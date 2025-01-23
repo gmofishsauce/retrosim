@@ -38,12 +38,17 @@
 #define MACHINE_SIZE 64 // The actual number of bits (for alignment).
 #define MAX_STATE 128   // Maximum number of state representations
 #define MAX_PART 64     // Maximum number of parts
-#define MAX_BIND 8      // Maximum number of input bindings per component
+#define N_BIND   8      // Maximum input bindings in a part
+#define MAX_BIND 256    // Maximum number of input bindings
 
 #if MACHINE_SIZE == 32
 #define BITS uint32_t
+#define ALL_BITS ((uint32_t)0xFFFFFFFF)
+#define NO_BITS  ((uint32_t)0)
 #elif MACHINE_SIZE == 64
 #define BITS uint64_t
+#define ALL_BITS ((uint64_t)0xFFFFFFFFFFFFFFFF)
+#define NO_BITS  ((uint64_t)0)
 #else
 #error machine size must be 32 or 64
 #endif
@@ -53,12 +58,18 @@ typedef uint16_t INDEX;
 typedef INDEX S_IDX;    // index of a state_t
 typedef INDEX B_IDX;    // index of a bind_t
 typedef INDEX P_IDX;    // index of a part_t
+typedef void (*func_t)(void);
 
 typedef struct state {
-    P_IDX part;
     BITS values;
     BITS undefs;
     BITS highzs;
+    P_IDX part;
+#if MACHINE_SIZE == 64
+    uint8_t pad[6]; // alignment
+#else
+    uint8_t pad[2]; // alignment
+#endif
 } state_t;
 
 typedef struct bind {
@@ -68,24 +79,25 @@ typedef struct bind {
     INDEX spare;        // reserved
 } bind_t;
 
-
-typedef void (*func_t)(void);
-
 typedef struct part {
     char *name;
     func_t eval;
     func_t edge;
-    B_IDX inputs[MAX_BIND];
-    S_IDX future;     // Combinational parts don't use
-    S_IDX output;     // Sequential parts: edge() sets from future
+    INDEX inputs[N_BIND]; // Max of N_BIND input binds.
+    INDEX next_bind;      // Next slot in inputs
+    S_IDX future;         // Combinational parts don't use this
+    S_IDX output;         // Sequential parts: edge() sets from future
 #if MACHINE_SIZE == 64
-    uint32_t spare;   // alignment
+    uint16_t spare;       // alignment
 #endif
 } part_t;
 
-extern state_t state_pool[MAX_STATE];
-extern bind_t bind_pool[MAX_BIND];
-extern part_t part_pool[MAX_PART];
+extern state_t states[MAX_STATE];
+extern bind_t binds[MAX_BIND];
+extern part_t parts[MAX_PART];
 
-P_IDX make_part(char *name, func_t eval, func_t edge);
-B_IDX bind(S_IDX from, P_IDX to, INDEX offset, INDEX n_bits);
+P_IDX make_seq(char *name, func_t eval, func_t edge);
+P_IDX make_comb(char *name, func_t eval, func_t edge);
+S_IDX make_state(P_IDX part);
+void bind(S_IDX from, P_IDX to, INDEX offset, INDEX n_bits);
+
