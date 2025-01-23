@@ -17,7 +17,7 @@ extern void fatal(const char* fmt, ...);
 /* Uncomment the following to hopefully remove all debug as dead code
  * at high levels of optimization. Implementation in util.c. The idea
  * is that is_debug() becomes constant false, so a good optimizer can
- * eliminate the msg() calls.
+ * eliminate the evaluation of the arguments to msg().
  *
 #define NO_DEBUG 1
  */
