@@ -11,12 +11,3 @@
 void eval_zeroes(P_IDX p) {
     parts[p].output = all_zeroes;
 }
-
-/*
-void eval_ones(S_IDX s) {
-    states[s].output = ALL_BITS;
-}
-
-void eval_and(S_IDX s) {
-}
-*/

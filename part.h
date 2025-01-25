@@ -87,4 +87,3 @@ extern part_t parts[MAX_PART];
 
 P_IDX make_part(char *name, func_t eval, func_t edge);
 void bind(P_IDX from, P_IDX to, INDEX offset, INDEX n_bits);
-
