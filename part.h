@@ -34,70 +34,57 @@
  * will hopefully give good L1 cache locality.
  */
 
-#define MAX_WIDTH 32    // Maximum number of bits a part can have
-#define MACHINE_SIZE 64 // The actual number of bits (for alignment).
+#define MAX_WIDTH 16    // Maximum number of bits a part can have
 #define MAX_STATE 128   // Maximum number of state representations
 #define MAX_PART 64     // Maximum number of parts
-#define N_BIND   8      // Maximum input bindings in a part
+#define N_BIND   11     // Maximum input bindings in a part (see below)
 #define MAX_BIND 256    // Maximum number of input bindings
 
-#if MACHINE_SIZE == 32
-#define BITS uint32_t
-#define ALL_BITS ((uint32_t)0xFFFFFFFF)
-#define NO_BITS  ((uint32_t)0)
-#elif MACHINE_SIZE == 64
-#define BITS uint64_t
-#define ALL_BITS ((uint64_t)0xFFFFFFFFFFFFFFFF)
-#define NO_BITS  ((uint64_t)0)
-#else
-#error machine size must be 32 or 64
-#endif
+/* about N_BIND: it pads out the part_t to exactly 64 bytes. Getting it
+ * down to 32 bytes would be hard.
+ */
+
+#define BITS uint16_t
+#define ALL_BITS ((uint16_t)0xFFFF)
+#define NO_BITS  ((uint16_t)0)
 
 typedef uint16_t INDEX;
-
-typedef INDEX S_IDX;    // index of a state_t
 typedef INDEX B_IDX;    // index of a bind_t
 typedef INDEX P_IDX;    // index of a part_t
-typedef void (*func_t)(void);
+typedef void (*func_t)(P_IDX this);
 
-typedef struct state {
+typedef struct state {  // state of a part. 64 bits.
     BITS values;
     BITS undefs;
     BITS highzs;
-    P_IDX part;
-#if MACHINE_SIZE == 64
-    uint8_t pad[6]; // alignment
-#else
-    uint8_t pad[2]; // alignment
-#endif
+    BITS spare;
 } state_t;
 
-typedef struct bind {
-    S_IDX from;         // state being bound to
+extern state_t all_undef;
+extern state_t all_highz;
+extern state_t all_ones;
+extern state_t all_zeroes;
+
+typedef struct bind {   // bind some outputs to some inputs. 64 bits.
+    P_IDX from;         // binding to the output of this part
     INDEX offset;       // offset of binding bit 0 in state
     INDEX n_bits;       // contiguous bits
     INDEX spare;        // reserved
 } bind_t;
 
-typedef struct part {
+typedef struct part {     // A component. 64 bytes.
     char *name;
     func_t eval;
     func_t edge;
-    INDEX inputs[N_BIND]; // Max of N_BIND input binds.
+    state_t future;       // Combinational parts don't use this
+    state_t output;       // Sequential parts: edge() sets from future
     INDEX next_bind;      // Next slot in inputs
-    S_IDX future;         // Combinational parts don't use this
-    S_IDX output;         // Sequential parts: edge() sets from future
-#if MACHINE_SIZE == 64
-    uint16_t spare;       // alignment
-#endif
+    INDEX inputs[N_BIND]; // Max of N_BIND input binds.
 } part_t;
 
-extern state_t states[MAX_STATE];
 extern bind_t binds[MAX_BIND];
 extern part_t parts[MAX_PART];
 
-P_IDX make_seq(char *name, func_t eval, func_t edge);
-P_IDX make_comb(char *name, func_t eval, func_t edge);
-S_IDX make_state(P_IDX part);
-void bind(S_IDX from, P_IDX to, INDEX offset, INDEX n_bits);
+P_IDX make_part(char *name, func_t eval, func_t edge);
+void bind(P_IDX from, P_IDX to, INDEX offset, INDEX n_bits);
 

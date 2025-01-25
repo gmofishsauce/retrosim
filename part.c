@@ -9,36 +9,19 @@
 
 /* The index 0 is generally reserved. */
 
-state_t states[MAX_STATE];
-static S_IDX next_state = 1;
-
 bind_t binds[MAX_BIND];
 static B_IDX next_bind = 1;
 
 part_t parts[MAX_PART];
 static P_IDX next_part = 1;
 
-/* Make a state_t */
-S_IDX make_state(P_IDX p) {
-    DB(MIN, "make_state for part %s\n", parts[p].name);
-    if (next_state >= MAX_STATE) {
-        fatal("cannot allocate memory: state for %s\n", parts[p].name);
-    }
-    S_IDX s = next_state++;
-    states[s].part = p;
-    states[s].undefs = ALL_BITS;
-    return s;
-}
-
-/* Make a sequential part. */
-P_IDX make_seq(char *name, void (*eval)(void), void (*edge)(void)) {
-    P_IDX p = make_comb(name, eval, edge);
-    parts[p].future = make_state(p);
-    return p;
-}
+state_t all_undef = {NO_BITS, ALL_BITS, NO_BITS, 0};
+state_t all_highz = {NO_BITS, NO_BITS, ALL_BITS, 0};
+state_t all_ones = {ALL_BITS, NO_BITS, NO_BITS, 0};
+state_t all_zeroes = {NO_BITS, NO_BITS, NO_BITS, 0};
 
 /* Make a combinational part. */
-P_IDX make_comb(char *name, void (*eval)(void), void (*edge)(void)) {
+P_IDX make_part(char *name, func_t eval, func_t edge) {
     DB(MIN, "make_part %s\n", name);
     if (next_part >= MAX_PART) {
         fatal("cannot allocate memory: part %s\n", name);
@@ -47,27 +30,26 @@ P_IDX make_comb(char *name, void (*eval)(void), void (*edge)(void)) {
     parts[p].name = name;
     parts[p].eval = eval;
     parts[p].edge = edge;
-    parts[p].output = make_state(p);
-    parts[p].future = 0;
+    parts[p].output = all_undef;
+    parts[p].future = all_undef;
     return p;
 }
 
 /* Bind some outputs of from state to the combo or seq input of part to. */
-void bind(S_IDX from, P_IDX to, INDEX offset, INDEX n_bits) {
-    part_t *pval = &parts[states[from].part];
+void bind(P_IDX from, P_IDX to, INDEX offset, INDEX n_bits) {
     DB(MIN, "bind outputs from %s to %s\n",
-        pval->name, parts[to].name);
-    if (parts[to].next_bind >= MAX_BIND) {
+        parts[from].name, parts[to].name);
+    if (next_bind >= MAX_BIND) {
         fatal("cannot allocate memory: bind to %s\n", parts[to].name);
     }
-    if (pval->next_bind >= N_BIND) {
-        fatal("too many input binds for %s\n", pval->name);
+    if (parts[from].next_bind >= N_BIND) {
+        fatal("too many input binds for %s\n", parts[from].name);
     }
     B_IDX b = next_bind++;
     binds[b].from = from;
     binds[b].offset = offset;
     binds[b].n_bits = n_bits;
 
-    INDEX n = pval->next_bind++;
-    pval->inputs[n] = b;
+    INDEX n = parts[to].next_bind++;
+    parts[from].inputs[n] = b;
 }
