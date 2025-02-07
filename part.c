@@ -7,18 +7,13 @@
 #include "sim.h"
 #include "part.h"
 
-/* The index 0 is generally reserved. */
-
-bind_t binds[MAX_BIND];
-static B_IDX next_bind = 1;
-
 part_t parts[MAX_PART];
-static P_IDX next_part = 1;
+static P_IDX next_part = 1; // 0 is reserved
 
-state_t all_undef = {NO_BITS, ALL_BITS, NO_BITS, 0};
-state_t all_highz = {NO_BITS, NO_BITS, ALL_BITS, 0};
-state_t all_ones = {ALL_BITS, NO_BITS, NO_BITS, 0};
-state_t all_zeroes = {NO_BITS, NO_BITS, NO_BITS, 0};
+bitvec_t all_undef = {NO_BITS, ALL_BITS, NO_BITS, 0};
+bitvec_t all_highz = {NO_BITS, NO_BITS, ALL_BITS, 0};
+bitvec_t all_ones = {ALL_BITS, NO_BITS, NO_BITS, 0};
+bitvec_t all_zeroes = {NO_BITS, NO_BITS, NO_BITS, 0};
 
 /* Make a combinational part. */
 P_IDX make_part(char *name, func_t eval, func_t edge) {
@@ -36,7 +31,7 @@ P_IDX make_part(char *name, func_t eval, func_t edge) {
 }
 
 /* Bind some outputs of from state to the combo or seq input of part to. */
-void bind(P_IDX from, P_IDX to, INDEX offset, INDEX n_bits) {
+void bind(P_IDX from, P_IDX to, BYTE offset, BYTE n_bits) {
     DB(MIN, "bind outputs from %s to %s\n",
         parts[from].name, parts[to].name);
     if (next_bind >= MAX_BIND) {

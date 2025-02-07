@@ -3,74 +3,62 @@
 /* 456789012345678901234567890123456789012345678901234567890123456789012
  *      10        20        30        40        50        60        70 
  *
- * Four-state digital simulator. The four states are represented by
- * bitmasks similar to bitboards in chess. There are three bit vectors:
- * values, undefs, and highzs ("high-z's", pronounced "hizees"). Undefs
- * propagate and highz inputs become undefined outputs.
+ * Four-state digital simulator: bits may be 0, 1, Undefined, or high-Z.
+ * Undefs propagate and highz inputs become undefined outputs.
  *
- * The "physical" bit width of every simulated "part" is equal to the
- * width of a machine word on the computer running the simulator,
- * MACHINE_SIZE. In practice this is 32 or 64. The actual width, which
- * is less than or equal to the MACHINE_SIZE, is stored in the part.
+ * There are two representations for simulated state: bitvecs and
+ * bitbytes. In a bitvec, the four states are represented by bitmasks
+ * similar to bitboards in chess. There are three bit vectors: values,
+ * undefs, and highzs ("high-z's", pronounced "HIzees"). Bitvecs are
+ * intended for use in datapath components where input and output
+ * bindings are simple (a 16-bit register takes its input from the
+ * 16-bit output of an ALU) and values are often computed results.
  *
- * Parts have outputs in the form of state_t objects. The output of a
- * part is set when its eval() function is called or when its edge()
- * function is called. The decision is up to the part's implementation.
- * Sequential parts are created by having two state_t objects, one
- * holding the current output of the part, the other computed by eval()
- * with the next output that is transfered by edge().
+ * Bitbytes represent individual 4-state bits in a byte of storage. They
+ * are intended for use in control paths where input and output bindings
+ * are complex and functionality is simple, e.g. gates and controls.
  *
- * Parts have inputs in the form of bindings. Each binding specifies a
- * contiguous block of 1 to MACHINE_SIZE outputs of some other part.
- * Conceptually, calling eval() on a part causes it to evaluate its
- * inputs, which evaluate their inputs, and so on back to a sequential
- * part - even if that "part" is something like the default all-Z value
- * of an undriven bus. In reality, the code performs a topological sort
- * and finds a single evaluation order for all the parts.
- *
- * This is intended to become a data-oriented design. The computation
- * relies (or will rely) entirely on states and bindings. These are
- * allocated, only before simulation startup, from dense arrays which
- * will hopefully give good L1 cache locality.
+ * This is intended as a data-oriented design. Most of the simulation
+ * model is stored in memory-aligned data structures that are
+ * allocated from fixed sized pools (arrays) and referenced by small
+ * indices (uint16_t's) rather than pointers.
  */
 
-#define MAX_WIDTH 16    // Maximum number of bits a part can have
-#define MAX_STATE 128   // Maximum number of state representations
-#define MAX_PART 64     // Maximum number of parts
-#define N_BIND   11     // Maximum input bindings in a part (see below)
-#define MAX_BIND 256    // Maximum number of input bindings
+#define MAX_PART 64         // Maximum number of parts
+#define MAX_BITVEC 128      // Maximum number of bitvecs
+#define MAX_BITBYTES 256    // Maximum number of bitbytes
+#define MAX_BIND 512        // Maximum number of input bindings
 
-/* about N_BIND: it pads out the part_t to exactly 64 bytes. Getting it
- * down to 32 bytes would be hard.
- */
+typedef uint8_t byte_t;
+typedef uint16_t index_t;
+typedef void (*func_t)(index_t part);
 
-#define BITS uint16_t
+#define bits_t uint16_t
 #define ALL_BITS ((uint16_t)0xFFFF)
 #define NO_BITS  ((uint16_t)0)
 
-typedef uint16_t INDEX;
-typedef INDEX B_IDX;    // index of a bind_t
-typedef INDEX P_IDX;    // index of a part_t
-typedef void (*func_t)(P_IDX this);
+/* Bit vector type */
 
-typedef struct state {  // state of a part. 64 bits.
-    BITS values;
-    BITS undefs;
-    BITS highzs;
-    BITS spare;
-} state_t;
+typedef struct bitvec {
+    bits_t values;
+    bits_t undefs;
+    bits_t highzs;
+    bits_t spare;
+} bitvec_t;
 
-extern state_t all_undef;
-extern state_t all_highz;
-extern state_t all_ones;
-extern state_t all_zeroes;
+extern bitvec_t all_undef;
+extern bitvec_t all_highz;
+extern bitvec_t all_ones;
+extern bitvec_t all_zeroes;
 
-typedef struct bind {   // bind some outputs to some inputs. 64 bits.
-    P_IDX from;         // binding to the output of this part
-    INDEX offset;       // offset of binding bit 0 in state
-    INDEX n_bits;       // contiguous bits
-    INDEX spare;        // reserved
-} bind_t;
+/* Bit byte type */
+
+typedef uint16_t bitbyte_t;
+
+#define BB_0    0   // bit is 0
+#define BB_1    1   // bit is 1
+#define BB_Z    2   // bit is Z
+#define BB_U    3   // bit is U
 
 typedef struct part {     // A component. 64 bytes.
     char *name;
@@ -82,8 +70,7 @@ typedef struct part {     // A component. 64 bytes.
     INDEX inputs[N_BIND]; // Max of N_BIND input binds.
 } part_t;
 
-extern bind_t binds[MAX_BIND];
 extern part_t parts[MAX_PART];
 
 P_IDX make_part(char *name, func_t eval, func_t edge);
-void bind(P_IDX from, P_IDX to, INDEX offset, INDEX n_bits);
+void bind(P_IDX from, P_IDX to, BYTE offset, BYTE n_bits);

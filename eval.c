@@ -11,3 +11,7 @@
 void eval_zeroes(P_IDX p) {
     parts[p].output = all_zeroes;
 }
+
+void edge_reg(P_IDX p) {
+
+}
