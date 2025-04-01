@@ -32,9 +32,10 @@ int main(int ac, char** av) {
         fatal("unexpected option: %s\n", av[optind]);
     }
 
-    msg("%s: firing up...\n", av[0]);
-    DB(MIN, "%s\n", "NEW! Debug MIN");
-    DB(MED, "%s\n", "NEW! Debug MED");
-    DB(MAX, "%s\n", "NEW! Debug MAX");
-    msg("%s: done.\n", av[0]);
+    msg("%s: firing up...", av[0]);
+    DB(MIN, "%s", "Debug MIN printed this");
+    DB(MED, "%s", "Debug MED printed this");
+    DB(MAX, "%s", "Debug MAX printed this");
+    print_sizes();
+    msg("%s: done.", av[0]);
 }

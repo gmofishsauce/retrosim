@@ -1,5 +1,8 @@
 /* Copyright (c) Jeff Berkowitz 2024. All rights reserved. */
 
+#ifndef UTIL_H
+#define UTIL_H
+
 /* 456789012345678901234567890123456789012345678901234567890123456789012
  *      10        20        30        40        50        60        70 
  */
@@ -21,3 +24,4 @@ extern void fatal(const char* fmt, ...);
  *
 #define NO_DEBUG 1
  */
+#endif // UTIL_H

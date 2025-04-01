@@ -43,6 +43,7 @@ bool msg(const char* fmt, ...) {
         (void) vfprintf(stderr, fmt, args);
 #pragma clang diagnostic pop
         va_end(args);
+        fputc('\n', stderr);
     }
     return true;
 }
@@ -55,5 +56,6 @@ void NO_RETURN fatal(const char* fmt, ...) {
     (void) vfprintf(stderr, fmt, args);
 #pragma clang diagnostic pop
     va_end(args);
+    fputc('\n', stderr);
     exit(1);
 }
