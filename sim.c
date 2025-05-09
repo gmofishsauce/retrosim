@@ -9,8 +9,8 @@
  * /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/
  */
 
-#include <unistd.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include "sim.h"
 
 int main(int ac, char** av) {
@@ -36,6 +36,5 @@ int main(int ac, char** av) {
     DB(MIN, "%s", "Debug MIN printed this");
     DB(MED, "%s", "Debug MED printed this");
     DB(MAX, "%s", "Debug MAX printed this");
-    print_sizes();
     msg("%s: done.", av[0]);
 }

@@ -16,6 +16,4 @@
 
 #include "util.h"
 
-void print_sizes(void);
-
 #endif // SIM_H
