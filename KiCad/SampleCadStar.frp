@@ -1,0 +1,63 @@
+.HEA
+.TIM 2025-05-09T17:25:19-0700
+.APP "Eeschema 8.0.8"
+.TYP FULL
+
+.ADD_COM     J1     "Conn_01x04"     "$noname"
+.ADD_COM     U1     "74LS175"     "$noname"
+.ADD_COM     U2     "74LS86"     "$noname"
+.ADD_COM     X1     "CXO_DIP8"     "Oscillator:Oscillator_DIP-8"
+
+
+.ADD_TER   U1   15     "Net-(U1-Q3)"
+.TER       U2   13
+
+.ADD_TER   U1   10     "Net-(U1-Q2)"
+.TER       U2   10
+
+.ADD_TER   U1   9     "Net-(U1-Cp)"
+.TER       X1   5
+
+.ADD_TER   U1   12     "Net-(U1-D2)"
+.TER       U2   12
+            U2   8
+
+.ADD_TER   U1   5     "Net-(U1-D1)"
+.TER       U2   6
+            U2   9
+
+.ADD_TER   U1   8     "GND"
+.TER       U2   7
+            X1   4
+
+.ADD_TER   U1   4     "Net-(U1-D0)"
+.TER       U2   3
+            U2   4
+
+.ADD_TER   U1   6     "Net-(U1-~{Q1})"
+.TER       U2   5
+
+.ADD_TER   U1   13     "Net-(U1-D3)"
+.TER       U2   11
+
+.ADD_TER   J1   2     "Net-(J1-Pin_2)"
+.TER       U1   7
+
+.ADD_TER   J1   4     "Net-(J1-Pin_4)"
+.TER       U1   14
+
+.ADD_TER   J1   1     "Net-(J1-Pin_1)"
+.TER       U1   2
+            U2   1
+
+.ADD_TER   J1   3     "Net-(J1-Pin_3)"
+.TER       U1   11
+
+.ADD_TER   U1   1     "VCC"
+.TER       U1   16
+            U2   14
+            U2   2
+            X1   1
+            X1   8
+
+.END

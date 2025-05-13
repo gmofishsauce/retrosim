@@ -13,6 +13,8 @@
 #include <unistd.h>
 #include "sim.h"
 
+int simulate(void);
+
 int main(int ac, char** av) {
     int c;
     while ((c = getopt(ac, av, "qd:")) != -1) {
@@ -33,8 +35,23 @@ int main(int ac, char** av) {
     }
 
     msg("%s: firing up...", av[0]);
-    DB(MIN, "%s", "Debug MIN printed this");
-    DB(MED, "%s", "Debug MED printed this");
-    DB(MAX, "%s", "Debug MAX printed this");
-    msg("%s: done.", av[0]);
+    DB(MIN, "%s", "Debug MIN enabled");
+    DB(MED, "%s", "Debug MED enabled");
+    DB(MAX, "%s", "Debug MAX enabled");
+    int exitCode = simulate();
+    msg("%s: exit %d", av[0], exitCode);
+    return exitCode;
 }
+
+bitvec_t bv_undef;
+bitvec_t bv_highz;
+bitvec_t bv_ones;
+bitvec_t bv_zeroes;
+
+int simulate() { // return exit code, 0 for success or 2 for error
+    bitvec_t LS86  = bv_undef;
+    bitvec_t LS175 = bv_zeroes; // 175 has a master reset, no modeled for now.
+
+
+}
+

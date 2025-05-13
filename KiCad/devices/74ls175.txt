@@ -1,0 +1,39 @@
+PACKAGE '74ls175'
+CLASS IC
+PINCOUNT 16
+PINORDER MAIN ,
+	??Mr?__1,
+	Q0__2,
+	??Q0?__3,
+	D0__4,
+	D1__5,
+	??Q1?__6,
+	Q1__7,
+	GND__8,
+	Cp__9,
+	Q2__10,
+	??Q2?__11,
+	D2__12,
+	D3__13,
+	??Q3?__14,
+	Q3__15,
+	VCC__16
+FUNCTION MAIN MAIN ,
+	1,
+	2,
+	3,
+	4,
+	5,
+	6,
+	7,
+	8,
+	9,
+	10,
+	11,
+	12,
+	13,
+	14,
+	15,
+	16
+PACKAGEPROP VALUE 74LS175
+END
