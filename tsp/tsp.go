@@ -41,8 +41,8 @@ const (
 )
 
 // Tokenize takes an S-expression string and returns a slice of Tokens
-// Unlike most tokenizers, this one includes an (approximate) source line
-// number in each token for better error messages. 
+// Unlike most S-expr tokenizers, this one includes an (approximate)
+// source line number in each token for better error messages. 
 func Tokenize(input string) ([]Token, error) {
 	var tokens []Token
 	var currentToken string
@@ -50,12 +50,17 @@ func Tokenize(input string) ([]Token, error) {
 	var inString bool
 	var escapeSeen bool
 
+	// N.B. the escapeSeen state is managed by a single line of code near the
+	// very end of this loop. It's easy to miss, but otherwise we'd need to
+	// clear the escape state in many places, and it would be easy to miss one.
 	for _, r := range input {
 		switch r {
 		case '(':
 			if inString {
 				currentToken += string(r)
 			} else if currentToken != "" {
+				// Open parens need to be preceded by white space. This rule is likely
+				// incorrect for S-exprs in generally, but helps with KiCad exports.
 				return nil, fmt.Errorf("open paren in symbol near line %d", currentLine)
 			} else {
                 tokens = append(tokens, Token{LPAREN, currentLine, "("})
@@ -105,25 +110,24 @@ func Tokenize(input string) ([]Token, error) {
 		case '\\':
 			if !inString {
 				currentToken += string(r)
+			} else if inString && escapeSeen {
+				currentToken += string(r)
 			}
 		default:
 			currentToken += string(r)
 		}
 
-		escapeSeen = inString && (r == '\\')
+		escapeSeen = inString && !escapeSeen && (r == '\\')
 	}
 
     if currentToken != "" {
-		fmt.Fprintf(os.Stderr, "warning: file not properly terminated\n");
-		tokens = append(tokens, Token{SYMBOL, currentLine, currentToken})
+		return nil, fmt.Errorf("netlist has mismatched parens", currentLine)
 	}
 
 	return tokens, nil
 }
 
-// Parser
-
-var stack []string	// stack of strings Names identifying a model node
+// Parser. Creates a tree of ModelNodes.
 
 type ModelNode struct {
 	Name string
@@ -131,8 +135,6 @@ type ModelNode struct {
 	Parent *ModelNode
 	Children []*ModelNode
 }
-
-var currentNode *ModelNode
 
 func (m *ModelNode) String() string {
 	var sb strings.Builder
@@ -142,12 +144,12 @@ func (m *ModelNode) String() string {
 	if len(m.Value) == 0 {
 		sb.WriteString("- ")
 	} else {
-		sb.WriteString("(")
+		sb.WriteString("\"")
 		sb.WriteString(m.Value[0])
 		if len(m.Value) > 1 {
 			sb.WriteString("...")
 		}
-		sb.WriteString(") ")
+		sb.WriteString("\" ")
 	}
 	if m.Parent == nil {
 		sb.WriteString("- ")
@@ -159,78 +161,77 @@ func (m *ModelNode) String() string {
 	return sb.String()
 }
 
-func fullname() string {
-	var sb strings.Builder
-	for _, s := range stack[1:] {
-		sb.WriteRune(':')
-		sb.WriteString(s)
-	}
-	return sb.String()
-}
-
-func enter(t Token) error {
-	//fmt.Fprintf(os.Stderr, "enter %v\n", t)
-	stack = append(stack, t.Value)
-	m := &ModelNode{t.Value, []string{}, currentNode, []*ModelNode{}}
-	currentNode = m
-	fmt.Fprintf(os.Stderr, "currentNode: %s\n", currentNode)
-	return nil
-}
-
-func leave() error {
-	//fmt.Fprintf(os.Stderr, "leave %s\n", stack[len(stack)-1])
-	stack = stack[:len(stack)-1]
-	currentNode = currentNode.Parent
-	return nil
-}
-
-func stash(t Token) error {
-	currentNode.Value = append(currentNode.Value, t.Value)
-	fmt.Fprintf(os.Stderr, "stash %s\n", currentNode)
-	return nil
-}
-
 const (
 	INITIAL = 0
 	OPENING = 1
 	NEED_ANY = 2
 )
 
-func transpile(netlist string) error {
+// Parse hides the tokenizer from callers.
+// The returned value is tree of ModelNode.
+func parse(netlist string) (*ModelNode, error) {
 	tokens, err := Tokenize(netlist)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var state = INITIAL
+	var currentNode *ModelNode
+	var previousNode *ModelNode
+
 	for _, token := range tokens {
-		fmt.Printf("Type: %d, Value: %s\n", token.Type, token.Value)
+		//fmt.Printf("Type: %d, Value: %s\n", token.Type, token.Value)
 
 		switch (token.Type) {
 		case LPAREN:
 			if state == OPENING {
-				// paren following paren with no "key" symbol between
-				return fmt.Errorf("unbalanced open near line %d", token.Line)
+				// left paren following left paren with no "key" symbol between
+				return nil, fmt.Errorf("unbalanced open near line %d", token.Line)
 			}
 			state = OPENING
 			break
 		case RPAREN:
-			if state != NEED_ANY || len(stack) == 0 {
+			if state != NEED_ANY || currentNode == nil {
 				// This error will occur for "()", which may not be an error
-				return fmt.Errorf("unbalanced close near line %d", token.Line)
+				return nil, fmt.Errorf("unbalanced close near line %d", token.Line)
 			}
-			if err = leave(); err != nil {
-				return err
-			}
+			previousNode = currentNode
+			currentNode = currentNode.Parent
+			break
 		case SYMBOL:
 			if state == OPENING {
-				enter(token)
+				c := &ModelNode{token.Value, []string{}, currentNode, []*ModelNode{}}
+				if currentNode != nil {
+					// I hate these if's that are only true once...
+					currentNode.Children = append(currentNode.Children, c)
+				}
+				currentNode = c
+				fmt.Fprintf(os.Stderr, "currentNode: %s\n", currentNode)
 			} else {
-				stash(token)
+				currentNode.Value = append(currentNode.Value, token.Value)
+				fmt.Fprintf(os.Stderr, "stash %s in %s\n", token.Value, currentNode)
 			}
 			state = NEED_ANY
 		}
 	}
+	// As we climbed back up the tree due to the closing parens at the end,
+	// the current node became nil but the prevous node at that point is the root.
+	return previousNode, nil
+}
 
+func dump(m *ModelNode, indent int) {
+	fmt.Fprintf(os.Stderr, "%s%s\n", strings.Repeat(" ", 2*indent), m)
+	for _, c := range m.Children {
+		dump(c, 1+indent)
+	}
+}
+
+func transpile(netlist string) error {
+	model, err := parse(netlist)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "root: %s\n", model)
+	dump(model, 0)
 	return nil
 }

@@ -1,7 +1,7 @@
 (export (version "E")
   (design
     (source "/Users/jeff/go/src/github.com/gmofishsauce/wut4/sim/KiCad/Sample.kicad_sch")
-    (date "2025-05-10T16:09:55-0700")
+    (date "2025-05-13T13:46:59-0700")
     (tool "Eeschema 8.0.8")
     (sheet (number "1") (name "/") (tstamps "/")
       (title_block
@@ -35,7 +35,7 @@
       (sheetpath (names "/") (tstamps "/"))
       (tstamps "7ee712d0-a3c5-4b01-8004-4c5d496228f3"))
     (comp (ref "U1")
-      (value "\"74LS175\"")
+      (value "\"74LS\\n175\"")
       (datasheet "http://www.ti.com/lit/gpn/sn74LS175")
       (description "4-bit D Flip-Flop, reset")
       (fields

@@ -2584,6 +2584,16 @@
 		)
 		(uuid "fe32b7b2-c56d-491d-80ea-015452288f86")
 	)
+	(text "This is a long\npiece of text\nthat should be serialized\nas a line with escapes\nand turned back into text\nwith \\n characters."
+		(exclude_from_sim no)
+		(at 111.76 55.88 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "c82e1783-b5e7-488e-8a30-013fc027ce35")
+	)
 	(symbol
 		(lib_id "power:VCC")
 		(at 161.29 55.88 0)
@@ -3355,7 +3365,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "\"74LS175\""
+		(property "Value" "\"74LS\\n175\""
 			(at 163.4841 60.96 0)
 			(effects
 				(font
