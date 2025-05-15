@@ -100,7 +100,7 @@ func Tokenize(input string) ([]Token, error) {
 					currentToken = ""
 				}
 			}
-		case ' ', '\t', '\n':
+		case ' ', '\t', '\n', '\r':
 			if inString {
 				currentToken += string(r)
 			} else if currentToken != "" {
@@ -284,11 +284,11 @@ func dequote(s string) string {
 		return s
 	}
 	start := 0
-	end := len(s) - 1
+	end := len(s)
 	if s[start] == '"' {
-		start = 1
+		start++
 	}
-	if s[end] == '"' {
+	if s[end-1] == '"' {
 		end--
 	}
 	return s[start:end]
@@ -313,7 +313,14 @@ func qss(root *ModelNode, selector string) string {
 	if len(result[0].Value) > 1 {
 		return "MULTIPLE"
 	}
-	return dequote(result[0].Value[0])
+	//return dequote(result[0].Value[0])
+	return result[0].Value[0]
+}
+
+// Return true if the string is not empty and not equal
+// to "NOTFOUND" or "MULTIPLE".
+func valid(s string) bool {
+	return len(s) > 0 && s != "NOTFOUND" && s != "MULTIPLE"
 }
 
 func runSomeTests(root *ModelNode) error {
@@ -347,14 +354,47 @@ func runSomeTests(root *ModelNode) error {
 	return nil
 }
 
+// Use this wrapper for printf to emit all the content
 func emit(format string, a ...any) (n int, err error) {
 	n, err = fmt.Printf(format, a...)
 	return n, err
 }
 
+const topCommentStart = `/*
+ * Copyright (c) Jeff Berkowitz 2025. All rights reserved.
+ * This file was generated from a KiCad schematic. Do not edit.
+ *
+ * Tool: KiCad %s (schema version %s)
+ * From: %s
+ * Date: %s
+ *
+`
+
+const topCommentEnd = " */\n"
+
 func topComment(root *ModelNode) error {
 	schemaVersion := qss(root, "version")
-	emit("EMIT: %s\n", schemaVersion)
+	designSource := qss(root, "design:source")
+	designDate := qss(root, "design:date")
+	designTool := qss(root, "design:tool")
+	if designTool != "Eeschema 8.0.8" || schemaVersion != "E" {
+		msg("WARNING: netlist was written by an untested version of KiCad. YMMV.\n")
+	}
+	emit(topCommentStart, designTool, schemaVersion, designSource, designDate)
+
+	// Now emit a line for each sheet in the schematic.
+	for _, sheet := range(q(root, "design:sheet")) {
+		sheetNumber := qss(sheet, "number")
+		sheetName := qss(sheet, "name")
+		title := qss(sheet, "title_block:title")
+		if valid(title) {
+			emit(" * sheet %s: %s (%s)\n", sheetNumber, sheetName, title)
+		} else {
+			emit(" * sheet %s: %s\n", sheetNumber, sheetName)
+		}
+	}
+
+	emit(topCommentEnd)
 	return nil
 }
 
@@ -364,7 +404,7 @@ func transpile(netlist string) error {
 		return err
 	}
 	msg("parse complete, transpiling...\n")
-	runSomeTests(root)
+	//runSomeTests(root)
 
 	if err = topComment(root); err != nil {
 		return err
