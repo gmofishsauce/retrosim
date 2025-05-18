@@ -8,8 +8,6 @@ package main
 
 import (
 	"strings"
-	//"unicode" TODO when processing type names - may be unicode
-	//"unicode/utf8" TODO when processing type names - may be unicode
 )
 
 // Find ModelNodes named "string" in the children of ModelNode m

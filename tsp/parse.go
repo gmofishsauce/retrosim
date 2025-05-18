@@ -9,8 +9,6 @@ package main
 import (
 	"fmt"
 	"strings"
-	//"unicode" TODO when processing type names - may be unicode
-	//"unicode/utf8" TODO when processing type names - may be unicode
 )
 
 // Token represents a token in an S-expression
