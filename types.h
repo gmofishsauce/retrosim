@@ -11,28 +11,37 @@
  */
 
 typedef uint16_t index_t;
-typedef uint16_t bits_t;
+typedef uint16_t bit16_t;
+typedef uint64_t bit64_t;
 
-typedef struct bitvec {
+typedef struct bitvec16 {
+    bit16_t values;
+    bit16_t undefs;
+    bit16_t highzs;
     index_t owner;
-    bits_t values;
-    bits_t undefs;
-    bits_t highzs;
-} bitvec_t;
+} bitvec16_t;
 
-extern bitvec_t bv_undef;
-extern bitvec_t bv_highz;
-extern bitvec_t bv_ones;
-extern bitvec_t bv_zeroes;
+typedef struct bitvec64 {
+    bit64_t values;
+    bit64_t undefs;
+    bit64_t highzs;
+    index_t owner;
+    uint16_t pad[3];
+} bitvec64_t;
 
-#define BV_ALL  ((bits_t)0xFFFF)
-#define BV_NONE ((bits_t)0)
+extern bitvec16_t bv16_undef;
+extern bitvec16_t bv16_highz;
+extern bitvec16_t bv16_ones;
+extern bitvec16_t bv16_zeroes;
 
-typedef uint8_t bit_t; // "bit", singular
+extern bitvec64_t bv64_undef;
+extern bitvec64_t bv64_highz;
+extern bitvec64_t bv64_ones;
+extern bitvec64_t bv64_zeroes;
 
-#define BB_0    ((bit_t)0)   // bit is 0
-#define BB_1    ((bit_t)1)   // bit is 1
-#define BB_Z    ((bit_t)2)   // bit is Z
-#define BB_U    ((bit_t)3)   // bit is U
+#define BV16_ALL  ((bit16_t)0xFFFF)
+#define BV16_NONE ((bit16_t)0)
+#define BV64_ALL  ((bit64_t)0xFFFF_FFFF_FFFF_FFFF)
+#define BV64_NONE ((bit64_t)0)
 
 #endif // TYPES_H

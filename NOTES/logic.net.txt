@@ -45,8 +45,10 @@ a window at least 120 columns wide.
         (comment (number "9") (value "")))))
   (components
     (comp (ref "A1")                            ## components:comp:ref value entered as key in map
-      (value "Arduino_MKR_WiFi_1010_Socket")    ## components:comp:value entered as part of a compound value
-                                                ## need an HoH for the values of components:comp:ref
+      (value "Arduino_MKR_WiFi_1010_Socket")    ## components:comp:libsource:lib and
+                                                ## components:comp:libsource:part
+                                                ## match libparts:libpart:lib
+                                                ## and libparts:libpart:part
       (footprint "arduino-library:Arduino_MKR_WiFi_1010_Socket")
       (datasheet "https://docs.arduino.cc/hardware/mkr-wifi-1010")
       (description "Socket for Arduino MKR WiFi 1010")  ## components:comp:description into comment
@@ -597,8 +599,8 @@ a window at least 120 columns wide.
   (libparts
     (libpart (lib "74xx") (part "74HC14")
                                                     ## Here I think we want
-                                                    ## libparts:libpart:part:74HC14:pins
-                                                    ## and then for each pin: num, name, type.
+                                                    ## each libparts:libpart:pins:pin
+                                                    ## for each libparts:libpart:(lib, part)
       (description "Hex inverter schmitt trigger")
       (docs "http://www.ti.com/lit/gpn/sn74HC14")
       (footprints
