@@ -8,8 +8,6 @@ package main
 
 import (
 	"fmt"
-	//"unicode" TODO when processing type names - may be non-ASCII
-	//"unicode/utf8" TODO when processing type names - may be non-ASCII
 )
 
 func transpile(root *ModelNode) error {
@@ -26,18 +24,26 @@ func transpile(root *ModelNode) error {
 	if err := emitTopComment(root); err != nil {
 		return err
 	}
-	if len(componentTypes) > 1_000_000_000 { // not
-		msg("types %v instances %v\n", componentTypes, componentInstances)
-	}
 
+	msg("%d types, %d instances\n", len(componentTypes), len(componentInstances))
 	return nil
+}
+
+// Pin information for each pin on each type
+// kind is actually an enum with possible string values:
+//   Input, Output, Bidirectional, Tri-state, Passive, Free, Unspecified,
+//   Power input, Power output, Open collector, Open emitter, Unconnected.
+type PinInfo struct {
+	num string		// The pin "number" is not always a number
+	name string		// pin (signal) name
+	kind string		// string enum described above
 }
 
 // Type information for each type
 type ComponentType struct {
 	lib string
 	part string
-	pins []*ModelNode
+	pins []*PinInfo
 	emit bool
 }
 
@@ -47,9 +53,12 @@ func getTypes(root *ModelNode) ([]*ComponentType, error) {
 	for _, t := range(q(root, "libparts:libpart")) {
 		lib := qss(t, "lib")
 		part := qss(t, "part")
-		pins := q(t, "pins:pin")
+		var pins []*PinInfo
+		for _, p := range(q(t, "pins:pin")) {
+			pins = append(pins, &PinInfo{qss(p, "num"), qss(p, "name"), qss(p, "type")})
+		}
 		componentTypes = append(componentTypes, &ComponentType{lib, part, pins, false})
-		//msg("%s:%s has %d pins\n", lib, part, len(pins))
+		msg("%s:%s has %d pins\n", lib, part, len(pins))
 	}
 
 	return componentTypes, nil
@@ -62,15 +71,19 @@ type ComponentInstance struct {
 	componentType *ComponentType
 }
 
+func selectComponent(ref string) bool {
+	// Very primitive selector - emit for any A*, J*, or U*
+	// This is (oddly) Unicode safe because we're only looking
+	// for single-byte characters (for now)
+	refCh := rune(ref[0])
+	return refCh == 'A' || refCh == 'J' || refCh == 'U'
+}
+
 func getInstances(root *ModelNode, types []*ComponentType) ([]*ComponentInstance, error) {
 	var componentInstances []*ComponentInstance
 	for _, c := range(q(root, "components:comp")) {
 		ref := qss(c, "ref")
-		// Very primitive selector - emit for any A*, J*, or U*
-		// This is (oddly) Unicode safe because we're only looking
-		// for single-byte characters (for now)
-		refCh := rune(ref[0])
-		if refCh == 'A' || refCh == 'J' || refCh == 'U' {
+		if selectComponent(ref) {
 			lib := qss(c, "libsource:lib")
 			part := qss(c, "libsource:part")
 			// Find the ComponentType for lib:part
@@ -86,32 +99,61 @@ func getInstances(root *ModelNode, types []*ComponentType) ([]*ComponentInstance
 	return componentInstances, nil
 }
 
-/*
-Uncomment import "unicode" and "unicode/utf8" when needed
+// Example of a net:
+//  (net (code "10") (name "Net-(U1-D3)")
+//    (node (ref "U1") (pin "13") (pinfunction "D3") (pintype "input"))
+//    (node (ref "U2") (pin "11") (pintype "output")))
 
-func emitTypes(root *ModelNode) error {
-	emit("#include \"types.h\"\n")
-	for _, t := range(q(root, "libparts:libpart")) {
-		lib := qss(t, "lib")
-		part := qss(t, "part")
-		// The lib name or part name could be Unicode, although it's unlikely
-		r, _ := utf8.DecodeRuneInString(lib)
-		if !unicode.IsLetter(r) {
-			lib = "T" + lib
-		}
-		msg("loop lib, part = %s %s\n", lib, part)
-		// Emit a bitvec16_t if the part has 16 or fewer pins
-		// Else emit a bitvec64_t (more pins not supported)
-		n := len(q(t, "pins"))
-		if n > 16 {
-			emit("typedef %s_%s_t bitvec16_6\n", lib, part)
-		} else {
-			emit("typedef %s_%s_t bitvec64_t\n", lib, part)
-		}
-	}
-	return nil
+type NetNode struct {
+	part *ComponentInstance
+	pin *PinInfo
 }
-*/
+
+type NetInstance struct {
+	code string			// is this always a number?
+	name string
+	netNodes []*NetNode	// endpoints on this net
+}
+
+// NetNodes are references to other types, which have to be looked up
+func findInstance(ref string) *ComponentInstance {
+	return nil // TODO
+}
+
+func findPin(part *ComponentInstance, pin string) *PinInfo {
+	return nil // TODO
+}
+
+// Get the nets from the schematic
+func getNets(root *ModelNode) ([]*NetInstance, error) {
+	var netInstances []*NetInstance
+	for _, n := range(q(root, "nets:net")) {
+		code := qss(n, "code")
+		name := qss(n, "name")
+		var netNodes []*NetNode
+		for _, d := range(q(n, "node")) {
+			ref := qss(d, "ref")
+			part := findInstance(ref)
+			if part == nil {
+				// TODO this error should cause transpile failure
+				msg("part %s in net %s not found\n", ref, name)
+				break
+			}
+			num := qss(d, "pin")
+			pin := findPin(part, num)
+			if pin == nil {
+				// TODO this error should cause transpile failure
+				msg("pin %s of part %s not found\n", ref, num)
+				break
+			}
+			netNodes = append(netNodes, &NetNode{part, pin})
+		}
+		netInstances = append(netInstances, &NetInstance{code, name, netNodes})
+	}
+	return netInstances, nil
+}
+
+// TODO split this file into bind.go (above) and emit.go (below)
 
 // Emitters
 
@@ -159,17 +201,5 @@ func emitTopComment(root *ModelNode) error {
 	}
 
 	emit(topCommentEnd)
-	return nil
-}
-
-
-func emitInstances(root *ModelNode) error {
-/*
-	for _, c := range(q("components:comp")) {
-		key := qss(c, "ref")
-		lib := qss(c, "libsource:lib")
-		part := qss(c, "libsource:part")
-	}
-*/
 	return nil
 }

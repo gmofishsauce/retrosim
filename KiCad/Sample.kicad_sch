@@ -1386,177 +1386,6 @@
 				)
 			)
 		)
-		(symbol "Oscillator:CXO_DIP8"
-			(pin_names
-				(offset 0.254)
-			)
-			(exclude_from_sim no)
-			(in_bom yes)
-			(on_board yes)
-			(property "Reference" "Y"
-				(at -5.08 6.35 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(justify left)
-				)
-			)
-			(property "Value" "CXO_DIP8"
-				(at 1.27 -6.35 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(justify left)
-				)
-			)
-			(property "Footprint" "Oscillator:Oscillator_DIP-8"
-				(at 11.43 -8.89 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Datasheet" "http://cdn-reichelt.de/documents/datenblatt/B400/OSZI.pdf"
-				(at -2.54 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Description" "Crystal Clock Oscillator, DIP8-style metal package"
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "ki_keywords" "Crystal Clock Oscillator"
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "ki_fp_filters" "Oscillator*DIP*8*"
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(symbol "CXO_DIP8_0_1"
-				(rectangle
-					(start -5.08 5.08)
-					(end 5.08 -5.08)
-					(stroke
-						(width 0.254)
-						(type default)
-					)
-					(fill
-						(type background)
-					)
-				)
-				(polyline
-					(pts
-						(xy -1.905 -0.635) (xy -1.27 -0.635) (xy -1.27 0.635) (xy -0.635 0.635) (xy -0.635 -0.635) (xy 0 -0.635)
-						(xy 0 0.635) (xy 0.635 0.635) (xy 0.635 -0.635)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-			)
-			(symbol "CXO_DIP8_1_1"
-				(pin input line
-					(at -7.62 0 0)
-					(length 2.54)
-					(name "EN"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin power_in line
-					(at 0 -7.62 90)
-					(length 2.54)
-					(name "GND"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "4"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin output line
-					(at 7.62 0 180)
-					(length 2.54)
-					(name "OUT"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "5"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin power_in line
-					(at 0 7.62 270)
-					(length 2.54)
-					(name "Vcc"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "8"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-			)
-		)
 		(symbol "power:GND"
 			(power)
 			(pin_numbers hide)
@@ -1895,34 +1724,10 @@
 		(uuid "6609835d-88b5-4c8f-a090-401b30808009")
 	)
 	(junction
-		(at 161.29 97.79)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "8c0d8505-fce7-4ed1-b0ac-71bdd9d7058d")
-	)
-	(junction
 		(at 71.12 66.04)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "c18259c5-2100-4dac-9f1b-4ce42c74be86")
-	)
-	(junction
-		(at 24.13 77.47)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "dca4857e-1f7f-4dff-a09f-386dbba2bd80")
-	)
-	(junction
-		(at 161.29 58.42)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "e6ab2f94-32ce-4c02-9eb0-58b5c6730ae6")
-	)
-	(junction
-		(at 24.13 68.58)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "f7a3819e-fb50-4756-b214-fc7fffd3e5ab")
 	)
 	(junction
 		(at 144.78 138.43)
@@ -1946,17 +1751,7 @@
 	)
 	(wire
 		(pts
-			(xy 24.13 77.47) (xy 24.13 78.74)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "0158ee39-dc4a-4ff8-bd07-2d61cf61d4e6")
-	)
-	(wire
-		(pts
-			(xy 161.29 97.79) (xy 161.29 96.52)
+			(xy 161.29 96.52) (xy 161.29 99.06)
 		)
 		(stroke
 			(width 0)
@@ -1986,13 +1781,13 @@
 	)
 	(wire
 		(pts
-			(xy 24.13 68.58) (xy 24.13 77.47)
+			(xy 52.07 58.42) (xy 52.07 63.5)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "11f96e4d-bc1d-4bdd-8f34-2dd6da48202a")
+		(uuid "119932a4-5bf5-4490-87d7-aca7e19c64e3")
 	)
 	(wire
 		(pts
@@ -2006,7 +1801,7 @@
 	)
 	(wire
 		(pts
-			(xy 31.75 86.36) (xy 148.59 86.36)
+			(xy 54.61 86.36) (xy 148.59 86.36)
 		)
 		(stroke
 			(width 0)
@@ -2023,16 +1818,6 @@
 			(type default)
 		)
 		(uuid "1e16495f-b3e9-407f-93fe-a419305f30a0")
-	)
-	(wire
-		(pts
-			(xy 24.13 57.15) (xy 24.13 68.58)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "2a7d80a3-a220-40bf-a95e-412a27258a3f")
 	)
 	(wire
 		(pts
@@ -2086,33 +1871,13 @@
 	)
 	(wire
 		(pts
-			(xy 161.29 99.06) (xy 161.29 97.79)
+			(xy 48.26 68.58) (xy 53.34 68.58)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "3ad82a9c-ccea-47f5-9716-f3975bf185b8")
-	)
-	(wire
-		(pts
-			(xy 148.59 88.9) (xy 144.78 88.9)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "3fafb2d0-43a0-49fd-9267-050d02a3e2cf")
-	)
-	(wire
-		(pts
-			(xy 144.78 58.42) (xy 161.29 58.42)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "40c12b46-ffd2-43d3-bfb1-94a0d1f41f9e")
+		(uuid "3c3c239a-540c-447d-b15d-1adeabe4d33d")
 	)
 	(wire
 		(pts
@@ -2146,16 +1911,6 @@
 	)
 	(wire
 		(pts
-			(xy 24.13 68.58) (xy 53.34 68.58)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "52b2109a-0b39-4bf8-9be9-6370740843c5")
-	)
-	(wire
-		(pts
 			(xy 194.31 78.74) (xy 194.31 76.2)
 		)
 		(stroke
@@ -2166,7 +1921,7 @@
 	)
 	(wire
 		(pts
-			(xy 40.64 36.83) (xy 40.64 78.74)
+			(xy 43.18 38.1) (xy 43.18 78.74)
 		)
 		(stroke
 			(width 0)
@@ -2203,6 +1958,16 @@
 			(type default)
 		)
 		(uuid "63c57a1f-4888-42f3-a8a5-6d495660653a")
+	)
+	(wire
+		(pts
+			(xy 53.34 63.5) (xy 52.07 63.5)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6d003abd-14c9-406b-ae49-26da0d08612f")
 	)
 	(wire
 		(pts
@@ -2246,6 +2011,16 @@
 	)
 	(wire
 		(pts
+			(xy 54.61 88.9) (xy 148.59 88.9)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7d6f66ec-5bc9-4321-9d5b-4775e670812b")
+	)
+	(wire
+		(pts
 			(xy 144.78 138.43) (xy 160.02 138.43)
 		)
 		(stroke
@@ -2253,16 +2028,6 @@
 			(type default)
 		)
 		(uuid "860dea2b-bf58-4e5c-941c-652347551656")
-	)
-	(wire
-		(pts
-			(xy 144.78 88.9) (xy 144.78 58.42)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "867efd7f-70b1-4f13-b50e-bd0ffa809953")
 	)
 	(wire
 		(pts
@@ -2296,16 +2061,6 @@
 	)
 	(wire
 		(pts
-			(xy 24.13 97.79) (xy 161.29 97.79)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "8f90e0fa-85ef-4ab3-b7d1-2ce79fe93901")
-	)
-	(wire
-		(pts
 			(xy 124.46 78.74) (xy 121.92 78.74)
 		)
 		(stroke
@@ -2336,17 +2091,7 @@
 	)
 	(wire
 		(pts
-			(xy 48.26 63.5) (xy 53.34 63.5)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "9bf19b85-5eb6-45e9-89f5-abc5f18678d6")
-	)
-	(wire
-		(pts
-			(xy 40.64 78.74) (xy 102.87 78.74)
+			(xy 43.18 78.74) (xy 102.87 78.74)
 		)
 		(stroke
 			(width 0)
@@ -2356,7 +2101,7 @@
 	)
 	(wire
 		(pts
-			(xy 187.96 36.83) (xy 40.64 36.83)
+			(xy 187.96 38.1) (xy 43.18 38.1)
 		)
 		(stroke
 			(width 0)
@@ -2383,16 +2128,6 @@
 			(type default)
 		)
 		(uuid "a38ee977-1431-4ec1-8479-ff14a1dfb1cf")
-	)
-	(wire
-		(pts
-			(xy 24.13 93.98) (xy 24.13 97.79)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a577691d-1dc1-419f-8191-f0370ccd2fc8")
 	)
 	(wire
 		(pts
@@ -2486,16 +2221,6 @@
 	)
 	(wire
 		(pts
-			(xy 48.26 43.18) (xy 48.26 63.5)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "da6b9d4a-a0ea-4686-ba26-ed9282d784de")
-	)
-	(wire
-		(pts
 			(xy 121.92 83.82) (xy 124.46 83.82)
 		)
 		(stroke
@@ -2516,16 +2241,6 @@
 	)
 	(wire
 		(pts
-			(xy 16.51 86.36) (xy 16.51 77.47)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "e59e4b25-f19d-4fa4-b604-ae8e2c7c9ae4")
-	)
-	(wire
-		(pts
 			(xy 194.31 71.12) (xy 194.31 73.66)
 		)
 		(stroke
@@ -2533,16 +2248,6 @@
 			(type default)
 		)
 		(uuid "e790e715-ba75-4b2e-81e9-63076f04e681")
-	)
-	(wire
-		(pts
-			(xy 16.51 77.47) (xy 24.13 77.47)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "e7a46c5b-85ca-4b08-850d-9ba6f246a827")
 	)
 	(wire
 		(pts
@@ -2556,7 +2261,17 @@
 	)
 	(wire
 		(pts
-			(xy 187.96 76.2) (xy 187.96 36.83)
+			(xy 48.26 43.18) (xy 48.26 68.58)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f06b1c5e-12fd-4d16-80fe-ebf46f106a53")
+	)
+	(wire
+		(pts
+			(xy 187.96 76.2) (xy 187.96 38.1)
 		)
 		(stroke
 			(width 0)
@@ -2584,15 +2299,49 @@
 		)
 		(uuid "fe32b7b2-c56d-491d-80ea-015452288f86")
 	)
-	(text "This is a long\npiece of text\nthat should be serialized\nas a line with escapes\nand turned back into text\nwith \\n characters."
-		(exclude_from_sim no)
-		(at 111.76 55.88 0)
+	(global_label "~{POR}"
+		(shape input)
+		(at 54.61 88.9 180)
+		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
+			(justify right)
 		)
-		(uuid "c82e1783-b5e7-488e-8a30-013fc027ce35")
+		(uuid "48ada7f7-d179-48e4-9533-2a504da33184")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 47.7543 88.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "CLK"
+		(shape input)
+		(at 54.61 86.36 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "dfab49d8-ccda-40f5-9156-1e4db4014bba")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 48.0567 86.36 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
 	)
 	(symbol
 		(lib_id "power:VCC")
@@ -2662,7 +2411,7 @@
 	)
 	(symbol
 		(lib_id "power:VCC")
-		(at 24.13 57.15 0)
+		(at 52.07 58.42 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -2671,7 +2420,7 @@
 		(fields_autoplaced yes)
 		(uuid "4b91e3b7-3685-4e2b-92ed-0c6a081230cf")
 		(property "Reference" "#PWR05"
-			(at 24.13 60.96 0)
+			(at 52.07 62.23 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2680,7 +2429,7 @@
 			)
 		)
 		(property "Value" "VCC"
-			(at 24.13 52.07 0)
+			(at 52.07 53.34 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2688,7 +2437,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 24.13 57.15 0)
+			(at 52.07 58.42 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2697,7 +2446,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 24.13 57.15 0)
+			(at 52.07 58.42 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2706,7 +2455,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"VCC\""
-			(at 24.13 57.15 0)
+			(at 52.07 58.42 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3006,10 +2755,9 @@
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "7ee712d0-a3c5-4b01-8004-4c5d496228f3")
 		(property "Reference" "J1"
-			(at 209.55 73.6599 0)
+			(at 205.74 67.31 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3018,7 +2766,7 @@
 			)
 		)
 		(property "Value" "Conn_01x04"
-			(at 209.55 76.1999 0)
+			(at 201.93 82.55 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -3365,7 +3113,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "\"74LS\\n175\""
+		(property "Value" "74LS175"
 			(at 163.4841 60.96 0)
 			(effects
 				(font
@@ -3585,79 +3333,6 @@
 			(project ""
 				(path "/9e6cafd0-a629-4042-bd25-6234388dab21"
 					(reference "#PWR02")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Oscillator:CXO_DIP8")
-		(at 24.13 86.36 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "dd1b3277-c31e-4f3f-8e48-f7e972d20c22")
-		(property "Reference" "X1"
-			(at 31.75 81.28 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "CXO_DIP8"
-			(at 29.21 78.74 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "Oscillator:Oscillator_DIP-8"
-			(at 35.56 95.25 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "http://cdn-reichelt.de/documents/datenblatt/B400/OSZI.pdf"
-			(at 21.59 86.36 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Crystal Clock Oscillator, DIP8-style metal package"
-			(at 24.13 86.36 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "4e759139-6d31-4711-a53c-135ae779e51c")
-		)
-		(pin "4"
-			(uuid "7dd4ed53-a272-4f82-9126-255953d4cf96")
-		)
-		(pin "5"
-			(uuid "e4eaa4b2-c2a2-4884-88ca-cf6399463dfd")
-		)
-		(pin "8"
-			(uuid "e4fb1b0d-1e9b-48c0-b328-05b58d41d5d3")
-		)
-		(instances
-			(project "Sample"
-				(path "/9e6cafd0-a629-4042-bd25-6234388dab21"
-					(reference "X1")
 					(unit 1)
 				)
 			)

@@ -105,7 +105,7 @@ func Tokenize(input string) ([]Token, error) {
 	}
 
     if currentToken != "" {
-		return nil, fmt.Errorf("netlist has mismatched parens", currentLine)
+		return nil, fmt.Errorf("netlist has mismatched parens")
 	}
 
 	return tokens, nil
@@ -201,8 +201,7 @@ func parse(netlist string) (*ModelNode, error) {
 	return previousNode, nil
 }
 
-// OK, process the tree of model nodes into some C code
-
+// Debug function
 func dump(m *ModelNode, indent int) {
 	msg("%s%s\n", strings.Repeat(" ", 2*indent), m)
 	for _, c := range m.Children {

@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include "sim.h"
+#include "types.h"
 
 int simulate(void);
 
@@ -43,15 +44,17 @@ int main(int ac, char** av) {
     return exitCode;
 }
 
-bitvec_t bv_undef;
-bitvec_t bv_highz;
-bitvec_t bv_ones;
-bitvec_t bv_zeroes;
+bitvec16_t bv16_ones = { BV16_ALL, BV16_NONE, BV16_NONE, 0};
+bitvec16_t bv16_zeroes = { BV16_NONE, BV16_NONE, BV16_NONE, 0};
+bitvec16_t bv16_undef = { BV16_NONE, BV16_ALL, BV16_NONE, 0};
+bitvec16_t bv16_highz = { BV16_NONE, BV16_NONE, BV16_ALL, 0};
 
-int simulate() { // return exit code, 0 for success or 2 for error
-    bitvec_t LS86  = bv_undef;
-    bitvec_t LS175 = bv_zeroes; // 175 has a master reset, no modeled for now.
+bitvec64_t bv64_ones = { BV64_ALL, BV64_NONE, BV64_NONE, 0};
+bitvec64_t bv64_zeroes = { BV64_NONE, BV64_NONE, BV64_NONE, 0};
+bitvec64_t bv64_undef = { BV64_NONE, BV64_ALL, BV64_NONE, 0};
+bitvec64_t bv64_highz = { BV64_NONE, BV64_NONE, BV64_ALL, 0};
 
-
+int simulate(void) { // return exit code, 0 for success or 2 for error
+    return 0;
 }
 

@@ -41,7 +41,7 @@ extern bitvec64_t bv64_zeroes;
 
 #define BV16_ALL  ((bit16_t)0xFFFF)
 #define BV16_NONE ((bit16_t)0)
-#define BV64_ALL  ((bit64_t)0xFFFF_FFFF_FFFF_FFFF)
+#define BV64_ALL  ((bit64_t)0xFFFFFFFFFFFFFFFF)
 #define BV64_NONE ((bit64_t)0)
 
 #endif // TYPES_H
