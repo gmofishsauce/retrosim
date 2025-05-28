@@ -6,22 +6,29 @@
  */
 package main
 
+import "fmt"
+
 func transpile(root *ModelNode) error {
 	componentTypes, err := getTypes(root)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get component types: %w", err)
 	}
 
 	componentInstances, err := getInstances(root, componentTypes)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get component instances: %w", err)
+	}
+
+	netInstances, err := getNets(root, componentInstances)
+	if err != nil {
+		return fmt.Errorf("failed to process nets: %w", err)
 	}
 
 	if err := emitTopComment(root); err != nil {
-		return err
+		return fmt.Errorf("failed to emit top comment: %w", err)
 	}
 
-	msg("%d types, %d instances\n", len(componentTypes), len(componentInstances))
+	msg("%d types, %d instances, %d nets\n", len(componentTypes), len(componentInstances), len(netInstances))
 	return nil
 }
 
@@ -112,16 +119,29 @@ type NetInstance struct {
 }
 
 // NetNodes are references to other types, which have to be looked up
-func findInstance(ref string) *ComponentInstance {
-	return nil // TODO
+func findInstance(ref string, allInstances []*ComponentInstance) *ComponentInstance {
+	for _, instance := range allInstances {
+		if instance.ref == ref {
+			return instance
+		}
+	}
+	return nil
 }
 
-func findPin(part *ComponentInstance, pin string) *PinInfo {
-	return nil // TODO
+func findPin(part *ComponentInstance, pinNumStr string) *PinInfo {
+	if part == nil || part.componentType == nil {
+		return nil
+	}
+	for _, pInfo := range part.componentType.pins {
+		if pInfo.num == pinNumStr {
+			return pInfo
+		}
+	}
+	return nil
 }
 
 // Get the nets from the schematic
-func getNets(root *ModelNode) ([]*NetInstance, error) {
+func getNets(root *ModelNode, allInstances []*ComponentInstance) ([]*NetInstance, error) {
 	var netInstances []*NetInstance
 	for _, n := range(q(root, "nets:net")) {
 		code := qss(n, "code")
@@ -129,18 +149,14 @@ func getNets(root *ModelNode) ([]*NetInstance, error) {
 		var netNodes []*NetNode
 		for _, d := range(q(n, "node")) {
 			ref := qss(d, "ref")
-			part := findInstance(ref)
+			part := findInstance(ref, allInstances)
 			if part == nil {
-				// TODO this error should cause transpile failure
-				msg("part %s in net %s not found\n", ref, name)
-				break
+				return nil, fmt.Errorf("part %s (referenced in net %s - code %s) not found in component instances", ref, name, code)
 			}
-			num := qss(d, "pin")
-			pin := findPin(part, num)
+			pinNumStr := qss(d, "pin")
+			pin := findPin(part, pinNumStr)
 			if pin == nil {
-				// TODO this error should cause transpile failure
-				msg("pin %s of part %s not found\n", ref, num)
-				break
+				return nil, fmt.Errorf("pin %s of part %s (referenced in net %s - code %s) not found", pinNumStr, ref, name, code)
 			}
 			netNodes = append(netNodes, &NetNode{part, pin})
 		}
@@ -148,4 +164,3 @@ func getNets(root *ModelNode) ([]*NetInstance, error) {
 	}
 	return netInstances, nil
 }
-

@@ -54,37 +54,3 @@ func main() {
 	msg("done\n")
 	os.Exit(0)
 }
-
-// A few calls to exercise code.
-// Not really tests
-func runSomeTests(root *ModelNode) error {
-	dump(root, 0)
-
-	qstr := "version"
-	single := q(root, qstr)
-	if len(single) != 1 {
-		msg("q(root, %s) found %d nodes!?\n", qstr, len(single))
-		return fmt.Errorf("query failed: %s", qstr)
-	}
-	msg("%s: %v\n", qstr, single[0].Value)
-
-	qstr = "version"
-	ss := qss(root, qstr)
-	if ss == "NOTFOUND" || ss == "MULTIPLE" {
-		msg("q(root, %s) returned %s\n", qstr, ss)
-		return fmt.Errorf("query failed: %s", qstr)
-	}
-	msg("%s: %s\n", qstr, ss)
-
-	qstr = "design:sheet:title_block:company"
-	single = q(root, qstr)
-	if len(single) != 1 {
-		msg("q(root, %s) found %d nodes!?\n", qstr, len(single))
-		return fmt.Errorf("query failed: %s", qstr)
-	}
-	msg("%s: %s\n", qstr, single[0].Value)
-
-	msg("some tests passed\n")
-	return nil
-}
-
