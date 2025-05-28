@@ -8,28 +8,32 @@ package main
 
 import "fmt"
 
-func transpile(root *ModelNode) error {
+// BindingData holds all the structured information extracted from the netlist.
+type BindingData struct {
+	ComponentTypes     []*ComponentType
+	ComponentInstances []*ComponentInstance
+	NetInstances       []*NetInstance
+}
+
+// bind processes the parsed netlist model (root) and extracts structured
+// information about component types, instances, and nets.
+func bind(root *ModelNode) (*BindingData, error) {
 	componentTypes, err := getTypes(root)
 	if err != nil {
-		return fmt.Errorf("failed to get component types: %w", err)
+		return nil, fmt.Errorf("failed to get component types: %w", err)
 	}
 
 	componentInstances, err := getInstances(root, componentTypes)
 	if err != nil {
-		return fmt.Errorf("failed to get component instances: %w", err)
+		return nil, fmt.Errorf("failed to get component instances: %w", err)
 	}
 
 	netInstances, err := getNets(root, componentInstances)
 	if err != nil {
-		return fmt.Errorf("failed to process nets: %w", err)
+		return nil, fmt.Errorf("failed to process nets: %w", err)
 	}
-
-	if err := emitTopComment(root); err != nil {
-		return fmt.Errorf("failed to emit top comment: %w", err)
-	}
-
 	msg("%d types, %d instances, %d nets\n", len(componentTypes), len(componentInstances), len(netInstances))
-	return nil
+	return &BindingData{componentTypes, componentInstances, netInstances}, nil
 }
 
 // Pin information for each pin on each type

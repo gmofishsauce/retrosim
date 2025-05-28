@@ -7,11 +7,11 @@
 package main
 
 import (
-    "fmt"
+	"fmt"
 )
 
-// Use this wrapper for printf to emit all the content
-func emit(format string, a ...any) (n int, err error) {
+// emitf is a wrapper for fmt.Printf to direct all generated output.
+func emitf(format string, a ...any) (n int, err error) {
 	n, err = fmt.Printf(format, a...)
 	return n, err
 }
@@ -39,7 +39,7 @@ func emitTopComment(root *ModelNode) error {
 	if designTool != "Eeschema 8.0.8" || schemaVersion != "E" {
 		msg("WARNING: netlist was written by an untested version of KiCad. YMMV.\n")
 	}
-	emit(topCommentStart, companyName, designTool, schemaVersion, designSource, designDate)
+	emitf(topCommentStart, companyName, designTool, schemaVersion, designSource, designDate)
 
 	// Now emit a line for each sheet in the schematic.
 	for _, sheet := range(q(root, "design:sheet")) {
@@ -47,12 +47,26 @@ func emitTopComment(root *ModelNode) error {
 		sheetName := qss(sheet, "name")
 		title := qss(sheet, "title_block:title")
 		if valid(title) {
-			emit(" * sheet %s: %s (%s)\n", sheetNumber, sheetName, title)
+			emitf(" * sheet %s: %s (%s)\n", sheetNumber, sheetName, title)
 		} else {
-			emit(" * sheet %s: %s\n", sheetNumber, sheetName)
+			emitf(" * sheet %s: %s\n", sheetNumber, sheetName)
 		}
 	}
 
-	emit(topCommentEnd)
+	emitf(topCommentEnd)
+	return nil
+}
+
+// emit is the main entry point for code generation.
+// It orchestrates calls to various specific emitting functions.
+func emit(root *ModelNode, data *BindingData) error {
+	if err := emitTopComment(root); err != nil {
+		return fmt.Errorf("failed to emit top comment: %w", err)
+	}
+
+	// TODO: Add calls to emit C declarations for components using data.ComponentTypes
+	// TODO: Add calls to emit C declarations for nets/connections using data.NetInstances
+	// TODO: Add calls to emit C declarations for component instances using data.ComponentInstances
+
 	return nil
 }

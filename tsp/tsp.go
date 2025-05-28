@@ -45,12 +45,19 @@ func main() {
 		msg("%s: parsing %s: %v\n", os.Args[0], files[0], err)
         os.Exit(2)
     }
-    msg("parse complete, transpiling...\n")
+    msg("parse complete, binding data...\n")
 
-	if err := transpile(root); err != nil {
-		msg("transpile failed: %v\n", err)
+	bindingData, err := bind(root)
+	if err != nil {
+		msg("data binding failed: %v\n", err)
 		os.Exit(2)
 	}
-	msg("done\n")
+	msg("binding complete, emitting code...\n")
+
+	if err := emit(root, bindingData); err != nil {
+		msg("code emission failed: %v\n", err)
+		os.Exit(3)
+	}
+	msg("successfully processed %s\n", files[0])
 	os.Exit(0)
 }
