@@ -40,21 +40,21 @@ func main() {
 	}
 
 	netlist := string(bytes)
-	root, err := parse(netlist)
+	ast, err := parse(netlist)
     if err != nil {
 		msg("%s: parsing %s: %v\n", os.Args[0], files[0], err)
         os.Exit(2)
     }
     msg("parse complete, binding data...\n")
 
-	bindingData, err := bind(root)
+	bindingData, err := bind(ast)
 	if err != nil {
 		msg("data binding failed: %v\n", err)
 		os.Exit(2)
 	}
 	msg("binding complete, emitting code...\n")
 
-	if err := emit(root, bindingData); err != nil {
+	if err := emit(ast, bindingData); err != nil {
 		msg("code emission failed: %v\n", err)
 		os.Exit(3)
 	}

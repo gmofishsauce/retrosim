@@ -11,13 +11,13 @@ import (
 	"testing"
 )
 
-// getTestRootNode provides a parsed *ModelNode for testing.
+// getTestAst provides a parsed *ModelNode (as an AST) for testing.
 // It parses a predefined netlist string.
 // Note: The content of `testNetlist` is a placeholder. It needs to be a valid
 // netlist string that your `parse` function can process and that contains
 // the data expected by the queries in the tests (e.g., "version", "design:sheet:title_block:company").
 // The current example assumes a simple S-expression format.
-func getTestRootNode(t *testing.T) *ModelNode {
+func getTestAst(t *testing.T) *ModelNode {
 	// This netlist string should be in the format expected by your `parse` function.
 	// It should contain elements that can be queried by "version" and
 	// "design:sheet:title_block:company".
@@ -31,55 +31,55 @@ func getTestRootNode(t *testing.T) *ModelNode {
 		)
 	)`
 
-	root, err := parse(testNetlist) // Assumes `parse` is defined in the main package
+	ast, err := parse(testNetlist) // Assumes `parse` is defined in the main package
 	if err != nil {
 		t.Fatalf("Failed to parse test netlist: %v", err)
 	}
-	if root == nil {
-		t.Fatalf("parse returned nil root for test netlist")
+	if ast == nil {
+		t.Fatalf("parse returned nil AST for test netlist")
 	}
-	return root
+	return ast
 }
 
 func TestQueryVersionSingleNode(t *testing.T) {
-	root := getTestRootNode(t)
+	ast := getTestAst(t)
 
 	qstr := "version"
-	single := q(root, qstr) // Assumes `q` and `ModelNode` are defined in the main package
+	single := q(ast, qstr) // Assumes `q` and `ModelNode` are defined in the main package
 
 	if len(single) != 1 {
-		t.Errorf("q(root, %q) expected 1 node, got %d", qstr, len(single))
+		t.Errorf("q(ast, %q) expected 1 node, got %d", qstr, len(single))
 	} else {
 		// The original code printed single[0].Value. We log it here for debugging.
 		// For a more complete test, you might assert its value:
 		// if single[0].Value != "expected_version_value" { t.Errorf(...) }
-		t.Logf("q(root, %q) found node with value: %v", qstr, single[0].Value)
+		t.Logf("q(ast, %q) found node with value: %v", qstr, single[0].Value)
 	}
 }
 
 func TestQueryVersionString(t *testing.T) {
-	root := getTestRootNode(t)
+	ast := getTestAst(t)
 
 	qstr := "version"
-	ss := qss(root, qstr) // Assumes `qss` is defined in the main package
+	ss := qss(ast, qstr) // Assumes `qss` is defined in the main package
 
 	if ss == "NOTFOUND" || ss == "MULTIPLE" {
-		t.Errorf("qss(root, %q) returned %s, expected a valid string value", qstr, ss)
+		t.Errorf("qss(ast, %q) returned %s, expected a valid string value", qstr, ss)
 	} else {
-		t.Logf("qss(root, %q) returned: %s", qstr, ss)
+		t.Logf("qss(ast, %q) returned: %s", qstr, ss)
 	}
 }
 
 func TestQueryCompanySingleNode(t *testing.T) {
-	root := getTestRootNode(t)
+	ast := getTestAst(t)
 
 	qstr := "design:sheet:title_block:company"
-	single := q(root, qstr)
+	single := q(ast, qstr)
 
 	if len(single) != 1 {
-		t.Errorf("q(root, %q) expected 1 node, got %d", qstr, len(single))
+		t.Errorf("q(ast, %q) expected 1 node, got %d", qstr, len(single))
 	} else {
-		t.Logf("q(root, %q) found node with value: %v", qstr, single[0].Value)
+		t.Logf("q(ast, %q) found node with value: %v", qstr, single[0].Value)
 	}
 }
 
@@ -92,14 +92,14 @@ func TestParseSampleNetlistFile(t *testing.T) {
 	}
 
 	netlist := string(bytes)
-	root, err := parse(netlist) // Assumes `parse` is defined in the main package
+	ast, err := parse(netlist) // Assumes `parse` is defined in the main package
 
 	if err != nil {
 		t.Fatalf("parse(%s) returned an error: %v", netlistFilename, err)
 	}
 
-	if root == nil {
-		t.Fatalf("parse(%s) returned a nil root node without an error", netlistFilename)
+	if ast == nil {
+		t.Fatalf("parse(%s) returned a nil AST without an error", netlistFilename)
 	}
 
 	// If we reach here, the parse was successful.

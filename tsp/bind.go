@@ -17,18 +17,18 @@ type BindingData struct {
 
 // bind processes the parsed netlist model (root) and extracts structured
 // information about component types, instances, and nets.
-func bind(root *ModelNode) (*BindingData, error) {
-	componentTypes, err := getTypes(root)
+func bind(ast *ModelNode) (*BindingData, error) {
+	componentTypes, err := getTypes(ast)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get component types: %w", err)
 	}
 
-	componentInstances, err := getInstances(root, componentTypes)
+	componentInstances, err := getInstances(ast, componentTypes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get component instances: %w", err)
 	}
 
-	netInstances, err := getNets(root, componentInstances)
+	netInstances, err := getNets(ast, componentInstances)
 	if err != nil {
 		return nil, fmt.Errorf("failed to process nets: %w", err)
 	}
@@ -54,14 +54,14 @@ type ComponentType struct {
 	emit bool
 }
 
-func getTypes(root *ModelNode) ([]*ComponentType, error) {
+func getTypes(ast *ModelNode) ([]*ComponentType, error) {
 	var componentTypes []*ComponentType
 
-	for _, t := range(q(root, "libparts:libpart")) {
+	for _, t := range(q(ast, "libparts:libpart")) {
 		lib := qss(t, "lib")
 		part := qss(t, "part")
 		var pins []*PinInfo
-		for _, p := range(q(t, "pins:pin")) {
+		for _, p := range(q(t, "pins:pin")) { // This q call is on a child node, not the main ast
 			pins = append(pins, &PinInfo{qss(p, "num"), qss(p, "name"), qss(p, "type")})
 		}
 		componentTypes = append(componentTypes, &ComponentType{lib, part, pins, false})
@@ -86,9 +86,9 @@ func selectComponent(ref string) bool {
 	return refCh == 'A' || refCh == 'J' || refCh == 'U'
 }
 
-func getInstances(root *ModelNode, types []*ComponentType) ([]*ComponentInstance, error) {
+func getInstances(ast *ModelNode, types []*ComponentType) ([]*ComponentInstance, error) {
 	var componentInstances []*ComponentInstance
-	for _, c := range(q(root, "components:comp")) {
+	for _, c := range(q(ast, "components:comp")) {
 		ref := qss(c, "ref")
 		if selectComponent(ref) {
 			lib := qss(c, "libsource:lib")
@@ -145,13 +145,13 @@ func findPin(part *ComponentInstance, pinNumStr string) *PinInfo {
 }
 
 // Get the nets from the schematic
-func getNets(root *ModelNode, allInstances []*ComponentInstance) ([]*NetInstance, error) {
+func getNets(ast *ModelNode, allInstances []*ComponentInstance) ([]*NetInstance, error) {
 	var netInstances []*NetInstance
-	for _, n := range(q(root, "nets:net")) {
+	for _, n := range(q(ast, "nets:net")) {
 		code := qss(n, "code")
 		name := qss(n, "name")
 		var netNodes []*NetNode
-		for _, d := range(q(n, "node")) {
+		for _, d := range(q(n, "node")) { // This q call is on a child node, not the main ast
 			ref := qss(d, "ref")
 			part := findInstance(ref, allInstances)
 			if part == nil {

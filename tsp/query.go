@@ -24,9 +24,9 @@ func find(m *ModelNode, name string) []*ModelNode {
 // Return a set of ModelNodes named a:b:c... where the node "a"
 // is a child of the root node. Multiple hits are possible at
 // every level.
-func q(root *ModelNode, selector string) []*ModelNode {
+func q(ast *ModelNode, selector string) []*ModelNode {
 	names := strings.Split(selector, ":")
-	candidates := []*ModelNode{root}
+	candidates := []*ModelNode{ast}
 	var newCandidates []*ModelNode
 
 	if len(names) == 0 {
@@ -50,8 +50,8 @@ func q(root *ModelNode, selector string) []*ModelNode {
 // in-band error returns are used: if the query returns no
 // nodes, the return value is NOTFOUND and if the query returns
 // multiple nodes, the return value is MULTIPLE.
-func qss(root *ModelNode, selector string) string {
-	result := q(root, selector)
+func qss(ast *ModelNode, selector string) string {
+	result := q(ast, selector)
 	if len(result) == 0 {
 		return "NOTFOUND"
 	}
@@ -72,4 +72,3 @@ func qss(root *ModelNode, selector string) string {
 func valid(s string) bool {
 	return len(s) > 0 && s != "NOTFOUND" && s != "MULTIPLE"
 }
-

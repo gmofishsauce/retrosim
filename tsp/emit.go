@@ -30,11 +30,11 @@ const topCommentStart = `/*
 
 const topCommentEnd = " */\n"
 
-func emitTopComment(root *ModelNode) error {
-	schemaVersion := qss(root, "version")
-	designSource := qss(root, "design:source")
-	designDate := qss(root, "design:date")
-	designTool := qss(root, "design:tool")
+func emitTopComment(ast *ModelNode) error {
+	schemaVersion := qss(ast, "version")
+	designSource := qss(ast, "design:source")
+	designDate := qss(ast, "design:date")
+	designTool := qss(ast, "design:tool")
 	companyName := "(TODO owning company here)"
 	if designTool != "Eeschema 8.0.8" || schemaVersion != "E" {
 		msg("WARNING: netlist was written by an untested version of KiCad. YMMV.\n")
@@ -42,7 +42,7 @@ func emitTopComment(root *ModelNode) error {
 	emitf(topCommentStart, companyName, designTool, schemaVersion, designSource, designDate)
 
 	// Now emit a line for each sheet in the schematic.
-	for _, sheet := range(q(root, "design:sheet")) {
+	for _, sheet := range(q(ast, "design:sheet")) {
 		sheetNumber := qss(sheet, "number")
 		sheetName := qss(sheet, "name")
 		title := qss(sheet, "title_block:title")
@@ -59,8 +59,8 @@ func emitTopComment(root *ModelNode) error {
 
 // emit is the main entry point for code generation.
 // It orchestrates calls to various specific emitting functions.
-func emit(root *ModelNode, data *BindingData) error {
-	if err := emitTopComment(root); err != nil {
+func emit(ast *ModelNode, data *BindingData) error {
+	if err := emitTopComment(ast); err != nil {
 		return fmt.Errorf("failed to emit top comment: %w", err)
 	}
 
