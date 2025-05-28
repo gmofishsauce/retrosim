@@ -6,10 +6,6 @@
  */
 package main
 
-import (
-	"fmt"
-)
-
 func transpile(root *ModelNode) error {
 	componentTypes, err := getTypes(root)
 	if err != nil {
@@ -153,53 +149,3 @@ func getNets(root *ModelNode) ([]*NetInstance, error) {
 	return netInstances, nil
 }
 
-// TODO split this file into bind.go (above) and emit.go (below)
-
-// Emitters
-
-// Use this wrapper for printf to emit all the content
-func emit(format string, a ...any) (n int, err error) {
-	n, err = fmt.Printf(format, a...)
-	return n, err
-}
-
-// Generate a useful top comment
-// TODO get the company and put it in the copyright
-const topCommentStart = `/*
- * Copyright (c) %s 2025. All rights reserved.
- * This file was generated from a KiCad schematic. Do not edit.
- *
- * Tool: KiCad %s (schema version %s)
- * From: %s
- * Date: %s
- *
-`
-
-const topCommentEnd = " */\n"
-
-func emitTopComment(root *ModelNode) error {
-	schemaVersion := qss(root, "version")
-	designSource := qss(root, "design:source")
-	designDate := qss(root, "design:date")
-	designTool := qss(root, "design:tool")
-	companyName := "(TODO owning company here)"
-	if designTool != "Eeschema 8.0.8" || schemaVersion != "E" {
-		msg("WARNING: netlist was written by an untested version of KiCad. YMMV.\n")
-	}
-	emit(topCommentStart, companyName, designTool, schemaVersion, designSource, designDate)
-
-	// Now emit a line for each sheet in the schematic.
-	for _, sheet := range(q(root, "design:sheet")) {
-		sheetNumber := qss(sheet, "number")
-		sheetName := qss(sheet, "name")
-		title := qss(sheet, "title_block:title")
-		if valid(title) {
-			emit(" * sheet %s: %s (%s)\n", sheetNumber, sheetName, title)
-		} else {
-			emit(" * sheet %s: %s\n", sheetNumber, sheetName)
-		}
-	}
-
-	emit(topCommentEnd)
-	return nil
-}
