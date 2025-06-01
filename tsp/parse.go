@@ -188,10 +188,9 @@ func parse(netlist string) (*ModelNode, error) {
 					currentNode.Children = append(currentNode.Children, c)
 				}
 				currentNode = c
-				dbg("currentNode: %s\n", currentNode)
+				dbg("ModelNode: %s line %d\n", currentNode, token.Line)
 			} else {
 				currentNode.Value = append(currentNode.Value, token.Value)
-				dbg("stash %s in %s\n", token.Value, currentNode)
 			}
 			state = NEED_ANY
 		}

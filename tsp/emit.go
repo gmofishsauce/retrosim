@@ -8,12 +8,51 @@ package main
 
 import (
 	"fmt"
+	"strings"
 )
+
+// uniq is a last resort for making unique identifiers
+var uniq int
 
 // emitf is a wrapper for fmt.Printf to direct all generated output.
 func emitf(format string, a ...any) (n int, err error) {
 	n, err = fmt.Printf(format, a...)
 	return n, err
+}
+
+func isCIdentifierChar(index int, r rune) bool {
+	if 'a' <= r && r <= 'z' || 'A' <= r && r <= 'Z' || r == '_' {
+		return true
+	}
+	return index != 0 && '0' <= r && r <= '9'
+}
+
+// Create a C-compatible name for a node in a network
+// We assume the net code, node ref, and node pin are ASCII.
+func makeNetNodeName(ni *NetInstance, nn *NetNode) string {
+	var sb strings.Builder
+	sb.WriteRune('N')
+	sb.WriteString(ni.code)
+	sb.WriteRune('_')
+	sb.WriteString(nn.part.ref)
+	sb.WriteRune('_')
+	sb.WriteString(nn.pin.num)
+	if len(nn.pin.name) != 0 && nn.pin.name != "NOTFOUND" {
+		sb.WriteRune('_')
+		for i, r := range nn.pin.name {
+			if isCIdentifierChar(i, r) {
+				sb.WriteRune(r)
+			} else if r == '{' || r == '}' {
+				// drop these grouping chars
+			} else if r == '~' {
+				sb.WriteString("NOT_")
+			} else if r > 128 {
+				sb.WriteString(fmt.Sprintf("%x", string(r)))
+			}
+			// else drop this ASCII non-identifier char
+		}
+	}
+	return sb.String()
 }
 
 // Generate a useful top comment
@@ -62,6 +101,26 @@ func emitTopComment(ast *ModelNode) error {
 func emit(ast *ModelNode, data *BindingData) error {
 	if err := emitTopComment(ast); err != nil {
 		return fmt.Errorf("failed to emit top comment: %w", err)
+	}
+
+	// Emit the wire nets.
+	// TODO 4 special wire nets based on the net name: VCC, GND, CLK, POR
+	// TODO as bits 0, 1, 2, and 3
+	// TODO filter all nets where the net name contains the string "unconnected"
+	// TODO Allocate enough bitvec64_t's to fit every unfiltered net
+	// TODO allocate a bit for each net.
+	bit := 4
+	emitf("bitvec64_t wires;")
+	for _, ni := range data.NetInstances {
+		if !strings.Contains(strings.ToUpper(ni.name), "UNCONNECTED") {
+			for _, nn := range ni.netNodes {
+				nodeName := makeNetNodeName(ni, nn)
+				emitf("#define set_%s (wires |= (1<<%d))\n", nodeName, bit)
+				emitf("#define clr_%s (wires &= ~(1<<%d))\n", nodeName, bit)
+				emitf("#define get_%s (wires & (1<<%d))\n", nodeName, bit)
+				bit++;
+			}
+		}
 	}
 
 	// TODO: Add calls to emit C declarations for components using data.ComponentTypes
