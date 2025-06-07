@@ -11,10 +11,13 @@ import (
 	"strings"
 )
 
-// uniq is a last resort for making unique identifiers
-var uniq int
+// Prefix for generated symbols. TODO: allow overriding
+var uniquePrefix = "Tsp"
 
-// emitf is a wrapper for fmt.Printf to direct all generated output.
+// uniq is a last resort for making unique identifiers
+var nextUniqueValue int
+
+// emitf is a wrapper for fmt.Printf for generated output.
 func emitf(format string, a ...any) (n int, err error) {
 	n, err = fmt.Printf(format, a...)
 	return n, err
@@ -26,6 +29,8 @@ func isCIdentifierChar(index int, r rune) bool {
 	}
 	return index != 0 && '0' <= r && r <= '9'
 }
+
+/* Wrote this before I realized I only had to name the nets.
 
 // Create a C-compatible name for a node in a network
 // We assume the net code, node ref, and node pin are ASCII.
@@ -54,6 +59,7 @@ func makeNetNodeName(ni *NetInstance, nn *NetNode) string {
 	}
 	return sb.String()
 }
+*/
 
 // Generate a useful top comment
 // TODO get the company and put it in the copyright
@@ -96,23 +102,11 @@ func emitTopComment(ast *ModelNode) error {
 	return nil
 }
 
-// emit is the main entry point for code generation.
-// It orchestrates calls to various specific emitting functions.
-func emit(ast *ModelNode, data *BindingData) error {
-	if err := emitTopComment(ast); err != nil {
-		return fmt.Errorf("failed to emit top comment: %w", err)
-	}
-
-	// Emit the wire nets.
-	// TODO 4 special wire nets based on the net name: VCC, GND, CLK, POR
-	// TODO as bits 0, 1, 2, and 3
-	// TODO filter all nets where the net name contains the string "unconnected"
-	// TODO Allocate enough bitvec64_t's to fit every unfiltered net
-	// TODO allocate a bit for each net.
-	bit := 4
-	emitf("bitvec64_t wires;")
-	for _, ni := range data.NetInstances {
-		if !strings.Contains(strings.ToUpper(ni.name), "UNCONNECTED") {
+// Emit the definition of a net using the given bit position.
+func emitNet(ni *NetInstance, bit int) error {
+	
+			
+			/*
 			for _, nn := range ni.netNodes {
 				nodeName := makeNetNodeName(ni, nn)
 				emitf("#define set_%s (wires |= (1<<%d))\n", nodeName, bit)
@@ -120,8 +114,60 @@ func emit(ast *ModelNode, data *BindingData) error {
 				emitf("#define get_%s (wires & (1<<%d))\n", nodeName, bit)
 				bit++;
 			}
+			*/
+	return nil
+}
+
+// Emit the wire nets.
+emitNets(data *BindingData) {
+
+	// TODO Allocate enough bitvec64_t's to fit every unfiltered net
+	emitf("// Wire nets\n")
+	emitf("bitvec64_t %sWires;\n\n", UniquePrefix)
+
+	// Emit macros for the special signals defined by the simulator
+	// GND, VCC, CLK, and POR (Power On Reset). These nets don't need
+	// actual bits allocated.
+	emitf("#define GetGND() 0\n")
+	emitf("#define GetVCC() 1\n")
+	emitf("#define GetCLK() uint16_t %sGetClk(void)\n", UniquePrefix)
+	emitf("#define GetPOR() uint16_t %sGetPor(void)\n", UniquePrefix)
+	emitf("\n")
+
+	bit := 0
+	for _, ni := range data.NetInstances {
+		nameUpper := strings.ToUpper(ni.name)
+		if nameUpper == "VCC" || nameUpper == "GND" ||
+			nameUpper == "CLK" || nameUpper == "POR ||
+			strings.Contains(nameUpper, "UNCONNECTED") {
+			continue; // don't assign a bit or gen a name
 		}
+		if err := emitNet(ni, bit); err != nil {
+			return netErr
+		}
+		bit++
 	}
+}
+
+// TODO seems the "owner" field in the bitvecN_t's is not required.
+// TODO could put a field "eval" bits there allowing recursive eval.
+// TODO especially since recursive eval can be the topological sort.
+
+// emit is the main entry point for code generation.
+// It orchestrates calls to various specific emitting functions.
+func emit(ast *ModelNode, data *BindingData) error {
+	if err := emitTopComment(ast); err != nil {
+		return fmt.Errorf("failed to emit top comment: %w", err)
+	}
+	emitf("\n")
+	emitf("#include <stdint.h>\n")
+	emitf("#include "types.h\n")
+	emitf("\n")
+
+	if err := emitNets(data); err != nil {
+		return fmt.Errorf("failed to emit wire nets: %w", err)
+	}
+
 
 	// TODO: Add calls to emit C declarations for components using data.ComponentTypes
 	// TODO: Add calls to emit C declarations for nets/connections using data.NetInstances
