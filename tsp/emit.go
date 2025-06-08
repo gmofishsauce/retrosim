@@ -12,7 +12,7 @@ import (
 )
 
 // Prefix for generated symbols. TODO: allow overriding
-var uniquePrefix = "Tsp"
+var UniquePrefix = "Tsp"
 
 // uniq is a last resort for making unique identifiers
 var nextUniqueValue int
@@ -30,36 +30,78 @@ func isCIdentifierChar(index int, r rune) bool {
 	return index != 0 && '0' <= r && r <= '9'
 }
 
-/* Wrote this before I realized I only had to name the nets.
-
-// Create a C-compatible name for a node in a network
-// We assume the net code, node ref, and node pin are ASCII.
-func makeNetNodeName(ni *NetInstance, nn *NetNode) string {
+// Create a C-compatible name for a node in a net. We
+// assume the net code, node ref, and node pin are ASCII.
+// If passed the string NOTFOUND, simply returns it.
+func makeCIdentifier(s string) string {
 	var sb strings.Builder
-	sb.WriteRune('N')
-	sb.WriteString(ni.code)
-	sb.WriteRune('_')
-	sb.WriteString(nn.part.ref)
-	sb.WriteRune('_')
-	sb.WriteString(nn.pin.num)
-	if len(nn.pin.name) != 0 && nn.pin.name != "NOTFOUND" {
-		sb.WriteRune('_')
-		for i, r := range nn.pin.name {
-			if isCIdentifierChar(i, r) {
-				sb.WriteRune(r)
-			} else if r == '{' || r == '}' {
-				// drop these grouping chars
-			} else if r == '~' {
-				sb.WriteString("NOT_")
-			} else if r > 128 {
-				sb.WriteString(fmt.Sprintf("%x", string(r)))
-			}
-			// else drop this ASCII non-identifier char
+	for i, r := range s {
+		if isCIdentifierChar(i, r) {
+			sb.WriteRune(r)
+		} else if r == '~' {
+			sb.WriteString("NOT_")
+		} else if r > 128 {
+			sb.WriteString(fmt.Sprintf("%x", string(r)))
 		}
+		// else drop this ASCII non-identifier char
 	}
 	return sb.String()
 }
+
+// Create a C-compatible name for a node in a network
+// We assume the net code, node ref, and node pin are ASCII.
+/*
+ Here's a typical net:
+
+    (net (code "8") (name "Net-(U1-D0)")
+      (node (ref "U1") (pin "4") (pinfunction "D0") (pintype "input"))
+      (node (ref "U2") (pin "3") (pintype "output"))
+      (node (ref "U2") (pin "4") (pintype "input")))
+
+ The name of the net is not useful. The code makes it unique. We append
+ the most useful piece of information, which is the ID of the driver,
+ pin U2-3 in this case, and its name if it has one (this driver doesn't).
 */
+
+func makeNetName(ni *NetInstance) string {
+	var sb strings.Builder
+	sb.WriteRune('N')
+	sb.WriteString(ni.code)
+
+	var drivingNode *NetNode
+	for _, nn := range ni.netNodes {
+		// The values of .kind are defined by KiCad; they are:
+		// Input, Output, Bidirectional, Tri-state, Passive, Free, Unspecified,
+		// Power input, Power output, Open collector, Open emitter, Unconnected.
+		if nn.pin.kind == "output" || nn.pin.kind == "tri-state" {
+			drivingNode = nn
+			break
+		}
+	}
+
+	// TODO Not all nets have an obvious driver.  We need some fallbacks that
+	// will assign some kind of name to each net other than e.g. "N37". Maybe
+	// take "bidirectional" nodes as drivers, definitely open collectors,
+	// possibly power nodes, etc. If none of these work and the net itself
+	// has a name, use that (KiCad has the same problem and the netnames it
+	// generates and exports are not very useful.) Or possibly just append
+	// up to three part IDs and pin nums separated by underscores.
+
+	if drivingNode == nil {
+		// TODO fallbacks
+	} else {
+		sb.WriteString("_drv_")
+		sb.WriteString(drivingNode.part.ref)
+		sb.WriteRune('_')
+		sb.WriteString(drivingNode.pin.num)
+		if drivingNode.pin.name != "NOTFOUND" {
+			sb.WriteRune('_')
+			sb.WriteString(makeCIdentifier(drivingNode.pin.name))
+		}
+	}
+
+	return sb.String()
+}
 
 // Generate a useful top comment
 // TODO get the company and put it in the copyright
@@ -102,32 +144,18 @@ func emitTopComment(ast *ModelNode) error {
 	return nil
 }
 
-// Emit the definition of a net using the given bit position.
-func emitNet(ni *NetInstance, bit int) error {
-	
-			
-			/*
-			for _, nn := range ni.netNodes {
-				nodeName := makeNetNodeName(ni, nn)
-				emitf("#define set_%s (wires |= (1<<%d))\n", nodeName, bit)
-				emitf("#define clr_%s (wires &= ~(1<<%d))\n", nodeName, bit)
-				emitf("#define get_%s (wires & (1<<%d))\n", nodeName, bit)
-				bit++;
-			}
-			*/
-	return nil
-}
-
 // Emit the wire nets.
-emitNets(data *BindingData) {
-
+func emitNets(data *BindingData) error {
 	// TODO Allocate enough bitvec64_t's to fit every unfiltered net
 	emitf("// Wire nets\n")
-	emitf("bitvec64_t %sWires;\n\n", UniquePrefix)
+	emitf("bitvec64_t %sWires;\n", UniquePrefix)
+	emitf("\n")
 
 	// Emit macros for the special signals defined by the simulator
 	// GND, VCC, CLK, and POR (Power On Reset). These nets don't need
 	// actual bits allocated.
+	// TODO make it possible to define other nets as 1 or 0.
+	// TODO make it possible to change the name of POR and CLK.
 	emitf("#define GetGND() 0\n")
 	emitf("#define GetVCC() 1\n")
 	emitf("#define GetCLK() uint16_t %sGetClk(void)\n", UniquePrefix)
@@ -138,15 +166,50 @@ emitNets(data *BindingData) {
 	for _, ni := range data.NetInstances {
 		nameUpper := strings.ToUpper(ni.name)
 		if nameUpper == "VCC" || nameUpper == "GND" ||
-			nameUpper == "CLK" || nameUpper == "POR ||
-			strings.Contains(nameUpper, "UNCONNECTED") {
+			nameUpper == "CLK" || nameUpper == "POR" ||
+			strings.Contains(nameUpper, "UNCONNECTED") ||
+			nameUpper[0] == '/' { // buses start with /
 			continue; // don't assign a bit or gen a name
 		}
 		if err := emitNet(ni, bit); err != nil {
-			return netErr
+			return err
 		}
 		bit++
 	}
+	return nil
+}
+
+// Emit the definition of a net using the given bit position.
+func emitNet(ni *NetInstance, bit int) error {
+	netName := makeNetName(ni)
+	emitf("#define Set%s (wires |= (1<<%d))\n", netName, bit)
+	emitf("#define Clr%s (wires &= ~(1<<%d))\n", netName, bit)
+	emitf("#define Get%s (wires & (1<<%d))\n", netName, bit)
+	bit++;
+	return nil
+}
+
+func emitBuses(data *BindingData) error {
+/*
+			// Bus. KiCad delimits the bus name from the wire number
+			// within the bus using a '-'. But we don't want to split()
+			// on the '-' because nothing prevents someone from putting
+			// a '-' into a bus name. So we want the last '-'.
+			sepIndex := strings.LastIndexByte(nameUpper, byte('-'))
+			if sepIndex == -1 {
+				return fmt.Errorf("bus name has no '-' separator: %s", nameUpper)
+			}
+			busName := nameUpper[1:sepIndex]
+			wireID := nameUpper[sepIndex+1:]
+		}
+	// When we encounter a net that is part of a bus in the first pass
+	// over the next, we place it in this map keyed by bus name ordered
+	// by bus element. Note that the bus element need not be a number.
+	// If it is a number, the slice will be ordered numerically. If not,
+	// the ordering is lexical.
+	// map[string][]*NetInstance   FIXME
+*/
+	return nil
 }
 
 // TODO seems the "owner" field in the bitvecN_t's is not required.
@@ -161,11 +224,14 @@ func emit(ast *ModelNode, data *BindingData) error {
 	}
 	emitf("\n")
 	emitf("#include <stdint.h>\n")
-	emitf("#include "types.h\n")
+	emitf("#include \"types.h\"\n")
 	emitf("\n")
 
 	if err := emitNets(data); err != nil {
 		return fmt.Errorf("failed to emit wire nets: %w", err)
+	}
+	if err := emitBuses(data); err != nil {
+		return fmt.Errorf("failed to emit buses: %w", err)
 	}
 
 
