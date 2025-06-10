@@ -8,6 +8,9 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"os"
+	"path"
 	"strings"
 )
 
@@ -15,11 +18,60 @@ import (
 var UniquePrefix = "Tsp"
 
 // uniq is a last resort for making unique identifiers
-var nextUniqueValue int
+var nextUniqueValue int = 1137
 
-// emitf is a wrapper for fmt.Printf for generated output.
-func emitf(format string, a ...any) (n int, err error) {
-	n, err = fmt.Printf(format, a...)
+// emith and emitc take the same arguments as printf().
+// They write to the output .h or .c files, respectively,
+// appending a newline if one isn't passed. Emitting an
+// empty string will product a blank line.
+
+var cFileName string
+var hFileName string
+var cFile io.Writer
+var hFile io.Writer
+
+// The output files are written to the Gen subdirectory
+// if it exists, otherwise in .
+func openOutputs() error {
+
+	dirPath := path.Join(".", "Gen")
+	inf, err := os.Stat(dirPath)
+	if err != nil || !inf.IsDir() {
+		dirPath = "."
+	}
+	name := path.Join(dirPath, UniquePrefix + "Gen")
+	cFileName = name + ".c"
+	hFileName = name + ".h"
+
+	cFile, err = os.Create(cFileName)
+	if err != nil {
+		return err
+	}
+	hFile, err = os.Create(hFileName)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func emitc(format string, a ...any) (n int, err error) {
+	return emitFmt(cFile, format, a...)
+}
+
+func emith(format string, a ...any) (n int, err error) {
+	return emitFmt(hFile, format, a...)
+}
+
+func emitFmt(out io.Writer, format string, a ...any) (n int, err error) {
+	if len(format) == 0 {
+		fmt.Fprintf(out, "\n")
+		return 1, nil
+	}
+	n, err = fmt.Fprintf(out, format, a...)
+	if format[len(format)-1] != '\n' {
+		fmt.Fprintf(out, "\n")
+		n++
+	}
 	return n, err
 }
 
@@ -79,27 +131,19 @@ func makeNetName(ni *NetInstance) string {
 		}
 	}
 
-	// TODO Not all nets have an obvious driver.  We need some fallbacks that
-	// will assign some kind of name to each net other than e.g. "N37". Maybe
-	// take "bidirectional" nodes as drivers, definitely open collectors,
-	// possibly power nodes, etc. If none of these work and the net itself
-	// has a name, use that (KiCad has the same problem and the netnames it
-	// generates and exports are not very useful.) Or possibly just append
-	// up to three part IDs and pin nums separated by underscores.
-
-	if drivingNode == nil {
-		// TODO fallbacks
-	} else {
+	var rawName string
+	if drivingNode != nil && drivingNode.pin.name != "NOTFOUND" {
 		sb.WriteString("_drv_")
 		sb.WriteString(drivingNode.part.ref)
 		sb.WriteRune('_')
 		sb.WriteString(drivingNode.pin.num)
-		if drivingNode.pin.name != "NOTFOUND" {
-			sb.WriteRune('_')
-			sb.WriteString(makeCIdentifier(drivingNode.pin.name))
-		}
+		rawName = makeCIdentifier(drivingNode.pin.name)
+	} else {
+		rawName = makeCIdentifier(ni.name)
 	}
 
+	sb.WriteRune('_')
+	sb.WriteString(rawName)
 	return sb.String()
 }
 
@@ -112,10 +156,9 @@ const topCommentStart = `/*
  * Tool: KiCad %s (schema version %s)
  * From: %s
  * Date: %s
- *
-`
+ *`
 
-const topCommentEnd = " */\n"
+const topCommentEnd = " */"
 
 func emitTopComment(ast *ModelNode) error {
 	schemaVersion := qss(ast, "version")
@@ -124,9 +167,10 @@ func emitTopComment(ast *ModelNode) error {
 	designTool := qss(ast, "design:tool")
 	companyName := "(TODO owning company here)"
 	if designTool != "Eeschema 8.0.8" || schemaVersion != "E" {
-		msg("WARNING: netlist was written by an untested version of KiCad. YMMV.\n")
+		msg("WARNING: netlist was written by an untested version of KiCad.\n")
 	}
-	emitf(topCommentStart, companyName, designTool, schemaVersion, designSource, designDate)
+	emitc(topCommentStart, companyName, designTool, schemaVersion, designSource, designDate)
+	emith(topCommentStart, companyName, designTool, schemaVersion, designSource, designDate)
 
 	// Now emit a line for each sheet in the schematic.
 	for _, sheet := range(q(ast, "design:sheet")) {
@@ -134,33 +178,39 @@ func emitTopComment(ast *ModelNode) error {
 		sheetName := qss(sheet, "name")
 		title := qss(sheet, "title_block:title")
 		if valid(title) {
-			emitf(" * sheet %s: %s (%s)\n", sheetNumber, sheetName, title)
+			emitc(" * sheet %s: %s (%s)", sheetNumber, sheetName, title)
+			emith(" * sheet %s: %s (%s)", sheetNumber, sheetName, title)
 		} else {
-			emitf(" * sheet %s: %s\n", sheetNumber, sheetName)
+			emitc(" * sheet %s: %s", sheetNumber, sheetName)
+			emith(" * sheet %s: %s", sheetNumber, sheetName)
 		}
 	}
 
-	emitf(topCommentEnd)
+	emitc(topCommentEnd)
+	emith(topCommentEnd)
 	return nil
 }
 
 // Emit the wire nets.
 func emitNets(data *BindingData) error {
 	// TODO Allocate enough bitvec64_t's to fit every unfiltered net
-	emitf("// Wire nets\n")
-	emitf("bitvec64_t %sWires;\n", UniquePrefix)
-	emitf("\n")
+	emitc("// Wire nets")
+	emith("// Wire nets")
+	emitc("bitvec64_t %sWires;", UniquePrefix)
+	emith("extern bitvec64_t %sWires;", UniquePrefix)
+	emitc("")
+	emith("")
 
 	// Emit macros for the special signals defined by the simulator
 	// GND, VCC, CLK, and POR (Power On Reset). These nets don't need
 	// actual bits allocated.
 	// TODO make it possible to define other nets as 1 or 0.
 	// TODO make it possible to change the name of POR and CLK.
-	emitf("#define GetGND() 0\n")
-	emitf("#define GetVCC() 1\n")
-	emitf("#define GetCLK() uint16_t %sGetClk(void)\n", UniquePrefix)
-	emitf("#define GetPOR() uint16_t %sGetPor(void)\n", UniquePrefix)
-	emitf("\n")
+	emith("#define GetGND() 0")
+	emith("#define GetVCC() 1")
+	emith("#define GetCLK() uint16_t %sGetClk(void)", UniquePrefix)
+	emith("#define GetPOR() uint16_t %sGetPor(void)", UniquePrefix)
+	emith("")
 
 	bit := 0
 	for _, ni := range data.NetInstances {
@@ -182,9 +232,9 @@ func emitNets(data *BindingData) error {
 // Emit the definition of a net using the given bit position.
 func emitNet(ni *NetInstance, bit int) error {
 	netName := makeNetName(ni)
-	emitf("#define Set%s (wires |= (1<<%d))\n", netName, bit)
-	emitf("#define Clr%s (wires &= ~(1<<%d))\n", netName, bit)
-	emitf("#define Get%s (wires & (1<<%d))\n", netName, bit)
+	emith("#define Set%s (wires |= (1<<%d))", netName, bit)
+	emith("#define Clr%s (wires &= ~(1<<%d))", netName, bit)
+	emith("#define Get%s (wires & (1<<%d))", netName, bit)
 	bit++;
 	return nil
 }
@@ -219,13 +269,21 @@ func emitBuses(data *BindingData) error {
 // emit is the main entry point for code generation.
 // It orchestrates calls to various specific emitting functions.
 func emit(ast *ModelNode, data *BindingData) error {
+	if err := openOutputs(); err != nil {
+		return err
+	}
 	if err := emitTopComment(ast); err != nil {
 		return fmt.Errorf("failed to emit top comment: %w", err)
 	}
-	emitf("\n")
-	emitf("#include <stdint.h>\n")
-	emitf("#include \"types.h\"\n")
-	emitf("\n")
+
+	emitc("")
+	emith("")
+
+	emitc("#include \"%s\"", hFileName)
+
+	emith("#include <stdint.h>")
+	emith("#include \"types.h\"")
+	emith("")
 
 	if err := emitNets(data); err != nil {
 		return fmt.Errorf("failed to emit wire nets: %w", err)
