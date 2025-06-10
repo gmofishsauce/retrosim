@@ -123,27 +123,35 @@ func makeNetName(ni *NetInstance) string {
 	var drivingNode *NetNode
 	for _, nn := range ni.netNodes {
 		// The values of .kind are defined by KiCad; they are:
-		// Input, Output, Bidirectional, Tri-state, Passive, Free, Unspecified,
-		// Power input, Power output, Open collector, Open emitter, Unconnected.
+		// input, output, bidirectional, tri-state, passive, free, unspecified,
+		// power input, power output, open collector, open emitter, unconnected.
 		if nn.pin.kind == "output" || nn.pin.kind == "tri-state" {
 			drivingNode = nn
 			break
 		}
+		// TODO process open collector, bidirectional, maybe others as
+		// fallback "driver pins" for a net if there is just one of them.
 	}
 
 	var rawName string
-	if drivingNode != nil && drivingNode.pin.name != "NOTFOUND" {
+	if drivingNode == nil {
+		rawName = makeCIdentifier(ni.name)
+	} else {
 		sb.WriteString("_drv_")
 		sb.WriteString(drivingNode.part.ref)
 		sb.WriteRune('_')
 		sb.WriteString(drivingNode.pin.num)
-		rawName = makeCIdentifier(drivingNode.pin.name)
-	} else {
-		rawName = makeCIdentifier(ni.name)
+
+		name := drivingNode.pin.name
+		if len(name) != 0 && name != "NOTFOUND" {
+			rawName = makeCIdentifier(name)
+		}
 	}
 
-	sb.WriteRune('_')
-	sb.WriteString(rawName)
+	if len(rawName) != 0 {
+		sb.WriteRune('_')
+		sb.WriteString(rawName)
+	}
 	return sb.String()
 }
 
@@ -191,6 +199,20 @@ func emitTopComment(ast *ModelNode) error {
 	return nil
 }
 
+var nextBit int
+
+// Allocate bit(s) to represent wire nets or buses of them at runtime.
+// Return the shift index of the low-order allocated bit.
+func allocWireBits(nBits int) (int, error) {
+	// TODO for now, we support up to 64 wires total.
+	if nextBit + nBits >= 64 {
+		return -1, fmt.Errorf("TODO: schematic has more than 64 wires")
+	}
+	result := nextBit
+	nextBit += nBits
+	return result, nil
+}
+
 // Emit the wire nets.
 func emitNets(data *BindingData) error {
 	// TODO Allocate enough bitvec64_t's to fit every unfiltered net
@@ -212,7 +234,6 @@ func emitNets(data *BindingData) error {
 	emith("#define GetPOR() uint16_t %sGetPor(void)", UniquePrefix)
 	emith("")
 
-	bit := 0
 	for _, ni := range data.NetInstances {
 		nameUpper := strings.ToUpper(ni.name)
 		if nameUpper == "VCC" || nameUpper == "GND" ||
@@ -221,44 +242,74 @@ func emitNets(data *BindingData) error {
 			nameUpper[0] == '/' { // buses start with /
 			continue; // don't assign a bit or gen a name
 		}
-		if err := emitNet(ni, bit); err != nil {
+		if err := emitNet(ni); err != nil {
 			return err
 		}
-		bit++
 	}
 	return nil
 }
 
 // Emit the definition of a net using the given bit position.
-func emitNet(ni *NetInstance, bit int) error {
+func emitNet(ni *NetInstance) error {
+	position, err := allocWireBits(1)
+	if err != nil {
+		return fmt.Errorf("emitting net %s: %v", ni.name, err)
+	}
 	netName := makeNetName(ni)
-	emith("#define Set%s (wires |= (1<<%d))", netName, bit)
-	emith("#define Clr%s (wires &= ~(1<<%d))", netName, bit)
-	emith("#define Get%s (wires & (1<<%d))", netName, bit)
-	bit++;
+	return emitNetMacros(netName, position, 1)
+}
+
+func emitNetMacros(netName string, bitPos int, fieldWidth int) error {
+	mask := (1<<(fieldWidth)) - 1	
+
+	// The GetNNN() macros rely on the C definition of bitN_t being
+	// a uint rather than an int to avoid sign-extending arithmetic
+	// right shift. Otherwise, would need to & result with mask.
+
+	emith("#define Set_%s(b)  (wires.values |= (((b)&0x%X)<<%d))", netName, mask, bitPos)
+	emith("#define Get_%s()  ((wires.values & (0x%X<<%d))>>%d)", netName, mask, bitPos, bitPos)
+	emith("#define SetZ_%s(b) (wires.highzs |= (((b)&0x%X)<<%d))", netName, mask, bitPos)
+	emith("#define IsZ_%s()  ((wires.highzs & (0x%X<<%d))>>%d)", netName, mask, bitPos, bitPos)
+	emith("#define SetU_%s(b) (wires.undefs |= (((b)&0x%X)<<%d))", netName, mask, bitPos)
+	emith("#define IsU_%s()  ((wires.undefs & (0x%X<<%d))>>%d)", netName, mask, bitPos, bitPos)
 	return nil
 }
 
+// Bus. Bus names start with a "/" and KiCad delimits the bus name from
+// the wire number(s) within the bus using a '-'. But we don't want to
+// split() on the '-' because nothing prevents someone from putting a '-'
+// into the bus name. We want the last '-'.
+//
+// We emit a set of macros for the bus as a unit. We impose no particular
+// ordering on the bits within a bus, leaving that to the handwritten
+// functional code. The idea is that the handwritten code can manipulate
+// buses as units, e.g. the output bus of a 16-bit ALU can be set by doing
+// 16-bit operations, etc.
+
 func emitBuses(data *BindingData) error {
-/*
-			// Bus. KiCad delimits the bus name from the wire number
-			// within the bus using a '-'. But we don't want to split()
-			// on the '-' because nothing prevents someone from putting
-			// a '-' into a bus name. So we want the last '-'.
-			sepIndex := strings.LastIndexByte(nameUpper, byte('-'))
-			if sepIndex == -1 {
-				return fmt.Errorf("bus name has no '-' separator: %s", nameUpper)
-			}
-			busName := nameUpper[1:sepIndex]
-			wireID := nameUpper[sepIndex+1:]
+	busMap := make(map[string]int) // map bus names to number of wires
+
+	for _, ni := range data.NetInstances {
+		if ni.name[0] != '/' {
+			continue
 		}
-	// When we encounter a net that is part of a bus in the first pass
-	// over the next, we place it in this map keyed by bus name ordered
-	// by bus element. Note that the bus element need not be a number.
-	// If it is a number, the slice will be ordered numerically. If not,
-	// the ordering is lexical.
-	// map[string][]*NetInstance   FIXME
-*/
+
+		sepIndex := strings.LastIndexByte(ni.name, byte('-'))
+		if sepIndex == -1 {
+			return fmt.Errorf("bus name has no '-' separator: %s", ni.name)
+		}
+		busName := ni.name[1:sepIndex]
+		busMap[busName] += 1
+	}
+
+	for busName, count := range busMap {
+		bitPos, err := allocWireBits(count)
+		if err != nil {
+			return fmt.Errorf("emitting bus %s: %v", busName, err)
+		}
+		emitNetMacros(busName, bitPos, count)
+	}
+	
 	return nil
 }
 
