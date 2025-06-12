@@ -65,7 +65,6 @@ func getTypes(ast *ModelNode) ([]*ComponentType, error) {
 			pins = append(pins, &PinInfo{qss(p, "num"), qss(p, "name"), qss(p, "type")})
 		}
 		componentTypes = append(componentTypes, &ComponentType{lib, part, pins, false})
-		msg("%s:%s has %d pins\n", lib, part, len(pins))
 	}
 
 	return componentTypes, nil
@@ -98,7 +97,6 @@ func getInstances(ast *ModelNode, types []*ComponentType) ([]*ComponentInstance,
 				if lib == t.lib && part == t.part {
 					t.emit = true // this type is referenced
 					componentInstances = append(componentInstances, &ComponentInstance{ref, t})
-					msg("emit %s type %s:%s\n", ref, t.lib, t.part)
 				}
 			}
 		}

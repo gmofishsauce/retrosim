@@ -175,7 +175,6 @@ func emitNetMacros(netName string, bitPos int, fieldWidth int) error {
 	// a uint rather than an int to avoid sign-extending arithmetic
 	// right shift. Otherwise, would need to & result with mask.
 
-	emith("")
 	emith("// %s", netName)
 	emith("#define Set_%s(b)  (wires.values |= (((b)&0x%X)<<%d))", netName, mask, bitPos)
 	emith("#define Get_%s()  ((wires.values & (0x%X<<%d))>>%d)", netName, mask, bitPos, bitPos)

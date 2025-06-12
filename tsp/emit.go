@@ -25,14 +25,10 @@ func emit(ast *ModelNode, data *BindingData) error {
 		return fmt.Errorf("failed to emit top comment: %w", err)
 	}
 
-	emitc("")
-	emith("")
-
-	emitc("#include \"%s\"", hFileName)
-
 	emith("#include <stdint.h>")
 	emith("#include \"types.h\"")
-	emith("")
+
+	emitc("#include \"%s\"", hFileName)
 
 	if err := emitNets(data); err != nil {
 		return fmt.Errorf("failed to emit wire nets: %w", err)
@@ -40,11 +36,62 @@ func emit(ast *ModelNode, data *BindingData) error {
 	if err := emitBuses(data); err != nil {
 		return fmt.Errorf("failed to emit buses: %w", err)
 	}
+	if err := emitComponents(data); err != nil {
+		return fmt.Errorf("failed to emit component types: %w", err)
+	}
+	if err := emitInstances(data); err != nil {
+		return fmt.Errorf("failed to emit component instances: %w", err)
+	}
 
+	// XXX need to emit function prototypes for outputs, but only a single
+	// XXX function prototype for the combined outputs that form a bus.
 
-	// TODO: Add calls to emit C declarations for components using data.ComponentTypes
-	// TODO: Add calls to emit C declarations for component instances using data.ComponentInstances
+	return nil
+}
 
+/*
+type ComponentType struct {
+	lib string
+	part string
+	pins []*PinInfo
+	emit bool
+}
+*/
+
+func emitComponents(data *BindingData) error {
+	emith("// Component types")
+	for _, c := range data.ComponentTypes {
+		cName := "C" + makeCIdentifier(c.lib + "_" + c.part)
+		// We presume at least two pins (power and ground)
+		// that don't get simulated, so we can simulate up
+		// to 18 pin parts with 16 bits and 66 pins with
+		// 64 bits.
+		// TODO it's possible to do much better by tracking
+		// TODO the actual number of pins that are used, and
+		// TODO we must: the ALU chip has 68 pins, but two
+		// TODO are power and two are unused, if we track.
+		var baseType string
+		if len(c.pins) <= 18 {
+			baseType = "bitvec16_t"
+		} else if len(c.pins) <= 66 {
+			baseType = "bitvec64_t"
+		} else {
+			return fmt.Errorf("part has too many pins: %s:%s", c.lib, c.part)
+		}
+
+		emith("typedef struct %s_t %s", cName, baseType)
+	}
+	return nil
+}
+
+/*
+type ComponentInstance struct {
+	ref string
+	componentType *ComponentType
+}
+*/
+
+func emitInstances(data *BindingData) error {
 	return nil
 }
 
@@ -99,8 +146,6 @@ func emitNets(data *BindingData) error {
 	emith("// Wire nets")
 	emitc("bitvec64_t %sWires;", UniquePrefix)
 	emith("extern bitvec64_t %sWires;", UniquePrefix)
-	emitc("")
-	emith("")
 
 	// Emit macros for the special signals defined by the simulator
 	// GND, VCC, CLK, and POR (Power On Reset). These nets don't need
@@ -111,7 +156,6 @@ func emitNets(data *BindingData) error {
 	emith("#define GetVCC() 1")
 	emith("#define GetCLK() uint16_t %sGetClk(void)", UniquePrefix)
 	emith("#define GetPOR() uint16_t %sGetPor(void)", UniquePrefix)
-	emith("")
 
 	for _, ni := range data.NetInstances {
 		nameUpper := strings.ToUpper(ni.name)
