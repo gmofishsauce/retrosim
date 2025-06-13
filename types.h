@@ -20,15 +20,14 @@ typedef struct bitvec16 {
     bit16_t values;
     bit16_t undefs;
     bit16_t highzs;
-    index_t owner;
+    bit16_t spare;
 } bitvec16_t;
 
 typedef struct bitvec64 {
     bit64_t values;
     bit64_t undefs;
     bit64_t highzs;
-    index_t owner;
-    uint16_t pad[3];
+    bit64_t spare;
 } bitvec64_t;
 
 extern bitvec16_t bv16_undef;

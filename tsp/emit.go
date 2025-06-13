@@ -28,7 +28,7 @@ func emit(ast *ModelNode, data *BindingData) error {
 	emith("#include <stdint.h>")
 	emith("#include \"types.h\"")
 
-	emitc("#include \"%s\"", hFileName)
+	emitc("#include \"%s\"", hFileName[1+strings.LastIndexByte(hFileName, byte('/')):])
 
 	if err := emitNets(data); err != nil {
 		return fmt.Errorf("failed to emit wire nets: %w", err)
@@ -43,8 +43,8 @@ func emit(ast *ModelNode, data *BindingData) error {
 		return fmt.Errorf("failed to emit component instances: %w", err)
 	}
 
-	// XXX need to emit function prototypes for outputs, but only a single
-	// XXX function prototype for the combined outputs that form a bus.
+	// XXX TODO need to emit function prototypes for outputs, but only a single
+	// XXX TODO function prototype for the combined outputs that form a bus.
 
 	return nil
 }
@@ -61,7 +61,6 @@ type ComponentType struct {
 func emitComponents(data *BindingData) error {
 	emith("// Component types")
 	for _, c := range data.ComponentTypes {
-		cName := "C" + makeCIdentifier(c.lib + "_" + c.part)
 		// We presume at least two pins (power and ground)
 		// that don't get simulated, so we can simulate up
 		// to 18 pin parts with 16 bits and 66 pins with
@@ -79,7 +78,7 @@ func emitComponents(data *BindingData) error {
 			return fmt.Errorf("part has too many pins: %s:%s", c.lib, c.part)
 		}
 
-		emith("typedef struct %s_t %s", cName, baseType)
+		emith("typedef struct %s %s_t;", baseType, makeComponentTypeName(c))
 	}
 	return nil
 }
@@ -92,6 +91,23 @@ type ComponentInstance struct {
 */
 
 func emitInstances(data *BindingData) error {
+	emith("// Resolver functions")
+	emitc("// Resolver functions")
+	emitc("/*")
+
+	for _, inst := range data.ComponentInstances {
+		for _, p := range(inst.componentType.pins) {
+			if p.kind == "output" {
+				f := fmt.Sprintf("%s_p%s_resolver", makeComponentTypeName(inst.componentType), p.num)
+				emith("extern void %s(void);", f)
+				emitc("void %s(void) {", f)
+				emitc("    // TODO")
+				emitc("}")
+			}
+		}
+	}
+
+	emitc("*/")
 	return nil
 }
 

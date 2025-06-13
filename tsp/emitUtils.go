@@ -35,7 +35,9 @@ var hFile io.Writer
 // if it exists, otherwise in .
 func openOutputs() error {
 
-	dirPath := path.Join(".", "Gen")
+	// TODO option for this
+	dirPath := ".." // path.Join(".", "Gen")
+
 	inf, err := os.Stat(dirPath)
 	if err != nil || !inf.IsDir() {
 		dirPath = "."
@@ -83,13 +85,14 @@ func isCIdentifierChar(index int, r rune) bool {
 	return index != 0 && '0' <= r && r <= '9'
 }
 
-// Create a C-compatible name for a node in a net. We
-// assume the net code, node ref, and node pin are ASCII.
-// If passed the string NOTFOUND, simply returns it.
-func makeCIdentifier(s string) string {
+// Create a C-compatible name for a node in a net. We assume the net code,
+// node ref, and node pin are ASCII. The startIndex is the offset of the
+// first character of s within the eventual identifier being created by
+// the caller; if startIndex > 0, the first character of s may be a digit.
+func makeCIdentifier(startIndex int, s string) string {
 	var sb strings.Builder
 	for i, r := range s {
-		if isCIdentifierChar(i, r) {
+		if isCIdentifierChar(startIndex + i, r) {
 			sb.WriteRune(r)
 		} else if r == '~' {
 			sb.WriteString("NOT_")
@@ -118,10 +121,8 @@ func makeCIdentifier(s string) string {
 
 func makeNetName(ni *NetInstance) string {
 	var sb strings.Builder
-	sb.WriteRune('N')
-	sb.WriteString(ni.code)
-
 	var drivingNode *NetNode
+
 	for _, nn := range ni.netNodes {
 		// The values of .kind are defined by KiCad; they are:
 		// input, output, bidirectional, tri-state, passive, free, unspecified,
@@ -134,9 +135,12 @@ func makeNetName(ni *NetInstance) string {
 		// fallback "driver pins" for a net if there is just one of them.
 	}
 
+	sb.WriteRune('N') // startIndex is now 1
+	sb.WriteString(ni.code)
+
 	var rawName string
 	if drivingNode == nil {
-		rawName = makeCIdentifier(ni.name)
+		rawName = makeCIdentifier(1, ni.name)
 	} else {
 		sb.WriteString("_drv_")
 		sb.WriteString(drivingNode.part.ref)
@@ -145,7 +149,7 @@ func makeNetName(ni *NetInstance) string {
 
 		name := drivingNode.pin.name
 		if len(name) != 0 && name != "NOTFOUND" {
-			rawName = makeCIdentifier(name)
+			rawName = makeCIdentifier(sb.Len(), name)
 		}
 	}
 
@@ -185,3 +189,6 @@ func emitNetMacros(netName string, bitPos int, fieldWidth int) error {
 	return nil
 }
 
+func makeComponentTypeName(c *ComponentType) string {
+	return "C" + makeCIdentifier(1, c.lib + "_" + c.part)
+}
