@@ -57,20 +57,26 @@ func openOutputs() error {
 	return nil
 }
 
-func emitc(format string, a ...any) (n int, err error) {
-	return emitFmt(cFile, format, a...)
-}
-
-func emith(format string, a ...any) (n int, err error) {
-	return emitFmt(hFile, format, a...)
-}
-
-func emitFmt(out io.Writer, format string, a ...any) (n int, err error) {
-	if len(format) == 0 {
-		fmt.Fprintf(out, "\n")
-		return 1, nil
+func emitc(format string, a ...any) {
+	n, err := emitFmt(cFile, format, a...)
+	if n == 0 || err != nil {
+		panic("low level I/O error formatting output")
 	}
-	n, err = fmt.Fprintf(out, format, a...)
+}
+
+func emith(format string, a ...any) {
+	n, err := emitFmt(hFile, format, a...)
+	if n == 0 || err != nil {
+		panic("low level I/O error formatting output")
+	}
+}
+
+func emitFmt(out io.Writer, format string, a ...any) (int, error) {
+	if len(format) == 0 {
+		n, err := fmt.Fprintf(out, "\n")
+		return n, err
+	}
+	n, err := fmt.Fprintf(out, format, a...)
 	if format[len(format)-1] != '\n' {
 		fmt.Fprintf(out, "\n")
 		n++
@@ -142,7 +148,7 @@ func makeNetName(ni *NetInstance) string {
 	if drivingNode == nil {
 		rawName = makeCIdentifier(1, ni.name)
 	} else {
-		sb.WriteString("_drv_")
+		sb.WriteString("_")
 		sb.WriteString(drivingNode.part.ref)
 		sb.WriteRune('_')
 		sb.WriteString(drivingNode.pin.num)

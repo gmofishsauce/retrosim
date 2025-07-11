@@ -77,10 +77,10 @@ type ComponentInstance struct {
 	componentType *ComponentType
 }
 
-func selectComponent(ref string) bool {
+func shouldEmit(ref string) bool {
 	// Very primitive selector - emit for any A*, J*, or U*
-	// This is (oddly) Unicode safe because we're only looking
-	// for single-byte characters (for now)
+	// This is (oddly) UTF-8 safe because we're only looking
+	// for a leading single byte characters (for now)
 	refCh := rune(ref[0])
 	return refCh == 'A' || refCh == 'J' || refCh == 'U'
 }
@@ -89,7 +89,7 @@ func getInstances(ast *ModelNode, types []*ComponentType) ([]*ComponentInstance,
 	var componentInstances []*ComponentInstance
 	for _, c := range(q(ast, "components:comp")) {
 		ref := qss(c, "ref")
-		if selectComponent(ref) {
+		if shouldEmit(ref) {
 			lib := qss(c, "libsource:lib")
 			part := qss(c, "libsource:part")
 			// Find the ComponentType for lib:part

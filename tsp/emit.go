@@ -91,23 +91,6 @@ type ComponentInstance struct {
 */
 
 func emitInstances(data *BindingData) error {
-	emith("// Resolver functions")
-	emitc("// Resolver functions")
-	emitc("/*")
-
-	for _, inst := range data.ComponentInstances {
-		for _, p := range(inst.componentType.pins) {
-			if p.kind == "output" {
-				f := fmt.Sprintf("%s_p%s_resolver", makeComponentTypeName(inst.componentType), p.num)
-				emith("extern void %s(void);", f)
-				emitc("void %s(void) {", f)
-				emitc("    // TODO")
-				emitc("}")
-			}
-		}
-	}
-
-	emitc("*/")
 	return nil
 }
 
@@ -170,10 +153,13 @@ func emitNets(data *BindingData) error {
 	// TODO make it possible to change the name of POR and CLK.
 	emith("#define GetGND() 0")
 	emith("#define GetVCC() 1")
-	emith("#define GetCLK() uint16_t %sGetClk(void)", UniquePrefix)
-	emith("#define GetPOR() uint16_t %sGetPor(void)", UniquePrefix)
+	emith("extern uint16_t %sGetClk(void);", UniquePrefix)
+	emith("#define GetCLK() %sGetClk()", UniquePrefix)
+	emith("extern uint16_t %sGetPor(void);", UniquePrefix)
+	emith("#define GetPOR() %sGetPor()", UniquePrefix)
 
 	for _, ni := range data.NetInstances {
+		msg("process %s\n", ni.name)
 		nameUpper := strings.ToUpper(ni.name)
 		if nameUpper == "VCC" || nameUpper == "GND" ||
 			nameUpper == "CLK" || nameUpper == "POR" ||
@@ -181,6 +167,7 @@ func emitNets(data *BindingData) error {
 			nameUpper[0] == '/' { // buses start with /
 			continue; // don't assign a bit or gen a name
 		}
+		msg("emit %s\n", ni.name)
 		if err := emitNet(ni); err != nil {
 			return err
 		}
@@ -195,7 +182,11 @@ func emitNet(ni *NetInstance) error {
 		return fmt.Errorf("emitting net %s: %v", ni.name, err)
 	}
 	netName := makeNetName(ni)
-	return emitNetMacros(netName, position, 1)
+	result := emitNetMacros(netName, position, 1)
+	f := fmt.Sprintf("%s_resolver", netName)
+	emith("extern void %s(void);", f)
+	emitc("// void %s(void) {}", f)
+	return result
 }
 
 // Bus. Bus names start with a "/" and KiCad delimits the bus name from
@@ -223,6 +214,7 @@ func emitBuses(data *BindingData) error {
 		}
 		busName := ni.name[1:sepIndex]
 		busMap[busName] += 1
+		msg("busMap[%s] is %d\n", busName, busMap[busName])
 	}
 
 	for busName, count := range busMap {
@@ -230,7 +222,13 @@ func emitBuses(data *BindingData) error {
 		if err != nil {
 			return fmt.Errorf("emitting bus %s: %v", busName, err)
 		}
-		emitNetMacros(busName, bitPos, count)
+		msg("emit net macros for %s\n", busName)
+		if result := emitNetMacros(busName, bitPos, count); result != nil {
+			return result
+		}
+		f := fmt.Sprintf("%s_resolver", busName)
+		emith("extern void %s(void);", f)
+		emitc("// void %s(void) {}", f)
 	}
 	
 	return nil
