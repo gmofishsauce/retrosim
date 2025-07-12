@@ -21,16 +21,11 @@ void set_debug(debug_level state) {
     debug = state;
 }
 
-/* The NO_DEBUG macro is supposed to cause all the debugging calls
- * to be eliminated as dead code at high optimization levels. Note
- * the extra parentheses around false, i.e. "(false)" below, tell
- * clang that the dead code is intentional...believe it or not.
- */
 bool is_debug(debug_level level) {
-#if defined(NO_DEBUG)
-    return (false) && level != NONE && level <= debug;
-#else
+#if defined(DEBUG)
     return level != NONE && level <= debug;
+#else
+    return (false);
 #endif
 }
 

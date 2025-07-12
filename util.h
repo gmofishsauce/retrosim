@@ -15,13 +15,7 @@ extern bool is_debug(debug_level level);
 extern bool msg(const char* fmt, ...);
 extern void fatal(const char* fmt, ...);
 
+#define DEBUG // Comment out this line to eliminate code
 #define DB(L, F, ...) (is_debug(L) && msg(F, __VA_ARGS__))
 
-/* Uncomment the following to hopefully remove all debug as dead code
- * at high levels of optimization. Implementation in util.c. The idea
- * is that is_debug() becomes constant false, so a good optimizer can
- * eliminate the evaluation of the arguments to msg().
- *
-#define NO_DEBUG 1
- */
 #endif // UTIL_H
