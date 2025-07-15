@@ -18,6 +18,9 @@
 #define public 
 
 // TODO replace the word "resolver" with "hook" globally
+// TODO using function pointers for the resolvers allows
+// code manipulate their order in search of a forward-only
+// resolution order.
 
 static int simulate(void);
 static int halt(void);
@@ -25,6 +28,13 @@ static void rising_edge(void);
 static void clock_is_high(void);
 static void falling_edge(void);
 static void clock_is_low(void);
+
+#define MAX_RESOLVERS 10 // for Sample.net: tsp can compute: TODO
+typedef void (*handler_t)(void);
+static handler_t rising_edge_resolvers[MAX_RESOLVERS];
+static handler_t clock_is_high_resolvers[MAX_RESOLVERS];
+static handler_t falling_edge_resolvers[MAX_RESOLVERS];
+static handler_t clock_is_low_resolvers[MAX_RESOLVERS];
 
 public int main(int ac, char** av) {
     int c;
@@ -74,29 +84,21 @@ public bitvec64_t bv64_highz  = { BV64_NONE, BV64_NONE, BV64_ALL, 0};
 static int cycle;
 static int max_cycles = 10;
 static int por_cycles = 2;
-
 static uint16_t clock = 0;
+
+public uint16_t TspGetClk(void) {
+    return clock;
+}
+
+public uint16_t TspGetPor(void) {
+    return cycle <= por_cycles;
+}
 
 // Whether to continue running.
 // TODO mechanism for simulation code to halt the simulator
 static int halt(void) {
     return cycle > max_cycles;
 }
-
-uint16_t TspGetClk(void) {
-    return clock;
-}
-
-uint16_t TspGetPor(void) {
-    return cycle <= por_cycles;
-}
-
-#define MAX_RESOLVERS 10 // for Sample.net: tsp can compute: TODO
-typedef void (*handler_t)(void);
-static handler_t rising_edge_resolvers[MAX_RESOLVERS];
-static handler_t clock_is_high_resolvers[MAX_RESOLVERS];
-static handler_t falling_edge_resolvers[MAX_RESOLVERS];
-static handler_t clock_is_low_resolvers[MAX_RESOLVERS];
 
 static inline void execute(handler_t* resolvers) {
     for (int i = 0; resolvers[i] != 0; i++) {
@@ -120,10 +122,97 @@ static void clock_is_low(void) {
     execute(clock_is_low_resolvers);
 }
 
+#ifdef FIRST_ATTEMPT
+
 // TODO how about some kind of registration scheme where
 // components (really resolvers) would register themselves
 // for each/any of the four events? Better, each resolver
 // could provide a value that would cause registrations.
+// TODO for now, just do it:
+// static handler_t rising_edge_resolvers[MAX_RESOLVERS];
+// static handler_t clock_is_high_resolvers[MAX_RESOLVERS];
+// static handler_t falling_edge_resolvers[MAX_RESOLVERS];
+// static handler_t clock_is_low_resolvers[MAX_RESOLVERS];
+
+// TODO tension between per-net resolvers and per-component
+// resolvers. The former probably required for combinational
+// logic, the latter better for clocked devices.
+
+// void N8_U2_3_resolver(void) {}
+// void N9_U2_6_resolver(void) {}
+// void N10_U2_8_resolver(void) {}
+// void N11_U2_11_resolver(void) {}
+// void N12_U1_10_Q2_resolver(void) {}
+// void N13_U1_15_Q3_resolver(void) {}
+// void N14_U1_6_NOT_Q1_resolver(void) {}
+// void N17_NOT_POR_resolver(void) {}
+// void B1_resolver(void) {}
+
+static void U1_rising_edge(void);
+static void N8_U2_3_clock_is_high(void);
+static void N9_U2_6_clock_is_high(void);
+static void N10_U2_8_clock_is_high(void);
+static void N11_U2_11_clock_is_high(void);
+
+// TODO it's hard to figure out the inputs
+// of any part, because the nets are all
+// named by outputs ("drivers")
+// TODO need macros that are generalizations
+// of this expression from TspGen.h:
+// (wires.values |= (((b)&0x1)<<0))
+// TODO so it seems stateful components don't
+// really need internal state. They can just
+// set their output nets on the rising edge.
+// TODO would it be possible for tsp to write
+// macros like PIN(N, VAL) that would allow
+// setting the Nth pin of a component to a
+// value?
+static void U1_rising_edge(void) {
+    if (GetPOR()) {
+        
+        Set_N12_U1_10_Q2(b)
+        Set_N14_U1_6_NOT_Q1(b)
+    } else {
+    }
+    if (!GetPOR()) {
+        state.values |= Get_N8_U2_3() << 0;
+        state.values |= Get_N9_U2_6() << 1;
+        state.values |= Get_N10_U2_8() << 2;
+        state.values |= Get_N11_U2_11() << 3:
+        state.highzs |= IsZ_N8_U2_3() << 0;
+        state.highzs |= IsZ_N9_U2_6() << 1;
+        state.highzs |= IsZ_N10_U2_8() << 2;
+        state.highzs |= IsZ_N11_U2_11() << 3;
+        state.undefs |= IsU_N8_U2_3() << 0;
+        state.undefs |= IsU_N9_U2_6() << 1;
+        state.undefs |= IsU_N10_U2_8() << 2;
+        state.undefs |= IsU_N11_U2_11() << 3;
+    }
+}
+
+static void N8_U2_3_clock_is_high(void) {
+    
+}
+
+static void N9_U2_6_clock_is_high(void) {
+}
+
+static void N10_U2_8_clock_is_high(void) {
+}
+
+static void N11_U2_11_clock_is_high(void) {
+}
+
+void register_resolvers(void);
+void register_resolvers(void) {
+    rising_edge_resolvers[0] = &U1_rising_edge;
+    clock_is_high_resolvers[0] = &N8_U2_3_clock_is_high;
+    clock_is_high_resolvers[1] = &N9_U2_6_clock_is_high;
+    clock_is_high_resolvers[2] = &N10_U2_8_clock_is_high;
+    clock_is_high_resolvers[3] = &N11_U2_11_clock_is_high;
+}
+
+#endif
 
 int simulate(void) { // return exit code, 0 for success or 2 for error
 

@@ -8,16 +8,32 @@
  *
  * sheet 1: / (Sample Schematic)
  */
+
 #include <stdint.h>
-#include "types.h"
+// Bit states (values of the 2-bit fields that each represent 1 wire net):
+// The values 0 and 1 represent themselves
+#define HIGHZ 2
+#define UNDEF 3
+
 // Wire nets
-extern bitvec64_t TspWires;
+#define TARGET_WORD_SIZE 64 // must be a power of 2
+#define BITS_PER_WIRE  2    // there are four bit states
+#define N_WIRES 32          // computed by netlist transpiler
+#define BITS_PER_WORD 32    // should be 64/2 on 64-bit (most) computers
+#define BPW_LOG2 0x05       // lg2(BITS_PER_WORD)
+#define BPW_MASK 0x1F       // BPW - 1
+extern uint64_t TspWires[];
+
+#define GETBITS(b, n)    ((((TspWires[b>>BPW_LOG2])>>(b&BPW_MASK))&(BPW_MASK<<n))>>n)
+#define SETBITS(b, n, v) (((TspWires[b>>BPW_LOG2])&=~(BPW_MASK<<n)),((TspWires[b>>BPW_LOG2])|=(v&((BPW_MASK<<n)))<<n))
+
 #define GetGND() 0
 #define GetVCC() 1
-extern uint16_t TspGetClk(void);
+extern uint16_t  TspGetClk(void);
 #define GetCLK() TspGetClk()
-extern uint16_t TspGetPor(void);
+extern uint16_t  TspGetPor(void);
 #define GetPOR() TspGetPor()
+
 // N8_U2_3
 #define Set_N8_U2_3(b)  (wires.values |= (((b)&0x1)<<0))
 #define Get_N8_U2_3()  ((wires.values & (0x1<<0))>>0)
@@ -90,7 +106,3 @@ extern void N17_NOT_POR_resolver(void);
 #define SetU_B1(b) (wires.undefs |= (((b)&0xF)<<8))
 #define IsU_B1()  ((wires.undefs & (0xF<<8))>>8)
 extern void B1_resolver(void);
-// Component types
-typedef struct bitvec16_t C74xx_74LS175_t;
-typedef struct bitvec16_t C74xx_74LS86_t;
-typedef struct bitvec16_t CConnector_Generic_Conn_01x04_t;

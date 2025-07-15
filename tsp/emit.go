@@ -8,12 +8,9 @@ package main
 
 import (
 	"fmt"
+	"math/bits" // base 2 logarithm of an int
 	"strings"
 )
-
-// TODO seems the "owner" field in the bitvecN_t's is not required.
-// TODO could put a field "eval" bits there allowing recursive eval.
-// TODO especially since recursive eval can be the topological sort.
 
 // emit is the main entry point for code generation.
 // It orchestrates calls to various specific emitting functions.
@@ -26,8 +23,6 @@ func emit(ast *ModelNode, data *BindingData) error {
 	}
 
 	emith("#include <stdint.h>")
-	emith("#include \"types.h\"")
-
 	emitc("#include \"%s\"", hFileName[1+strings.LastIndexByte(hFileName, byte('/')):])
 
 	if err := emitNets(data); err != nil {
@@ -43,52 +38,25 @@ func emit(ast *ModelNode, data *BindingData) error {
 		return fmt.Errorf("failed to emit component instances: %w", err)
 	}
 
-	// XXX TODO need to emit function prototypes for outputs, but only a single
-	// XXX TODO function prototype for the combined outputs that form a bus.
-
 	return nil
 }
-
-/*
-type ComponentType struct {
-	lib string
-	part string
-	pins []*PinInfo
-	emit bool
-}
-*/
 
 func emitComponents(data *BindingData) error {
-	emith("// Component types")
-	for _, c := range data.ComponentTypes {
-		// We presume at least two pins (power and ground)
-		// that don't get simulated, so we can simulate up
-		// to 18 pin parts with 16 bits and 66 pins with
-		// 64 bits.
-		// TODO it's possible to do much better by tracking
-		// TODO the actual number of pins that are used, and
-		// TODO we must: the ALU chip has 68 pins, but two
-		// TODO are power and two are unused, if we track.
-		var baseType string
-		if len(c.pins) <= 18 {
-			baseType = "bitvec16_t"
-		} else if len(c.pins) <= 66 {
-			baseType = "bitvec64_t"
-		} else {
-			return fmt.Errorf("part has too many pins: %s:%s", c.lib, c.part)
-		}
-
-		emith("typedef struct %s %s_t;", baseType, makeComponentTypeName(c))
-	}
+//	emith("// Component types")
+//	for _, c := range data.ComponentTypes {
+//		var baseType string
+//		if len(c.pins) <= 18 {
+//			baseType = "bitvec16_t"
+//		} else if len(c.pins) <= 66 {
+//			baseType = "bitvec64_t"
+//		} else {
+//			return fmt.Errorf("part has too many pins: %s:%s", c.lib, c.part)
+//		}
+//
+//		emith("typedef struct %s %s_t;", baseType, makeComponentTypeName(c))
+//	}
 	return nil
 }
-
-/*
-type ComponentInstance struct {
-	ref string
-	componentType *ComponentType
-}
-*/
 
 func emitInstances(data *BindingData) error {
 	return nil
@@ -134,29 +102,68 @@ func emitTopComment(ast *ModelNode) error {
 	}
 
 	emitc(topCommentEnd)
+	emitc("")
 	emith(topCommentEnd)
+	emith("")
 	return nil
 }
 
+var targetWordSize int = 64
+var bitsPerWire int = 2
+var bitsPerWord int = targetWordSize / bitsPerWire
+var bpwLog2 int = bits.TrailingZeros(uint(bitsPerWord))
+var bpwMask int = bitsPerWord - 1
+
+var n_wires int = 32 // TODO compute n_wires dynamically; need not be a power of 2.
+
 // Emit the wire nets.
 func emitNets(data *BindingData) error {
-	// TODO Allocate enough bitvec64_t's to fit every unfiltered net
+	if targetWordSize != 64 && targetWordSize != 32 && targetWordSize != 16 {
+		panic("targetWordSize must be a power of two > 8 and < 128")
+	}
+	if bitsPerWire != 2 && bitsPerWire != 3 && bitsPerWire != 4 {
+		panic("1 must be < bitsPerWire must be < 5")
+	}
+	wiresVarName := fmt.Sprintf("%sWires", UniquePrefix)
+
 	emitc("// Wire nets")
+	emitc("uint%d_t %s[1+((N_WIRES-1)/BITS_PER_WORD)];", targetWordSize, wiresVarName)
+
+	emith("// Bit states (values of the 2-bit fields that each represent 1 wire net):")
+	emith("// The values 0 and 1 represent themselves")
+	emith("#define HIGHZ 2")
+	emith("#define UNDEF 3")
+	emith("")
+
 	emith("// Wire nets")
-	emitc("bitvec64_t %sWires;", UniquePrefix)
-	emith("extern bitvec64_t %sWires;", UniquePrefix)
+	emith("#define TARGET_WORD_SIZE %2d // must be a power of 2", targetWordSize)
+	emith("#define BITS_PER_WIRE %2d    // there are four bit states", bitsPerWire)
+	emith("#define N_WIRES %2d          // computed by netlist transpiler", n_wires)
+	emith("#define BITS_PER_WORD %2d    // should be 64/2 on 64-bit (most) computers", bitsPerWord);
+	emith("#define BPW_LOG2 0x%02X       // lg2(BITS_PER_WORD)", bpwLog2)
+	emith("#define BPW_MASK 0x%02X       // BPW - 1", bpwMask)
+	emith("extern uint%d_t %s[];", targetWordSize, wiresVarName)
+	emith("")
+
+	// Emit macros for getting and setting bits. b is the word index, n is the simulator
+	// bit number of field within the word, and n is the field width.
+	emith("#define GETBITS(b, n)    ((((%s[b>>BPW_LOG2])>>(b&BPW_MASK))&(BPW_MASK<<n))>>n)", wiresVarName)
+	emith("#define SETBITS(b, n, v) (((%s[b>>BPW_LOG2])&=~(BPW_MASK<<n)),((%s[b>>BPW_LOG2])|=(v&((BPW_MASK<<n)))<<n))",
+			wiresVarName, wiresVarName)
+	emith("")
 
 	// Emit macros for the special signals defined by the simulator
 	// GND, VCC, CLK, and POR (Power On Reset). These nets don't need
-	// actual bits allocated.
+	// setters defined.
 	// TODO make it possible to define other nets as 1 or 0.
-	// TODO make it possible to change the name of POR and CLK.
+	// TODO make it possible to change the names of these signals.
 	emith("#define GetGND() 0")
 	emith("#define GetVCC() 1")
-	emith("extern uint16_t %sGetClk(void);", UniquePrefix)
+	emith("extern uint16_t  %sGetClk(void);", UniquePrefix)
 	emith("#define GetCLK() %sGetClk()", UniquePrefix)
-	emith("extern uint16_t %sGetPor(void);", UniquePrefix)
+	emith("extern uint16_t  %sGetPor(void);", UniquePrefix)
 	emith("#define GetPOR() %sGetPor()", UniquePrefix)
+	emith("")
 
 	for _, ni := range data.NetInstances {
 		msg("process %s\n", ni.name)
