@@ -147,9 +147,10 @@ func emitNets(data *BindingData) error {
 
 	// Emit macros for getting and setting bits. b is the word index, n is the simulator
 	// bit number of field within the word, and n is the field width.
-	emith("#define GETBITS(b, n)    ((((%s[b>>BPW_LOG2])>>(b&BPW_MASK))&(BPW_MASK<<n))>>n)", wiresVarName)
-	emith("#define SETBITS(b, n, v) (((%s[b>>BPW_LOG2])&=~(BPW_MASK<<n)),((%s[b>>BPW_LOG2])|=(v&((BPW_MASK<<n)))<<n))",
-			wiresVarName, wiresVarName)
+	emith("#define GETBITS(b, n)    (((%s[(b)>>BPW_LOG2])>>((b)&BPW_MASK))&((1ULL<<(n))-1ULL))", wiresVarName)
+	emith("#define SETBITS(b, n, v) (((%s[(b)>>BPW_LOG2])&=~(((uint64_t)((1ULL<<(n))-1ULL))<<(b))),"+
+									"((%s[(b)>>BPW_LOG2])|=((v)&(((1ULL<<(n))-1ULL)))<<(b)))",
+								     wiresVarName, wiresVarName)
 	emith("")
 
 	// Emit macros for the special signals defined by the simulator

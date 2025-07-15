@@ -24,8 +24,8 @@
 #define BPW_MASK 0x1F       // BPW - 1
 extern uint64_t TspWires[];
 
-#define GETBITS(b, n)    ((((TspWires[b>>BPW_LOG2])>>(b&BPW_MASK))&(BPW_MASK<<n))>>n)
-#define SETBITS(b, n, v) (((TspWires[b>>BPW_LOG2])&=~(BPW_MASK<<n)),((TspWires[b>>BPW_LOG2])|=(v&((BPW_MASK<<n)))<<n))
+#define GETBITS(b, n)    (((TspWires[(b)>>BPW_LOG2])>>((b)&BPW_MASK))&((1ULL<<(n))-1ULL))
+#define SETBITS(b, n, v) (((TspWires[(b)>>BPW_LOG2])&=~(((uint64_t)((1ULL<<(n))-1ULL))<<(b))),((TspWires[(b)>>BPW_LOG2])|=((v)&(((1ULL<<(n))-1ULL)))<<(b)))
 
 #define GetGND() 0
 #define GetVCC() 1

@@ -214,7 +214,22 @@ void register_resolvers(void) {
 
 #endif
 
+#include <stdio.h>
+
 int simulate(void) { // return exit code, 0 for success or 2 for error
+
+    SETBITS(0,  4, 0xF);
+    SETBITS(4,  4, 0xE);
+    SETBITS(8,  4, 0xE);
+    SETBITS(12, 4, 0xB);
+    SETBITS(16, 4, 0xD);
+    SETBITS(20, 4, 0xA);
+    SETBITS(24, 4, 0xE);
+    SETBITS(28, 4, 0xD);
+
+    uint64_t b = GETBITS(0, 32);
+    printf("GETBITS returns 0x%llX\n", b);
+    printf("TspWires[0] is 0x%llX\n", TspWires[0]);
 
     for (cycle = 1; !halt(); cycle++) {
         rising_edge();
