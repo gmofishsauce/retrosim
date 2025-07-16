@@ -145,8 +145,14 @@ func emitNets(data *BindingData) error {
 	emith("extern uint%d_t %s[];", targetWordSize, wiresVarName)
 	emith("")
 
-	// Emit macros for getting and setting bits. b is the word index, n is the simulator
-	// bit number of field within the word, and n is the field width.
+	// Emit macros for getting and setting bits. b is the bit index of the
+	// least-significant bit within the word. The allocator ensures that the
+	// entire bit field fits within this word. n is the width of the bit field.
+	// v is the value to place in the bit field. It is restricted to n bits. 
+	emith("#define GETBIT(b)        (%s[(b)>>BPW_LOG2]>>(((b)&BPW_MASK)&1ULL))", wiresVarName)
+	emith("#define SETBIT(b, v)     (((%s[(b)>>BPW_LOG2])&=~((uint64_t)(1ULL<<(b)))),"+
+									"((%s[(b)>>BPW_LOG2])|=((v)&1ULL)<<(b)))",
+								     wiresVarName, wiresVarName)
 	emith("#define GETBITS(b, n)    (((%s[(b)>>BPW_LOG2])>>((b)&BPW_MASK))&((1ULL<<(n))-1ULL))", wiresVarName)
 	emith("#define SETBITS(b, n, v) (((%s[(b)>>BPW_LOG2])&=~(((uint64_t)((1ULL<<(n))-1ULL))<<(b))),"+
 									"((%s[(b)>>BPW_LOG2])|=((v)&(((1ULL<<(n))-1ULL)))<<(b)))",
@@ -156,8 +162,8 @@ func emitNets(data *BindingData) error {
 	// Emit macros for the special signals defined by the simulator
 	// GND, VCC, CLK, and POR (Power On Reset). These nets don't need
 	// setters defined.
-	// TODO make it possible to define other nets as 1 or 0.
-	// TODO make it possible to change the names of these signals.
+	// TODO make it possible to change the names of these signals for
+	// compatibility with schematics that weren't designed for this tool.
 	emith("#define GetGND() 0")
 	emith("#define GetVCC() 1")
 	emith("extern uint16_t  %sGetClk(void);", UniquePrefix)
@@ -172,27 +178,58 @@ func emitNets(data *BindingData) error {
 		if nameUpper == "VCC" || nameUpper == "GND" ||
 			nameUpper == "CLK" || nameUpper == "POR" ||
 			strings.Contains(nameUpper, "UNCONNECTED") ||
-			nameUpper[0] == '/' { // buses start with /
+			nameUpper[0] == '/' { // i.e. it's a bus
 			continue; // don't assign a bit or gen a name
 		}
 		msg("emit %s\n", ni.name)
-		if err := emitNet(ni); err != nil {
+		netName := makeNetName(ni)
+		if err := emitNet(ni, netName); err != nil {
 			return err
 		}
+		// Emit aliases for net
+		for _, nn := range(ni.netNodes) {
+			emith("#define %s_%s %s", nn.part.ref, nn.pin.num, netName)
+		}
+		emith("")
 	}
 	return nil
 }
 
+/*
+type PinInfo struct {
+    num string      // The pin "number" is not always a number
+    name string     // pin (signal) name
+    kind string     // string enum described above
+}
+
+type ComponentInstance struct {
+    ref string
+    componentType *ComponentType
+}
+
+type NetNode struct {
+    part *ComponentInstance
+    pin *PinInfo
+}
+
+type NetInstance struct {
+    code string         // is this always a number?
+    name string
+    netNodes []*NetNode // endpoints on this net
+}
+*/
+
 // Emit the definition of a net using the given bit position.
-func emitNet(ni *NetInstance) error {
+func emitNet(ni *NetInstance, netName string) error {
 	position, err := allocWireBits(1)
 	if err != nil {
 		return fmt.Errorf("emitting net %s: %v", ni.name, err)
 	}
-	netName := makeNetName(ni)
 	result := emitNetMacros(netName, position, 1)
 	f := fmt.Sprintf("%s_resolver", netName)
 	emith("extern void %s(void);", f)
+	emith("")
+
 	emitc("// void %s(void) {}", f)
 	return result
 }

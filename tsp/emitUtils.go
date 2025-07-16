@@ -179,19 +179,23 @@ func allocWireBits(nBits int) (int, error) {
 }
 
 func emitNetMacros(netName string, bitPos int, fieldWidth int) error {
-	mask := (1<<(fieldWidth)) - 1	
+	// mask := (1<<(fieldWidth)) - 1	
 
 	// The GetNNN() macros rely on the C definition of bitN_t being
 	// a uint rather than an int to avoid sign-extending arithmetic
 	// right shift. Otherwise, would need to & result with mask.
 
-	emith("// %s", netName)
-	emith("#define Set_%s(b)  (wires.values |= (((b)&0x%X)<<%d))", netName, mask, bitPos)
-	emith("#define Get_%s()  ((wires.values & (0x%X<<%d))>>%d)", netName, mask, bitPos, bitPos)
-	emith("#define SetZ_%s(b) (wires.highzs |= (((b)&0x%X)<<%d))", netName, mask, bitPos)
-	emith("#define IsZ_%s()  ((wires.highzs & (0x%X<<%d))>>%d)", netName, mask, bitPos, bitPos)
-	emith("#define SetU_%s(b) (wires.undefs |= (((b)&0x%X)<<%d))", netName, mask, bitPos)
-	emith("#define IsU_%s()  ((wires.undefs & (0x%X<<%d))>>%d)", netName, mask, bitPos, bitPos)
+	emith("// net %s", netName)
+	emith("#define %s_POS %d", netName, bitPos)
+	emith("#define %s_SZ %d", netName, fieldWidth)
+
+//	emith("#define Set_%s(b)  (wires.values |= (((b)&0x%X)<<%d))", netName, mask, bitPos)
+//	emith("#define Get_%s()  ((wires.values & (0x%X<<%d))>>%d)", netName, mask, bitPos, bitPos)
+//	emith("#define SetZ_%s(b) (wires.highzs |= (((b)&0x%X)<<%d))", netName, mask, bitPos)
+//	emith("#define IsZ_%s()  ((wires.highzs & (0x%X<<%d))>>%d)", netName, mask, bitPos, bitPos)
+//	emith("#define SetU_%s(b) (wires.undefs |= (((b)&0x%X)<<%d))", netName, mask, bitPos)
+//	emith("#define IsU_%s()  ((wires.undefs & (0x%X<<%d))>>%d)", netName, mask, bitPos, bitPos)
+
 	return nil
 }
 

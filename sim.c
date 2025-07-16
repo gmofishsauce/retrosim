@@ -231,6 +231,9 @@ int simulate(void) { // return exit code, 0 for success or 2 for error
     printf("GETBITS returns 0x%llX\n", b);
     printf("TspWires[0] is 0x%llX\n", TspWires[0]);
 
+    SETBIT(1, 0);
+    printf("TspWires[0] is 0x%llX\n", TspWires[0]);
+
     for (cycle = 1; !halt(); cycle++) {
         rising_edge();
         clock = 1;
