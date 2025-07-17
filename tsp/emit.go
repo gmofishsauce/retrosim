@@ -1,3 +1,4 @@
+// TODO GETSIB and GETSIBS might be called GETNET and GETBUS, etc?
 /*
  * Copyright (c) Jeff Berkowitz 2025.
  *
@@ -25,6 +26,9 @@ func emit(ast *ModelNode, data *BindingData) error {
 	emith("#include <stdint.h>")
 	emitc("#include \"%s\"", hFileName[1+strings.LastIndexByte(hFileName, byte('/')):])
 
+	if err := emitFixedContent(); err != nil {
+		return fmt.Errorf("failed to emit fixed content: %w", err)
+	}
 	if err := emitNets(data); err != nil {
 		return fmt.Errorf("failed to emit wire nets: %w", err)
 	}
@@ -80,7 +84,10 @@ func emitTopComment(ast *ModelNode) error {
 	designSource := qss(ast, "design:source")
 	designDate := qss(ast, "design:date")
 	designTool := qss(ast, "design:tool")
-	companyName := "(TODO owning company here)"
+	companyName := qss(ast, "design:sheet:title_block:company")
+	if len(companyName) == 0 || companyName == "NOTFOUND" {
+		companyName = "(No company name given in sheet)"
+	}
 	if designTool != "Eeschema 8.0.8" || schemaVersion != "E" {
 		msg("WARNING: netlist was written by an untested version of KiCad.\n")
 	}
@@ -120,19 +127,20 @@ var sibsPerWord int = targetWordSize / bitsPerSib       // typically 32
 var spwLog2 int = bits.TrailingZeros(uint(sibsPerWord)) // typically 5
 var spwMask int = sibsPerWord - 1                       // typically 0b11111
 
-// XXX FIXME nNets
-var nWires int = 20 // number of sibs allocated for the entire simulation
+// XXX FIXME nNets also TODO need a real allocator
+// Need to decide whether this counts the number of nets or whether
+// it is effectiely the number of machine words required to hold all
+// nets or ...
+var NetsCount int = 32 // number of sibs allocated for the entire simulation
 
-// Emit the wire nets.
-func emitNets(data *BindingData) error {
+func emitFixedContent() error {
 	if targetWordSize != 64 && targetWordSize != 32 && targetWordSize != 16 {
-		panic("targetWordSize must be 16, 32, or 64")
+		return fmt.Errorf("internal error: targetWordSize must be 16, 32, or 64")
 	}
 	if bitsPerSib != 2 && bitsPerSib != 3 && bitsPerSib != 4 {
-		panic("bitsPerSib must 2, 3, or 4")
+		return fmt.Errorf("internal error: bitsPerSib must 2, 3, or 4")
 	}
-	// XXX FIXME netsVarName %sNets
-	wiresVarName := fmt.Sprintf("%sWires", UniquePrefix)
+	netsVarName := fmt.Sprintf("%sNets", UniquePrefix)
 
 	emith("// Values of sibs. The values 0 and 1 represent themselves.")
 	emith("#define HIGHZ 2")
@@ -143,32 +151,34 @@ func emitNets(data *BindingData) error {
 	emith("#define TARGET_WORD_SIZE %2d // must 16, 32, or 64", targetWordSize)
 	emith("#define BITS_PER_SIB %2d     // physical bits per sib; must be 2, 3, or 4", bitsPerSib)
 	emith("#define SIB_MASK 0x%02XULL    // select a single sib", sibMask)
-	emith("#define N_NETS %2d           // computed by netlist transpiler", nWires)
+	emith("#define N_NETS %2d           // computed by netlist transpiler", NetsCount)
 	emith("#define SIBS_PER_WORD %2d    // E.g. 64/2 on 64-bit computers", sibsPerWord);
 	emith("#define SPW_LOG2 0x%02X       // lg2(SIBS_PER_WORD)", spwLog2)
 	emith("#define SPW_MASK 0x%02XULL    // SPW - 1", spwMask)
-	emith("extern uint%d_t %s[];", targetWordSize, wiresVarName)
+	emith("extern uint%d_t %s[];", targetWordSize, netsVarName)
 	emith("")
 
-	// Emit the definition of the wires array into the (tiny) C file
+	// Emit the definition of the nets array into the (tiny) C file
 	emitc("// Wire nets")
-	emitc("uint%d_t %s[1+((N_NETS-1)/SIBS_PER_WORD)];", targetWordSize, wiresVarName)
+	emitc("uint%d_t %s[1+((N_NETS-1)/SIBS_PER_WORD)];", targetWordSize, netsVarName)
 
 	emith("#define WORD(s)          ((s)>>SPW_LOG2)       // index of word containing sib s")
 	emith("#define POS(s)           ((s)&SPW_MASK)        // position of sib s within word, 0..SIBS_PER_WORD")
-	emith("#define BITPOS(s)		(POS(s)*BITS_PER_SIB) // position of bit holding sib s within word")
-	emith("#define BOUND(v,m)		((v)&(m)) 		      // bound v in 0..m where m = 2^n-1 for some n")
+	emith("#define BITPOS(s)        (POS(s)*BITS_PER_SIB) // position of bit holding sib s within word")
+	emith("#define BOUND(v,m)       ((v)&(m)) 		      // bound v in 0..m where m = 2^n-1 for some n")
 	emith("#define MASK(n)          ((1ULL<<(2*n))-1ULL)  // create right justified mask selecting n sibs (not bits)")
 	emith("")
 
-	emith("// Get or set a single simulated bit")
-	emith("#define GETSIB(s)        ((%s[WORD(s)]>>BITPOS(s))&MASK(1))", wiresVarName)
+	emith("// Get or set a single sib (BITS_PER_SIB physical bits)")
+	emith("#define GETSIB(s)        ((%s[WORD(s)]>>BITPOS(s))&MASK(1))", netsVarName)
 	emith("#define SETSIB(s, v)     (%s[WORD(s)]&=~(MASK(1)<<BITPOS(s)),%s[WORD(s)]|=(BOUND(v,MASK(1))<<BITPOS(s)))",
-								     wiresVarName, wiresVarName)
+								     netsVarName, netsVarName)
 	emith("// Get or set a contiguous field of n sibs")
-	emith("#define GETSIBS(s, n)    ((%s[WORD(s)]>>BITPOS(s))&MASK(n))", wiresVarName)
+	emith("#define GETSIBS(s, n)    ((%s[WORD(s)]>>BITPOS(s))&MASK(n))", netsVarName)
 	emith("#define SETSIBS(s, n, v) (%s[WORD(s)]&=~(MASK(n)<<BITPOS(s)),%s[WORD(s)]|=(BOUND(v,MASK(n))<<BITPOS(s)))",
-								     wiresVarName, wiresVarName)
+								     netsVarName, netsVarName)
+
+	// TODO could have GETBUS and SETBUS that don't require separate s and n values ...
 	emith("")
 
 	// Emit macros for the special signals defined by the simulator
@@ -184,6 +194,11 @@ func emitNets(data *BindingData) error {
 	emith("#define GetPOR() %sGetPor()", UniquePrefix)
 	emith("")
 
+	return nil
+}
+
+// Emit the wire nets.
+func emitNets(data *BindingData) error {
 	for _, ni := range data.NetInstances {
 		msg("process %s\n", ni.name)
 		nameUpper := strings.ToUpper(ni.name)
@@ -247,7 +262,7 @@ func emitNet(ni *NetInstance, netName string) error {
 }
 
 // Bus. Bus names start with a "/" and KiCad delimits the bus name from
-// the wire number(s) within the bus using a '-'. But we don't want to
+// the net number(s) within the bus using a '-'. But we don't want to
 // split() on the '-' because nothing prevents someone from putting a '-'
 // into the bus name. We want the last '-'.
 //
@@ -258,7 +273,7 @@ func emitNet(ni *NetInstance, netName string) error {
 // 16-bit operations, etc.
 
 func emitBuses(data *BindingData) error {
-	busMap := make(map[string]int) // map bus names to number of wires
+	busMap := make(map[string]int) // map bus names to number of nets
 
 	for _, ni := range data.NetInstances {
 		if ni.name[0] != '/' {

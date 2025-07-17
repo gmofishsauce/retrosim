@@ -1,5 +1,5 @@
 /*
- * Copyright (c) (TODO owning company here) 2025. All rights reserved.
+ * Copyright (c) Wholly Unnecessary Technologies 2025. All rights reserved.
  * This file was generated from a KiCad schematic. Do not edit.
  *
  * Tool: KiCad Eeschema 8.0.8 (schema version E)
@@ -22,20 +22,23 @@
 #define SIBS_PER_WORD 32    // E.g. 64/2 on 64-bit computers
 #define SPW_LOG2 0x05       // lg2(SIBS_PER_WORD)
 #define SPW_MASK 0x1FULL    // SPW - 1
-extern uint64_t TspWires[];
+extern uint64_t TspNets[];
 
 #define WORD(s)          ((s)>>SPW_LOG2)       // index of word containing sib s
 #define POS(s)           ((s)&SPW_MASK)        // position of sib s within word, 0..SIBS_PER_WORD
-#define BITPOS(s)		(POS(s)*BITS_PER_SIB) // position of bit holding sib s within word
-#define BOUND(v,m)		((v)&(m)) 		      // bound v in 0..m where m = 2^n-1 for some n
+#define BITPOS(s)        (POS(s)*BITS_PER_SIB) // position of bit holding sib s within word
+#define BOUND(v,m)       ((v)&(m)) 		      // bound v in 0..m where m = 2^n-1 for some n
 #define MASK(n)          ((1ULL<<(2*n))-1ULL)  // create right justified mask selecting n sibs (not bits)
 
-// Get or set a single simulated bit
-#define GETSIB(s)        ((TspWires[WORD(s)]>>BITPOS(s))&MASK(1))
-#define SETSIB(s, v)     (TspWires[WORD(s)]&=~(MASK(1)<<BITPOS(s)),TspWires[WORD(s)]|=(BOUND(v,MASK(1))<<BITPOS(s)))
-// Get or set a contiguous field of n sibs
-#define GETSIBS(s, n)    ((TspWires[WORD(s)]>>BITPOS(s))&MASK(n))
-#define SETSIBS(s, n, v) (TspWires[WORD(s)]&=~(MASK(n)<<BITPOS(s)),TspWires[WORD(s)]|=(BOUND(v,MASK(n))<<BITPOS(s)))
+#define GET1(sym, s)       ((sym[WORD(s)]>>BITPOS(s))&MASK(1))
+#define SET1(sym, s, v)    (sym[WORD(s)]&=~(MASK(1)<<BITPOS(s)),sym[WORD(s)]|=(BOUND(v,MASK(1))<<BITPOS(s)))
+#define GETN(sym, s, n)    ((sym[WORD(s)]>>BITPOS(s))&MASK(n))
+#define SETN(sym, s, n, v) (sym[WORD(s)]&=~(MASK(n)<<BITPOS(s)),sym[WORD(s)]|=(BOUND(v,MASK(n))<<BITPOS(s)))
+
+#define getnet(s)       GET1(TspNets, s)
+#define setnet(s, v)    SET1(TspNets, s, v)
+#define getbus(s, n)    GETN(TspNets, s, n)
+#define setbus(s, n, v) SETN(TspNets, s, n, v)
 
 #define GetGND() 0
 #define GetVCC() 1

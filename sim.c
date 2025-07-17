@@ -154,39 +154,9 @@ static void N9_U2_6_clock_is_high(void);
 static void N10_U2_8_clock_is_high(void);
 static void N11_U2_11_clock_is_high(void);
 
-// TODO it's hard to figure out the inputs
-// of any part, because the nets are all
-// named by outputs ("drivers")
-// TODO need macros that are generalizations
-// of this expression from TspGen.h:
-// (wires.values |= (((b)&0x1)<<0))
-// TODO so it seems stateful components don't
-// really need internal state. They can just
-// set their output nets on the rising edge.
-// TODO would it be possible for tsp to write
-// macros like PIN(N, VAL) that would allow
-// setting the Nth pin of a component to a
-// value?
 static void U1_rising_edge(void) {
     if (GetPOR()) {
-        
-        Set_N12_U1_10_Q2(b)
-        Set_N14_U1_6_NOT_Q1(b)
     } else {
-    }
-    if (!GetPOR()) {
-        state.values |= Get_N8_U2_3() << 0;
-        state.values |= Get_N9_U2_6() << 1;
-        state.values |= Get_N10_U2_8() << 2;
-        state.values |= Get_N11_U2_11() << 3:
-        state.highzs |= IsZ_N8_U2_3() << 0;
-        state.highzs |= IsZ_N9_U2_6() << 1;
-        state.highzs |= IsZ_N10_U2_8() << 2;
-        state.highzs |= IsZ_N11_U2_11() << 3;
-        state.undefs |= IsU_N8_U2_3() << 0;
-        state.undefs |= IsU_N9_U2_6() << 1;
-        state.undefs |= IsU_N10_U2_8() << 2;
-        state.undefs |= IsU_N11_U2_11() << 3;
     }
 }
 
@@ -218,18 +188,18 @@ void register_resolvers(void) {
 
 int simulate(void) { // return exit code, 0 for success or 2 for error
 
-    printf("SETSIB(0, UNDEF)\n");
-    SETSIB(0, UNDEF);
-    printf("SETSIB(3, 1)\n");
-    SETSIB(3, 1);
-    printf("GETSIB(0) returns 0x%llX\n", GETSIB(0));
-    printf("GETSIB(4) returns 0x%llX\n", GETSIB(4));
-    printf("TspWires[0] is 0x%llX\n", TspWires[0]);
+    printf("setnet(0, UNDEF)\n");
+    setnet(0, UNDEF);
+    printf("setnet(3, 1)\n");
+    setnet(3, 1);
+    printf("getnet(0) returns 0x%llX\n", getnet(0));
+    printf("getnet(3) returns 0x%llX\n", getnet(3));
+    printf("TspWires[0] is 0x%llX\n", TspNets[0]);
 
-    printf("SETSIBS(4, 4, 0xA)\n");
-    SETSIBS(4, 4, 0xA);
-    printf("GETSIBS(4, 4) returns 0x%llx\n", GETSIBS(4, 4));
-    printf("TspWires[0] is 0x%llX\n", TspWires[0]);
+    printf("setbus(4, 4, 0xA)\n");
+    setbus(4, 4, 0xA);
+    printf("getbus(4, 4) returns 0x%llx\n", getbus(4, 4));
+    printf("TspWires[0] is 0x%llX\n", TspNets[0]);
 
     for (cycle = 1; !halt(); cycle++) {
         rising_edge();

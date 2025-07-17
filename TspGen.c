@@ -1,5 +1,5 @@
 /*
- * Copyright (c) (TODO owning company here) 2025. All rights reserved.
+ * Copyright (c) Wholly Unnecessary Technologies 2025. All rights reserved.
  * This file was generated from a KiCad schematic. Do not edit.
  *
  * Tool: KiCad Eeschema 8.0.8 (schema version E)
@@ -11,7 +11,7 @@
 
 #include "TspGen.h"
 // Wire nets
-uint64_t TspWires[1+((N_NETS-1)/SIBS_PER_WORD)];
+uint64_t TspNets[1+((N_NETS-1)/SIBS_PER_WORD)];
 // void N8_U2_3_resolver(void) {}
 // void N9_U2_6_resolver(void) {}
 // void N10_U2_8_resolver(void) {}
