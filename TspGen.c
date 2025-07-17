@@ -11,7 +11,7 @@
 
 #include "TspGen.h"
 // Wire nets
-uint64_t TspWires[1+((N_WIRES-1)/BITS_PER_WORD)];
+uint64_t TspWires[1+((N_NETS-1)/SIBS_PER_WORD)];
 // void N8_U2_3_resolver(void) {}
 // void N9_U2_6_resolver(void) {}
 // void N10_U2_8_resolver(void) {}

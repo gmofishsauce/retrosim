@@ -108,54 +108,66 @@ func emitTopComment(ast *ModelNode) error {
 	return nil
 }
 
-var targetWordSize int = 64
-var bitsPerWire int = 2
-var bitsPerWord int = targetWordSize / bitsPerWire
-var bpwLog2 int = bits.TrailingZeros(uint(bitsPerWord))
-var bpwMask int = bitsPerWord - 1
+// The simulator operates on simulated bits, called sibs. With four-state
+// logic {0, 1, high impedence, undefined} a sib takes two physical bits.
 
-var n_wires int = 32 // TODO compute n_wires dynamically; need not be a power of 2.
+var targetWordSize int = 64
+var nSibStates int = 4 // must 4, 8, or 16
+var bitsPerSib int = bits.TrailingZeros(uint(nSibStates))
+var sibMask = (1<<bitsPerSib)-1
+
+var sibsPerWord int = targetWordSize / bitsPerSib       // typically 32
+var spwLog2 int = bits.TrailingZeros(uint(sibsPerWord)) // typically 5
+var spwMask int = sibsPerWord - 1                       // typically 0b11111
+
+// XXX FIXME nNets
+var nWires int = 20 // number of sibs allocated for the entire simulation
 
 // Emit the wire nets.
 func emitNets(data *BindingData) error {
 	if targetWordSize != 64 && targetWordSize != 32 && targetWordSize != 16 {
-		panic("targetWordSize must be a power of two > 8 and < 128")
+		panic("targetWordSize must be 16, 32, or 64")
 	}
-	if bitsPerWire != 2 && bitsPerWire != 3 && bitsPerWire != 4 {
-		panic("1 must be < bitsPerWire must be < 5")
+	if bitsPerSib != 2 && bitsPerSib != 3 && bitsPerSib != 4 {
+		panic("bitsPerSib must 2, 3, or 4")
 	}
+	// XXX FIXME netsVarName %sNets
 	wiresVarName := fmt.Sprintf("%sWires", UniquePrefix)
 
-	emitc("// Wire nets")
-	emitc("uint%d_t %s[1+((N_WIRES-1)/BITS_PER_WORD)];", targetWordSize, wiresVarName)
-
-	emith("// Bit states (values of the 2-bit fields that each represent 1 wire net):")
-	emith("// The values 0 and 1 represent themselves")
+	emith("// Values of sibs. The values 0 and 1 represent themselves.")
 	emith("#define HIGHZ 2")
 	emith("#define UNDEF 3")
 	emith("")
 
-	emith("// Wire nets")
-	emith("#define TARGET_WORD_SIZE %2d // must be a power of 2", targetWordSize)
-	emith("#define BITS_PER_WIRE %2d    // there are four bit states", bitsPerWire)
-	emith("#define N_WIRES %2d          // computed by netlist transpiler", n_wires)
-	emith("#define BITS_PER_WORD %2d    // should be 64/2 on 64-bit (most) computers", bitsPerWord);
-	emith("#define BPW_LOG2 0x%02X       // lg2(BITS_PER_WORD)", bpwLog2)
-	emith("#define BPW_MASK 0x%02X       // BPW - 1", bpwMask)
+	emith("// Constants")
+	emith("#define TARGET_WORD_SIZE %2d // must 16, 32, or 64", targetWordSize)
+	emith("#define BITS_PER_SIB %2d     // physical bits per sib; must be 2, 3, or 4", bitsPerSib)
+	emith("#define SIB_MASK 0x%02XULL    // select a single sib", sibMask)
+	emith("#define N_NETS %2d           // computed by netlist transpiler", nWires)
+	emith("#define SIBS_PER_WORD %2d    // E.g. 64/2 on 64-bit computers", sibsPerWord);
+	emith("#define SPW_LOG2 0x%02X       // lg2(SIBS_PER_WORD)", spwLog2)
+	emith("#define SPW_MASK 0x%02XULL    // SPW - 1", spwMask)
 	emith("extern uint%d_t %s[];", targetWordSize, wiresVarName)
 	emith("")
 
-	// Emit macros for getting and setting bits. b is the bit index of the
-	// least-significant bit within the word. The allocator ensures that the
-	// entire bit field fits within this word. n is the width of the bit field.
-	// v is the value to place in the bit field. It is restricted to n bits. 
-	emith("#define GETBIT(b)        (%s[(b)>>BPW_LOG2]>>(((b)&BPW_MASK)&1ULL))", wiresVarName)
-	emith("#define SETBIT(b, v)     (((%s[(b)>>BPW_LOG2])&=~((uint64_t)(1ULL<<(b)))),"+
-									"((%s[(b)>>BPW_LOG2])|=((v)&1ULL)<<(b)))",
+	// Emit the definition of the wires array into the (tiny) C file
+	emitc("// Wire nets")
+	emitc("uint%d_t %s[1+((N_NETS-1)/SIBS_PER_WORD)];", targetWordSize, wiresVarName)
+
+	emith("#define WORD(s)          ((s)>>SPW_LOG2)       // index of word containing sib s")
+	emith("#define POS(s)           ((s)&SPW_MASK)        // position of sib s within word, 0..SIBS_PER_WORD")
+	emith("#define BITPOS(s)		(POS(s)*BITS_PER_SIB) // position of bit holding sib s within word")
+	emith("#define BOUND(v,m)		((v)&(m)) 		      // bound v in 0..m where m = 2^n-1 for some n")
+	emith("#define MASK(n)          ((1ULL<<(2*n))-1ULL)  // create right justified mask selecting n sibs (not bits)")
+	emith("")
+
+	emith("// Get or set a single simulated bit")
+	emith("#define GETSIB(s)        ((%s[WORD(s)]>>BITPOS(s))&MASK(1))", wiresVarName)
+	emith("#define SETSIB(s, v)     (%s[WORD(s)]&=~(MASK(1)<<BITPOS(s)),%s[WORD(s)]|=(BOUND(v,MASK(1))<<BITPOS(s)))",
 								     wiresVarName, wiresVarName)
-	emith("#define GETBITS(b, n)    (((%s[(b)>>BPW_LOG2])>>((b)&BPW_MASK))&((1ULL<<(n))-1ULL))", wiresVarName)
-	emith("#define SETBITS(b, n, v) (((%s[(b)>>BPW_LOG2])&=~(((uint64_t)((1ULL<<(n))-1ULL))<<(b))),"+
-									"((%s[(b)>>BPW_LOG2])|=((v)&(((1ULL<<(n))-1ULL)))<<(b)))",
+	emith("// Get or set a contiguous field of n sibs")
+	emith("#define GETSIBS(s, n)    ((%s[WORD(s)]>>BITPOS(s))&MASK(n))", wiresVarName)
+	emith("#define SETSIBS(s, n, v) (%s[WORD(s)]&=~(MASK(n)<<BITPOS(s)),%s[WORD(s)]|=(BOUND(v,MASK(n))<<BITPOS(s)))",
 								     wiresVarName, wiresVarName)
 	emith("")
 

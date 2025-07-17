@@ -10,24 +10,32 @@
  */
 
 #include <stdint.h>
-// Bit states (values of the 2-bit fields that each represent 1 wire net):
-// The values 0 and 1 represent themselves
+// Values of sibs. The values 0 and 1 represent themselves.
 #define HIGHZ 2
 #define UNDEF 3
 
-// Wire nets
-#define TARGET_WORD_SIZE 64 // must be a power of 2
-#define BITS_PER_WIRE  2    // there are four bit states
-#define N_WIRES 32          // computed by netlist transpiler
-#define BITS_PER_WORD 32    // should be 64/2 on 64-bit (most) computers
-#define BPW_LOG2 0x05       // lg2(BITS_PER_WORD)
-#define BPW_MASK 0x1F       // BPW - 1
+// Constants
+#define TARGET_WORD_SIZE 64 // must 16, 32, or 64
+#define BITS_PER_SIB  2     // physical bits per sib; must be 2, 3, or 4
+#define SIB_MASK 0x03ULL    // select a single sib
+#define N_NETS 32           // computed by netlist transpiler
+#define SIBS_PER_WORD 32    // E.g. 64/2 on 64-bit computers
+#define SPW_LOG2 0x05       // lg2(SIBS_PER_WORD)
+#define SPW_MASK 0x1FULL    // SPW - 1
 extern uint64_t TspWires[];
 
-#define GETBIT(b)        (TspWires[(b)>>BPW_LOG2]>>(((b)&BPW_MASK)&1ULL))
-#define SETBIT(b, v)     (((TspWires[(b)>>BPW_LOG2])&=~((uint64_t)(1ULL<<(b)))),((TspWires[(b)>>BPW_LOG2])|=((v)&1ULL)<<(b)))
-#define GETBITS(b, n)    (((TspWires[(b)>>BPW_LOG2])>>((b)&BPW_MASK))&((1ULL<<(n))-1ULL))
-#define SETBITS(b, n, v) (((TspWires[(b)>>BPW_LOG2])&=~(((uint64_t)((1ULL<<(n))-1ULL))<<(b))),((TspWires[(b)>>BPW_LOG2])|=((v)&(((1ULL<<(n))-1ULL)))<<(b)))
+#define WORD(s)          ((s)>>SPW_LOG2)       // index of word containing sib s
+#define POS(s)           ((s)&SPW_MASK)        // position of sib s within word, 0..SIBS_PER_WORD
+#define BITPOS(s)		(POS(s)*BITS_PER_SIB) // position of bit holding sib s within word
+#define BOUND(v,m)		((v)&(m)) 		      // bound v in 0..m where m = 2^n-1 for some n
+#define MASK(n)          ((1ULL<<(2*n))-1ULL)  // create right justified mask selecting n sibs (not bits)
+
+// Get or set a single simulated bit
+#define GETSIB(s)        ((TspWires[WORD(s)]>>BITPOS(s))&MASK(1))
+#define SETSIB(s, v)     (TspWires[WORD(s)]&=~(MASK(1)<<BITPOS(s)),TspWires[WORD(s)]|=(BOUND(v,MASK(1))<<BITPOS(s)))
+// Get or set a contiguous field of n sibs
+#define GETSIBS(s, n)    ((TspWires[WORD(s)]>>BITPOS(s))&MASK(n))
+#define SETSIBS(s, n, v) (TspWires[WORD(s)]&=~(MASK(n)<<BITPOS(s)),TspWires[WORD(s)]|=(BOUND(v,MASK(n))<<BITPOS(s)))
 
 #define GetGND() 0
 #define GetVCC() 1

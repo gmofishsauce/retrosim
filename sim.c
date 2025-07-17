@@ -218,20 +218,17 @@ void register_resolvers(void) {
 
 int simulate(void) { // return exit code, 0 for success or 2 for error
 
-    SETBITS(0,  4, 0xF);
-    SETBITS(4,  4, 0xE);
-    SETBITS(8,  4, 0xE);
-    SETBITS(12, 4, 0xB);
-    SETBITS(16, 4, 0xD);
-    SETBITS(20, 4, 0xA);
-    SETBITS(24, 4, 0xE);
-    SETBITS(28, 4, 0xD);
-
-    uint64_t b = GETBITS(0, 32);
-    printf("GETBITS returns 0x%llX\n", b);
+    printf("SETSIB(0, UNDEF)\n");
+    SETSIB(0, UNDEF);
+    printf("SETSIB(3, 1)\n");
+    SETSIB(3, 1);
+    printf("GETSIB(0) returns 0x%llX\n", GETSIB(0));
+    printf("GETSIB(4) returns 0x%llX\n", GETSIB(4));
     printf("TspWires[0] is 0x%llX\n", TspWires[0]);
 
-    SETBIT(1, 0);
+    printf("SETSIBS(4, 4, 0xA)\n");
+    SETSIBS(4, 4, 0xA);
+    printf("GETSIBS(4, 4) returns 0x%llx\n", GETSIBS(4, 4));
     printf("TspWires[0] is 0x%llX\n", TspWires[0]);
 
     for (cycle = 1; !halt(); cycle++) {
