@@ -13,10 +13,10 @@
 #include <unistd.h>
 #include <stdio.h> // temporary here, for debugging
 
-#include "logic.h"
+#include "api.h"
 #include "sim.h"
 
-#include "TspGen.h"
+extern uint64_t TspNets[]; // XXX temporary here
 
 // TODO replace the word "resolver" with "hook" globally
 // TODO using function pointers for the resolvers allows
@@ -31,11 +31,15 @@ static void falling_edge(void);
 static void clock_is_low(void);
 
 #define MAX_RESOLVERS 10 // for Sample.net: tsp can compute: TODO
-typedef void (*handler_t)(void);
 static handler_t rising_edge_resolvers[MAX_RESOLVERS];
 static handler_t clock_is_high_resolvers[MAX_RESOLVERS];
 static handler_t falling_edge_resolvers[MAX_RESOLVERS];
 static handler_t clock_is_low_resolvers[MAX_RESOLVERS];
+
+static int n_rising_edge_resolvers = 0;
+static int n_clock_is_high_resolvers = 0;
+static int n_falling_edge_resolvers = 0;
+static int n_clock_is_low_resolvers = 0;
 
 int main(int ac, char** av) {
     int c;
@@ -113,14 +117,24 @@ static void clock_is_low(void) {
     execute(clock_is_low_resolvers);
 }
 
-void register_resolvers(void);
+void add_rising_edge_resolver(handler_t fp) {
+    rising_edge_resolvers[n_rising_edge_resolvers] = fp;
+    n_rising_edge_resolvers++;
+}
 
-void register_resolvers(void) {
-    rising_edge_resolvers[0] = &U1_rising_edge;
-    clock_is_high_resolvers[0] = &N8_U2_3_clock_is_high;
-    clock_is_high_resolvers[1] = &N9_U2_6_clock_is_high;
-    clock_is_high_resolvers[2] = &N10_U2_8_clock_is_high;
-    clock_is_high_resolvers[3] = &N11_U2_11_clock_is_high;
+void add_clock_is_high_resolver(handler_t fp) {
+    clock_is_high_resolvers[n_clock_is_high_resolvers] = fp;
+    n_clock_is_high_resolvers++;
+}
+
+void add_falling_edge_resolver(handler_t fp) {
+    falling_edge_resolvers[n_rising_edge_resolvers] = fp;
+    n_falling_edge_resolvers++;
+}
+
+void add_clock_is_low_rising_edge_resolver(handler_t fp) {
+    clock_is_low_resolvers[n_clock_is_low_resolvers] = fp;
+    n_clock_is_low_resolvers++;
 }
 
 int simulate(void) { // return exit code, 0 for success or 2 for error
@@ -139,8 +153,6 @@ int simulate(void) { // return exit code, 0 for success or 2 for error
     printf("getbus(4, 4) returns 0x%llx\n", getbus(4, 4));
     printf("TspWires[0] is 0x%llX\n", TspNets[0]);
     */
-
-    register_resolvers();
 
     TspNets[0] = 0;
     for (cycle = 1; !halt(); cycle++) {
