@@ -14,6 +14,8 @@
 #include "sim.h"
 #include "types.h"
 
+#include <stdio.h> // temporary here, for debugging
+
 #include "TspGen.h"
 #define public 
 
@@ -81,9 +83,9 @@ public bitvec64_t bv64_highz  = { BV64_NONE, BV64_NONE, BV64_ALL, 0};
 // The cycle counter counts from 1, so the first cycle is "1"
 // Everything related to cycles is 1-based. I may regret this.
 
-static int cycle;
-static int max_cycles = 10;
-static int por_cycles = 2;
+static unsigned long long cycle;
+static unsigned long long  max_cycles = 10;
+static unsigned long long  por_cycles = 2;
 static uint16_t clock = 0;
 
 public uint16_t TspGetClk(void) {
@@ -122,6 +124,11 @@ static void clock_is_low(void) {
     execute(clock_is_low_resolvers);
 }
 
+static inline uint64_t NOT(int sib) {
+    return (sib&0x2) ? UNDEF : ~sib&1;
+}
+
+#define FIRST_ATTEMPT
 #ifdef FIRST_ATTEMPT
 
 // TODO how about some kind of registration scheme where
@@ -154,23 +161,44 @@ static void N9_U2_6_clock_is_high(void);
 static void N10_U2_8_clock_is_high(void);
 static void N11_U2_11_clock_is_high(void);
 
+// Set internal state of outputs to bus B1
+// These are from register U1, outputs Q0, Q1, Q2#, and Q3#.
 static void U1_rising_edge(void) {
+    static uint64_t B1_state[1];
     if (GetPOR()) {
+        SETN(B1_state, B1, B1_SIZE, 0x03);
     } else {
+        printf("  U1_rising_edge(): value\n");
+        SET1(B1_state, 0, getnet(U2_3));
+        SET1(B1_state, 1, getnet(U2_6));
+        SET1(B1_state, 2, NOT(getnet(U2_8)));
+        SET1(B1_state, 3, NOT(getnet(U2_11)));
     }
+    setbus(B1, B1_SIZE, GETN(B1_state, B1, B1_SIZE));
 }
 
 static void N8_U2_3_clock_is_high(void) {
-    
+    uint64_t in1 = GetVCC();
+    uint64_t in2 = getnet(B1+0);
+    setnet(U2_3, ((in1&2)|(in2&2)) ? UNDEF : in1^in2);
 }
 
 static void N9_U2_6_clock_is_high(void) {
+    uint64_t in1 = getnet(U2_3);
+    uint64_t in2 = getnet(B1+1);
+    setnet(U2_6, ((in1&2)|(in2&2)) ? UNDEF : in1^in2);
 }
 
 static void N10_U2_8_clock_is_high(void) {
+    uint64_t in1 = getnet(U2_6);
+    uint64_t in2 = getnet(B1+2);
+    setnet(U2_6, ((in1&2)|(in2&2)) ? UNDEF : in1^in2);
 }
 
 static void N11_U2_11_clock_is_high(void) {
+    uint64_t in1 = getnet(U2_8);
+    uint64_t in2 = getnet(B1+3);
+    setnet(U2_8, ((in1&2)|(in2&2)) ? UNDEF : in1^in2);
 }
 
 void register_resolvers(void);
@@ -184,10 +212,9 @@ void register_resolvers(void) {
 
 #endif
 
-#include <stdio.h>
-
 int simulate(void) { // return exit code, 0 for success or 2 for error
 
+    /* working test code
     printf("setnet(0, UNDEF)\n");
     setnet(0, UNDEF);
     printf("setnet(3, 1)\n");
@@ -200,11 +227,18 @@ int simulate(void) { // return exit code, 0 for success or 2 for error
     setbus(4, 4, 0xA);
     printf("getbus(4, 4) returns 0x%llx\n", getbus(4, 4));
     printf("TspWires[0] is 0x%llX\n", TspNets[0]);
+    */
 
+    register_resolvers();
+
+    TspNets[0] = 0;
     for (cycle = 1; !halt(); cycle++) {
+        printf("cycle %llu:\n", cycle);
         rising_edge();
+        printf("  after rising edge: 0x%llX\n", TspNets[0]);
         clock = 1;
         clock_is_high();
+        printf("  after clock is high: 0x%llX\n", TspNets[0]);
         falling_edge();
         clock = 0;
         clock_is_low();

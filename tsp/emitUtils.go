@@ -186,15 +186,7 @@ func emitNetMacros(netName string, bitPos int, fieldWidth int) error {
 	// right shift. Otherwise, would need to & result with mask.
 
 	emith("// net %s", netName)
-	emith("#define %s_POS %d", netName, bitPos)
-	emith("#define %s_SZ %d", netName, fieldWidth)
-
-//	emith("#define Set_%s(b)  (wires.values |= (((b)&0x%X)<<%d))", netName, mask, bitPos)
-//	emith("#define Get_%s()  ((wires.values & (0x%X<<%d))>>%d)", netName, mask, bitPos, bitPos)
-//	emith("#define SetZ_%s(b) (wires.highzs |= (((b)&0x%X)<<%d))", netName, mask, bitPos)
-//	emith("#define IsZ_%s()  ((wires.highzs & (0x%X<<%d))>>%d)", netName, mask, bitPos, bitPos)
-//	emith("#define SetU_%s(b) (wires.undefs |= (((b)&0x%X)<<%d))", netName, mask, bitPos)
-//	emith("#define IsU_%s()  ((wires.undefs & (0x%X<<%d))>>%d)", netName, mask, bitPos, bitPos)
+	emith("#define %s %d", netName, bitPos)
 
 	return nil
 }

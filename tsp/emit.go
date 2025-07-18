@@ -169,16 +169,27 @@ func emitFixedContent() error {
 	emith("#define MASK(n)          ((1ULL<<(2*n))-1ULL)  // create right justified mask selecting n sibs (not bits)")
 	emith("")
 
-	emith("// Get or set a single sib (BITS_PER_SIB physical bits)")
-	emith("#define GETSIB(s)        ((%s[WORD(s)]>>BITPOS(s))&MASK(1))", netsVarName)
-	emith("#define SETSIB(s, v)     (%s[WORD(s)]&=~(MASK(1)<<BITPOS(s)),%s[WORD(s)]|=(BOUND(v,MASK(1))<<BITPOS(s)))",
-								     netsVarName, netsVarName)
-	emith("// Get or set a contiguous field of n sibs")
-	emith("#define GETSIBS(s, n)    ((%s[WORD(s)]>>BITPOS(s))&MASK(n))", netsVarName)
-	emith("#define SETSIBS(s, n, v) (%s[WORD(s)]&=~(MASK(n)<<BITPOS(s)),%s[WORD(s)]|=(BOUND(v,MASK(n))<<BITPOS(s)))",
-								     netsVarName, netsVarName)
+	emith("// Get or set a single sib in the variable sym")
+	emith("#define GET1(sym, s)       ((sym[WORD(s)]>>BITPOS(s))&MASK(1))")
+	emith("#define SET1(sym, s, v)    (sym[WORD(s)]&=~(MASK(1)<<BITPOS(s)),sym[WORD(s)]|=(BOUND(v,MASK(1))<<BITPOS(s)))")
+	emith("// Get or set n sibs in the variable sym")
+	emith("#define GETN(sym, s, n)    ((sym[WORD(s)]>>BITPOS(s))&MASK(n))")
+	emith("#define SETN(sym, s, n, v) (sym[WORD(s)]&=~(MASK(n)<<BITPOS(s)),sym[WORD(s)]|=(BOUND(v,MASK(n))<<BITPOS(s)))")
 
-	// TODO could have GETBUS and SETBUS that don't require separate s and n values ...
+	emith("#define getnet(s)       GET1(%s, s)", netsVarName)
+	emith("#define setnet(s, v)    SET1(%s, s, v)", netsVarName)
+	emith("#define getbus(s, n)    GETN(%s, s, n)", netsVarName)
+	emith("#define setbus(s, n, v) SETN(%s, s, n, v)", netsVarName)
+
+	// Previous iteration
+	// emith("#define GETSIB(s)        ((%s[WORD(s)]>>BITPOS(s))&MASK(1))", netsVarName)
+	// emith("#define SETSIB(s, v)     (%s[WORD(s)]&=~(MASK(1)<<BITPOS(s)),%s[WORD(s)]|=(BOUND(v,MASK(1))<<BITPOS(s)))",
+	// 							        netsVarName, netsVarName)
+	// emith("// Get or set a contiguous field of n sibs")
+	// emith("#define GETSIBS(s, n)    ((%s[WORD(s)]>>BITPOS(s))&MASK(n))", netsVarName)
+	// emith("#define SETSIBS(s, n, v) (%s[WORD(s)]&=~(MASK(n)<<BITPOS(s)),%s[WORD(s)]|=(BOUND(v,MASK(n))<<BITPOS(s)))",
+    //                                  netsVarName, netsVarName)
+
 	emith("")
 
 	// Emit macros for the special signals defined by the simulator
@@ -298,6 +309,7 @@ func emitBuses(data *BindingData) error {
 		if result := emitNetMacros(busName, bitPos, count); result != nil {
 			return result
 		}
+		emith("#define %s_SIZE %d\n", busName, busMap[busName])
 		f := fmt.Sprintf("%s_resolver", busName)
 		emith("extern void %s(void);", f)
 		emitc("// void %s(void) {}", f)
