@@ -9,7 +9,6 @@ package main
 
 import (
 	"fmt"
-	"math/bits" // base 2 logarithm of an int
 	"strings"
 )
 
@@ -23,8 +22,17 @@ func emit(ast *ModelNode, data *BindingData) error {
 		return fmt.Errorf("failed to emit top comment: %w", err)
 	}
 
+	shortName := hFileName[1+strings.LastIndexByte(hFileName, byte('/')):]
+	emitc("#include \"%s\"", shortName)
+	emitc("")
+
+	upperSymbolName := strings.Replace(strings.ToUpper(shortName), ".", "_", -1)
+	emith("#ifndef %s", upperSymbolName)
+	emith("#define %s", upperSymbolName)
+	emith("")
 	emith("#include <stdint.h>")
-	emitc("#include \"%s\"", hFileName[1+strings.LastIndexByte(hFileName, byte('/')):])
+	emith("#include \"api.h\"")
+	emith("")
 
 	if err := emitFixedContent(); err != nil {
 		return fmt.Errorf("failed to emit fixed content: %w", err)
@@ -42,6 +50,8 @@ func emit(ast *ModelNode, data *BindingData) error {
 		return fmt.Errorf("failed to emit component instances: %w", err)
 	}
 
+	emith("")
+	emith("#endif // %s", upperSymbolName)
 	return nil
 }
 
@@ -115,95 +125,27 @@ func emitTopComment(ast *ModelNode) error {
 	return nil
 }
 
-// The simulator operates on simulated bits, called sibs. With four-state
-// logic {0, 1, high impedence, undefined} a sib takes two physical bits.
-
-var targetWordSize int = 64
-var nSibStates int = 4 // must 4, 8, or 16
-var bitsPerSib int = bits.TrailingZeros(uint(nSibStates))
-var sibMask = (1<<bitsPerSib)-1
-
-var sibsPerWord int = targetWordSize / bitsPerSib       // typically 32
-var spwLog2 int = bits.TrailingZeros(uint(sibsPerWord)) // typically 5
-var spwMask int = sibsPerWord - 1                       // typically 0b11111
-
 // XXX FIXME nNets also TODO need a real allocator
 // Need to decide whether this counts the number of nets or whether
 // it is effectiely the number of machine words required to hold all
 // nets or ...
-var NetsCount int = 32 // number of sibs allocated for the entire simulation
+var NetsCount uint = 32 // number of sibs allocated for the entire simulation
 
 func emitFixedContent() error {
-	if targetWordSize != 64 && targetWordSize != 32 && targetWordSize != 16 {
-		return fmt.Errorf("internal error: targetWordSize must be 16, 32, or 64")
-	}
-	if bitsPerSib != 2 && bitsPerSib != 3 && bitsPerSib != 4 {
-		return fmt.Errorf("internal error: bitsPerSib must 2, 3, or 4")
-	}
 	netsVarName := fmt.Sprintf("%sNets", UniquePrefix)
-
-	emith("// Values of sibs. The values 0 and 1 represent themselves.")
-	emith("#define HIGHZ 2")
-	emith("#define UNDEF 3")
+	emith("extern uint64_t %s[];", netsVarName);
 	emith("")
-
-	emith("// Constants")
-	emith("#define TARGET_WORD_SIZE %2d // must 16, 32, or 64", targetWordSize)
-	emith("#define BITS_PER_SIB %2d     // physical bits per sib; must be 2, 3, or 4", bitsPerSib)
-	emith("#define SIB_MASK 0x%02XULL    // select a single sib", sibMask)
-	emith("#define N_NETS %2d           // computed by netlist transpiler", NetsCount)
-	emith("#define SIBS_PER_WORD %2d    // E.g. 64/2 on 64-bit computers", sibsPerWord);
-	emith("#define SPW_LOG2 0x%02X       // lg2(SIBS_PER_WORD)", spwLog2)
-	emith("#define SPW_MASK 0x%02XULL    // SPW - 1", spwMask)
-	emith("extern uint%d_t %s[];", targetWordSize, netsVarName)
-	emith("")
-
-	// Emit the definition of the nets array into the (tiny) C file
-	emitc("// Wire nets")
-	emitc("uint%d_t %s[1+((N_NETS-1)/SIBS_PER_WORD)];", targetWordSize, netsVarName)
-
-	emith("#define WORD(s)          ((s)>>SPW_LOG2)       // index of word containing sib s")
-	emith("#define POS(s)           ((s)&SPW_MASK)        // position of sib s within word, 0..SIBS_PER_WORD")
-	emith("#define BITPOS(s)        (POS(s)*BITS_PER_SIB) // position of bit holding sib s within word")
-	emith("#define BOUND(v,m)       ((v)&(m)) 		      // bound v in 0..m where m = 2^n-1 for some n")
-	emith("#define MASK(n)          ((1ULL<<(2*n))-1ULL)  // create right justified mask selecting n sibs (not bits)")
-	emith("")
-
-	emith("// Get or set a single sib in the variable sym")
-	emith("#define GET1(sym, s)       ((sym[WORD(s)]>>BITPOS(s))&MASK(1))")
-	emith("#define SET1(sym, s, v)    (sym[WORD(s)]&=~(MASK(1)<<BITPOS(s)),sym[WORD(s)]|=(BOUND(v,MASK(1))<<BITPOS(s)))")
-	emith("// Get or set n sibs in the variable sym")
-	emith("#define GETN(sym, s, n)    ((sym[WORD(s)]>>BITPOS(s))&MASK(n))")
-	emith("#define SETN(sym, s, n, v) (sym[WORD(s)]&=~(MASK(n)<<BITPOS(s)),sym[WORD(s)]|=(BOUND(v,MASK(n))<<BITPOS(s)))")
 
 	emith("#define getnet(s)       GET1(%s, s)", netsVarName)
 	emith("#define setnet(s, v)    SET1(%s, s, v)", netsVarName)
 	emith("#define getbus(s, n)    GETN(%s, s, n)", netsVarName)
 	emith("#define setbus(s, n, v) SETN(%s, s, n, v)", netsVarName)
-
-	// Previous iteration
-	// emith("#define GETSIB(s)        ((%s[WORD(s)]>>BITPOS(s))&MASK(1))", netsVarName)
-	// emith("#define SETSIB(s, v)     (%s[WORD(s)]&=~(MASK(1)<<BITPOS(s)),%s[WORD(s)]|=(BOUND(v,MASK(1))<<BITPOS(s)))",
-	// 							        netsVarName, netsVarName)
-	// emith("// Get or set a contiguous field of n sibs")
-	// emith("#define GETSIBS(s, n)    ((%s[WORD(s)]>>BITPOS(s))&MASK(n))", netsVarName)
-	// emith("#define SETSIBS(s, n, v) (%s[WORD(s)]&=~(MASK(n)<<BITPOS(s)),%s[WORD(s)]|=(BOUND(v,MASK(n))<<BITPOS(s)))",
-    //                                  netsVarName, netsVarName)
-
 	emith("")
 
-	// Emit macros for the special signals defined by the simulator
-	// GND, VCC, CLK, and POR (Power On Reset). These nets don't need
-	// setters defined.
-	// TODO make it possible to change the names of these signals for
-	// compatibility with schematics that weren't designed for this tool.
-	emith("#define GetGND() 0")
-	emith("#define GetVCC() 1")
-	emith("extern uint16_t  %sGetClk(void);", UniquePrefix)
-	emith("#define GetCLK() %sGetClk()", UniquePrefix)
-	emith("extern uint16_t  %sGetPor(void);", UniquePrefix)
-	emith("#define GetPOR() %sGetPor()", UniquePrefix)
-	emith("")
+	// Emit the definition of the nets array into the (tiny) C file
+	emitc("// Wire nets")
+	emitc("uint64_t %s[%d];", netsVarName, 1+(NetsCount-1)/32)
+	emitc("")
 
 	return nil
 }
@@ -211,7 +153,6 @@ func emitFixedContent() error {
 // Emit the wire nets.
 func emitNets(data *BindingData) error {
 	for _, ni := range data.NetInstances {
-		msg("process %s\n", ni.name)
 		nameUpper := strings.ToUpper(ni.name)
 		if nameUpper == "VCC" || nameUpper == "GND" ||
 			nameUpper == "CLK" || nameUpper == "POR" ||
@@ -219,7 +160,6 @@ func emitNets(data *BindingData) error {
 			nameUpper[0] == '/' { // i.e. it's a bus
 			continue; // don't assign a bit or gen a name
 		}
-		msg("emit %s\n", ni.name)
 		netName := makeNetName(ni)
 		if err := emitNet(ni, netName); err != nil {
 			return err
@@ -264,11 +204,7 @@ func emitNet(ni *NetInstance, netName string) error {
 		return fmt.Errorf("emitting net %s: %v", ni.name, err)
 	}
 	result := emitNetMacros(netName, position, 1)
-	f := fmt.Sprintf("%s_resolver", netName)
-	emith("extern void %s(void);", f)
 	emith("")
-
-	emitc("// void %s(void) {}", f)
 	return result
 }
 
@@ -297,7 +233,6 @@ func emitBuses(data *BindingData) error {
 		}
 		busName := ni.name[1:sepIndex]
 		busMap[busName] += 1
-		msg("busMap[%s] is %d\n", busName, busMap[busName])
 	}
 
 	for busName, count := range busMap {
@@ -305,14 +240,10 @@ func emitBuses(data *BindingData) error {
 		if err != nil {
 			return fmt.Errorf("emitting bus %s: %v", busName, err)
 		}
-		msg("emit net macros for %s\n", busName)
 		if result := emitNetMacros(busName, bitPos, count); result != nil {
 			return result
 		}
 		emith("#define %s_SIZE %d\n", busName, busMap[busName])
-		f := fmt.Sprintf("%s_resolver", busName)
-		emith("extern void %s(void);", f)
-		emitc("// void %s(void) {}", f)
 	}
 	
 	return nil

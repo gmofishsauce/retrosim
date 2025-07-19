@@ -9,10 +9,12 @@
  * sheet 1: / (Sample Schematic)
  */
 
+#ifndef TSPGEN_H
+#define TSPGEN_H
+
 #include <stdint.h>
 #include "api.h"
 
-#define N_NETS 32           // computed by netlist transpiler
 extern uint64_t TspNets[];
 
 #define getnet(s)       GET1(TspNets, s)
@@ -22,7 +24,6 @@ extern uint64_t TspNets[];
 
 // net N8_U2_3
 #define N8_U2_3 0
-extern void N8_U2_3_resolver(void);
 
 #define U1_4 N8_U2_3
 #define U2_3 N8_U2_3
@@ -30,7 +31,6 @@ extern void N8_U2_3_resolver(void);
 
 // net N9_U2_6
 #define N9_U2_6 1
-extern void N9_U2_6_resolver(void);
 
 #define U1_5 N9_U2_6
 #define U2_6 N9_U2_6
@@ -38,7 +38,6 @@ extern void N9_U2_6_resolver(void);
 
 // net N10_U2_8
 #define N10_U2_8 2
-extern void N10_U2_8_resolver(void);
 
 #define U1_12 N10_U2_8
 #define U2_12 N10_U2_8
@@ -46,39 +45,35 @@ extern void N10_U2_8_resolver(void);
 
 // net N11_U2_11
 #define N11_U2_11 3
-extern void N11_U2_11_resolver(void);
 
 #define U1_13 N11_U2_11
 #define U2_11 N11_U2_11
 
 // net N12_U1_10_Q2
 #define N12_U1_10_Q2 4
-extern void N12_U1_10_Q2_resolver(void);
 
 #define U1_10 N12_U1_10_Q2
 #define U2_10 N12_U1_10_Q2
 
 // net N13_U1_15_Q3
 #define N13_U1_15_Q3 5
-extern void N13_U1_15_Q3_resolver(void);
 
 #define U1_15 N13_U1_15_Q3
 #define U2_13 N13_U1_15_Q3
 
 // net N14_U1_6_NOT_Q1
 #define N14_U1_6_NOT_Q1 6
-extern void N14_U1_6_NOT_Q1_resolver(void);
 
 #define U1_6 N14_U1_6_NOT_Q1
 #define U2_5 N14_U1_6_NOT_Q1
 
 // net N17_NOT_POR
 #define N17_NOT_POR 7
-extern void N17_NOT_POR_resolver(void);
 
 #define U1_1 N17_NOT_POR
 
 // net B1
 #define B1 8
 #define B1_SIZE 4
-extern void B1_resolver(void);
+
+#endif // TSPGEN_H
