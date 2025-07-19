@@ -18,11 +18,6 @@
 
 extern uint64_t TspNets[]; // XXX temporary here
 
-// TODO replace the word "resolver" with "hook" globally
-// TODO using function pointers for the resolvers allows
-// code manipulate their order in search of a forward-only
-// resolution order.
-
 static int simulate(void);
 static int halt(void);
 static void rising_edge(void);
@@ -30,16 +25,16 @@ static void clock_is_high(void);
 static void falling_edge(void);
 static void clock_is_low(void);
 
-#define MAX_RESOLVERS 10 // for Sample.net: tsp can compute: TODO
-static handler_t rising_edge_resolvers[MAX_RESOLVERS];
-static handler_t clock_is_high_resolvers[MAX_RESOLVERS];
-static handler_t falling_edge_resolvers[MAX_RESOLVERS];
-static handler_t clock_is_low_resolvers[MAX_RESOLVERS];
+#define MAX_HOOKS 10 // TODO XXX tsp can compute
+static handler_t rising_edge_hooks[MAX_HOOKS];
+static handler_t clock_is_high_hooks[MAX_HOOKS];
+static handler_t falling_edge_hooks[MAX_HOOKS];
+static handler_t clock_is_low_hooks[MAX_HOOKS];
 
-static int n_rising_edge_resolvers = 0;
-static int n_clock_is_high_resolvers = 0;
-static int n_falling_edge_resolvers = 0;
-static int n_clock_is_low_resolvers = 0;
+static int n_rising_edge_hooks = 0;
+static int n_clock_is_high_hooks = 0;
+static int n_falling_edge_hooks = 0;
+static int n_clock_is_low_hooks = 0;
 
 int main(int ac, char** av) {
     int c;
@@ -76,9 +71,9 @@ int main(int ac, char** av) {
 // The cycle counter counts from 1, so the first cycle is "1"
 // Everything related to cycles is 1-based. I may regret this.
 
-static unsigned long long cycle;
-static unsigned long long  max_cycles = 10;
-static unsigned long long  por_cycles = 2;
+static uint64_t cycle;
+static uint64_t  max_cycles = 10;
+static uint64_t  por_cycles = 2;
 static uint16_t clock = 0;
 
 uint16_t TspGetClk(void) {
@@ -102,59 +97,44 @@ static inline void execute(handler_t* resolvers) {
 }
 
 static void rising_edge(void) {
-    execute(rising_edge_resolvers);
+    execute(rising_edge_hooks);
 }
 
 static void clock_is_high(void) {
-    execute(clock_is_high_resolvers);
+    execute(clock_is_high_hooks);
 }
 
 static void falling_edge(void) {
-    execute(falling_edge_resolvers);
+    execute(falling_edge_hooks);
 }
 
 static void clock_is_low(void) {
-    execute(clock_is_low_resolvers);
+    execute(clock_is_low_hooks);
 }
 
-void add_rising_edge_resolver(handler_t fp) {
-    rising_edge_resolvers[n_rising_edge_resolvers] = fp;
-    n_rising_edge_resolvers++;
+void add_rising_edge_hook(handler_t fp) {
+    rising_edge_hooks[n_rising_edge_hooks] = fp;
+    n_rising_edge_hooks++;
 }
 
-void add_clock_is_high_resolver(handler_t fp) {
-    clock_is_high_resolvers[n_clock_is_high_resolvers] = fp;
-    n_clock_is_high_resolvers++;
+void add_clock_is_high_hook(handler_t fp) {
+    clock_is_high_hooks[n_clock_is_high_hooks] = fp;
+    n_clock_is_high_hooks++;
 }
 
-void add_falling_edge_resolver(handler_t fp) {
-    falling_edge_resolvers[n_rising_edge_resolvers] = fp;
-    n_falling_edge_resolvers++;
+void add_falling_edge_hook(handler_t fp) {
+    falling_edge_hooks[n_rising_edge_hooks] = fp;
+    n_falling_edge_hooks++;
 }
 
-void add_clock_is_low_rising_edge_resolver(handler_t fp) {
-    clock_is_low_resolvers[n_clock_is_low_resolvers] = fp;
-    n_clock_is_low_resolvers++;
+void add_clock_is_low_rising_edge_hook(handler_t fp) {
+    clock_is_low_hooks[n_clock_is_low_hooks] = fp;
+    n_clock_is_low_hooks++;
 }
 
 int simulate(void) { // return exit code, 0 for success or 2 for error
+    init();
 
-    /* working test code
-    printf("setnet(0, UNDEF)\n");
-    setnet(0, UNDEF);
-    printf("setnet(3, 1)\n");
-    setnet(3, 1);
-    printf("getnet(0) returns 0x%llX\n", getnet(0));
-    printf("getnet(3) returns 0x%llX\n", getnet(3));
-    printf("TspWires[0] is 0x%llX\n", TspNets[0]);
-
-    printf("setbus(4, 4, 0xA)\n");
-    setbus(4, 4, 0xA);
-    printf("getbus(4, 4) returns 0x%llx\n", getbus(4, 4));
-    printf("TspWires[0] is 0x%llX\n", TspNets[0]);
-    */
-
-    TspNets[0] = 0;
     for (cycle = 1; !halt(); cycle++) {
         printf("cycle %llu:\n", cycle);
         rising_edge();

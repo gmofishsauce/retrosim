@@ -3,21 +3,34 @@
 #include "api.h"
 #include "TspGen.h"
 
-// void N8_U2_3_resolver(void) {}
-// void N9_U2_6_resolver(void) {}
-// void N10_U2_8_resolver(void) {}
-// void N11_U2_11_resolver(void) {}
-// void N12_U1_10_Q2_resolver(void) {}
-// void N13_U1_15_Q3_resolver(void) {}
-// void N14_U1_6_NOT_Q1_resolver(void) {}
-// void N17_NOT_POR_resolver(void) {}
-// void B1_resolver(void) {}
-
 void U1_rising_edge(void);
 void N8_U2_3_clock_is_high(void);
 void N9_U2_6_clock_is_high(void);
 void N10_U2_8_clock_is_high(void);
 void N11_U2_11_clock_is_high(void);
+
+void init(void) {
+    printf("setnet(0, UNDEF)\n");
+    setnet(0, UNDEF);
+    printf("setnet(3, 1)\n");
+    setnet(3, 1);
+    printf("getnet(0) returns 0x%llX\n", getnet(0));
+    printf("getnet(3) returns 0x%llX\n", getnet(3));
+    printf("TspWires[0] is 0x%llX\n", TspNets[0]);
+
+    printf("setbus(4, 4, 0xA)\n");
+    setbus(4, 4, 0xA);
+    printf("getbus(4, 4) returns 0x%llx\n", getbus(4, 4));
+    printf("TspWires[0] is 0x%llX\n", TspNets[0]);
+
+    TspNets[0] = 0;
+
+    add_rising_edge_hook(&U1_rising_edge);
+    add_clock_is_high_hook(&N8_U2_3_clock_is_high);
+    add_clock_is_high_hook(&N9_U2_6_clock_is_high);
+    add_clock_is_high_hook(&N10_U2_8_clock_is_high);
+    add_clock_is_high_hook(&N11_U2_11_clock_is_high);
+}
 
 // Set internal state of outputs to bus B1
 // These are from register U1, outputs Q0, Q1, Q2#, and Q3#.

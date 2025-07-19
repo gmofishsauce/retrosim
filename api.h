@@ -38,12 +38,14 @@ extern uint16_t  TspGetClk(void);
 extern uint16_t  TspGetPor(void);
 #define GetPOR() TspGetPor()
 
+extern void init(void);
+
 typedef void (*handler_t)(void);
 
-void add_rising_edge_resolver(handler_t fp);
-void add_clock_is_high_resolver(handler_t fp);
-void add_falling_edge_resolver(handler_t fp);
-void add_clock_is_low_rising_edge_resolver(handler_t fp);
+extern void add_rising_edge_hook(handler_t fp);
+extern void add_clock_is_high_hook(handler_t fp);
+extern void add_falling_edge_hook(handler_t fp);
+extern void add_clock_is_low_rising_edge_hook(handler_t fp);
 
 uint64_t NOT(int sib);
 
