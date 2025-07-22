@@ -17,10 +17,6 @@ import (
 // Prefix for generated symbols. TODO: allow overriding
 var UniquePrefix = "Tsp"
 
-// The bit number of next bit to allocate
-// TODO: quick and dirty impl can only handle 64 bits total.
-var nextBit int
-
 // emith and emitc take the same arguments as printf().
 // They write to the output .h or .c files, respectively,
 // appending a newline if one isn't passed. Emitting an
@@ -33,6 +29,7 @@ var hFile io.Writer
 
 // The output files are written to the Gen subdirectory
 // if it exists, otherwise in .
+// TODO generated code should be named after the schematic
 func openOutputs() error {
 
 	// TODO option for this
@@ -166,31 +163,28 @@ func makeNetName(ni *NetInstance) string {
 	return sb.String()
 }
 
-// Allocate bit(s) to represent wire nets or buses of them at runtime.
-// Return the shift index of the low-order allocated bit.
-func allocWireBits(nBits int) (int, error) {
-	// TODO for now, we support up to 64 wires total.
-	if nextBit + nBits >= 64 {
-		return -1, fmt.Errorf("TODO: schematic has more than 64 wires")
-	}
-	result := nextBit
-	nextBit += nBits
-	return result, nil
-}
-
 func emitNetMacros(netName string, bitPos int, fieldWidth int) error {
-	// mask := (1<<(fieldWidth)) - 1	
-
-	// The GetNNN() macros rely on the C definition of bitN_t being
-	// a uint rather than an int to avoid sign-extending arithmetic
-	// right shift. Otherwise, would need to & result with mask.
-
 	emith("// net %s", netName)
 	emith("#define %s %d", netName, bitPos)
-
 	return nil
 }
 
 func makeComponentTypeName(c *ComponentType) string {
 	return "C" + makeCIdentifier(1, c.lib + "_" + c.part)
 }
+
+// The allocator allocates "nets". Each net requires one four-state bit,
+// called a "sib" (simulated bit). Buses require 1 net for each bus line.
+// Nets are identified by indices 0..N-1. The macros in api.h in the C code
+// adjust for the fact that each "bit" requires BITS_PER_SIB bits, and the
+// emitter adjusts the amount of allocated space (machine words) to fit
+// all the allocated sibs. In the four-state simulator, BITS_PER_SIB is 2.
+// In theory, this code could be changed to do an 8-state simulator with
+// with weak states and 3 bits per sib.
+var NumNets int = 0
+func allocNets(nAlloc int) int {
+	result := NumNets;
+	NumNets++;
+	return result;
+}
+

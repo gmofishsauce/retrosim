@@ -1,4 +1,3 @@
-// TODO GETSIB and GETSIBS might be called GETNET and GETBUS, etc?
 /*
  * Copyright (c) Jeff Berkowitz 2025.
  *
@@ -10,6 +9,17 @@ package main
 import (
 	"fmt"
 	"strings"
+)
+
+// Parameters of the implementation. Sibs are simulated bits, each
+// requiring "n" bits for 2^n simulated states. N has only ever been
+// 2, but want to reserve the possibility of an 8-state simulator.
+// Also want to reserve the possibility of targeting a machine with
+// smaller than 64-bit words, such as a microcontroller.
+const (
+	TargetWordBits = 64
+	TargetWordType = "uint64_t"
+	BitsPerSib = 2
 )
 
 // emit is the main entry point for code generation.
@@ -34,7 +44,7 @@ func emit(ast *ModelNode, data *BindingData) error {
 	emith("#include \"api.h\"")
 	emith("")
 
-	if err := emitFixedContent(); err != nil {
+	if err := emitFixedContent(NumNets); err != nil {
 		return fmt.Errorf("failed to emit fixed content: %w", err)
 	}
 	if err := emitNets(data); err != nil {
@@ -56,28 +66,20 @@ func emit(ast *ModelNode, data *BindingData) error {
 }
 
 func emitComponents(data *BindingData) error {
+//  TODO simulate component behaviors
 //	emith("// Component types")
 //	for _, c := range data.ComponentTypes {
-//		var baseType string
-//		if len(c.pins) <= 18 {
-//			baseType = "bitvec16_t"
-//		} else if len(c.pins) <= 66 {
-//			baseType = "bitvec64_t"
-//		} else {
-//			return fmt.Errorf("part has too many pins: %s:%s", c.lib, c.part)
-//		}
-//
 //		emith("typedef struct %s %s_t;", baseType, makeComponentTypeName(c))
 //	}
 	return nil
 }
 
 func emitInstances(data *BindingData) error {
+//  TODO simulate component behaviors
 	return nil
 }
 
 // Generate a useful top comment
-// TODO get the company and put it in the copyright
 const topCommentStart = `/*
  * Copyright (c) %s 2025. All rights reserved.
  * This file was generated from a KiCad schematic. Do not edit.
@@ -125,15 +127,9 @@ func emitTopComment(ast *ModelNode) error {
 	return nil
 }
 
-// XXX FIXME nNets also TODO need a real allocator
-// Need to decide whether this counts the number of nets or whether
-// it is effectiely the number of machine words required to hold all
-// nets or ...
-var NetsCount uint = 32 // number of sibs allocated for the entire simulation
-
-func emitFixedContent() error {
+func emitFixedContent(netsCount int) error {
 	netsVarName := fmt.Sprintf("%sNets", UniquePrefix)
-	emith("extern uint64_t %s[];", netsVarName);
+	emith("extern %s %s[];", TargetWordType, netsVarName);
 	emith("")
 
 	emith("#define getnet(s)       GET1(%s, s)", netsVarName)
@@ -143,8 +139,9 @@ func emitFixedContent() error {
 	emith("")
 
 	// Emit the definition of the nets array into the (tiny) C file
+	sibsPerTargetWord := TargetWordBits/BitsPerSib
 	emitc("// Wire nets")
-	emitc("uint64_t %s[%d];", netsVarName, 1+(NetsCount-1)/32)
+	emitc("%s %s[%d];", TargetWordType, netsVarName, 1+(netsCount-1)/sibsPerTargetWord)
 	emitc("")
 
 	return nil
@@ -173,36 +170,9 @@ func emitNets(data *BindingData) error {
 	return nil
 }
 
-/*
-type PinInfo struct {
-    num string      // The pin "number" is not always a number
-    name string     // pin (signal) name
-    kind string     // string enum described above
-}
-
-type ComponentInstance struct {
-    ref string
-    componentType *ComponentType
-}
-
-type NetNode struct {
-    part *ComponentInstance
-    pin *PinInfo
-}
-
-type NetInstance struct {
-    code string         // is this always a number?
-    name string
-    netNodes []*NetNode // endpoints on this net
-}
-*/
-
 // Emit the definition of a net using the given bit position.
 func emitNet(ni *NetInstance, netName string) error {
-	position, err := allocWireBits(1)
-	if err != nil {
-		return fmt.Errorf("emitting net %s: %v", ni.name, err)
-	}
+	position := allocNets(1)
 	result := emitNetMacros(netName, position, 1)
 	emith("")
 	return result
@@ -218,6 +188,8 @@ func emitNet(ni *NetInstance, netName string) error {
 // functional code. The idea is that the handwritten code can manipulate
 // buses as units, e.g. the output bus of a 16-bit ALU can be set by doing
 // 16-bit operations, etc.
+//
+// TODO buses that are named signals (I forget what KiCad calls these).
 
 func emitBuses(data *BindingData) error {
 	busMap := make(map[string]int) // map bus names to number of nets
@@ -236,11 +208,8 @@ func emitBuses(data *BindingData) error {
 	}
 
 	for busName, count := range busMap {
-		bitPos, err := allocWireBits(count)
-		if err != nil {
-			return fmt.Errorf("emitting bus %s: %v", busName, err)
-		}
-		if result := emitNetMacros(busName, bitPos, count); result != nil {
+		position := allocNets(count)
+		if result := emitNetMacros(busName, position, count); result != nil {
 			return result
 		}
 		emith("#define %s_SIZE %d\n", busName, busMap[busName])

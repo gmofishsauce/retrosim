@@ -15,6 +15,47 @@ type BindingData struct {
 	NetInstances       []*NetInstance
 }
 
+// Pin information for each pin on each type
+// kind is actually an enum with possible string values:
+//   Input, Output, Bidirectional, Tri-state, Passive, Free, Unspecified,
+//   Power input, Power output, Open collector, Open emitter, Unconnected.
+type PinInfo struct {
+	num string		// The pin "number" is not always a number
+	name string		// pin (signal) name
+	kind string		// string enum described above
+}
+
+// Type information for each type
+type ComponentType struct {
+	lib string
+	part string
+	pins []*PinInfo
+	emit bool
+}
+
+// Component instance for each component
+// Points to a ComponentType
+type ComponentInstance struct {
+	ref string
+	componentType *ComponentType
+}
+
+// Example of a net:
+//  (net (code "10") (name "Net-(U1-D3)")
+//    (node (ref "U1") (pin "13") (pinfunction "D3") (pintype "input"))
+//    (node (ref "U2") (pin "11") (pintype "output")))
+
+type NetNode struct {
+	part *ComponentInstance
+	pin *PinInfo
+}
+
+type NetInstance struct {
+	code string			// is this always a number?
+	name string
+	netNodes []*NetNode	// endpoints on this net
+}
+
 // bind processes the parsed netlist model (root) and extracts structured
 // information about component types, instances, and nets.
 func bind(ast *ModelNode) (*BindingData, error) {
@@ -36,24 +77,6 @@ func bind(ast *ModelNode) (*BindingData, error) {
 	return &BindingData{componentTypes, componentInstances, netInstances}, nil
 }
 
-// Pin information for each pin on each type
-// kind is actually an enum with possible string values:
-//   Input, Output, Bidirectional, Tri-state, Passive, Free, Unspecified,
-//   Power input, Power output, Open collector, Open emitter, Unconnected.
-type PinInfo struct {
-	num string		// The pin "number" is not always a number
-	name string		// pin (signal) name
-	kind string		// string enum described above
-}
-
-// Type information for each type
-type ComponentType struct {
-	lib string
-	part string
-	pins []*PinInfo
-	emit bool
-}
-
 func getTypes(ast *ModelNode) ([]*ComponentType, error) {
 	var componentTypes []*ComponentType
 
@@ -68,13 +91,6 @@ func getTypes(ast *ModelNode) ([]*ComponentType, error) {
 	}
 
 	return componentTypes, nil
-}
-
-// Component instance for each component
-// Points to a ComponentType
-type ComponentInstance struct {
-	ref string
-	componentType *ComponentType
 }
 
 func shouldEmit(ref string) bool {
@@ -102,22 +118,6 @@ func getInstances(ast *ModelNode, types []*ComponentType) ([]*ComponentInstance,
 		}
 	}
 	return componentInstances, nil
-}
-
-// Example of a net:
-//  (net (code "10") (name "Net-(U1-D3)")
-//    (node (ref "U1") (pin "13") (pinfunction "D3") (pintype "input"))
-//    (node (ref "U2") (pin "11") (pintype "output")))
-
-type NetNode struct {
-	part *ComponentInstance
-	pin *PinInfo
-}
-
-type NetInstance struct {
-	code string			// is this always a number?
-	name string
-	netNodes []*NetNode	// endpoints on this net
 }
 
 // NetNodes are references to other types, which have to be looked up
@@ -153,12 +153,14 @@ func getNets(ast *ModelNode, allInstances []*ComponentInstance) ([]*NetInstance,
 			ref := qss(d, "ref")
 			part := findInstance(ref, allInstances)
 			if part == nil {
-				return nil, fmt.Errorf("part %s (referenced in net %s - code %s) not found in component instances", ref, name, code)
+				return nil, fmt.Errorf("part %s (referenced in net %s - code %s) not found in component instances",
+								ref, name, code)
 			}
 			pinNumStr := qss(d, "pin")
 			pin := findPin(part, pinNumStr)
 			if pin == nil {
-				return nil, fmt.Errorf("pin %s of part %s (referenced in net %s - code %s) not found", pinNumStr, ref, name, code)
+				return nil, fmt.Errorf("pin %s of part %s (referenced in net %s - code %s) not found",
+								pinNumStr, ref, name, code)
 			}
 			netNodes = append(netNodes, &NetNode{part, pin})
 		}

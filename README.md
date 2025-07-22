@@ -16,6 +16,7 @@ The other files are:
 ### Sooner
 
  - I/O for the simulator: vcd file generator (target https://github.com/yne/vcd)
+ - DONE Real allocator for storage for nets (currently just allocates 32 nets)
  - Put the transpiler in its own repo and rename it
  - 4-value logic functions using LUTs to avoid branches in code
  - Better sample code, separated from simulator core and transpiler
@@ -25,3 +26,4 @@ The other files are:
 
  - Simulators for common 74xxx series components
  - Modify the transpiler to connect component simulators
+
