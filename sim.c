@@ -11,15 +11,13 @@
 
 #include <stdlib.h>
 #include <unistd.h>
-#include <stdio.h> // temporary here, for debugging
 
 #include "api.h"
 #include "sim.h"
 
-extern uint64_t TspNets[]; // XXX temporary here
+char* g_progname;
 
 static int simulate(void);
-static int halt(void);
 static void rising_edge(void);
 static void clock_is_high(void);
 static void falling_edge(void);
@@ -38,6 +36,7 @@ static int n_clock_is_low_hooks = 0;
 
 int main(int ac, char** av) {
     int c;
+    g_progname = av[0];
     while ((c = getopt(ac, av, "qd:")) != -1) {
         switch (c) {
         case 'q':
@@ -59,35 +58,13 @@ int main(int ac, char** av) {
         fatal("unexpected option: %s\n", av[optind]);
     }
 
-    msg("%s: firing up...", av[0]);
+    msg("firing up...");
     DB(MIN, "%s", "Debug MIN enabled");
     DB(MED, "%s", "Debug MED enabled");
     DB(MAX, "%s", "Debug MAX enabled");
     int exitCode = simulate();
-    msg("%s: exit %d", av[0], exitCode);
+    msg("exit %d", exitCode);
     return exitCode;
-}
-
-// The cycle counter counts from 1, so the first cycle is "1"
-// Everything related to cycles is 1-based. I may regret this.
-
-static uint64_t cycle;
-static uint64_t  max_cycles = 10;
-static uint64_t  por_cycles = 2;
-static uint16_t clock = 0;
-
-uint16_t TspGetClk(void) {
-    return clock;
-}
-
-uint16_t TspGetPor(void) {
-    return cycle <= por_cycles;
-}
-
-// Whether to continue running.
-// TODO mechanism for simulation code to halt the simulator
-static int halt(void) {
-    return cycle > max_cycles;
 }
 
 static inline void execute(handler_t* resolvers) {
@@ -135,18 +112,14 @@ void add_clock_is_low_rising_edge_hook(handler_t fp) {
 int simulate(void) { // return exit code, 0 for success or 2 for error
     init();
 
-    for (cycle = 1; !halt(); cycle++) {
-        printf("cycle %llu:\n", cycle);
+    for (g_cycle = 1; is_running(); g_cycle++) {
         rising_edge();
-        printf("  after rising edge: 0x%llX\n", TspNets[0]);
-        clock = 1;
         clock_is_high();
-        printf("  after clock is high: 0x%llX\n", TspNets[0]);
         falling_edge();
-        clock = 0;
         clock_is_low();
     }
 
+    msg("terminating normally after %d cycle%s", g_cycle-1, (g_cycle-1 == 1) ? "" : "s");
     return 0;
 }
 

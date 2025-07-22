@@ -31,6 +31,9 @@
 #define GETN(sym, s, n)    ((sym[WORD(s)]>>BITPOS(s))&MASK(n))
 #define SETN(sym, s, n, v) (sym[WORD(s)]&=~(MASK(n)<<BITPOS(s)),sym[WORD(s)]|=(BOUND(v,MASK(n))<<BITPOS(s)))
 
+// The aliases getnet() and setnet() for GET1() and SET1() are emitted
+// into the generated .h file. Similarly for getbus() and setbus().
+
 #define GetGND() 0
 #define GetVCC() 1
 extern uint16_t  TspGetClk(void);
@@ -38,7 +41,12 @@ extern uint16_t  TspGetClk(void);
 extern uint16_t  TspGetPor(void);
 #define GetPOR() TspGetPor()
 
+// global variables
+extern uint64_t g_cycle;
+
 extern void init(void);
+extern void halt(void);
+extern int is_running(void);
 
 typedef void (*handler_t)(void);
 

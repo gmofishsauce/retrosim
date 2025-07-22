@@ -6,6 +6,13 @@
  */
 package main
 
+// TODO need to look into "group buses", e.g. {COPI CIPO CLK}, or
+// SPI{COPI CIPO CLK}, or even more complicated compound names
+// involving a vector bus of group buses.
+// TODO related: the "B1+2" mechanicsm for bit 2 of bus B1 assumes
+// too much for group buses. Maybe need something like _COPI, _CIPO,
+// and _CLK for the first case, SPI_COPI etc for the second case.
+
 import (
 	"fmt"
 	"os"

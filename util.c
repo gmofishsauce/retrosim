@@ -33,12 +33,14 @@ bool msg(const char* fmt, ...) {
     if (!quiet) {
         va_list args;
         va_start(args, fmt);
+        fputs(g_progname, stderr);
+        fputs(": ", stderr);
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wformat-nonliteral"
         (void) vfprintf(stderr, fmt, args);
 #pragma clang diagnostic pop
         va_end(args);
-        fputc('\n', stderr);
+        fputs("\n", stderr);
     }
     return true;
 }

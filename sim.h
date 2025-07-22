@@ -16,4 +16,6 @@
 
 #include "util.h"
 
+extern char* g_progname;
+
 #endif // SIM_H
