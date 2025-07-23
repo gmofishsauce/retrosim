@@ -15,7 +15,11 @@ import (
 )
 
 // Prefix for generated symbols. TODO: allow overriding
+// TODO: should be named after the schematic
 var UniquePrefix = "Tsp"
+
+// The NetList is written to enable tracing in the C sim.
+var NetList strings.Builder
 
 // emith and emitc take the same arguments as printf().
 // They write to the output .h or .c files, respectively,
@@ -32,13 +36,8 @@ var hFile io.Writer
 // TODO generated code should be named after the schematic
 func openOutputs() error {
 
-	// TODO option for this
-	dirPath := ".." // path.Join(".", "Gen")
-
-	inf, err := os.Stat(dirPath)
-	if err != nil || !inf.IsDir() {
-		dirPath = "."
-	}
+	var err error
+	dirPath := mkOutputDirPath()
 	name := path.Join(dirPath, UniquePrefix + "Gen")
 	cFileName = name + ".c"
 	hFileName = name + ".h"
@@ -163,9 +162,11 @@ func makeNetName(ni *NetInstance) string {
 	return sb.String()
 }
 
-func emitNetMacros(netName string, bitPos int, fieldWidth int) error {
+func emitNetMacros(netName string, index int, fieldWidth int) error {
 	emith("// net %s", netName)
-	emith("#define %s %d", netName, bitPos)
+	emith("#define %s %d", netName, index)
+	line := fmt.Sprintf("%s,%d,%d\n", netName, index, fieldWidth);
+	NetList.WriteString(line)
 	return nil
 }
 
@@ -188,3 +189,32 @@ func allocNets(nAlloc int) int {
 	return result;
 }
 
+// TODO what is the default?
+// TODO option to override or change this
+func mkOutputDirPath() string {
+	dirPath := ".."
+	inf, err := os.Stat(dirPath)
+	if err != nil || !inf.IsDir() {
+		dirPath = "."
+	}
+	return dirPath
+}
+
+func emitNetList() error {
+	if NetList.Len() == 0 {
+		msg("warning: empty netlist")
+		return nil
+	}
+
+	dirPath := mkOutputDirPath()
+	name := path.Join(dirPath, UniquePrefix + "Gen-Netlist.csv")
+	netFile, err := os.Create(name)
+	if err != nil {
+		return err
+	}
+	n, err := fmt.Fprintf(netFile, "%s", NetList.String())
+	if n == 0 || err != nil {
+		return err
+	}
+	return nil
+}

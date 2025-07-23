@@ -59,6 +59,9 @@ func emit(ast *ModelNode, data *BindingData) error {
 	if err := emitInstances(data); err != nil {
 		return fmt.Errorf("failed to emit component instances: %w", err)
 	}
+	if err := emitNetList(); err != nil {
+		return fmt.Errorf("failed to emit netlist: %w", err)
+	}
 
 	emith("")
 	emith("#endif // %s", upperSymbolName)
@@ -190,7 +193,6 @@ func emitNet(ni *NetInstance, netName string) error {
 // 16-bit operations, etc.
 //
 // TODO buses that are named signals (I forget what KiCad calls these).
-
 func emitBuses(data *BindingData) error {
 	busMap := make(map[string]int) // map bus names to number of nets
 
@@ -217,4 +219,3 @@ func emitBuses(data *BindingData) error {
 	
 	return nil
 }
-
