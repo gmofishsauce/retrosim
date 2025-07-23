@@ -55,6 +55,18 @@ extern void add_clock_is_high_hook(handler_t fp);
 extern void add_falling_edge_hook(handler_t fp);
 extern void add_clock_is_low_rising_edge_hook(handler_t fp);
 
+// Tracing is expensive, so it must be enabled in the transpiler or
+// hacked into the transpiler-generated include file and recompiled.
+#if defined(ENABLE_TRACING)
+extern void init_tracing(void);
+extern void write_trace(void);
+#define INIT_TRACING() init_tracing()
+#define WRITE_TRACE() write_trace()
+#else
+#define INIT_TRACING()
+#define WRITE_TRACE()
+#endif // ENABLE_TRACING
+
 uint64_t NOT(int sib);
 
 #endif // API_H
