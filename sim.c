@@ -106,6 +106,7 @@ int simulate(void) { // return exit code, 0 for success or 2 for error
         execute(clock_is_low_hooks);
     }
 
+    CLOSE_TRACE();
     msg("terminating normally after %d cycle%s", g_cycle-1, (g_cycle-1 == 1) ? "" : "s");
     return 0;
 }

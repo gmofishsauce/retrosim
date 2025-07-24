@@ -60,11 +60,14 @@ extern void add_clock_is_low_rising_edge_hook(handler_t fp);
 #if defined(ENABLE_TRACING)
 extern void init_tracing(void);
 extern void write_trace(void);
+extern void close_trace(void);
 #define INIT_TRACING() init_tracing()
 #define WRITE_TRACE() write_trace()
+#define CLOSE_TRACE() close_trace()
 #else
 #define INIT_TRACING()
 #define WRITE_TRACE()
+#define CLOSE_TRACE()
 #endif // ENABLE_TRACING
 
 uint64_t NOT(int sib);
