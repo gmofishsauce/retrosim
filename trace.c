@@ -3,28 +3,21 @@
  *      10        20        30        40        50        60        70 
  */
 
-#include "compile_options.h"
-
-#ifdef ENABLE_TRACING
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "sim.h"
-
-// TODO visibility of declarations needs yet more thought ...
-extern void init_tracing(void);
-extern void write_trace(void);
-extern void close_trace(void);
-extern uint64_t TspNets[];
+#include "api.h"
+#include "trace.h"
 
 static FILE* trace_file;
 
-typedef union {
-    uint8_t bytes[8];
-    int32_t ints[2];
-    uint64_t all;
-} header_t;
+// These values are used to write the data. They must be initialized
+// from transpiler-generated code.
+static void *nets;
+static size_t nets_element_size;
+static unsigned long nets_element_count;
 
 // Write the header to the trace file. The trace file is open.
 static int write_header(void) {
@@ -38,7 +31,7 @@ static int write_header(void) {
     // end of the netlist.
 
     errno = 0;
-    FILE* net_list_file = fopen(NET_LIST_FILE_NAME, "r");
+    FILE* net_list_file = fopen(get_net_list_file_name(), "r");
     if (net_list_file == NULL) {
         msg("open netlist file failed: %s\n", strerror(errno));
         return 0;
@@ -73,9 +66,13 @@ static int write_header(void) {
     return 1;
 }
 
-void init_tracing(void) {
+void initialize_tracing(void) {
+    nets = get_nets();
+    nets_element_size = (size_t)get_nets_element_size();
+    nets_element_count = get_nets_element_count();
+
     errno = 0;
-    trace_file = fopen(TRACE_FILE_NAME, "w");
+    trace_file = fopen(get_trace_file_name(), "w");
     if (trace_file == NULL) {
         msg("open trace file failed: %s\n", strerror(errno));
         return;
@@ -87,13 +84,9 @@ void init_tracing(void) {
     }
 }
 
-// TODO The transpiler needs to generate these
-#define TARGET_WORD_TYPE uint64_t
-#define NETS_SIZE 1
-
 void write_trace(void) {
     errno = 0;
-    if (trace_file && fwrite(&TspNets, sizeof(TARGET_WORD_TYPE), NETS_SIZE, trace_file) != NETS_SIZE) {
+    if (trace_file && fwrite(nets, nets_element_count, nets_element_size, trace_file) != nets_element_size) {
         msg("write_trace: write failed (%s): tracing suspended", strerror(errno));
         fclose(trace_file);
         trace_file = NULL;
@@ -105,5 +98,3 @@ void close_trace(void) {
         fclose(trace_file);
     }
 }
-
-#endif // ENABLE_TRACING

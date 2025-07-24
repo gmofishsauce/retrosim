@@ -9,7 +9,7 @@ void N9_U2_6_clock_is_high(void);
 void N10_U2_8_clock_is_high(void);
 void N11_U2_11_clock_is_high(void);
 
-void init(void) {
+void initialize_simulation(void) {
     add_rising_edge_hook(&U1_rising_edge);
     add_clock_is_high_hook(&N8_U2_3_clock_is_high);
     add_clock_is_high_hook(&N9_U2_6_clock_is_high);

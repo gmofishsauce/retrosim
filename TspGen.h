@@ -12,10 +12,13 @@
 #ifndef TSPGEN_H
 #define TSPGEN_H
 
-#include <stdint.h>
 #include "api.h"
 
-extern uint64_t TspNets[];
+// TODO transpiler generate:
+#define N_HOOKS 10
+#define NETS_ELEMENT_COUNT 1
+extern uint64_t TspNets[NETS_ELEMENT_COUNT];
+// END TODO
 
 #define getnet(s)       GET1(TspNets, s)
 #define setnet(s, v)    SET1(TspNets, s, v)

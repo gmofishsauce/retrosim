@@ -4,6 +4,7 @@
 #define API_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 // Constants
 #define TARGET_WORD_SIZE 64 // in theory can be 16 or 32 ... not tried.
@@ -44,7 +45,14 @@ extern uint16_t  TspGetPor(void);
 // global variables
 extern uint64_t g_cycle; // counts from 1 to n
 
-extern void init(void);
+// "Reverse API": the simulation core calls these
+extern void initialize_simulation(void);
+extern void *get_nets(void);
+extern size_t get_nets_element_size(void);
+extern unsigned long get_nets_element_count(void);
+extern char* get_net_list_file_name(void);
+extern char* get_trace_file_name(void);
+
 extern void halt(void);
 extern int is_running(void);
 
@@ -54,21 +62,6 @@ extern void add_rising_edge_hook(handler_t fp);
 extern void add_clock_is_high_hook(handler_t fp);
 extern void add_falling_edge_hook(handler_t fp);
 extern void add_clock_is_low_rising_edge_hook(handler_t fp);
-
-// Tracing is expensive, so it must be enabled in the transpiler or
-// hacked into the transpiler-generated include file and recompiled.
-#if defined(ENABLE_TRACING)
-extern void init_tracing(void);
-extern void write_trace(void);
-extern void close_trace(void);
-#define INIT_TRACING() init_tracing()
-#define WRITE_TRACE() write_trace()
-#define CLOSE_TRACE() close_trace()
-#else
-#define INIT_TRACING()
-#define WRITE_TRACE()
-#define CLOSE_TRACE()
-#endif // ENABLE_TRACING
 
 uint64_t NOT(int sib);
 

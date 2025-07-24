@@ -12,5 +12,26 @@
 #include "TspGen.h"
 
 // Wire nets
-uint64_t TspNets[1];
+uint64_t TspNets[NETS_ELEMENT_COUNT];
 
+// TODO transpiler generate
+// This is the "reverse API": the simulator core calls these.
+
+// Get the nets data structure (bit vector). The size of the data structure
+// can be determined from the element size and the element count getters.
+void *get_nets(void) {
+    return (void*) TspNets;
+}
+size_t get_nets_element_size(void) {
+    return sizeof(uint64_t);
+}
+unsigned long get_nets_element_count(void) {
+    return NETS_ELEMENT_COUNT;
+}
+char *get_net_list_file_name(void) {
+    return "TspNets.csv";
+}
+char *get_trace_file_name(void) {
+    return "TspTrace.bin";
+}
+// END TODO

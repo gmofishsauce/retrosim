@@ -12,20 +12,18 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-// TODO the transpiler needs to generate a "compile_options.h"
-#include "compile_options.h"
-
-#include "api.h"
 #include "sim.h"
+#include "api.h"
+#include "trace.h"
 
 char* g_progname;
 
 static int simulate(void);
 
-static handler_t rising_edge_hooks[MAX_HOOKS];
-static handler_t clock_is_high_hooks[MAX_HOOKS];
-static handler_t falling_edge_hooks[MAX_HOOKS];
-static handler_t clock_is_low_hooks[MAX_HOOKS];
+static handler_t rising_edge_hooks[10]; /// TODO XXX FIXME 10 calloc/realloc
+static handler_t clock_is_high_hooks[10]; /// TODO XXX FIXME 10
+static handler_t falling_edge_hooks[10]; /// TODO XXX FIXME 10
+static handler_t clock_is_low_hooks[10]; /// TODO XXX FIXME 10
 
 static int n_rising_edge_hooks = 0;
 static int n_clock_is_high_hooks = 0;
@@ -92,12 +90,12 @@ static inline void execute(handler_t* resolvers) {
     for (int i = 0; resolvers[i] != 0; i++) {
         (*resolvers[i])();
     }
-    WRITE_TRACE(); // disappears unless #defined.
+    write_trace();
 }
 
 int simulate(void) { // return exit code, 0 for success or 2 for error
-    init();
-    INIT_TRACING();
+    initialize_simulation();
+    initialize_tracing();
 
     for (g_cycle = 1; is_running(); g_cycle++) {
         execute(rising_edge_hooks);
@@ -106,7 +104,7 @@ int simulate(void) { // return exit code, 0 for success or 2 for error
         execute(clock_is_low_hooks);
     }
 
-    CLOSE_TRACE();
+    close_trace();
     msg("terminating normally after %d cycle%s", g_cycle-1, (g_cycle-1 == 1) ? "" : "s");
     return 0;
 }
