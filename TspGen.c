@@ -17,10 +17,10 @@ uint64_t TspNets[NETS_ELEMENT_COUNT];
 void *get_nets(void) {
 	return (void*) TspNets;
 }
-size_t get_nets_element_size(void) {
+uint32_t get_nets_element_size(void) {
 	return sizeof(uint64_t);
 }
-unsigned long get_nets_element_count(void) {
+uint32_t get_nets_element_count(void) {
 	return NETS_ELEMENT_COUNT;
 }
 char *get_net_list_file_name(void) {

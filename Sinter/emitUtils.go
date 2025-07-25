@@ -165,6 +165,7 @@ func makeNetName(ni *NetInstance) string {
 func emitNetMacros(netName string, index int, fieldWidth int) error {
 	emith("// net %s", netName)
 	emith("#define %s %d", netName, index)
+	// Every line in the NetList must end with a newline!
 	line := fmt.Sprintf("%s,%d,%d\n", netName, index, fieldWidth);
 	NetList.WriteString(line)
 	return nil

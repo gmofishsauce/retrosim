@@ -16,19 +16,15 @@ static FILE* trace_file;
 // These values are used to write the data. They must be initialized
 // from transpiler-generated code.
 static void *nets;
-static size_t nets_element_size;
-static unsigned long nets_element_count;
+static uint32_t nets_element_size;
+static uint32_t nets_element_count;
 
-// Write the header to the trace file. The trace file is open.
+// Write the header to the trace file. The trace file is open and remains so.
 static int write_header(void) {
-    header_t header;
-    header.all = 0ULL;
 
-    // Write the netlist file after the header at offset 8, pad it out to an
-    // 8-byte boundary with newlines, seek to 0 and write the header with the
-    // netlist size. Then seek to the end of the netlist and begin tracing.
-    // The eventual consumer must accept the blank lines we (may) add at the
-    // end of the netlist.
+    // Copy the netlist file after the header, NUL terminate it, pad it out to an
+    // 8-byte boundary with NUL chars, seek to 0 and write the header with the netlist
+    // size. Seek to the end of the netlist and leave the file open to begin tracing.
 
     errno = 0;
     FILE* net_list_file = fopen(get_net_list_file_name(), "r");
@@ -36,39 +32,57 @@ static int write_header(void) {
         msg("open netlist file failed: %s\n", strerror(errno));
         return 0;
     }
-    fseek(trace_file, (long)sizeof(header), SEEK_SET);
 
-    int trace_start = 0;
-    for (int b = fgetc(net_list_file); b != -1; b = fgetc(net_list_file), trace_start++) {
+    uint32_t netlist_size = 0;
+    fseek(trace_file, (long)sizeof(header_t), SEEK_SET);
+    for (int b = fgetc(net_list_file); b != -1; b = fgetc(net_list_file), netlist_size++) {
         fputc(b, trace_file);
     }
     fclose(net_list_file);
-    int round_up = sizeof(unsigned long long) - (trace_start&0x7);
-    trace_start += round_up;
+
+    // Careful here: put a NUL char, -then- round up to 8-byte boundary with more NULs.
+    fputc('\0', trace_file);
+    netlist_size++;
+
+    uint32_t round_up = sizeof(unsigned long long) - (netlist_size&0x7);
+    netlist_size += round_up;
     for (; round_up > 0; --round_up) {
-        fputc('\n', trace_file);
+        fputc('\0', trace_file);
     }
     long start_of_trace = ftell(trace_file);
-    fseek(trace_file, 0, SEEK_SET);
+    if (start_of_trace != sizeof(header_t) + netlist_size) {
+        msg("internal error: positioning trace writer: %ld %ld %ld\n",
+            start_of_trace, sizeof(header_t), netlist_size);
+        return 0;
+    }
 
-    header.bytes[0] = 0x83;
-    header.bytes[1] = 0x82;
-    header.bytes[2] = 0x81;
-    header.bytes[3] = 0x80;
-    header.ints[1] = trace_start;
+    fseek(trace_file, 0, SEEK_SET);
+    header_t header;
+    header.magic.b[0] = 0x83;
+    header.magic.b[1] = 0x82;
+    header.magic.b[2] = 0x81;
+    header.magic.b[3] = 0x80;
+    header.netlist_size = netlist_size;
+    header.element_size = nets_element_size;
+    header.element_count = nets_element_count;
+    memset(header.reserved, 0, sizeof(header.reserved));
+
     errno = 0;
-    if (fwrite(&header, sizeof(header), 1, trace_file) != 1) {
+    if (fwrite(&header, sizeof(header_t), 1, trace_file) != 1) {
         msg("write_trace: write failed (%s)\n", strerror(errno));
         return 0;
     }
 
+    // Position the trace file for writing and leave it open.
     fseek(trace_file, start_of_trace, SEEK_SET);
     return 1;
 }
 
+// Initialize the trace file. If error, leave trace_file null
+// which safely disables the other tracing calls.
 void initialize_tracing(void) {
     nets = get_nets();
-    nets_element_size = (size_t)get_nets_element_size();
+    nets_element_size = get_nets_element_size();
     nets_element_count = get_nets_element_count();
 
     errno = 0;
@@ -86,7 +100,9 @@ void initialize_tracing(void) {
 
 void write_trace(void) {
     errno = 0;
-    if (trace_file && fwrite(nets, nets_element_count, nets_element_size, trace_file) != nets_element_size) {
+    // fread() and fwrite() declare the -count- of elements as a size_t.
+    // This is wrong, because a count is not a size, but we're stuck with it.
+    if (trace_file && fwrite(nets, nets_element_size, (size_t)nets_element_count, trace_file) != (size_t)nets_element_count) {
         msg("write_trace: write failed (%s): tracing suspended", strerror(errno));
         fclose(trace_file);
         trace_file = NULL;

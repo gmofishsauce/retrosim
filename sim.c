@@ -33,6 +33,7 @@ static int n_clock_is_low_hooks = 0;
 int main(int ac, char** av) {
     int c;
     g_progname = av[0];
+
     while ((c = getopt(ac, av, "qd:")) != -1) {
         switch (c) {
         case 'q':

@@ -158,10 +158,10 @@ func emitFixedContent(netsCount int) error {
 	emitc("void *get_nets(void) {");
 	emitc("	return (void*) %s;", netsVarName);
 	emitc("}");
-	emitc("size_t get_nets_element_size(void) {");
+	emitc("uint32_t get_nets_element_size(void) {");
 	emitc("	return sizeof(%s);", TargetWordType);
 	emitc("}");
-	emitc("unsigned long get_nets_element_count(void) {");
+	emitc("uint32_t get_nets_element_count(void) {");
 	emitc("	return %s;", netsElementCountName);
 	emitc("}");
 
