@@ -200,14 +200,14 @@ func mkOutputDirPath() string {
 	return dirPath
 }
 
-func emitNetList() error {
+func emitNetList(netListFileName string) error {
 	if NetList.Len() == 0 {
 		msg("warning: empty netlist")
 		return nil
 	}
 
 	dirPath := mkOutputDirPath()
-	name := path.Join(dirPath, UniquePrefix + "Gen-Netlist.csv")
+	name := path.Join(dirPath, netListFileName)
 	netFile, err := os.Create(name)
 	if err != nil {
 		return err

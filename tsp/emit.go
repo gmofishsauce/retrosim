@@ -17,10 +17,15 @@ import (
 // Also want to reserve the possibility of targeting a machine with
 // smaller than 64-bit words, such as a microcontroller.
 const (
-	TargetWordBits = 64
 	TargetWordType = "uint64_t"
+	TargetWordBits = 64
 	BitsPerSib = 2
+	SibsPerTargetWord = TargetWordBits/BitsPerSib
 )
+
+// Generated in one emitter function, used in a later function,
+// so kind of global. Messy.
+var netListFileName string
 
 // emit is the main entry point for code generation.
 // It orchestrates calls to various specific emitting functions.
@@ -59,7 +64,7 @@ func emit(ast *ModelNode, data *BindingData) error {
 	if err := emitInstances(data); err != nil {
 		return fmt.Errorf("failed to emit component instances: %w", err)
 	}
-	if err := emitNetList(); err != nil {
+	if err := emitNetList(netListFileName); err != nil {
 		return fmt.Errorf("failed to emit netlist: %w", err)
 	}
 
@@ -132,6 +137,10 @@ func emitTopComment(ast *ModelNode) error {
 
 func emitFixedContent(netsCount int) error {
 	netsVarName := fmt.Sprintf("%sNets", UniquePrefix)
+	netsElementsCount := 1+(netsCount-1)/SibsPerTargetWord
+	netsElementCountName := "NETS_ELEMENT_COUNT"
+
+	emith("#define %s %d", netsElementCountName, netsElementsCount)
 	emith("extern %s %s[];", TargetWordType, netsVarName);
 	emith("")
 
@@ -142,10 +151,30 @@ func emitFixedContent(netsCount int) error {
 	emith("")
 
 	// Emit the definition of the nets array into the (tiny) C file
-	sibsPerTargetWord := TargetWordBits/BitsPerSib
 	emitc("// Wire nets")
-	emitc("%s %s[%d];", TargetWordType, netsVarName, 1+(netsCount-1)/sibsPerTargetWord)
+	emitc("%s %s[%s];", TargetWordType, netsVarName, netsElementCountName)
 	emitc("")
+
+	emitc("void *get_nets(void) {");
+	emitc("	return (void*) %s;", netsVarName);
+	emitc("}");
+	emitc("size_t get_nets_element_size(void) {");
+	emitc("	return sizeof(%s);", TargetWordType);
+	emitc("}");
+	emitc("unsigned long get_nets_element_count(void) {");
+	emitc("	return %s;", netsElementCountName);
+	emitc("}");
+
+	// The name of the netlist file is generated here but used by the
+	// netlist emitter later in this file. We just stick the name in
+	// global variable. Messy.
+	netListFileName = fmt.Sprintf("%sNets.%s", UniquePrefix, "csv")
+	emitc("char *get_net_list_file_name(void) {");
+	emitc("	return \"%s\";", netListFileName);
+	emitc("}");
+	emitc("char *get_trace_file_name(void) {");
+	emitc("	return \"%sTrace.%s\";", UniquePrefix, "bin");
+	emitc("}");
 
 	return nil
 }
