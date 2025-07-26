@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"strings"
 )
 
@@ -37,8 +36,7 @@ var hFile io.Writer
 func openOutputs() error {
 
 	var err error
-	dirPath := mkOutputDirPath()
-	name := path.Join(dirPath, UniquePrefix + "Gen")
+	name := UniquePrefix + "Gen"
 	cFileName = name + ".c"
 	hFileName = name + ".h"
 
@@ -190,26 +188,13 @@ func allocNets(nAlloc int) int {
 	return result;
 }
 
-// TODO what is the default?
-// TODO option to override or change this
-func mkOutputDirPath() string {
-	dirPath := ".."
-	inf, err := os.Stat(dirPath)
-	if err != nil || !inf.IsDir() {
-		dirPath = "."
-	}
-	return dirPath
-}
-
 func emitNetList(netListFileName string) error {
 	if NetList.Len() == 0 {
 		msg("warning: empty netlist")
 		return nil
 	}
 
-	dirPath := mkOutputDirPath()
-	name := path.Join(dirPath, netListFileName)
-	netFile, err := os.Create(name)
+	netFile, err := os.Create(netListFileName)
 	if err != nil {
 		return err
 	}

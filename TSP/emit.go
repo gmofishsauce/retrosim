@@ -46,7 +46,7 @@ func emit(ast *ModelNode, data *BindingData) error {
 	emith("#define %s", upperSymbolName)
 	emith("")
 	emith("#include <stdint.h>")
-	emith("#include \"api.h\"")
+	emith("#include \"CORE/api.h\"")
 	emith("")
 
 	if err := emitFixedContent(NumNets); err != nil {

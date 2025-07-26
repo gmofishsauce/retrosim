@@ -16,8 +16,8 @@
 #include <string.h>
 #include <time.h>
 
-#include "../api.h"
-#include "../trace.h"
+#include "../CORE/api.h"
+#include "../CORE/trace.h"
 
 static char* g_progname;
 static int num_signals;
