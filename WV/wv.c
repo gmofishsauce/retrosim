@@ -4,9 +4,9 @@
  *
  * Build: cc -o wv wv.c
  *
- * Translate a binary trace file written by sim to VCD format. Accepts
- * binary data on standard input to avoid complexities of knowing file
- * name. Write textual VCD file on stdout.
+ * Translate a binary trace file written by sim to VCD format. Takes one
+ * command line argument, the binary trace file name. Write textual VCD
+ * file on stdout. Can be piped into vcd.
  */
 
 #include <errno.h>
@@ -16,6 +16,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "../api.h"
 #include "../trace.h"
 
 static char* g_progname;
@@ -27,12 +28,12 @@ typedef struct signal {
     int size;
 } signal_t;
 
+static header_t header;
+
 // Read the signal definitions from the trace file into some allocated storage.
 // The signal list is a single newline-delimited string following the header.
 // Its size in bytes is in the header.
 static signal_t* get_signals(FILE* input) {
-    header_t header;
-    
     errno = 0;
     if (fread(&header, sizeof(header), 1, input) != 1) {
         fprintf(stderr, "%s: failed to read header (%s)\n", g_progname, strerror(errno));
@@ -100,6 +101,7 @@ static signal_t* get_signals(FILE* input) {
         }
     }
 
+    // Binary file is still open and positioned to the first trace sample.
     return signals;
 }
 
@@ -128,7 +130,48 @@ static void write_vcd_header(signal_t* signals) {
     printf("$dumpvars\n");
 }
 
-static void write_samples(signal_t* signals, FILE* input) {
+// The execution history of a trace file starts after the netlist metadata
+// (the input file is positioned there now). There are four samples per
+// clock cycle - high, falling edge, low, and rising edge (samples mod 0,
+// 1, 2, and 3). Each sample is (element_size*element_count) bytes. The
+// signals array defines the bitfields within the sample. The dimension
+// of the signals array is in the global num_signals. The macros for
+// extracting the bitfields from the samples are in ../api.h.
+
+static int write_samples(signal_t* signals, FILE* input) {
+    int sample_size = header.element_size*header.element_count;
+    char* sample_buf = (char*)malloc(sample_size);
+    if (sample_buf == NULL) {
+        fprintf(stderr, "%s: malloc failed\n", g_progname);
+        return 0;
+    }
+
+    char *format = "01ZX";
+    int quarter_clock_ns = 50; // 200ns clock period = 5MHz
+
+    for (long sample = 0; /* no condition */ ; sample++) {
+        if (fread(sample_buf, sample_size, 1, input) != 1) {
+            break; // done            
+        }
+        printf("#%ld\n", sample*quarter_clock_ns);
+        for (signal_t *sp = signals; sp < &signals[num_signals]; ++sp) {
+            // sp->name sp->pos sp->size
+            // fprintf(stderr, "%s %d %d\n", sp->name, sp->pos, sp->size);
+            // #define GET1(sym, s)       ((sym[WORD(s)]>>BITPOS(s))&MASK(1))
+
+            if (sp->size == 1) {
+                printf("%cs%ld\n", format[GET1(sample_buf, sp->pos)], sp-signals);
+            } else {
+                printf("b");
+                for (int i = 0; i < sp->size; ++i) {
+                    printf("%c", format[GET1(sample_buf, sp->pos+i)]);
+                }
+                printf(" s%ld\n", sp-signals);
+            }
+        }
+    }
+
+    return 1;
 }
 
 int main(int ac, char** av) {
@@ -141,13 +184,22 @@ int main(int ac, char** av) {
     errno = 0;
     FILE* trace_file = fopen(av[1], "r");
     if (trace_file == NULL) {
-        fprintf(stderr, "%s: unable to read the signals list from \"%s\" (%s)\n",
-                g_progname, av[1], strerror(errno));
+        fprintf(stderr, "%s: open \"%s\" failed: %s\n", g_progname, av[1], strerror(errno));
         exit(1);
     }
 
     signal_t *signals = get_signals(trace_file);
+    if (signals == NULL) {
+        fprintf(stderr, "%s: read metadata from \"%s\" failed\n", g_progname, av[1]);
+        exit(2);
+    }
+
     write_vcd_header(signals);
-    write_samples(signals, trace_file);
+    if (!write_samples(signals, trace_file)) {
+        fprintf(stderr, "%s: failed to write samples\n", g_progname);
+        exit(2);
+    }
+
+    return 0;
 }
 
