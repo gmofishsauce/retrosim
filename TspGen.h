@@ -13,7 +13,7 @@
 #define TSPGEN_H
 
 #include <stdint.h>
-#include "api.h"
+#include "CORE/api.h"
 
 #define NETS_ELEMENT_COUNT 1
 extern uint64_t TspNets[];
