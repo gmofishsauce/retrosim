@@ -49,7 +49,7 @@ func emit(ast *ModelNode, data *BindingData) error {
 	emith("#include \"CORE/api.h\"")
 	emith("")
 
-	if err := emitFixedContent(NumNets); err != nil {
+	if err := emitFixedContent(NextSib); err != nil {
 		return fmt.Errorf("failed to emit fixed content: %w", err)
 	}
 	if err := emitNets(data); err != nil {
@@ -135,9 +135,9 @@ func emitTopComment(ast *ModelNode) error {
 	return nil
 }
 
-func emitFixedContent(netsCount int) error {
+func emitFixedContent(sibsCount int) error {
 	netsVarName := fmt.Sprintf("%sNets", UniquePrefix)
-	netsElementsCount := 1+(netsCount-1)/SibsPerTargetWord
+	netsElementsCount := 1+(sibsCount-1)/SibsPerTargetWord
 	netsElementCountName := "NETS_ELEMENT_COUNT"
 
 	emith("#define %s %d", netsElementCountName, netsElementsCount)

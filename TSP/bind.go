@@ -151,18 +151,20 @@ func getNets(ast *ModelNode, allInstances []*ComponentInstance) ([]*NetInstance,
 		var netNodes []*NetNode
 		for _, d := range(q(n, "node")) { // This q call is on a child node, not the main ast
 			ref := qss(d, "ref")
-			part := findInstance(ref, allInstances)
-			if part == nil {
-				return nil, fmt.Errorf("part %s (referenced in net %s - code %s) not found in component instances",
-								ref, name, code)
+			if (shouldEmit(ref)) {
+				part := findInstance(ref, allInstances)
+				if part == nil {
+					return nil, fmt.Errorf("part %s (referenced in net %s - code %s) not found in component instances",
+									ref, name, code)
+				}
+				pinNumStr := qss(d, "pin")
+				pin := findPin(part, pinNumStr)
+				if pin == nil {
+					return nil, fmt.Errorf("pin %s of part %s (referenced in net %s - code %s) not found",
+									pinNumStr, ref, name, code)
+				}
+				netNodes = append(netNodes, &NetNode{part, pin})
 			}
-			pinNumStr := qss(d, "pin")
-			pin := findPin(part, pinNumStr)
-			if pin == nil {
-				return nil, fmt.Errorf("pin %s of part %s (referenced in net %s - code %s) not found",
-								pinNumStr, ref, name, code)
-			}
-			netNodes = append(netNodes, &NetNode{part, pin})
 		}
 		netInstances = append(netInstances, &NetInstance{code, name, netNodes})
 	}

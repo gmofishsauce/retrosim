@@ -174,17 +174,26 @@ func makeComponentTypeName(c *ComponentType) string {
 }
 
 // The allocator allocates "nets". Each net requires one four-state bit,
-// called a "sib" (simulated bit). Buses require 1 net for each bus line.
-// Nets are identified by indices 0..N-1. The macros in api.h in the C code
-// adjust for the fact that each "bit" requires BITS_PER_SIB bits, and the
+// called a "sib" (simulated bit). Buses require 1 sib for each bus line.
+// Sibs are identified by indices 0..N-1. The macros in api.h in C code
+// adjust for the fact that each sib requires BitsPerSib bits, and the
 // emitter adjusts the amount of allocated space (machine words) to fit
-// all the allocated sibs. In the four-state simulator, BITS_PER_SIB is 2.
-// In theory, this code could be changed to do an 8-state simulator with
-// with weak states and 3 bits per sib.
-var NumNets int = 0
+// all the allocated sibs. In the four-state simulator, BitsPerSib is 2.
+// On a host with 64-bit unsigned long longs, SibsPerTargetWord is 32.
+// Because it is possible to set assign a multiple-sib net (bus) directly,
+// no bus may have more than SibsPerTarget word bits. For connectors this
+// is a significant limitation and may need to be addressed.
+var NextSib int = 0
 func allocNets(nAlloc int) int {
-	result := NumNets;
-	NumNets++;
+	if nAlloc > SibsPerTargetWord {
+		panic(fmt.Sprintf("cannot allocate %d contiguous sibs", nAlloc))
+	}
+	mask := ^(SibsPerTargetWord-1)
+	if (NextSib + nAlloc)&mask != NextSib&mask {
+		NextSib = (NextSib+SibsPerTargetWord)&mask
+	}
+	result := NextSib
+	NextSib += nAlloc
 	return result;
 }
 
