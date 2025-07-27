@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
+typedef uint64_t sib_t;
+
 // Constants
 #define TARGET_WORD_SIZE 64 // in theory can be 16 or 32 ... not tried.
 #define BITS_PER_SIB  2     // physical bits per sib
@@ -64,6 +66,9 @@ extern void add_clock_is_high_hook(handler_t fp);
 extern void add_falling_edge_hook(handler_t fp);
 extern void add_clock_is_low_rising_edge_hook(handler_t fp);
 
-uint64_t NOT(int sib);
+extern sib_t and4s(sib_t a0, sib_t a1);
+extern sib_t or4s(sib_t a0, sib_t a1);
+extern sib_t xor4s(sib_t a0, sib_t a1);
+extern sib_t not4s(sib_t a0);
 
 #endif // API_H
