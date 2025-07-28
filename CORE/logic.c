@@ -3,13 +3,16 @@
  *      10        20        30        40        50        60        70 
  *
  * 4-state logical functions for use by component implementations.
+ * TODO functions nand4s, nor4s, xnor4s.
  */
 
 #include "api.h"
 
-// Sibs (simulated bits) are 4-state bits. They take 2 bits to store.
-// The type uint64_t propagates from the bit vector that is used by
-// by the simulation core to represent values of all the nets.
+// Sibs (simulated bits) are 4-state bits. They take BITS_PER_SIB = 2
+// bits to store. The type sib_t (usually uint64_t) propagates from the
+// bit vector used the core to represent all the simulated nets. The
+// macros GET1() and GETN(), which implement getnet() and getbus(), put
+// the result value in the low order bits.
 
 #define X 3
 #define SIB(v) (v&3)
@@ -46,15 +49,15 @@ uint8_t not4s_table[] = {
 };
 
 inline sib_t and4s(sib_t a0, sib_t a1) {
-    return (sib_t)and4s_table[SIB(a1)<<2|SIB(a0)];
+    return (sib_t)and4s_table[SIB(a1)<<BITS_PER_SIB|SIB(a0)];
 }
 
 inline sib_t or4s(sib_t a0, sib_t a1) {
-    return (sib_t)or4s_table[SIB(a1)<<2|SIB(a0)];
+    return (sib_t)or4s_table[SIB(a1)<<BITS_PER_SIB|SIB(a0)];
 }
 
 inline sib_t xor4s(sib_t a0, sib_t a1) {
-    return (sib_t)xor4s_table[SIB(a1)<<2|SIB(a0)];
+    return (sib_t)xor4s_table[SIB(a1)<<BITS_PER_SIB|SIB(a0)];
 }
 
 inline sib_t not4s(sib_t a0) {

@@ -62,7 +62,7 @@ func main() {
 	msg("binding complete, emitting code...\n")
 
 	if err := emit(ast, bindingData); err != nil {
-		msg("code emission failed: %v\n", err)
+		msg("code generation failed: %v\n", err)
 		os.Exit(3)
 	}
 	msg("successfully processed %s\n", files[0])

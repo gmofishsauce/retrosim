@@ -39,11 +39,30 @@ The `vcd` utility displays the results.
 
 ## Command line flags
 
-TODO
+ - TODO
 
-## 4-state logic programming API
+## Programming API
 
-TODO
+### Implementing and adding component behaviors
+
+ - TODO
+
+### 4-state logic programming API
+
+These utility functions are inline and contain only table lookups, not branches.
+Using them may help ensure your implementations are branch free which may help
+performance.
+
+The arguments are 4-state bits represented by the values 0 through 3 in the least
+significant 2 bits of the argument. Typicaly, they are obtained from the `getnet()`
+or the `GET1()` macros.
+
+```
+    extern sib_t and4s(sib_t a0, sib_t a1);
+    extern sib_t or4s(sib_t a0, sib_t a1);
+    extern sib_t xor4s(sib_t a0, sib_t a1);
+    extern sib_t not4s(sib_t a0);
+```
 
 ## TODO list
 
@@ -51,8 +70,8 @@ TODO
 
  - DONE I/O for the simulator: vcd file generator (target https://github.com/yne/vcd)
  - DONE Real allocator for storage for nets (currently just allocates 32 nets)
- - 4-value logic functions using LUTs to avoid branches in code
- - 4-value logic API documentation
+ - DONE 4-value logic functions using LUTs to avoid branches in code
+ - DONE 4-value logic API documentation
  - Better sample code
  - DONE? Fully reorganize repo as described above
 
