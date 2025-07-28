@@ -34,7 +34,7 @@ func emit(ast *ModelNode, data *BindingData) error {
 		return err
 	}
 	if err := emitTopComment(ast); err != nil {
-		return fmt.Errorf("failed to emit top comment: %w", err)
+		return fmt.Errorf("failed to generate top comment: %w", err)
 	}
 
 	shortName := hFileName[1+strings.LastIndexByte(hFileName, byte('/')):]
@@ -50,22 +50,22 @@ func emit(ast *ModelNode, data *BindingData) error {
 	emith("")
 
 	if err := emitFixedContent(NextSib); err != nil {
-		return fmt.Errorf("failed to emit fixed content: %w", err)
+		return fmt.Errorf("failed to generate fixed content: %w", err)
 	}
 	if err := emitNets(data); err != nil {
-		return fmt.Errorf("failed to emit wire nets: %w", err)
+		return fmt.Errorf("failed to generate wire nets: %w", err)
 	}
 	if err := emitBuses(data); err != nil {
-		return fmt.Errorf("failed to emit buses: %w", err)
+		return fmt.Errorf("failed to generate buses: %w", err)
 	}
 	if err := emitComponents(data); err != nil {
-		return fmt.Errorf("failed to emit component types: %w", err)
+		return fmt.Errorf("failed to generate component types: %w", err)
 	}
 	if err := emitInstances(data); err != nil {
-		return fmt.Errorf("failed to emit component instances: %w", err)
+		return fmt.Errorf("failed to generate component instances: %w", err)
 	}
 	if err := emitNetList(netListFileName); err != nil {
-		return fmt.Errorf("failed to emit netlist: %w", err)
+		return fmt.Errorf("failed to generate netlist: %w", err)
 	}
 
 	emith("")

@@ -59,7 +59,7 @@ func main() {
 		msg("data binding failed: %v\n", err)
 		os.Exit(2)
 	}
-	msg("binding complete, emitting code...\n")
+	msg("binding complete, generating code...\n")
 
 	if err := emit(ast, bindingData); err != nil {
 		msg("code generation failed: %v\n", err)
