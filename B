@@ -1,4 +1,0 @@
-#!/bin/bash
-# cc -### -O0 -std=c99 -Weverything -Wno-poison-system-directories *.c -o sim
-cc -O0 -std=c99 -Weverything -Wno-declaration-after-statement -Wno-poison-system-directories CORE/*.c *.c -o sim
-# cc -### -O0 -std=c99 -Weverything *.c -o sim

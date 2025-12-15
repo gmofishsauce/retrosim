@@ -1,2 +1,0 @@
-#!/bin/bash
-rm -i TspGen.c TspGen.h TspNets.csv TspTrace.bin
