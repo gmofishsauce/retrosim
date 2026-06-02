@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wut4 editor</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="toolbar">
+    <span id="design-name">unnamed schematic</span>
+    <span id="tool-mode">select</span>
+  </header>
+
+  <main id="workspace">
+    <aside id="palette" aria-label="component palette"></aside>
+    <section id="canvas-area">
+      <canvas id="canvas"></canvas>
+    </section>
+  </main>
+
+  <div id="loading-overlay">Loading component library…</div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
