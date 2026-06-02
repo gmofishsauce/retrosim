@@ -24,6 +24,12 @@ export function initToolbar({ container, store, interaction, fileops }) {
   sep.className = "tool-sep";
   container.appendChild(sep);
 
+  container.append(
+    button("−", "Zoom out", () => interaction.zoomBy(0.8)),
+    button("+", "Zoom in", () => interaction.zoomBy(1.25)),
+    Object.assign(document.createElement("span"), { className: "tool-sep" }),
+  );
+
   const undoBtn = button("Undo", "Undo (Ctrl/Cmd+Z)", () => store.undo());
   const redoBtn = button("Redo", "Redo (Shift+Ctrl/Cmd+Z)", () => store.redo());
   container.append(undoBtn, redoBtn);

@@ -11,6 +11,7 @@ import {
   screenToWorld,
   snapToGrid,
   clampZoom,
+  zoomAbout,
 } from "./geometry.js";
 
 test("constants (A5)", () => {
@@ -58,4 +59,21 @@ test("clampZoom bounds to [ZOOM_MIN, ZOOM_MAX]", () => {
   assert.equal(clampZoom(0.1), ZOOM_MIN);
   assert.equal(clampZoom(10), ZOOM_MAX);
   assert.equal(clampZoom(1.5), 1.5);
+});
+
+test("zoomAbout keeps the world point under the cursor fixed", () => {
+  const vp = { pan: { x: 3, y: -7 }, zoom: 1 };
+  const sp = { x: 80, y: 40 };
+  const before = screenToWorld(sp, vp);
+  const nv = zoomAbout(vp, sp, 2);
+  assert.equal(nv.zoom, 2);
+  const after = screenToWorld(sp, nv);
+  assert.ok(Math.abs(after.x - before.x) < 1e-9);
+  assert.ok(Math.abs(after.y - before.y) < 1e-9);
+});
+
+test("zoomAbout clamps the resulting zoom", () => {
+  const vp = { pan: { x: 0, y: 0 }, zoom: 1 };
+  assert.equal(zoomAbout(vp, { x: 0, y: 0 }, 100).zoom, ZOOM_MAX);
+  assert.equal(zoomAbout(vp, { x: 0, y: 0 }, 0.001).zoom, ZOOM_MIN);
 });

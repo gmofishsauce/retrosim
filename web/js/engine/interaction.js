@@ -3,7 +3,7 @@
 // model directly except for transient drag previews; committed changes go
 // through the store as Commands.
 
-import { snapToGrid, screenToWorld } from "../geometry.js";
+import { snapToGrid, screenToWorld, scaleFor, zoomAbout } from "../geometry.js";
 import {
   hitComponent,
   hitPin,
@@ -41,6 +41,8 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   let placeType = null; // ComponentType when tool === "place"
   let wireSource = null; // pending WIRE source spec
   let drag = null; // transient drag state for SELECT gestures
+  let pan = null; // transient pan state { sx, sy, pan0 }
+  let spaceDown = false; // space held -> left-drag pans
 
   const findType = (name) => library.find((c) => c.name === name);
   const findWire = (id) => store.design.wires.find((w) => w.id === id);
@@ -129,7 +131,17 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   });
 
   // --- canvas pointer handling ---
+  // Pan with the middle button or space + left drag (§6.11).
+  function startPan(e) {
+    pan = { sx: e.clientX, sy: e.clientY, pan0: { ...store.state.viewport.pan } };
+    e.preventDefault();
+  }
+
   canvas.addEventListener("mousedown", (e) => {
+    if (e.button === 1 || (e.button === 0 && spaceDown)) {
+      startPan(e);
+      return;
+    }
     if (e.button !== 0) return;
     const pt = canvasPoint(e);
 
@@ -205,6 +217,17 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   });
 
   window.addEventListener("mousemove", (e) => {
+    if (pan) {
+      const scale = scaleFor(store.state.viewport);
+      renderer.setViewport({
+        pan: {
+          x: pan.pan0.x - (e.clientX - pan.sx) / scale,
+          y: pan.pan0.y - (e.clientY - pan.sy) / scale,
+        },
+        zoom: store.state.viewport.zoom,
+      });
+      return;
+    }
     if (!drag) return;
     const g = gridOf(e);
 
@@ -242,7 +265,22 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     }
   });
 
+  // Zoom to cursor with the wheel (FR-022).
+  canvas.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      renderer.setViewport(zoomAbout(store.state.viewport, canvasPoint(e), factor));
+    },
+    { passive: false },
+  );
+
   window.addEventListener("mouseup", () => {
+    if (pan) {
+      pan = null;
+      return;
+    }
     if (!drag) return;
 
     if (drag.type === "component" && drag.moved) {
@@ -271,9 +309,19 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   });
 
   // --- keyboard ---
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "Space") spaceDown = false;
+  });
+
   window.addEventListener("keydown", (e) => {
     // Ignore shortcuts while typing in a field (e.g., the save dialog).
     if (e.target instanceof HTMLInputElement || e.target.isContentEditable) return;
+
+    if (e.code === "Space") {
+      spaceDown = true;
+      e.preventDefault(); // don't scroll the page
+      return;
+    }
 
     if (e.key === "Escape") {
       if (store.state.tool !== "select") setTool("select");
@@ -325,5 +373,13 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     }
   });
 
-  return { setTool };
+  // zoomBy zooms about the canvas center (toolbar +/- buttons).
+  function zoomBy(factor) {
+    const rect = canvas.getBoundingClientRect();
+    renderer.setViewport(
+      zoomAbout(store.state.viewport, { x: rect.width / 2, y: rect.height / 2 }, factor),
+    );
+  }
+
+  return { setTool, zoomBy };
 }

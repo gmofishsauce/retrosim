@@ -60,3 +60,15 @@ export function snapToGrid(screen, viewport) {
 export function clampZoom(zoom) {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom));
 }
+
+// zoomAbout returns a new viewport scaled by factor while keeping the world point
+// currently under `screen` fixed on screen (zoom-to-cursor). Zoom is clamped.
+export function zoomAbout(viewport, screen, factor) {
+  const zoom = clampZoom(viewport.zoom * factor);
+  const newScale = PX_PER_UNIT_DEFAULT * zoom;
+  const world = screenToWorld(screen, viewport);
+  return {
+    pan: { x: world.x - screen.x / newScale, y: world.y - screen.y / newScale },
+    zoom,
+  };
+}
