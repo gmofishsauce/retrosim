@@ -1,0 +1,124 @@
+# wut4-editor — Implementation Status
+
+_Last updated: 2026-06-02_
+
+A localhost-only TTL circuit design editor (Go server + plain-JS SPA), built per
+`sim/specs/requirements.md` and `sim/specs/design.md`. This file tracks what is
+implemented, how it's verified, and what remains.
+
+## Summary
+
+The editor is a usable MVP: place/select/move/rotate/delete components, draw and
+route wires (bends, branches/junctions, fan-out), draw buses (width, branch), and
+save/open designs. Tools are available from a toolbar; zoom and pan work. The MD
+component library is served from **hardcoded stub fixtures** pending the MD-format
+design session (OQ-001); the real parser is not yet written.
+
+- **Go server tests:** all green (`cd sim/srv && go test ./...`)
+- **JS unit tests:** 82 passing (`cd sim/web && node --test`)
+- **End-to-end:** verified in headless Chrome via the DevTools Protocol
+  (placement, rotate, move, wire, branch, delete, bus draw/width/branch, file
+  save→new→open round-trip, zoom, pan).
+
+## Layout
+
+```
+sim/
+  srv/                 Go module: github.com/gmofishsauce/wut4/sim/srv
+    cmd/wut4-editor/   entry point (loopback-only bind, flags)
+    server/            api, components(+stub), storage, paths, types
+  web/                 SPA (plain ES modules, no build step)
+    js/                app, api, store, geometry, commands
+      model/           design, netlist, persist
+      engine/          canvas (renderer), interaction (tool FSM), hittest
+      chrome/          toolbar, dialogs, fileops
+  specs/               requirements.md, design.md (authoritative)
+```
+
+## Implemented
+
+### Server (Go, `net/http` only)
+- Loopback-only bind with a fatal guard on non-loopback `--addr` (NFR-001).
+- Flags: `--addr`, `--components-dir`, `--data-dir`, `--web-dir`.
+- `GET /api/v1/components` — component library (currently stub fixtures: 74138,
+  7400). MD parsing **deferred** (OQ-001); `LoadLibrary` returns fixtures.
+- `GET /api/v1/defaults` — platform app-data dir (per-OS, table-tested seam).
+- `GET /api/v1/files` — directory listing for the file dialog (.json + dirs).
+- `GET /api/v1/design/load`, `POST /api/v1/design/save` — JSON designs, atomic
+  write (temp + rename); designs stored opaquely (`json.RawMessage`).
+- Static handler serves `web/`. Consistent `{"error":...}` envelope + status map.
+
+### Client model (pure, unit-tested)
+- `Design` shape; `addInstance` with refdes assignment (FR-011).
+- First-class `Vertex` graph; `addWire`, pin-vertex create/reuse (fan-out),
+  `vertexWorld` (pin positions derived → wires stretch on move, FR-018).
+- Bends (insert/move/delete), branch/junction (`branchWire`,
+  `branchAtPathPoint`).
+- `cleanup`: G2 junction demotion (interior→bend, endpoint→free), FR-030 prune,
+  vertex GC; `deleteWire`, `deleteInstance` (FR-018a/029/033a).
+- Buses: `addBus`/`deleteBus`/`setBusWidth`.
+- `buildNets`: union-find over wires, derived from ids only (FR-034b/059a).
+- `serializeDesign`/`deserializeDesign` (FR-055/056); id counters rebuilt on load.
+
+### Store & commands
+- Single command pipeline with undo/redo (UNDO_CAP=100, NFR-006), dirty flag,
+  pub/sub; `replaceDesign`/`markSaved` for New/Open/Save.
+- Commands: place/move/rotate/delete component; add/delete wire; insert/move
+  bend; add/delete bus; set bus width. Cascade-causing deletes use snapshot
+  revert for exact undo.
+
+### UI
+- Canvas renderer (rAF, render-on-dirty): grid, component outlines + pin stubs +
+  **upright** labels, wires (thin black), junction dots, dangling-end markers,
+  buses (thick blue + `/n` width annotation).
+- Interaction FSM: SELECT / PLACE / WIRE / BUS. Placement (click or drag,
+  one-shot); select/move(snap)/rotate(R)/delete; wire click-to-select,
+  drag-to-bend, branch; bus draw with equal-width guard (FR-039a).
+- Toolbar: Select/Wire/Bus, zoom −/+, Undo/Redo, New/Open/Save/Save As;
+  active-tool highlight; design-name with unsaved `*` marker.
+- File dialogs (server-assisted navigation) for Save/Open.
+- Zoom (wheel to cursor, buttons) and pan (middle-drag, space+drag).
+- Keyboard: `w`/`b` tools, `R`/`Shift+R` rotate, Delete, Esc, Ctrl/Cmd+Z /
+  Shift+Ctrl/Cmd+Z / Ctrl/Cmd+Y undo-redo.
+
+## Not yet implemented
+
+- **MD parser + package registry (S21)** — BLOCKED on OQ-001 (MD file format).
+  The server serves stub fixtures until the format session concludes.
+- **Bus snap-connect / breakout (S17, MVP-deferrable)** — FR-041–043 (group
+  match + disambiguation), FR-043a (breakout), FR-037b (bit names), and the
+  bit-lane/provenance `buildNets` extension (FR-037a/060a). The save format and
+  vertex model already accommodate these.
+- **Right-click context menu** — bus width / bit names (FR-038/037b); bus width
+  currently has a `+`/`-` keyboard stopgap.
+- **Properties panel** — per-instance overrides UI (FR-020a).
+- **Recent-files fallback** (FR-054) — server-assisted navigation is used.
+- Minor: pin-label crowding at low zoom (readable when zoomed in).
+
+## Deviations from the design (agreed with stakeholder)
+
+- Go server is its own module at `sim/srv/` (design §9 implied `sim/server`),
+  keeping the server separate from the SPA at `sim/web/`.
+- Designs are persisted **opaquely** (`json.RawMessage`); no full `Design` Go
+  struct (the SPA owns the schema).
+- `paths.go` uses a testable `appDataDir(goos, getenv, home)` seam.
+- SELECT-mode wire interaction: click selects, drag inserts/moves a bend
+  (reconciles FR-031 with FR-033a; stakeholder-confirmed).
+- The bit-lane `buildNets` extension was moved from S16 to S17 (needs snap/pin
+  connections to be observable).
+
+## How to run
+
+```
+cd sim/srv
+go build -o /tmp/wut4-editor ./cmd/wut4-editor
+/tmp/wut4-editor --web-dir ../web        # binds 127.0.0.1:8137
+# open http://127.0.0.1:8137
+```
+
+Tests:
+
+```
+cd sim/srv && go test ./...
+cd sim/web && node --test
+```

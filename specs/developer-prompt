@@ -1,0 +1,63 @@
+ A few things to set up the developer context with:
+  - Point it at sim/specs/requirements.md and sim/specs/design.md as the
+  authoritative inputs (it can read them from the repo — no need to paste).
+  design-discussion.txt is optional rationale only.
+  - The repo's CLAUDE.md/memory conventions still apply (Go style, ~/go/bin,
+  etc.).
+  - Tell it to start from the walking-skeleton slice and to treat the MD parser 
+  as deferred (serve stub ComponentType fixtures), since OQ-001 is still open —
+  otherwise it may try to build mdparse.go against an undefined format.
+  - Give it an explicit instruction that when implementation reveals a spec gap
+  or contradiction, it should stop and raise it (to you, or back to the
+  architect) rather than invent a resolution — preserving the authority chain
+  we've been maintaining.
+  
+  One practical note: the specs are committed but a8a5676 isn't pushed yet.
+  Doesn't matter for a local developer session, but if the new context is
+  anywhere remote, push first.
+
+  So: exit, re-invoke with a developer prompt, and have it begin by reading the
+  two specs and confirming sim/ is empty. Want me to write a short handoff note
+  (the starting slice + the deferred/blocked list) into something like
+  sim/specs/impl-notes.md so the fresh context picks it up without you having to
+  re-explain?
+
+do you think it's time to write code?
+
+⏺ Yes — I think it's time, with one caveat that the design already anticipated.
+  Here's my honest read as the architect.
+
+  The verdict: build now. We've made the three decisions that actually carried
+  architectural risk (the vertex graph, the bit-lane netlist,
+  package-as-metadata), and the spec is detailed enough that further paper
+  review will hit diminishing returns. The fastest way to validate the rest of
+  the design is to make it run — code will surface any remaining gaps faster
+  than more discussion.
+
+  The one real gate is still OQ-001: the MD file format is undefined, which
+  blocks the bodies of mdparse.go and packages.go. But the design was
+  deliberately built so this doesn't block anything else: everything downstream
+  consumes the ComponentType contract (§7.1), not the file syntax. So we route
+  around it by serving a hand-written stub library (a couple of ComponentType
+  JSON fixtures, e.g. a 74138 and a 74245) from /api/v1/components until the
+  format session happens. Nothing else waits.
+
+  What I'd build first — a walking skeleton, not a layer. The riskiest, most
+  novel parts are the client spine: the single mutation pipeline (Store →
+  Command → undo), the canvas render loop, and buildNets. I'd prove those
+  end-to-end early rather than build the server out fully first:
+
+  1. Thin Go server: bind 127.0.0.1, serve web/, stub /components + /defaults.
+  (Skip mdparse, storage for now.)
+  2. SPA bootstrap + store.js (commands/undo) + geometry.js.
+  3. Canvas: grid + render; place a component (click-then-click), select, move —
+  exercising the Command/undo path and rotation-preserves-grid math.
+  4. Wires + buildNets (vertex model) — the connectivity spine.
+  5. Then persistence (storage.go, save/open), then buses/bit-lanes.
+
+  Deferred deliberately (per the spec's MVP notes): the MD parser body, and bus
+  snap-connect/breakout/disambiguation — the model and save format already
+  support them, so they stay additive.
+
+  Before we start I'd quickly confirm the sim/ tree is actually empty
+  (greenfield assumption) so we're not surprised.
