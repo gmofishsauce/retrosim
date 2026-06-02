@@ -4,9 +4,10 @@
 // the library is ready (FR-003).
 
 import { getComponents } from "./api.js";
-import { createDesign, addInstance } from "./model/design.js";
+import { createDesign } from "./model/design.js";
 import { createStore } from "./store.js";
 import { initCanvas } from "./engine/canvas.js";
+import { initInteraction } from "./engine/interaction.js";
 
 // defaultDesignName builds "unnamed schematic <datetime>" from the local clock
 // (FR-004, FR-045).
@@ -43,12 +44,16 @@ async function main() {
 
   try {
     const components = await getComponents(); // FR-003: await before enabling UI
-    renderPalette(document.getElementById("palette"), components);
+    const palette = document.getElementById("palette");
+    renderPalette(palette, components);
+    initInteraction({
+      canvas: document.getElementById("canvas"),
+      palette,
+      store,
+      renderer,
+      library: components,
+    });
     overlay.classList.add("hidden");
-
-    // Dev hook: lets the renderer be exercised from the console before the
-    // placement tool exists (removed once interaction lands).
-    window.__wut4 = { store, design, renderer, components, addInstance };
   } catch (err) {
     overlay.classList.add("error");
     overlay.textContent =
