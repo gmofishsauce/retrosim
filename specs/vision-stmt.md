@@ -103,8 +103,8 @@ separate components. Please use JavaScript for the user interface
 and golang for the server. The transpiler should be a separate
 command line program so that it can eventually participate in a
 pipeline with the C compiler to generate an executable simulator
-for the design. Although the trans pilar may be written in any
-language, I prefer go because I am already familiar with it. Please
+for the design. Although the transpiler may be written in any
+language, I prefer Go because I am already familiar with it. Please
 use this language unless there is a strong engineering reason to
 prefer a different one in which case let's discuss.
 
