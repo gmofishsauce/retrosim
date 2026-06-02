@@ -22,7 +22,24 @@ body {
   border-bottom: 1px solid #000;
 }
 
-#design-name { font-weight: 600; }
+#tools { display: flex; align-items: center; gap: 0.25rem; }
+
+.tool-btn {
+  padding: 0.25rem 0.6rem;
+  background: #444;
+  color: #eee;
+  border: 1px solid #555;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.tool-btn:hover:not(:disabled) { background: #555; }
+.tool-btn.active { background: #4a90d9; border-color: #4a90d9; color: #fff; }
+.tool-btn:disabled { opacity: 0.4; cursor: default; }
+
+.tool-sep { width: 1px; height: 1.2rem; background: #555; margin: 0 0.35rem; }
+
+#design-name { font-weight: 600; margin-left: 0.5rem; }
 
 #tool-mode {
   margin-left: auto;
@@ -85,3 +102,16 @@ body {
 #loading-overlay.hidden { display: none; }
 
 #loading-overlay.error { color: #b00020; }
+
+.toast {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #b00020;
+  color: #fff;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  z-index: 20;
+}

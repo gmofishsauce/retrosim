@@ -77,6 +77,12 @@ export function createStore(initial = {}) {
       notify();
     },
 
+    // setTool changes the active tool and notifies (so chrome can reflect it).
+    setTool(tool) {
+      state.tool = tool;
+      notify();
+    },
+
     // markSaved clears the dirty flag after a successful save (FR-049a).
     markSaved() {
       state.dirty = false;

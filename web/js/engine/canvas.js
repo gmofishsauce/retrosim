@@ -47,6 +47,7 @@ export function initCanvas(canvasEl, store) {
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, w, h);
     drawGrid(ctx, w, h, vp);
+    drawBuses(ctx, store.design, vp, store.state.selection);
     drawWires(ctx, store.design, vp, store.state.selection);
     drawVertices(ctx, store.design, vp);
     drawComponents(ctx, store.design, vp, store.state.selection);
@@ -122,6 +123,39 @@ function drawWires(ctx, design, vp, selection) {
     ctx.lineWidth = selected ? 2.5 : 1;
     ctx.strokeStyle = selected ? "#4a90d9" : "#000";
     ctx.stroke();
+  }
+}
+
+// drawBuses draws buses as thick blue polylines with a "/n" width annotation
+// (FR-036/037), highlighting the selected one.
+function drawBuses(ctx, design, vp, selection) {
+  if (!design) return;
+  for (const b of design.buses) {
+    const pts = b.path.map((p) => worldToScreen(pathPointWorld(design, p), vp));
+    if (pts.length < 2) continue;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    const selected = selection?.kind === "bus" && selection.id === b.id;
+    ctx.lineWidth = selected ? 5 : 3;
+    ctx.strokeStyle = selected ? "#4a90d9" : "#1565c0";
+    ctx.stroke();
+
+    // Width annotation: a slash tick plus the bit count, at the first segment's
+    // midpoint.
+    const mx = (pts[0].x + pts[1].x) / 2;
+    const my = (pts[0].y + pts[1].y) / 2;
+    ctx.strokeStyle = "#1565c0";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(mx - 4, my + 4);
+    ctx.lineTo(mx + 4, my - 4);
+    ctx.stroke();
+    ctx.fillStyle = "#1565c0";
+    ctx.font = PIN_FONT;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(String(b.width), mx + 5, my - 4);
   }
 }
 

@@ -8,6 +8,7 @@ import { createDesign } from "./model/design.js";
 import { createStore } from "./store.js";
 import { initCanvas } from "./engine/canvas.js";
 import { initInteraction } from "./engine/interaction.js";
+import { initToolbar } from "./chrome/toolbar.js";
 
 // defaultDesignName builds "unnamed schematic <datetime>" from the local clock
 // (FR-004, FR-045).
@@ -46,13 +47,14 @@ async function main() {
     const components = await getComponents(); // FR-003: await before enabling UI
     const palette = document.getElementById("palette");
     renderPalette(palette, components);
-    initInteraction({
+    const interaction = initInteraction({
       canvas: document.getElementById("canvas"),
       palette,
       store,
       renderer,
       library: components,
     });
+    initToolbar({ container: document.getElementById("tools"), store, interaction });
     overlay.classList.add("hidden");
   } catch (err) {
     overlay.classList.add("error");

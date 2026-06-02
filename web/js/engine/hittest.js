@@ -79,6 +79,23 @@ function distToSegment(p, a, b) {
   return Math.hypot(p.x - cx, p.y - cy);
 }
 
+// hitBusSegment returns { bus, segIndex, dist } for the nearest bus segment
+// within tol grid units of the world point, or null.
+export function hitBusSegment(design, pt, tol = 0.5) {
+  let best = null;
+  for (const b of design.buses) {
+    for (let i = 0; i < b.path.length - 1; i++) {
+      const a = pathPointWorld(design, b.path[i]);
+      const c = pathPointWorld(design, b.path[i + 1]);
+      const d = distToSegment(pt, a, c);
+      if (d <= tol && (best === null || d < best.dist)) {
+        best = { bus: b, segIndex: i, dist: d };
+      }
+    }
+  }
+  return best;
+}
+
 // hitBend returns { wire, bendIndex } for an interior bend point within tol grid
 // units of the world point, or null.
 export function hitBend(design, pt, tol = 0.5) {

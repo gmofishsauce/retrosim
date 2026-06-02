@@ -10,6 +10,9 @@ import {
   branchWire,
   insertBend,
   moveBend,
+  addBus,
+  deleteBus,
+  setBusWidth,
 } from "./model/design.js";
 
 function findInstance(design, refdes) {
@@ -33,7 +36,11 @@ const CONNECTIVITY_KEYS = [
 ];
 
 function snapshotConnectivity(design) {
-  const snap = { nextWireId: design.nextWireId, nextVertexId: design.nextVertexId };
+  const snap = {
+    nextWireId: design.nextWireId,
+    nextBusId: design.nextBusId,
+    nextVertexId: design.nextVertexId,
+  };
   for (const k of CONNECTIVITY_KEYS) snap[k] = structuredClone(design[k]);
   return snap;
 }
@@ -44,6 +51,7 @@ function restoreConnectivity(design, snap) {
     design[k].push(...structuredClone(snap[k]));
   }
   design.nextWireId = snap.nextWireId;
+  design.nextBusId = snap.nextBusId;
   design.nextVertexId = snap.nextVertexId;
 }
 
@@ -66,8 +74,10 @@ function snapshotCommand(label, mutate) {
 // {kind:"free",x,y} | {kind:"vertex",id} | {kind:"branch",wireId,segIndex,x,y}.
 function resolveSpec(design, spec) {
   if (spec.kind === "branch") {
-    const host = design.wires.find((w) => w.id === spec.wireId);
-    if (!host) throw new Error(`no such wire ${spec.wireId}`);
+    const host =
+      design.wires.find((w) => w.id === spec.wireId) ??
+      design.buses.find((b) => b.id === spec.wireId);
+    if (!host) throw new Error(`no such conductor ${spec.wireId}`);
     const j = branchWire(design, host, spec.segIndex, spec.x, spec.y);
     return { kind: "vertex", id: j.id };
   }
@@ -187,6 +197,41 @@ export function moveBendCmd(wireId, bendIndex, x, y) {
     revert(design) {
       const w = design.wires.find((wr) => wr.id === wireId);
       moveBend(w, bendIndex, old.x, old.y);
+    },
+  };
+}
+
+// addBusCmd adds a bus between two endpoint specs at the given width (FR-035).
+export function addBusCmd(specA, specB, width) {
+  return snapshotCommand("Add bus", (design) => {
+    const a = resolveSpec(design, specA);
+    const b = resolveSpec(design, specB);
+    addBus(design, a, b, width);
+  });
+}
+
+// deleteBusCmd removes a bus and runs the connectivity cleanup (FR-033a).
+export function deleteBusCmd(busId) {
+  return snapshotCommand(`Delete bus ${busId}`, (design) =>
+    deleteBus(design, busId),
+  );
+}
+
+// setBusWidthCmd changes a bus's width (FR-038), capturing the old width and bit
+// names so undo restores them.
+export function setBusWidthCmd(busId, width) {
+  let old = null;
+  return {
+    label: "Set bus width",
+    apply(design) {
+      const bus = design.buses.find((b) => b.id === busId);
+      if (old === null) old = { width: bus.width, bitNames: bus.bitNames };
+      setBusWidth(design, busId, width);
+    },
+    revert(design) {
+      const bus = design.buses.find((b) => b.id === busId);
+      bus.width = old.width;
+      bus.bitNames = old.bitNames;
     },
   };
 }

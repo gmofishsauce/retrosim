@@ -15,6 +15,7 @@ export function createDesign(name) {
     buses: [],
     vertices: [],
     nextWireId: 1,
+    nextBusId: 1,
     nextVertexId: 1,
   };
 }
@@ -157,6 +158,43 @@ export function addWire(design, a, b) {
   };
   design.wires.push(wire);
   return wire;
+}
+
+// addBus creates a bus (a multi-bit conductor) between two endpoints (FR-035).
+// A bus carries its width and, later, snap-connection metadata and per-bit names
+// (FR-037/060). Path and endpoint handling mirror wires.
+export function addBus(design, a, b, width) {
+  const va = resolveEndpoint(design, a);
+  const vb = resolveEndpoint(design, b);
+  const bus = {
+    id: "b" + design.nextBusId++,
+    path: [
+      { t: "node", v: va.id },
+      { t: "node", v: vb.id },
+    ],
+    width,
+    groupConnections: [],
+    bitNames: null,
+  };
+  design.buses.push(bus);
+  return bus;
+}
+
+// setBusWidth changes a bus's width (FR-038). Per-bit names that no longer match
+// the new width are dropped (they will be re-adopted on a later snap, FR-037b).
+export function setBusWidth(design, busId, width) {
+  const bus = design.buses.find((b) => b.id === busId);
+  if (!bus) throw new Error(`no such bus ${busId}`);
+  bus.width = width;
+  if (bus.bitNames && bus.bitNames.length !== width) bus.bitNames = null;
+}
+
+// deleteBus removes a bus and runs the connectivity cleanup (FR-033a).
+export function deleteBus(design, busId) {
+  const i = design.buses.findIndex((b) => b.id === busId);
+  if (i < 0) throw new Error(`no such bus ${busId}`);
+  design.buses.splice(i, 1);
+  cleanup(design);
 }
 
 // insertBend splits segment segIndex of a wire/bus path by inserting an interior

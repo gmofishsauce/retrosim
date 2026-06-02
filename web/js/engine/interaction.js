@@ -4,7 +4,13 @@
 // through the store as Commands.
 
 import { snapToGrid, screenToWorld } from "../geometry.js";
-import { hitComponent, hitPin, hitSegment, hitBend } from "./hittest.js";
+import {
+  hitComponent,
+  hitPin,
+  hitSegment,
+  hitBend,
+  hitBusSegment,
+} from "./hittest.js";
 import {
   placeComponent,
   moveComponent,
@@ -14,8 +20,22 @@ import {
   deleteWireCmd,
   insertBendCmd,
   moveBendCmd,
+  addBusCmd,
+  deleteBusCmd,
+  setBusWidthCmd,
 } from "../commands.js";
 import { insertBend, moveBend } from "../model/design.js";
+
+const DEFAULT_BUS_WIDTH = 8;
+
+// showToast surfaces a brief non-fatal message (e.g., a rejected connection).
+function showToast(msg) {
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2000);
+}
 
 export function initInteraction({ canvas, palette, store, renderer, library }) {
   let placeType = null; // ComponentType when tool === "place"
@@ -26,12 +46,12 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   const findWire = (id) => store.design.wires.find((w) => w.id === id);
 
   function setTool(tool, type = null) {
-    store.state.tool = tool;
     placeType = type;
     wireSource = null;
     const label = document.getElementById("tool-mode");
     if (label) label.textContent = tool === "place" ? `place ${type.name}` : tool;
     canvas.style.cursor = tool === "select" ? "default" : "crosshair";
+    store.setTool(tool); // notifies subscribers (toolbar highlight)
   }
 
   function select(sel) {
@@ -66,6 +86,26 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       return { kind: "branch", wireId: sh.wire.id, segIndex: sh.segIndex, x: g.x, y: g.y };
     }
     return null;
+  }
+
+  // busTargetAt returns a bus endpoint spec: a branch on an existing bus, or a
+  // free grid point (buses connect to components via snap-connect in a later
+  // slice).
+  function busTargetAt(e) {
+    const world = worldOf(e);
+    const bh = hitBusSegment(store.design, world, 0.4);
+    const g = gridOf(e);
+    if (bh) {
+      return {
+        kind: "branch",
+        wireId: bh.bus.id,
+        segIndex: bh.segIndex,
+        x: g.x,
+        y: g.y,
+        busWidth: bh.bus.width,
+      };
+    }
+    return { kind: "free", x: g.x, y: g.y };
   }
 
   // --- palette: click to arm PLACE, or drag a tile onto the canvas ---
@@ -110,6 +150,30 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       return;
     }
 
+    if (store.state.tool === "bus") {
+      const target = busTargetAt(e);
+      if (!wireSource) {
+        wireSource = target;
+        return;
+      }
+      // Reject joining two buses of unequal width (FR-039a).
+      if (
+        wireSource.kind === "branch" &&
+        target.kind === "branch" &&
+        wireSource.busWidth !== target.busWidth
+      ) {
+        showToast(
+          `cannot join buses of width ${wireSource.busWidth} and ${target.busWidth}`,
+        );
+        setTool("select");
+        return;
+      }
+      const width = wireSource.busWidth ?? target.busWidth ?? DEFAULT_BUS_WIDTH;
+      store.dispatch(addBusCmd(wireSource, target, width));
+      setTool("select"); // one-shot (FR-040)
+      return;
+    }
+
     // SELECT tool.
     const world = worldOf(e);
     const bend = hitBend(store.design, world, 0.5);
@@ -123,6 +187,12 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       select({ kind: "wire", id: seg.wire.id });
       // A plain click selects; a drag inserts a bend here (decided on move).
       drag = { type: "segment", wireId: seg.wire.id, segIndex: seg.segIndex, tempIndex: -1, moved: false };
+      return;
+    }
+    const busSeg = hitBusSegment(store.design, world, 0.4);
+    if (busSeg) {
+      select({ kind: "bus", id: busSeg.bus.id });
+      drag = null; // bus bend editing is wired up with the context-menu slice
       return;
     }
     const comp = hitComponent(store.design, world);
@@ -207,8 +277,27 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       else select(null);
       return;
     }
-    if (e.key.toLowerCase() === "w" && store.state.tool === "select") {
+
+    // Undo/redo: Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z or Ctrl/Cmd+Y (FR-024).
+    const mod = e.metaKey || e.ctrlKey;
+    if (mod && e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      if (e.shiftKey) store.redo();
+      else store.undo();
+      return;
+    }
+    if (mod && e.key.toLowerCase() === "y") {
+      e.preventDefault();
+      store.redo();
+      return;
+    }
+
+    if (store.state.tool === "select" && e.key.toLowerCase() === "w") {
       setTool("wire");
+      return;
+    }
+    if (store.state.tool === "select" && e.key.toLowerCase() === "b") {
+      setTool("bus");
       return;
     }
 
@@ -219,10 +308,19 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       e.preventDefault();
       if (sel.kind === "component") store.dispatch(deleteComponent(sel.refdes));
       else if (sel.kind === "wire") store.dispatch(deleteWireCmd(sel.id));
+      else if (sel.kind === "bus") store.dispatch(deleteBusCmd(sel.id));
       select(null);
     } else if (e.key.toLowerCase() === "r" && sel.kind === "component") {
       e.preventDefault();
       store.dispatch(rotateComponent(sel.refdes, e.shiftKey ? -90 : 90));
+    } else if (sel.kind === "bus" && (e.key === "+" || e.key === "=" || e.key === "-")) {
+      // Stopgap width control until the right-click context menu (FR-038, S20).
+      e.preventDefault();
+      const bus = store.design.buses.find((b) => b.id === sel.id);
+      const delta = e.key === "-" ? -1 : 1;
+      store.dispatch(setBusWidthCmd(sel.id, Math.max(1, bus.width + delta)));
     }
   });
+
+  return { setTool };
 }
