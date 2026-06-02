@@ -1,0 +1,55 @@
+design.md is written to sim/specs/design.md. It follows the architect template
+  (all 12 sections) and is self-contained so a developer can build from it
+  without requirements.md.
+
+  Key decisions baked in:
+  - Canvas 2D drawing engine + vanilla ES-module chrome, no build step (your Q1
+  choice). The schematic surface is imperative Canvas 2D; the
+  toolbar/palette/dialogs/properties are plain DOM. The two are decoupled, so a
+  framework can be added later without touching the engine. 
+  - MD format: parser contract pinned down, syntax deferred (your Q2 choice).
+  §6.3 fixes ParseComponent(path) → ComponentType, §7.1 fixes the in-memory
+  ComponentType/Pin/PinGroup model, and §7.6 has the non-binding strawman syntax
+  you asked to see — clearly marked "FOR DISCUSSION ONLY." Everything else
+  builds against the data model, so only the parser body waits on your format
+  session.
+  
+  Things I had to resolve (flagged in §3, the architect's job, not silent 
+  guesses):
+  - Junction/net derivation (OQ-007): a junction endpoint stores the target wire
+  id (+ a render-only coord), and nets are computed by union-find over ids only
+  — never pixel geometry — satisfying FR-059a. §6.6 has the algorithm.
+  - Fan-out vs two-endpoint wires: fan-out = multiple wires sharing a pin +
+  junctions; no wire ever has >2 endpoints.
+  - Delete-leaves-dangling-junction gap (G2): deleting a wire converts any
+  junction referencing it into a free (dangling) endpoint, then the
+  zero-endpoint sweep runs.
+  - Grid/zoom defaults (OQ-004): 8 px/grid-unit default, 0.25×–4.0× zoom,
+  rotation done about the instance origin so 90° turns keep pins on integer
+  grid.
+  - NFR-005 made testable: ≤16 ms frames at a stated stress size.
+  - Bus-group width (A3): width = Σ member pin bit-widths, first-declared on
+  ties.
+  
+  Open items you should weigh in on (§12) — none block the server skeleton,
+  canvas engine, store/undo, or chrome; only the MD parser body and bus 
+  snap-connect wait on confirmation:
+  1. The strawman MD syntax in §7.6 — react whenever you've thought it over.
+  2. Confirm the junction representation meets your downstream-tool intent.
+  3. Confirm grid/zoom constants and the NFR-005 target numbers.
+  4. Pin-group width/tie-break semantics (A3) and the pin-direction set
+  (OQ-008).
+  
+  One thing worth your eye: the design keeps all filesystem access server-side
+  (per FR-053) — the browser never uses a native picker — so "choose save
+  location" (FR-051) is driven by the /api/v1/files directory-listing endpoint,
+  with a localStorage recent-files list designed as the FR-054 fallback.
+  
+✻ Worked for 6m 28s
+
+※ recap: Goal: produce design.md for the localhost TTL circuit editor. I've 
+  written it to sim/specs/design.md with all 12 sections, using vanilla 
+  JS/Canvas 2D and a deferred MD-format parser contract. Next: review the open 
+  questions in section 12 and confirm the strawman MD syntax. (disable recaps in
+  /config)
+
