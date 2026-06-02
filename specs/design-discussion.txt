@@ -18,6 +18,11 @@ requirements.md):
      §6.6, §7.2 and requirements.md FR-037a/b, FR-039a, FR-041a/b, FR-043a,
      FR-060a.
 
+  3. Optional MD `package:` type (e.g., DIP-16) as datasheet metadata —
+     resolved by the parser to outline + pin numbers, with functional pin
+     placement kept author-controlled (footprint != schematic symbol). See
+     design.md §6.3/§7.1/§7.6 and requirements.md FR-062/FR-062b.
+
 Kept as rationale/history only — design.md and requirements.md remain the
 authoritative specs. The transcript below is lightly reformatted from the
 terminal session; some tool output and edit steps are elided.

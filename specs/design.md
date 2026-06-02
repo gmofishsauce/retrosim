@@ -438,9 +438,10 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   error only on an unreadable directory.
 - **Dependencies:** `mdparse.go`.
 
-### 6.3 Go: MD parser (`sim/server/mdparse.go`)
-- **Purpose:** convert one MD file's bytes into a `ComponentType`.
-- **Satisfies:** FR-061, FR-062, FR-062a, FR-063, FR-064, FR-066.
+### 6.3 Go: MD parser + package registry (`sim/server/mdparse.go`, `sim/server/packages.go`)
+- **Purpose:** convert one MD file's bytes into a `ComponentType`; resolve a
+  declared package type to outline geometry and physical pin numbers.
+- **Satisfies:** FR-061, FR-062, FR-062a, FR-062b, FR-063, FR-064, FR-066.
 - **Interface (the deferral boundary — stable even though syntax is TBD):**
   - `ParseComponent(path string) (ComponentType, error)`
   - The returned `ComponentType` MUST be fully populated for the fields in §7.1.
@@ -449,13 +450,30 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   - Unknown sections/keys MUST be ignored (not error) so future additions don't
     break the parser (FR-066).
 - **Behavior:** to be specified in the MD-format session. A strawman is in §7.6.
-  The parser validates: type name present; outline dims > 0; every pin has a
-  valid `side` ∈ {left,right,top,bottom}, integer `position ≥ 0`, `direction`
-  ∈ {in,out,bidir,tristate}, `width ≥ 1`; every pin-group member names an
-  existing pin.
+  The parser validates: type name present; every pin has a valid `side` ∈
+  {left,right,top,bottom}, integer `position ≥ 0`, `direction` ∈
+  {in,out,bidir,tristate}, `width ≥ 1`; every pin-group member names an existing
+  pin.
+- **Outline resolution (FR-062b) — at parse time, in this order:**
+  1. if the MD states an explicit outline, use it;
+  2. else if a `package` is declared, resolve it via `packages.go` to outline
+     dimensions (and fill each pin's `number` where the package defines it);
+  3. else derive a default rectangle sized to fit the author-placed pins
+     (`width`/`height` = max pin `position` per side + margin).
+  The result is **always concrete** `width`/`height` in the returned
+  `ComponentType` (§7.1). A declared `package` never moves pins (FR-014) — it only
+  supplies geometry defaults and pin numbers; the original `package` string is
+  retained. After resolving, validate outline dims > 0.
+- **Package registry (`packages.go`):** `ResolvePackage(name string) (PackageGeom,
+  error)`. For the DIP family this is a **parametric generator**
+  `DIP(pins, rowSpacingMils)` (pins must be even; rows of `pins/2`), plus a tiny
+  table for any non-parametric oddballs. Names like `DIP-16`, `DIP-24/0.6` (exact
+  grammar is an OQ-001 detail). Unknown package → parse error (file + reason);
+  TTL's "few packages" means the registry stays small.
 - **Error handling:** return an `error` with file + line + human-readable reason
-  on any validation failure; the loader logs and skips (§6.2). Never panic.
-- **Dependencies:** none beyond std lib.
+  on any validation failure (including an unknown/unresolvable `package`); the
+  loader logs and skips (§6.2). Never panic.
+- **Dependencies:** `packages.go`; none beyond std lib.
 
 ### 6.4 Go: HTTP API (`sim/server/api.go`)
 - **Purpose:** route and handle all REST endpoints; serve static SPA.
@@ -749,12 +767,19 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 | Field | Type | Notes |
 |---|---|---|
 | `name` | string | unique type name, e.g. `"74138"` (FR-062) |
-| `width` | int | outline width in grid units (>0) |
-| `height` | int | outline height in grid units (>0) |
+| `package` | string? | optional declared package, e.g. `"DIP-16"` (FR-062b); preserved verbatim for later footprint/BOM phases |
+| `width` | int | outline width in grid units (>0); **resolved** value (stated, derived from pins, or from `package` — §6.3) |
+| `height` | int | outline height in grid units (>0); resolved value |
 | `pins` | `Pin[]` | FR-062, FR-062a |
 | `pinGroups` | `PinGroup[]` | optional (FR-063) |
 | `delays` | `map[string]number` | optional propagation delays, ns (FR-064) |
 | `behavior` | string | opaque GALasm text, preserved & ignored (FR-066) |
+
+Note: `width`/`height` are always **concrete in the parsed `ComponentType`** even
+when the MD file states only a `package` — resolution happens at parse time (§6.3)
+so the canvas, the save format, and FR-057's full-copy all keep consuming explicit
+geometry. The `package` string is retained alongside (not instead of) the resolved
+dimensions.
 
 **`Pin`**
 
@@ -765,6 +790,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 | `position` | int | grid units along the side from its origin (top for L/R, left for T/B) |
 | `direction` | enum | `in` \| `out` \| `bidir` \| `tristate` (FR-062a) |
 | `width` | int | bit-width, default `1` |
+| `number` | int? | optional physical pin number (e.g., DIP pin 7); supplied by `package` or stated (FR-062b); footprint/BOM metadata, not used for drawing |
 
 **`PinGroup`**
 
@@ -914,18 +940,21 @@ demand (e.g., for future tools).
 
 ```
 # 74138                        ; type name (FR-062)
-outline: 6 x 12                ; width x height in grid units
+package: DIP-16                ; FR-062b: resolves to outline + pin numbers.
+                               ; `outline: 6 x 12` may still be given to override.
 
-pins:                          ; name  side    pos  dir       [width]
-  A0    left    2   in
-  A1    left    3   in
-  A2    left    4   in
-  /E1   left    6   in
-  /E2   left    7   in
-  E3    left    8   in
-  /Y0   right   2   out
-  /Y1   right   3   out
-  ; …                          ; tristate example: DQ0  right 2  tristate
+pins:                          ; name  side  pos  dir       pin#  [width]
+  A0    left    2   in    1    ; side/pos are author-chosen (functional, FR-014);
+  A1    left    3   in    2    ; pin# is physical (from package or stated), used
+  A2    left    4   in    3    ; only for footprint/BOM, never for drawing.
+  /E1   left    6   in    4
+  /E2   left    7   in    5
+  E3    left    8   in    6
+  /Y0   right   2   out   15   ; note: /Y7 is physical pin 7 (left side of the
+  /Y1   right   3   out   14   ; DIP) yet sits on the RIGHT of the symbol — proof
+  ; …                          ; the package can't derive symbol layout.
+  GND   bottom  3   pwr   8
+  Vcc   top     3   pwr   16   ; tristate example: DQ0  right 2  tristate  9
 groups:                        ; name: ordered pins (FR-063)
   A: A0, A1, A2                ; 3-bit address group
 
@@ -936,6 +965,11 @@ behavior: |                    ; opaque GALasm, preserved & ignored (FR-066)
   /Y0 = /(/E1 * /E2 * E3 * /A2 * /A1 * /A0)
   ; …
 ```
+
+The parser resolves `package: DIP-16` to concrete `width`/`height` and fills any
+omitted pin numbers (§6.3); if both `package` and `outline` are absent, the
+outline defaults to a box sized to the placed pins. `package` is retained in the
+parsed `ComponentType` for later footprint/BOM use.
 
 ---
 
@@ -950,6 +984,7 @@ behavior: |                    ; opaque GALasm, preserved & ignored (FR-066)
 | Junction identity | (a) reference a point on a wire by coordinate; (b) junction endpoint stores *target wire id* + render-only coord; (c) split host wire into two records on branch | **First-class `Vertex` objects shared by id; a branched wire keeps one record with the junction as an interior `node` path-point** | Symmetric (no host/branch parent-child); deleting a wire just drops a vertex ref-count (eliminates the G2 special case); shared vertex holds the only position copy so junctions can't drift; preserves "the wire I drew" as one record for select/delete (FR-033a) and aligns with FR-031/033 in-place editing; cleanly absorbs the future off-sheet **connector** tool and edge-connector components as new vertex kinds |
 | Bus connectivity (N nets) | Treat a bus as one net; expand bits only in a downstream tool; per-bit explicit net objects | **Bit-lane union-find: a bus = `width` lanes `(busId,i)`; group snap binds bit i, bus↔bus joins lanes by index, breakout taps one lane** | A bus is genuinely *width* signals (FR-037a); lanes make wires, group snaps, bus joins, and breakout all the same union; subsumes the old "one net per bus" bug; provenance (`{bus,bit,name}`) serves downstream tools (FR-060a) |
 | Bus group-match tie | First group in MD order (silent) | **Auto-connect only on a single match; prompt to disambiguate on ≥2 (FR-041b)** | Silent guessing is wrong for chips with multiple equal-width groups (e.g., ALU A/B/Y); stakeholder confirmed → promoted to requirement; withdraws design-only assumption A3 |
+| Component outline source | Author states `outline: W x H` per part; package drives a *pictorial* DIP drawing | **Optional `package:` resolved by a parser registry to outline + pin numbers; functional pin placement stays author-controlled** | Avoids hand-computing outlines; "few TTL packages" makes the registry tiny; a package is a *footprint*, not a symbol, so it can't derive functional pin layout (FR-014) — pictorial drawing would break readable symbols and bus groups; resolving at parse time keeps `ComponentType`/save format unchanged (FR-062b) |
 | Coordinate system | Store pixels; store mm | **Store integer grid units; derive pixels via viewport** | Everything snaps to grid by construction (FR-021); zoom/pan are pure view transforms; rotation by 90° preserves grid (§6.7) |
 | Rotation pivot | Rotate about component center | **Rotate pin offsets about the instance origin** | Guarantees rotated pins stay on integer grid intersections (FR-021) without half-grid artifacts |
 | File I/O location | Browser native file picker / downloads | **All FS access server-side via REST** | FR-053 requires server-assisted navigation; keeps a single trusted FS actor; localhost-only (NFR-001) |
@@ -968,6 +1003,7 @@ sim/
     api.go                  CREATE  /api/v1 router + handlers + static (§6.4)
     components.go           CREATE  library load/hold/List (§6.2)
     mdparse.go              CREATE  ParseComponent contract (syntax TBD) (§6.3)
+    packages.go             CREATE  package registry: DIP generator + table (§6.3)
     storage.go              CREATE  ListDir/LoadDesign/SaveDesign (§6.5)
     paths.go                CREATE  AppDataDir per-OS (§6.5)
     types.go                CREATE  ComponentType/Pin/PinGroup/Design/Vertex/Wire/Bus/PathPoint Go structs (§7)
@@ -1045,6 +1081,7 @@ No files are modified (greenfield).
 | FR-059, FR-059a, FR-060 | §6.6, §7.2 | `model/netlist.js`, `types.go` |
 | FR-060a | §6.6, §7.2, A7 | `model/netlist.js`, `types.go` |
 | FR-061…FR-064 | §6.3, §7.1, §7.6 | `mdparse.go`, `types.go` |
+| FR-062b | §6.3, §7.1, §7.6 | `mdparse.go`, `packages.go`, `types.go` |
 | FR-065 | §6.4 | `api.go` |
 | FR-066 | §6.3, §7.1 | `mdparse.go` |
 | NFR-001 | §6.1 | `main.go` |
@@ -1068,6 +1105,12 @@ snap FR-041–043) are fully designed so they are additive when implemented.
   / bad direction / non-integer position / group referencing unknown pin → error
   with file+line; behavioral block captured into `Behavior` and unknown keys
   ignored (FR-061–FR-066).
+- **Go `mdparse` + `packages` (FR-062b):** `package: DIP-16` → resolved
+  `width`/`height` > 0 with `package` preserved; unknown package → error;
+  author `outline:` overrides the package; no `package`/`outline` → outline
+  derived from pin positions; a declared package never alters pin `side`/`position`
+  (FR-014); `DIP(pins, mils)` generator: odd pin count → error, `DIP-24/0.3` vs
+  `DIP-24/0.6` yield different widths.
 - **Go `storage`:** atomic save does not corrupt an existing file when the write
   fails midway; `ListDir` returns only `.json`+dirs with a correct `parent`;
   load of malformed JSON → 422 (FR-046–FR-053, FR-055).
@@ -1130,10 +1173,15 @@ machine. (Confirm the target numbers in §12 if different.)
 Implementation of the **core editor and server can begin now**; these items gate
 only the noted slices.
 
-- **OQ-001 / G1 — MD file syntax (BLOCKS `mdparse.go` body only).** The concrete
-  syntax must be settled collaboratively (strawman in §7.6). All other modules
-  proceed against the `ComponentType` contract (§7.1) and can be exercised with a
-  hand-written stub library. *Do not finalize the parser until the format session
+- **OQ-001 / G1 — MD file syntax (BLOCKS `mdparse.go` + `packages.go` bodies
+  only).** The concrete syntax must be settled collaboratively (strawman in §7.6).
+  Decided in principle: a part may declare a **package** (`DIP-16`, …) that the
+  parser resolves to outline + pin numbers (FR-062b), keeping functional pin
+  placement author-controlled. Still open for the format session: the exact
+  package-naming grammar (esp. width disambiguation, e.g. `DIP-24/0.6`) and the
+  registry's initial contents. All other modules proceed against the
+  `ComponentType` contract (§7.1) and can be exercised with a hand-written stub
+  library. *Do not finalize the parser/registry until the format session
   concludes.*
 - **A3 — Pin-group "width" semantics & tie-break — RESOLVED.** Width = Σ member
   pin bit-widths; on a tie the user is **prompted** (no silent pick). This was

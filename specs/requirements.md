@@ -142,8 +142,9 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 ### 3.17 Component Definition (MD File)
 
 - FR-061: Each TTL component type shall be defined by an MD file whose format is to be designed collaboratively and then parsed by the server.
-- FR-062: The MD file shall specify: component type name, rectangular outline dimensions, and for each pin: its name, the side of the rectangle it appears on (left, right, top, bottom), and its position along that side.
+- FR-062: The MD file shall specify: component type name; the rectangular outline dimensions (either stated directly or derived from a declared package type per FR-062b); and for each pin: its name, the side of the rectangle it appears on (left, right, top, bottom), and its position along that side.
 - FR-062a: The MD file shall specify each pin's electrical direction (at minimum: input, output, bidirectional, and tristate-capable), so that high-impedance behavior and signal direction can be represented in a later simulation phase.
+- FR-062b: The MD file may declare a standard physical package type (e.g., `DIP-16`, `DIP-24/0.6`). The server shall resolve the package — via a built-in package table/generator — to the component's outline dimensions and to each pin's physical pin number, so the author need not state outline dimensions explicitly. A declared package supplies defaults and physical metadata only; it shall not override author-specified pin side/position (FR-014). The component remains a functional schematic symbol, not a pictorial package drawing.
 - FR-063: The MD file shall optionally specify one or more named pin groups, each listing the pins that form a bus and their bit order, to support bus snap-connection (FR-041 through FR-043).
 - FR-064: The MD file shall optionally specify propagation delay values for the component.
 - FR-065: The server shall expose the parsed component library to the browser application via an API endpoint.
@@ -166,9 +167,9 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 
 | Entity | Key Attributes | Notes |
 |---|---|---|
-| ComponentType | name, outline dimensions, pins (name, side, position, direction), pin groups, propagation delays, (future) behavioral equations | Loaded from MD files at server startup |
+| ComponentType | name, optional package type, outline dimensions (stated or package-derived), pins (name, side, position, direction, optional pin number), pin groups, propagation delays, (future) behavioral equations | Loaded from MD files at server startup |
 | ComponentInstance | type name, U-number, canvas position (x, y), rotation (0/90/180/270), copied type data, per-instance overrides | One per placed component in a design |
-| Pin | name, side, position along side, direction (in/out/bidir/tristate), bit-width | Defined in MD file; referenced by wires and buses |
+| Pin | name, side, position along side, direction (in/out/bidir/tristate), bit-width, optional physical pin number | Defined in MD file; referenced by wires and buses |
 | PinGroup | name, ordered list of pins | Optional; declared in MD file; enables bus snap-connect |
 | Wire | endpoint A, endpoint B (each: instance+pin, junction on another wire/bus, or free coord), ordered bend points | A wire with zero connected endpoints is not persisted |
 | Bus | same as Wire, plus width in bits, snap-connection metadata, optional per-bit signal names, single-bit breakout taps | Represents N independent nets (one per bit); rendered as thick blue line with annotation |
@@ -221,7 +222,7 @@ The minimum set of requirements needed for a usable first release:
 
 ## 9. Open Questions
 
-- OQ-001: The MD file format is not yet defined. A separate design session is needed to specify the syntax and semantics before parser implementation begins.
+- OQ-001: The MD file format is not yet defined. A separate design session is needed to specify the syntax and semantics before parser implementation begins. The data content now includes an optional package type (FR-062b); the concrete package-naming grammar (e.g., `DIP-16` vs `DIP-24/0.6`) and the package table/generator contents are part of that session.
 - OQ-002: Bus snap-connection and its extensions (FR-041 through FR-043a) may prove complex enough to warrant their own design pass; they are noted as potentially deferrable from the MVP. Disambiguation on multiple width-matches (FR-041b) and single-bit breakout (FR-043a) have now been specified following stakeholder discussion.
 - OQ-003: Server-assisted file navigation (FR-053) may be difficult to implement cleanly in the browser; the fallback to a recent-files list (FR-054) should be kept as a ready alternative.
 - OQ-004: The exact grid spacing (1 mm vs. 2 mm equivalent at default zoom) and the default zoom level are not yet specified.
@@ -246,6 +247,7 @@ The minimum set of requirements needed for a usable first release:
 | Grid | A uniform lattice of points covering the canvas; all design elements snap to grid intersections |
 | Junction | A point at which a wire branches from another wire or bus, electrically tying them together |
 | MD file | A text file (format TBD) that defines the name, pin layout, pin directions, pin groups, optional timing, and (eventually) the GALasm behavior of one TTL component type |
+| Package | The physical package of a TTL part (e.g., DIP-16, DIP-24/0.6). Declared optionally in the MD file; the server resolves it to outline dimensions and physical pin numbers. It is metadata/defaults — the schematic symbol's pin placement is still author-controlled (FR-014) |
 | Net | The set of pins and wire/bus segments that are all electrically connected through pins and junctions |
 | Palette | The panel displaying available component types as tiles, from which the user selects components to place |
 | Pin group | A named set of pins declared in an MD file that collectively form a bus interface |
