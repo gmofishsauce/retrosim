@@ -121,18 +121,29 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-035** — A Bus tool, separate from the Wire tool.
 - **FR-036** — Buses render as **thick blue** lines; wires as **thin black** lines.
 - **FR-037** — Each bus shows a width annotation: a slash mark and a digit (bits).
+- **FR-037a** — A width-N bus is **N independent single-bit nets**; bit *i* is a
+  distinct net from bit *j*. FR-034b connectivity applies per bit.
+- **FR-037b** — A bus may carry an optional per-bit **signal name** (e.g.,
+  C/V/N/Z). On first snap-connect to a named pin group, the bus **adopts** the
+  group's pin names in bit order; position (not name) determines connectivity.
 - **FR-038** — Right-click a bus to set its width.
 - **FR-039** — Bus drawing/bending/branching follow the wire interaction model
   (FR-026…FR-034).
+- **FR-039a** — Joining two buses of **unequal width** is prevented at connect time.
 - **FR-040** — After placing a bus, return to select mode.
 
 **Bus-to-Component Snap Connection**
-- **FR-041** — Dragging a bus endpoint onto a component checks the component's MD
-  file for a pin group matching the bus width.
-- **FR-042** — If a matching group exists, auto-connect each bit to the
-  corresponding pin in declared order (no per-pin wiring).
-- **FR-043** — If no matching group exists, attach the endpoint to the nearest pin
+- **FR-041** — Dragging a bus endpoint onto a component determines which declared
+  pin groups **match the bus width** (match = Σ member pin bit-widths == width).
+- **FR-041a** — Exactly **one** matching group → snap-connect automatically.
+- **FR-041b** — **More than one** matching group → prompt the user to choose by
+  name (may cancel). Supersedes the old "first declared on tie" guess.
+- **FR-042** — On connect (auto or chosen), connect each bit to the corresponding
+  group pin in declared bit order (no per-pin wiring).
+- **FR-043** — **No** matching group → attach the endpoint to the nearest pin
   only; remaining bits unconnected.
+- **FR-043a** — The user can **break out** a single bit from a bus and route it as
+  an ordinary single-bit wire; the wire joins that bus bit's net (FR-037a).
 
 **File Operations — New**
 - **FR-044** — Create a new empty design at any time.
@@ -233,12 +244,12 @@ this document adopts. **None block implementation** except where noted in §12.
   junction vertex (a branch point), but that is not a third endpoint — the wire
   still has exactly two endpoints. This is consistent with FR-059.
 
-- **A3 — "Matching pin group" for bus snap (FR-041).** Matching is by *width*;
-  the requirement is silent on ties (multiple groups of the same width) and on
-  whether group "width" is the **pin count** or the **sum of member pin bit-
-  widths**. **Resolution:** group width = **sum of member pin bit-widths**
-  (equals pin count when all members are 1-bit, the common case). On a tie,
-  choose the **first group in MD declaration order**. See §6.9; confirm in §12.
+- **A3 — "Matching pin group" for bus snap (FR-041).** *Previously* this design
+  guessed "first group in MD order" on a width tie. That guess is **withdrawn**:
+  the stakeholder confirmed the behavior and it is now a requirement. Group width
+  = **Σ member pin bit-widths** (FR-041); **one** match → auto-connect (FR-041a);
+  **≥2** matches → **disambiguation dialog** by group name (FR-041b); **0** matches
+  → nearest pin (FR-043). See §6.9/§6.11.
 
 - **A4 — Net storage vs derivation (FR-059a).** "Derivable" does not say whether
   to *store* nets. **Resolution:** the save file **includes** a `nets` array
@@ -253,6 +264,16 @@ this document adopts. **None block implementation** except where noted in §12.
 
 - **A6 — Bus-tool one-shot (OQ-005).** Assumed **yes**: the Bus tool returns to
   select mode after placing one bus, mirroring the Wire tool (FR-040 confirms).
+
+- **A7 — Buses as N nets + breakout (FR-037a/b, FR-039a, FR-043a, FR-060a).** A bus
+  is *width* independent signals, not one net. **Resolution:** the netlist treats
+  each conductor as a **bit-lane** — a wire is 1 lane, a width-*w* bus is lanes
+  `(busId, 0…w-1)` — and runs ordinary union-find over lanes (§6.6). A full
+  bus↔bus junction unions lanes pairwise by index (equal width enforced at connect
+  time, FR-039a); a **breakout** is a wire whose endpoint is a junction vertex on a
+  bus carrying a **bit index**, unioning that one lane (FR-043a). Buses may carry
+  per-bit names adopted from the snapped group (FR-037b); the saved `nets` carry
+  per-bit **provenance** `{bus,bit,name?}` (FR-060a).
 
 ### 3.2 Contradictions
 
@@ -300,7 +321,11 @@ as authoritative and raise it — do not silently diverge.
   (`net/http`, `encoding/json`, `os`, `path/filepath`). No web framework needed.
 - Server binds **only** to `127.0.0.1` (NFR-001). Single local user; **no**
   auth/TLS.
-- Out of scope: multi-select, copy/paste, the simulation engine, the transpiler.
+- Out of scope: multi-select, copy/paste, the simulation engine, the transpiler,
+  and **electrical-rule checking** (e.g., output-to-output conflicts, direction
+  validation). Pin `direction` is captured (FR-062a) so ERC can be added later
+  without a model change; the bus disambiguation dialog (FR-041b) does **not**
+  filter candidates by direction this phase (D2).
 - Target browsers: modern desktop **Chrome/Firefox**. No mobile support.
 
 ### 4.2 Assumptions
@@ -478,7 +503,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 ### 6.6 JS: model & netlist (`web/js/model/design.js`, `web/js/model/netlist.js`)
 - **Purpose:** the in-browser canonical design and the operations on it; net
   derivation.
-- **Satisfies:** FR-011, FR-018, FR-030, FR-034a, FR-034b, FR-056–FR-060, FR-059a.
+- **Satisfies:** FR-011, FR-018, FR-030, FR-034a, FR-034b, FR-037a, FR-043a,
+  FR-056–FR-060, FR-059a, FR-060a.
 - **Data:** the `Design` object (§7.2), including its **`vertices`** collection
   (§7.1a), and pure helper functions. Mutations are performed **only** by Command
   objects (§6.10), but the low-level operations live here so they are
@@ -492,29 +518,51 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   - `addVertex`/`removeVertex`, `addWire/addBus`, `insertBend`, `moveBend`,
     `deleteBend`, `branchWire` (creates or reuses a `junction` vertex; if the
     branch point lands on an interior `bend` path-point, that point flips to a
-    `node` referencing the new vertex), `deleteWire` (decrements junction-vertex
-    ref counts, demoting to `free`/deleting per §3.3 G2; prunes all-`free` wires
-    per FR-030), `deleteInstance` (converts the instance's `pin` vertices to
-    `free`, then runs the FR-030 sweep), `setBusWidth`, `setOverride`.
-- **Netlist (`netlist.js`) — `buildNets(design) → Net[]` (FR-034b/FR-059a):**
+    `node` referencing the new vertex), `breakoutBit` (FR-043a: create a
+    `junction` vertex on a bus with `bit` set to the chosen lane, and start a
+    single-bit wire from it), `deleteWire` (decrements junction-vertex ref counts,
+    demoting to `free`/deleting per §3.3 G2; prunes all-`free` wires per FR-030),
+    `deleteInstance` (converts the instance's `pin` vertices to `free`, then runs
+    the FR-030 sweep), `setBusWidth`, `setBusBitNames`, `snapBusGroup`,
+    `setOverride`.
+- **Netlist (`netlist.js`) — `buildNets(design) → Net[]` (FR-034b/FR-059a/FR-037a):**
+  Union-find runs over **bit-lanes**, not raw vertices, so a width-*w* bus
+  contributes *w* independent nets (A7). A *lane* is one electrical conductor:
+  a wire is 1 lane; a bus `B` is lanes `(B, 0…w-1)`.
   ```
-  uf = UnionFind()
-  for each vertex V:  add node V.id
-  for each wire/bus W:
-      nodes = [p.v for p in W.path if p.t == "node"]   # this wire's vertices
-      union all of nodes together                      # one wire = one node-set
-  # two wires sharing a vertex id are unioned by that shared id alone —
-  # no target-wire indirection, no geometric intersection.
-  # (future connector rule: union all vertices with kind=="connector"
-  #  that share a label.)
-  groups = connected components of uf            # over vertex ids
+  uf = UnionFind()                              # nodes are lanes
+  lane(wire)         = ("wire", wire.id)
+  lane(bus, i)       = ("bus",  bus.id, i)
+
+  # 1. plain-wire connectivity: two wires sharing a vertex are one lane
+  for each pair of wires sharing a vertex id:  union(lane(w1), lane(w2))
+  for each wire pin-vertex pv:                  attach pin pv→ lane(wire)
+
+  # 2. bus group snap (FR-042): bit i ↔ group pin bitMap[i]
+  for each bus B, each groupConnection gc on B:
+      for i, pinName in enumerate(gc.bitMap):   attach pin gc.instance.pinName → lane(B,i)
+
+  # 3. bus↔bus full junction (no bit index): align lanes by index
+  for each junction vertex V shared by buses B1,B2 with V.bit == null:
+      assert width(B1)==width(B2)               # guaranteed by FR-039a at edit time
+      for i in 0..w-1:                          union(lane(B1,i), lane(B2,i))
+
+  # 4. breakout (FR-043a): wire taps one bus bit via junction vertex with V.bit set
+  for each junction vertex V with V.bit == b shared by bus B and wire W:
+      union(lane(W), lane(B, b))
+
+  groups = connected components of uf
   nets = []
-  for each group containing ≥1 vertex with kind=="pin":
-      pins    = [V.ref+"."+V.pin for pin-vertices in group]
-      members = [W.id for wires whose path references any vertex in group]
-      nets.push({pins, members})
+  for each group with ≥1 attached pin:
+      pins       = [attached pins in group]
+      members    = [wire/bus ids whose lanes are in group]
+      provenance = [{bus, bit, name?} for bus-lanes in group]   # FR-060a
+      nets.push({pins, members, provenance, name: pickName(provenance)})
   ```
-  This uses **vertex ids only** — never pixel coordinates — satisfying FR-059a.
+  `pickName` prefers an explicit bus `bitNames[bit]` (FR-037b), else a connected
+  pin name, else null. This uses **ids and bit indices only** — never pixel
+  coordinates — satisfying FR-059a/FR-060a. (Future connector rule: union lanes of
+  `connector` vertices sharing a label.)
 - **Error handling:** operations validate references (e.g., moving a bend index
   that exists); invalid ops throw and are caught by the Store, which leaves state
   unchanged and surfaces a non-fatal toast.
@@ -559,7 +607,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
 ### 6.9 JS: interaction / tool FSM (`web/js/engine/interaction.js`, `hittest.js`)
 - **Purpose:** translate pointer/keyboard events into Commands; hit-testing.
-- **Satisfies:** FR-008–FR-010, FR-016–FR-019, FR-026–FR-034, FR-038–FR-043.
+- **Satisfies:** FR-008–FR-010, FR-016–FR-019, FR-026–FR-034, FR-038–FR-043a,
+  FR-039a.
 - **Tools / states:** `SELECT` (default, FR-004), `PLACE(type)` (transient, set by
   palette click), `WIRE`, `BUS`. The FSM also has transient sub-states for
   in-progress gestures (e.g., `WIRE_AWAIT_DEST`, `DRAGGING_BEND`,
@@ -581,6 +630,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | WIRE_AWAIT_DEST | click pin/segment | `AddWire(a,b)` (FR-027, FR-034a/b) | SELECT (FR-028) |
   | BUS | (same as WIRE) | `AddBus(...)` | SELECT (FR-040, A6) |
   | BUS | drag endpoint onto component | snap-connect (FR-041–043, §below) | SELECT |
+  | BUS | drag endpoint onto another bus | join if equal width; else **reject** (FR-039a) | SELECT |
+  | WIRE | click a bus segment | **breakout**: prompt/derive bit index, create `junction` vertex with `bit` set, begin 1-bit wire (FR-043a) | WIRE_AWAIT_DEST |
 
 - **Hit-testing (`hittest.js`):** in world space — components are rectangles
   (their rotated bounding outline); pins are points (tolerance ≈ ½ grid);
@@ -589,13 +640,25 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   segments take priority over component bodies when overlapping.
 - **Wire-mode cursor (FR-025):** while `WIRE`/`BUS` active, set a crosshair
   cursor and show a status hint; `SELECT` uses the default pointer.
-- **Bus snap-connect (FR-041–FR-043, A3):** on dropping a bus endpoint over a
-  component, compute the component's pin groups whose **summed member bit-width ==
-  bus width**; pick the first in MD order (A3). If found, create a `Bus` whose
-  endpoint is a group connection mapping bit *i* → group.pins[i] in order
-  (FR-042); store as `groupConnection` (§7.2). If none, attach the endpoint to the
-  **nearest pin** only (FR-043). *This feature may be deferred from the MVP per
-  the requirements; if deferred, the bus simply attaches to the nearest pin.*
+- **Bus snap-connect (FR-041–FR-043a, A3/A7):** on dropping a bus endpoint over a
+  component, compute the candidate pin groups whose **Σ member bit-width == bus
+  width**, then branch on the candidate count:
+  - **0 candidates** → attach the endpoint to the **nearest pin** only (FR-043).
+  - **1 candidate** → snap-connect automatically: store a `groupConnection`
+    mapping bit *i* → `group.pins[i]` (FR-041a/FR-042). If the bus has no
+    `bitNames`, adopt the group's member pin names (FR-037b).
+  - **≥2 candidates** → open the **disambiguation dialog** (§6.11), list groups by
+    name; on choose, snap as above; on cancel, leave the endpoint unconnected
+    (FR-041b).
+- **Breakout (FR-043a):** in WIRE mode, clicking a **bus** segment creates a
+  `junction` vertex on that bus with `bit` = the chosen lane (defaulting to the
+  bus's nearest bit; if the bus has `bitNames`, a small picker offers them) and
+  starts a single-bit wire from it. The lane union in §6.6 routes the wire into
+  exactly that bit's net.
+- **Width-mismatch guard (FR-039a):** a gesture that would join two buses of
+  unequal width is rejected at drop time with a non-fatal toast; no command is
+  dispatched. *Snap-connect, breakout, and bit-names may be deferred from the MVP
+  per requirements; the model and save format support them regardless (A7).*
 - **Error handling:** clicks on empty space in WIRE/BUS state are ignored (no
   partial wire). A gesture that would create a zero-endpoint wire is discarded
   (FR-030). Pressing `Esc` cancels an in-progress gesture, restoring SELECT.
@@ -648,12 +711,19 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     FR-053). **Fallback (FR-054):** if navigation is judged impractical, render a
     recent-files list persisted in `localStorage`. Keep the recent-files code
     ready behind the same dialog.
+  - *Bus group disambiguation (FR-041b)* — opened by snap-connect when **≥2** pin
+    groups match the bus width. Lists the candidate groups by name (e.g., `A`,
+    `B`, `Y` for a 16-bit ALU bus); the user picks one or cancels. Resolves a
+    promise the interaction FSM awaits before dispatching `snapBusGroup`. Does
+    **not** filter by pin direction (electrical-rule checking is out of scope this
+    phase — see §4.1, OQ-008/D2).
 - **Properties panel (`properties.js`)** — Satisfies FR-020a. Shows the selected
   instance's copied type data; editable fields (e.g., propagation delay) dispatch
   `SetOverride`. *(MVP-deferrable; the data model and `SetOverride` command exist
   regardless so the panel is purely additive — see §7.2 `overrides`.)*
-- **Context menu (`contextmenu.js`)** — Satisfies FR-033, FR-038. Right-click
-  surfaces "Delete bend point" (on a bend) and "Set bus width…" (on a bus).
+- **Context menu (`contextmenu.js`)** — Satisfies FR-033, FR-038, FR-037b.
+  Right-click surfaces "Delete bend point" (on a bend), "Set bus width…" and
+  "Name bus bits…" (on a bus, FR-037b).
 - **Dependencies:** store, api, geometry.
 
 ### 6.12 JS: API client & bootstrap (`web/js/api.js`, `web/js/app.js`)
@@ -719,6 +789,7 @@ connect **iff** they reference the same vertex id.
 | `kind` | enum | `pin` \| `junction` \| `free` (future: `connector`) |
 | `ref` | string? | `kind=pin` only: instance refdes, e.g. `"U3"` |
 | `pin` | string? | `kind=pin` only: pin name, e.g. `"Y0"` |
+| `bit` | int? | `kind=junction` on a **bus** only: the bit-lane this junction taps (FR-043a breakout). Absent/`null` = full join of all lanes (bus↔bus, FR-039a) |
 
 **Position authority differs by kind (deliberate):**
 - `kind=pin` → `x,y` is **derived** from `pinWorldPos(instance, pin)` and
@@ -781,12 +852,24 @@ another wire (FR-034b).
 |---|---|---|
 | `width` | int | bus width in bits (FR-037, FR-038) |
 | `groupConnections` | `GroupConnection[]` | snap-connect metadata (FR-042/FR-060) |
+| `bitNames` | string[]? | optional per-bit signal names, length = `width` (FR-037b/FR-060a); adopted from a group on first snap; `null`/absent = unnamed |
 
 `GroupConnection` anchors to the endpoint **vertex** rather than `"a"|"b"`:
 `{ "vertex": "v31", "instance": "U3", "group": "A", "bitMap": ["A0","A1","A2"] }`.
+Bit *i* of the bus ↔ `bitMap[i]` (FR-042). Breakout taps are **not** group
+connections — they are wires whose endpoint vertex is a `junction` on the bus with
+`bit` set (§7.1a, FR-043a).
 
-**`Net`** (derived, A4/FR-059a): `{ "pins": ["U3.Y0","U5.A1", …],
-"members": ["w12","b3", …] }`.
+**`Net`** (derived, A4/FR-059a/FR-060a) — one per electrical signal, so a width-*w*
+bus yields up to *w* nets:
+```jsonc
+{
+  "pins":       ["U3.Y0", "U5.A1"],          // attached component pins
+  "members":    ["w12", "b3"],               // wire/bus ids carrying this signal
+  "provenance": [ { "bus": "b3", "bit": 2, "name": "N" } ],  // bus-lane origin(s), FR-060a
+  "name":       "N"                          // resolved signal name, or null
+}
+```
 
 ### 7.3 Data lifecycle (CRUD)
 - **Create:** instances by placement (FR-008/009/011) — each pin a wire later
@@ -865,6 +948,8 @@ behavior: |                    ; opaque GALasm, preserved & ignored (FR-066)
 | Mutation path | Direct model edits from event handlers | **Single Command pipeline through the Store** | Makes undo/redo total and uniform (FR-024, NFR-006); one place to set the dirty flag (FR-049a); testable commands |
 | Net representation | Compute nets geometrically (intersections) at read time; store nets only; connection-by-name net labels | **Graph of `Vertex` nodes + union-find over vertex ids; `nets` stored as derived convenience** | FR-059a forbids pixel-geometry-dependent connectivity; id-based union-find is exact and pixel-free; storing nets aids downstream tools (A1/A4); net labels rejected by stakeholder |
 | Junction identity | (a) reference a point on a wire by coordinate; (b) junction endpoint stores *target wire id* + render-only coord; (c) split host wire into two records on branch | **First-class `Vertex` objects shared by id; a branched wire keeps one record with the junction as an interior `node` path-point** | Symmetric (no host/branch parent-child); deleting a wire just drops a vertex ref-count (eliminates the G2 special case); shared vertex holds the only position copy so junctions can't drift; preserves "the wire I drew" as one record for select/delete (FR-033a) and aligns with FR-031/033 in-place editing; cleanly absorbs the future off-sheet **connector** tool and edge-connector components as new vertex kinds |
+| Bus connectivity (N nets) | Treat a bus as one net; expand bits only in a downstream tool; per-bit explicit net objects | **Bit-lane union-find: a bus = `width` lanes `(busId,i)`; group snap binds bit i, bus↔bus joins lanes by index, breakout taps one lane** | A bus is genuinely *width* signals (FR-037a); lanes make wires, group snaps, bus joins, and breakout all the same union; subsumes the old "one net per bus" bug; provenance (`{bus,bit,name}`) serves downstream tools (FR-060a) |
+| Bus group-match tie | First group in MD order (silent) | **Auto-connect only on a single match; prompt to disambiguate on ≥2 (FR-041b)** | Silent guessing is wrong for chips with multiple equal-width groups (e.g., ALU A/B/Y); stakeholder confirmed → promoted to requirement; withdraws design-only assumption A3 |
 | Coordinate system | Store pixels; store mm | **Store integer grid units; derive pixels via viewport** | Everything snaps to grid by construction (FR-021); zoom/pan are pure view transforms; rotation by 90° preserves grid (§6.7) |
 | Rotation pivot | Rotate about component center | **Rotate pin offsets about the instance origin** | Guarantees rotated pins stay on integer grid intersections (FR-021) without half-grid artifacts |
 | File I/O location | Browser native file picker / downloads | **All FS access server-side via REST** | FR-053 requires server-assisted navigation; keeps a single trusted FS actor; localhost-only (NFR-001) |
@@ -942,9 +1027,14 @@ No files are modified (greenfield).
 | FR-031, FR-032, FR-033, FR-033a | §6.9, §6.10, §6.11 | `interaction.js`, `store.js`, `contextmenu.js` |
 | FR-034, FR-034a, FR-034b | §6.6, §6.9 | `model/netlist.js`, `interaction.js` |
 | FR-035, FR-036, FR-037 | §6.8, §6.11 | `canvas.js`, `toolbar.js` |
+| FR-037a | §6.6, §7.2, A7 | `model/netlist.js`, `types.go` |
+| FR-037b | §6.9, §6.11, §7.2 | `interaction.js`, `contextmenu.js`, `model/design.js` |
 | FR-038 | §6.9, §6.11 | `interaction.js`, `contextmenu.js` |
 | FR-039, FR-040 | §6.9 | `interaction.js` |
-| FR-041, FR-042, FR-043 | §6.9, §7.2 | `interaction.js`, `model/design.js` |
+| FR-039a | §6.9 | `interaction.js`, `hittest.js` |
+| FR-041, FR-041a, FR-041b | §6.9, §6.11, A3 | `interaction.js`, `dialogs.js` |
+| FR-042, FR-043 | §6.9, §7.2 | `interaction.js`, `model/design.js` |
+| FR-043a | §6.6, §6.9, §7.1a | `interaction.js`, `model/design.js`, `model/netlist.js` |
 | FR-044, FR-045 | §6.10, §6.12 | `store.js`, `app.js` |
 | FR-046, FR-047, FR-048, FR-049 | §6.5, §6.11 | `storage.go`, `dialogs.js` |
 | FR-049a | §6.10, §6.11 | `store.js`, `dialogs.js` |
@@ -953,6 +1043,7 @@ No files are modified (greenfield).
 | FR-055, FR-056 | §7.2 | `types.go`, `model/design.js` |
 | FR-057, FR-058 | §7.2 | `types.go`, `model/design.js`, `properties.js` |
 | FR-059, FR-059a, FR-060 | §6.6, §7.2 | `model/netlist.js`, `types.go` |
+| FR-060a | §6.6, §7.2, A7 | `model/netlist.js`, `types.go` |
 | FR-061…FR-064 | §6.3, §7.1, §7.6 | `mdparse.go`, `types.go` |
 | FR-065 | §6.4 | `api.go` |
 | FR-066 | §6.3, §7.1 | `mdparse.go` |
@@ -983,7 +1074,11 @@ snap FR-041–043) are fully designed so they are additive when implemented.
 - **Go `paths`:** `AppDataDir` returns the correct path per `GOOS` (OQ-006).
 - **JS `geometry`:** rotation table maps integer offsets to integer offsets for
   all four angles; round-trip world↔screen; snap-to-grid (FR-021, FR-020).
-- **JS `netlist.buildNets`:** see edge cases below (FR-034b/FR-059a).
+- **JS `netlist.buildNets`:** see edge cases below (FR-034b/FR-059a/FR-037a). A
+  width-8 bus snapped to an 8-pin group yields **8** nets, one per bit, with
+  correct `provenance` (FR-037a/FR-060a); a breakout wire joins exactly its bit's
+  net (FR-043a); two equal-width buses joined at a no-`bit` junction align lanes by
+  index (FR-039a).
 - **JS `store`:** every command's `apply`∘`revert` restores prior state; undo
   stack honors `UNDO_CAP ≥ 50` (NFR-006); redo cleared on new dispatch.
 
@@ -997,8 +1092,16 @@ snap FR-041–043) are fully designed so they are additive when implemented.
 - Move a component; connected segments stretch (FR-018).
 - Bus: thick blue, `/n` annotation, right-click width, snap to a matching pin
   group, fallback to nearest pin (FR-035–FR-043).
+- Bus disambiguation: snap a 16-bit bus to an ALU with three 16-bit groups (A/B/Y)
+  → dialog lists all three by name; pick `B` → connects to B; cancel → unconnected
+  (FR-041b). Snap a 4-bit bus to the same ALU → flags group auto-connects, no
+  dialog (FR-041a), and the bus adopts names C/V/N/Z (FR-037b).
+- Breakout: rip one bit off a bus into a single wire to a pin; verify only that
+  bit's net includes the pin (FR-043a). Attempt to join a 16-bit bus to a 4-bit
+  bus → rejected at drop with a toast (FR-039a).
 - Save (first-time prompt, prefilled name) → overwrite silently → Save As → Open
-  via navigation; round-trip equality of the model (FR-044–FR-060).
+  via navigation; round-trip equality of the model, including `bitNames`,
+  breakout taps, and `nets` provenance (FR-044–FR-060a).
 
 ### 11.3 Edge / boundary cases
 - Delete a component → connected wires keep one dangling end (FR-029); wires with
@@ -1008,7 +1111,10 @@ snap FR-041–043) are fully designed so they are additive when implemented.
 - Junction chain A→B→C: all three wires + their pins are one net, computed from
   ids only — moving any vertex does not change the net (FR-059a).
 - Bus width with a pin group whose summed bit-width matches via multi-bit pins
-  (A3); width tie → first declared group chosen.
+  (A3); width tie (≥2 matching groups) → disambiguation dialog, not a silent pick
+  (FR-041b).
+- Bus-to-bus chain bit alignment: bit 3 at one end equals bit 3 at the other; a
+  breakout off bit 3 anywhere along the chain lands in that same net (FR-037a/043a).
 - Undo across a delete-that-pruned-wires restores every pruned wire and junction.
 - Zoom at min/max bounds (0.25×/4.0×); pan far from origin keeps grid crisp.
 
@@ -1029,9 +1135,12 @@ only the noted slices.
   proceed against the `ComponentType` contract (§7.1) and can be exercised with a
   hand-written stub library. *Do not finalize the parser until the format session
   concludes.*
-- **A3 — Pin-group "width" semantics & tie-break.** This design assumes width =
-  Σ member pin bit-widths and "first declared on tie." Confirm when the MD format
-  is designed (ties also affect FR-041). Gates **bus snap-connect** only.
+- **A3 — Pin-group "width" semantics & tie-break — RESOLVED.** Width = Σ member
+  pin bit-widths; on a tie the user is **prompted** (no silent pick). This was
+  confirmed with the stakeholder and **promoted to requirements** (FR-041/041a/
+  041b); it is no longer an open question. Bus snap, breakout, and bus bit-names
+  (FR-037b/043a) are MVP-deferrable but fully designed (A7) and the save format
+  accommodates them now (FR-060a).
 - **OQ-007 / A1 — Junction representation.** Resolved to a **graph of first-class
   `Vertex` objects shared by id** (§7.1a), chosen with the stakeholder in light of
   the planned off-sheet **connector tool** (and possible edge-connector

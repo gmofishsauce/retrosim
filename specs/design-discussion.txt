@@ -1,0 +1,877 @@
+================================================================================
+DESIGN DISCUSSION LOG — TTL Circuit Design Editor
+================================================================================
+This file is a verbatim capture of an interactive design-review conversation
+between the project author and Claude (acting as software architect) about
+sim/specs/design.md.
+
+It records the *reasoning* behind design changes that were subsequently folded
+into design.md (and, where they changed observable behavior, back into
+requirements.md):
+
+  1. Connectivity model — replacing the edge-centric "wire with two endpoints +
+     junction-references-target-wire" scheme with a first-class Vertex graph
+     ("Model A"). See design.md §3.1/§3.3, §6.6, §7.1a, §8.
+
+  2. (Continued in later sessions, not all captured here) buses-as-N-nets,
+     single-bit breakout, and bus snap-group disambiguation. See design.md A7,
+     §6.6, §7.2 and requirements.md FR-037a/b, FR-039a, FR-041a/b, FR-043a,
+     FR-060a.
+
+Kept as rationale/history only — design.md and requirements.md remain the
+authoritative specs. The transcript below is lightly reformatted from the
+terminal session; some tool output and edit steps are elided.
+================================================================================
+
+❯ hi Claude I want to discuss the design document "design.md" in this folder
+  /Users/jeff/go/src/github.com/gmofishsauce/wut4/sim/specs. You should read
+  the entire document. My first question is about wires versus nets. There is a 
+  premise that wires have exactly two endpoints. Discussion question: Is there    another way this could have been done?                                        
+  
+⏺ I'll read the design document first.
+
+  Read 1 file, listed 1 directory (ctrl+o to expand)
+
+⏺ Good question to start with, because the "a wire has exactly two endpoints"
+  premise is doing more work in this design than it first appears, and it's a
+  genuinely independent decision from the requirements.
+
+  First, let me be precise about what the current design actually commits to,
+  since it's easy to conflate two separate things:
+
+  1. The electrical model is already net-based and id-based. FR-034b/FR-059a
+  require that nets be derivable without pixel geometry, and §6.6 satisfies that
+  with union-find over pin:* and wire:* ids. So connectivity correctness does
+  not depend on the two-endpoint rule.
+  2. The two-endpoint rule is a separate, geometric/record-shape choice. A
+  "wire" here is a polyline (it has bends) but topologically an edge with
+  exactly two endpoints a and b. Fan-out is pushed onto two mechanisms (A2):
+  multiple wires sharing a pin endpoint, and a junction endpoint where one
+  wire's endpoint references another wire's id.
+
+  So your real question is: was edge-with-two-endpoints +
+  junction-references-target-wire the best way to represent topology? There are
+  at least three alternatives, and I think one of them is cleaner.
+  
+  Alternative A — Node-centric graph (explicit vertices)
+
+  Make vertices first-class objects with ids. A vertex is one of: pin-anchor
+  (U3.Y0), junction, or free/dangling point. A wire segment is just an edge
+  {vertexA, vertexB}. Bends are degree-2 vertices (or stay as interior polyline
+  points); junctions and fan-out are simply vertices of degree ≥ 3.
+
+  - Net derivation becomes the natural connected-components of the graph —
+  arguably even simpler than the current union-find, because a shared vertex id
+  directly encodes a connection. No "endpoint kind" switch.
+  - The G2 problem disappears. In the current design (§3.3) deleting a wire
+  orphans every other wire whose junction endpoint referenced it, forcing the
+  "retarget junction → free" cleanup. That's a symptom of asymmetry: a junction
+  is modeled as "wire X's endpoint lands on wire Y," giving Y a parent-ish role
+  over X. With shared vertices there's no target wire — deleting an edge just
+  removes an edge; the shared vertex survives if anything else touches it, or
+  gets swept if not.
+  - It also fixes a latent visual bug. Today a junction stores a render-only
+  coordinate "on" wire Y. If Y is later reshaped (a bend dragged), that
+  coordinate can drift off Y's actual geometry while staying electrically
+  connected. A shared vertex can't float off, because both segments are defined
+  by it.
+  - Cost: more objects and referential-integrity bookkeeping (no dangling vertex
+  refs), and "branch from a wire" becomes "split the target edge at a new
+  vertex, reuse it" rather than "store a coordinate + target id."
+
+  This is the textbook schematic-as-planar-graph representation, and I think
+  it's strictly better on the connectivity axis. The current design is
+  essentially an edge-centric encoding of the same graph that keeps vertices
+  implicit — which is why it needs the junction-by-wire-id indirection and the
+  G2 special case.
+
+  Alternative B — Net-centric (nets authoritative, wires cosmetic)
+
+  Make nets the stored primary object: pins carry a netId, and wires become
+  purely graphical polylines tagged with a netId. This is how real EDA tools
+  work (it's what enables net labels — two wires on the same net that don't
+  visually touch).
+
+  - Pro: FR-059a is trivially satisfied because connectivity is stored, not
+  derived; downstream tools read nets directly.
+  - Con: you move the union-find work from save-time to edit-time. Connecting
+  two wires must merge two nets (and pick a surviving id); deleting a wire may
+  split a net (recompute). That's more complex interaction code than the
+  requirements ask for, and it permits geometry/electrical disagreement (a
+  feature for net-labels, a footgun otherwise). For this phase it's probably
+  over-built.
+
+  Alternative C — Hyperedge wire (one wire = one whole net-fragment)
+
+  Let a single wire be a tree/polyline with N endpoints, so one wire object is a
+  connected sub-net. Fan-out is intrinsic; no junction-to-other-wire concept at
+  all.
+  
+  - Pro: no junction indirection; drawing a branch just extends the same wire.
+  - Con: the record stops being a simple two-point edge,
+  hit-testing/bend-editing on an N-ary tree is fiddlier, and you still need
+  pin-sharing to union two separate wires — so you don't fully escape union-find
+  anyway.
+  
+  My read
+
+  The current choice is defensible and minimal, and it does satisfy the
+  requirements. But the one wart it carries — the junction asymmetry that forces
+  G2 and the "render-only coordinate that can drift" — is exactly the thing
+  Alternative A removes for a modest cost. If I were to change one thing, it
+  would be to keep two-endpoint segments but make a junction reference a shared
+  vertex id instead of a target wire id. That's the smallest move that converts
+  the design from edge-centric-with-implicit-vertices to a clean graph, and it
+  deletes a special case rather than adding machinery.
+
+  A couple of things worth your view, since this is the discussion:
+
+  - Do you anticipate ever wanting net labels / virtual connections (signals
+  connected by name, not by drawn wire)? If yes, that pulls toward Alternative B
+  and is worth deciding now, because it's expensive to retrofit. If no, A is
+  the sweet spot.
+  - How attached are you to the junction's "point along a wire" semantics — is a
+  junction conceptually on a particular wire, or just a shared point where
+  things meet? The current doc implies the former; A assumes the latter.
+
+✻ Crunched for 1m 13s
+
+※ recap: We're reviewing design.md for the TTL circuit editor, currently 
+  discussing whether wires should have exactly two endpoints. I laid out three 
+  alternatives and recommended a node-centric graph with shared vertex ids. 
+  Next: hear your view on net labels and junction semantics. (disable recaps in 
+  /config)
+
+❯ I don't prefer connection-by-name. In the future I would prefer to implement  
+  a "connector tool". This would appear in the schematic as a large circle with 
+  a symbol in it like "A6". It would allow termination of a wire and would      
+  connect to a similar symbol on a different sheet that would originate the     
+  continuing net. Alternatively, one could imagine connector components (e.g.   
+  edge connectors) that would function in a similar way. This viewpoint is      
+  supportive of changing over to your alternative "A", correct?                 
+  
+⏺ Yes — supportive, and let me be precise about why, because the connector tool
+  sharpens the argument in a way that's worth getting exactly right.
+
+  The connector is, in essence, a named electrical node with identity. A wire
+  terminates at it, and its electrical meaning is "this point is the same net as
+  the matching A6 on another sheet." That's three properties: it's a vertex, it
+  has a stable identity/label, and it participates in net derivation by
+  identity rather than by physical adjacency. Alternative A's whole premise is
+  "electrical nodes are first-class objects with ids." So a connector drops in
+  as just another vertex type, and cross-sheet linkage becomes one more union
+  rule in buildNets: union all connector vertices that share a label. That sits
+  right alongside the rules you already have (union pin↔segment, union
+  segment↔segment-at-shared-vertex).
+
+  Now the honest qualifier, so you're not over-weighting this one data point:
+
+  - A connector by itself doesn't stress the two-endpoint rule. It's a degree-1 
+  terminator — a wire ends there. The edge-centric model could absorb it too,
+  just by adding kind: "connector" to the Endpoint union. So the connector alone
+  isn't a knockout argument for A; the knockout argument remains the junction 
+  asymmetry (G2) and the drift-prone render coordinate.
+  - What the connector adds is a trend, and the trend is the real signal. You've
+  now named a sequence of features that are all "named electrical nodes with
+  identity": junctions today, off-sheet connectors next, and you floated
+  edge-connector components after that. In Alternative A each of these is the 
+  same concept — a vertex with a type and maybe a label — so each lands as a
+  small, uniform addition: one vertex type + one union rule. In the edge-centric
+  model each one is a new special case accreting onto the Endpoint union, and
+  it lands next to the junction kind that's already the source of G2. So the
+  connector roadmap is evidence that "node with identity" wants to be a
+  first-class concept, which is exactly what A makes it. That's the supportive
+  part.
+
+  Two things worth flagging before you commit, though, because the connector
+  pulls in scope the current design doesn't have:
+
+  1. It's a controlled re-introduction of connection-by-identity. You said no
+  invisible net labels, and that still holds — but the connector is
+  connection-by-name; it's just visible and explicit (a drawn symbol with A6 in
+  it). That distinction is exactly the right line to draw, and it's worth
+  recording so a future reader doesn't think the two positions contradict. The
+  netlist will eventually union two vertices that are nowhere near each other
+  geometrically, on the basis of a shared label. A handles that cleanly; just
+  know you're signing up for it.
+  2. Connectors imply a sheet concept that the design doesn't have yet. Today
+  there's one design = one canvas. "Continue the net on a different sheet" needs
+  a document container holding multiple sheets, label scoping (is A6 unique per
+  design or per sheet-pair?), and netlist unioning across sheets. That's
+  orthogonal to the wire-topology decision, but it's the bigger structural
+  change lurking behind the connector tool. Switching to A now doesn't cost you
+  anything here, and it makes the eventual cross-sheet union trivial — but I'd
+  note "multi-sheet" as a future structural item separate from the topology
+  change, so the two don't get conflated.
+
+  So: convert junctions to shared-vertex identity (Alternative A) now, and treat
+  connectors and multi-sheet as future vertex-type + container additions that A
+  is specifically shaped to absorb. Do you want me to work through what A does
+  to the §7 data model concretely — i.e., what the Vertex record looks like and
+  how Wire, Endpoint, and buildNets change — so we can see the actual edit
+  before deciding to fold it into design.md?
+
+✻ Sautéed for 47s
+
+❯ Yes, show me the concrete §7 data model changes for A                         
+
+⏺ Here's the concrete edit. I'll show it as a replacement for the affected parts
+  of §7 (and the §6.6 ripple), in the same table/JSONC style as the doc so it
+  can be folded in directly.
+
+  New: §7.1a Vertex (the first-class electrical node)
+
+  This is the whole point of A — every place a net can be joined becomes an
+  object with an id.
+
+  ┌───────┬─────────┬──────────────────────────────────────────────────┐
+  │ Field │  Type   │                      Notes                       │
+  ├───────┼─────────┼──────────────────────────────────────────────────┤
+  │ id    │ string  │ e.g. "v17"; stable; this is what wires reference │
+  ├───────┼─────────┼──────────────────────────────────────────────────┤
+  │ x, y  │ int     │ grid coords of the node                          │
+  ├───────┼─────────┼──────────────────────────────────────────────────┤
+  │ kind  │ enum    │ pin | junction | free (future: connector)        │
+  ├───────┼─────────┼──────────────────────────────────────────────────┤
+  │ ref   │ string? │ kind=pin only: instance refdes, e.g. "U3"        │
+  ├───────┼─────────┼──────────────────────────────────────────────────┤
+  │ pin   │ string? │ kind=pin only: pin name, e.g. "Y0"               │
+  └───────┴─────────┴──────────────────────────────────────────────────┘
+
+  Position authority differs by kind, and this is deliberate:
+  - kind=pin → x,y is derived from pinWorldPos(instance, pin) and recomputed
+  whenever the instance moves or rotates.
+  - kind=junction / free → x,y is authoritative (the user dragged it there).
+  
+  Notice what this buys you for free: FR-018 (wires stretch when a component 
+  moves) is no longer special logic. Wires reference the pin vertex; the pin
+  vertex follows the instance; the wire follows the vertex. The "stretch
+  connected segments" command basically evaporates.
+  
+  Replace: §7.2 Endpoint and Wire
+
+  The tagged-union Endpoint (pin / junction / free) goes away. Endpoints are now
+  just references to vertices, and a wire becomes an ordered path so an
+  interior point can be a junction without the old target-wire-id indirection.
+  
+  // PathPoint — a wire's path is an ordered list of these, length >= 2.
+  // The FIRST and LAST must be "node" points; interior points are usually
+  "bend".
+  { "t": "node", "v": "v17" }              // an electrical node
+  (pin/junction/free/connector)
+  { "t": "bend", "x": 40, "y": 16 }        // geometry only; nothing connects
+  here
+
+  Wire (replaces the old id/a/b/bends):
+  
+  ┌───────┬─────────────┬───────────────────────────────────────────┐
+  │ Field │    Type     │                   Notes                   │
+  ├───────┼─────────────┼───────────────────────────────────────────┤
+  │ id    │ string      │ "w12"                                     │
+  ├───────┼─────────────┼───────────────────────────────────────────┤
+  │ path  │ PathPoint[] │ ordered, length ≥ 2; ends are node points │
+  └───────┴─────────────┴───────────────────────────────────────────┘
+
+  Bus = Wire plus:
+  
+  ┌──────────────────┬───────────────────┬───────────────────────┐
+  │      Field       │       Type        │         Notes         │
+  ├──────────────────┼───────────────────┼───────────────────────┤
+  │ width            │ int               │ bits (FR-037/FR-038)  │
+  ├──────────────────┼───────────────────┼───────────────────────┤
+  │ groupConnections │ GroupConnection[] │ snap-connect metadata │
+  └──────────────────┴───────────────────┴───────────────────────┘
+
+  GroupConnection now anchors to a vertex instead of "a"|"b":
+  { "vertex": "v31", "instance": "U3", "group": "A", "bitMap": ["A0","A1","A2"] 
+  }.
+
+  Net (derived) — shape unchanged: { "pins": ["U3.Y0", …], "members": 
+  ["w12","b3", …] }.
+
+  Replace: §6.6 buildNets
+
+  This gets simpler — no per-endpoint kind switch, no pin:/wire: node-naming
+  scheme:
+
+  uf = UnionFind()
+  for each vertex V:           add node V.id
+  for each wire/bus W:
+      nodes = [p.v for p in W.path if p.t == "node"]
+      union all of nodes together          # one wire is electrically one
+  node-set
+  # shared vertex ids across two wires auto-union those wires — no junction
+  indirection
+  # (future connector rule: union all vertices with kind=connector that share a
+  label)
+  groups = connected components over vertex ids
+  for each group containing ≥1 vertex with kind=="pin":
+      net.pins    = [v.ref + "." + v.pin  for pin-vertices in group]
+      net.members = [W.id for wires whose path references any vertex in group]
+
+  Still ids-only, still pixel-free (FR-059a) — but the union over a shared 
+  vertex id is exactly the connection, so there's no "endpoint kind" dispatch
+  and no target-wire bookkeeping.
+  
+  Ripple into §7.3 (lifecycle) — this is where G2 dies
+
+  Operation: Move/rotate component
+  Old (edge-centric): MoveComponent explicitly re-points connected segments
+    (FR-018)
+  New (A): Recompute pin-vertex x,y; wires follow automatically
+  ────────────────────────────────────────      
+  Operation: Delete wire (FR-033a)
+  Old (edge-centric): retarget every other wire's junction-by-id to free at a
+    coord (G2 special case)
+  New (A): Remove wire; for each junction vertex it referenced, drop its
+    ref-count: now-1 → demote to free; now-0 → delete vertex. No retargeting, no
+
+    coordinate copying
+  ────────────────────────────────────────
+  Operation: Delete component (FR-018a)
+  Old (edge-centric): endpoints referencing it become dangling
+  New (A): Its pin vertices convert to kind=free at last position; then FR-030
+    sweep
+  ────────────────────────────────────────
+  Operation: FR-030 sweep
+  Old (edge-centric): wire with no connected endpoints removed
+  New (A): wire whose node-vertices are all free is removed
+  ────────────────────────────────────────
+  Operation: Branch (FR-034)
+  Old (edge-centric): new wire gets a junction endpoint storing target wire id +
+
+    render coord
+  New (A): create a junction vertex at the point; if it lands on an interior
+    bend, flip that bend PathPoint to a node; the new wire's end references the
+    same vertex id
+  ────────────────────────────────────────
+  Operation: Insert/delete bend (FR-031/033)
+  Old (edge-centric): edit bends[]
+  New (A): insert/remove a bend PathPoint
+  
+  The drift bug is also gone: the junction's position lives in one place (the
+  vertex), and both the host wire's path and the branch wire's endpoint
+  reference that one id, so they can't disagree.
+  
+  Ripple into §7.4 (migration)
+
+  Greenfield — nothing has shipped, so there's no runtime migration to write;
+  you just define formatVersion: 1 against this model. The only place the old
+  shape exists is the strawman in §7.6, so for the record the conceptual map is:
+  old pin endpoint → pin vertex; old free → free vertex; old
+  junction{target,x,y} → a junction vertex at (x,y) inserted into the target
+  wire's path, with the branch wire's end pointing at it.
+
+  ---
+  One genuine fork I want to surface rather than silently bake in, because it's
+  a behavioral choice, not just a representation one:
+  
+  When the user branches off the middle of an existing wire (FR-034), do you 
+  want the host wire to stay one record (the path[]-with-interior-node model 
+  above), or split into two records that meet at the junction vertex? Both give
+  you shared-vertex identity and kill G2. The path[] model I showed keeps "the
+  wire I drew" as one object — which matches FR-031/FR-033's in-place "edit this
+  polyline" semantics better, and makes FR-033a "delete this wire" delete the
+  whole run. Split-on-branch is marginally simpler in the record (bends stay
+  pure geometry, every electrical node is an endpoint) but turns one drawn wire
+  into several records, which can surprise on select/delete. I went with path[]
+  above for that reason.
+
+────────────────────────────────────────────────────────────────────────────────
+←  ☐ Branch model  ☐ Next step  ✔ Submit  →
+
+For FR-034 branching under model A, which wire-record granularity do you want?
+
+❯ 1. path[] keeps one wire        ┌────────────────────────────────────────────┐
+  2. split on branch              │ Wire {                                     │
+                                  ├─── ✂ ─── 9 lines hidden ───────────────────┤
+                                  └────────────────────────────────────────────┘
+
+                                  Notes: press n to add notes
+
+────────────────────────────────────────────────────────────────────────────────
+  Chat about this
+
+Enter to select · ↑/↓ to navigate · n to add notes · Tab to switch questions ·
+Esc to cancel
+
+[edits elided]
+
+Let me verify no stale references to the old endpoint model remain:
+
+  Searched for 3 patterns (ctrl+o to expand)
+
+⏺ Done. Model A is folded into design.md. Here's what changed and where:
+
+  New structure
+  - §7.1a Vertex (new subsection) — first-class electrical node with id, x/y,
+  kind (pin|junction|free, future connector), and ref/pin for pin-anchors.
+  Documents the position-authority split: pin vertices derive position from the
+  instance (so FR-018 stretch is free), junction/free are authoritative.
+  - §7.2 — Endpoint union replaced by PathPoint (node→vertex id, or bend→coord);
+  Wire is now {id, path[]} with the two ends as node points;
+  Bus.groupConnections anchor to a vertex id; Design JSON gains a vertices
+  collection.
+
+  Behavioral/consistency updates
+
+  - §6.6 — buildNets rewritten as union-find over vertex ids (one wire unions
+  updated (branchWire, deleteWire ref-count demotion, deleteInstance pin→free).
+  - §3.1 A1/A2 — rewritten for the graph/vertex model; A2 keeps "exactly two
+  endpoints" via path-ends, fan-out via shared vertices.
+  - §3.3 G2 — the special case is now dissolved: deletion just decrements a
+  junction vertex's ref-count (demote to free at 1, delete at 0).
+  - §6.9 — branch FSM row and hit-testing updated for junction vertices.
+  - §6.10 — DeleteComponent revert now captures vertex conversions/demotions.
+  - §7.3 / §7.4 / §7.5 — lifecycle, migration (no runtime migration needed —
+  greenfield, vertex model is v1), and in-memory indexes (nextVertexId, vertex
+  map, ref-counts).
+  - §8 — junction-identity and net-representation decision rows rewritten to
+  record the vertex choice and its rationale (incl. the connector/edge-connector
+  forward-looking argument and the rejection of net labels).
+  - §12 OQ-007 — resolution updated to the vertex model, with a note that the
+  connector tool implies a future multi-sheet container (orthogonal, tracked as
+  future scope).
+  - §9 — types.go struct list now names Vertex/Wire/Bus/PathPoint.
+
+  One deliberate non-change: §2 FR-059's restatement (line 166) still uses the
+  analyst's "two endpoint references… (a) pin (b) junction (c) free" wording.
+  That's the requirement itself, and the vertex model satisfies it — so I left
+  the requirement text authoritative rather than rewriting it to match the
+  implementation.
+
+  Nothing in §11 needed edits — the netlist/junction-chain/G2 test cases were
+  already phrased in terms of vertices and ids.
+
+  Want me to do a similar pass on the bus-as-N-nets question next (a
+  snap-connected bus is really width separate nets, which §6.6/§7.2 currently
+  gloss), or commit this first?
+
+✻ Sautéed for 6m 9s
+
+
+I pushed it. Let's discuss the bus-as-N-nets question now
+
+⏺ Good — this is the one place the current §6.6/§7.2 quietly cheats, so let's
+  pin it down.
+
+  The core problem
+
+  A bus is not one net. An 8-bit DATA bus is 8 independent nets that happen to
+  be drawn as one thick line for tidiness. But the current buildNets (even after
+  the vertex rewrite) unions all of a bus's path vertices into a single
+  connected component — so it would emit one net per bus instead of width nets.
+  That's silently wrong, and since §7.2 advertises nets as a derived convenience
+  for the downstream simulator/transpiler (A4), shipping a wrong nets array is
+  worse than shipping none.
+
+  What's actually already right
+
+  Here's the good news: the data model already stores everything needed for
+  per-bit nets. Bus.width gives the bit count, and each groupConnection carries
+  bitMap — an ordered list of component pins. The ordering is the bit binding:
+  bus bit i ↔ bitMap[i]. That's exactly FR-042 ("auto-connect each bit to the
+  corresponding pin in declared order"). So the fix is almost entirely in the
+  algorithm, not the schema.
+
+  The fix: two-level netlist (graphical group, then bit expansion)
+
+  Keep the vertex union-find for graphical connectivity, then layer bit-indexed
+  nets on top:
+
+  # Step A — graphical groups (unchanged): which edges are physically joined
+  guf = UnionFind(vertex ids)
+  for each edge E in wires ∪ buses: union all node-vertices in E.path
+  # → group(E): buses joined at a shared junction vertex land in one group
+
+  # Step B — width per group + homogeneity check
+  for each graphical group G:
+      widths = { width(E) : edges E in G }      # wire = 1, bus = bus.width
+      if |widths| > 1: FLAG "mixed-width connection"   # see decision Q3
+      w(G) = the single width
+
+  # Step C — per-bit nets, keyed (group, bitIndex)
+  net[(G,i)] = { pins:set, members:set }
+  for each edge E with group G:
+      for i in 0..w(G)-1: net[(G,i)].members += E.id
+      if E is a 1-bit wire:
+          for each pin-vertex pv on E: net[(G,0)].pins += "U_.pin"
+      if E is a bus:
+          for each groupConnection gc on E:
+              for i, pinName in enumerate(gc.bitMap):
+                  net[(G,i)].pins += gc.instance + "." + pinName
+  emit every net[(G,i)] whose pins is non-empty
+
+  This falls out cleanly:
+  - Plain wire → w=1, one net per group: identical to today's behavior.
+  - Bus → w nets per group, pins joined by bit index.
+  - Bus-to-bus junction → both buses in one group, so bit i of each lands in
+  net[(G,i)]: bit-aligned join, automatically. The vertex graph you already
+  built does the alignment work.
+
+  The one new invariant is Step B's homogeneity check: every edge in a graphical
+  group must have the same width. That's what catches "an 8-bit bus joined to a
+  4-bit bus" or "a plain wire spliced into a bus."
+
+  Three things this surfaces that need your call
+
+  Q1 — Do we compute bus nets in this phase at all? Either fix buildNets to
+  expand bits as above (correct, ~30 lines), or explicitly scope it so nets
+  covers only wires this phase and document that bus nets are the downstream
+  tool's job. I strongly prefer fixing it now — the model already holds the
+  data, the algorithm is small, and a half-correct nets array is a trap for the
+  next phase.
+
+  Q2 — Single-bit bus tap (a "bus rip"). This is the real gap. Today you can
+  connect a whole pin group to a bus (FR-041/042) or fall back to one nearest
+  pin (FR-043), but there's no way to pull one ordinary wire off bit 3 of a bus
+  and run it to a single pin. Real schematics do this constantly. The
+  requirements don't mention it, so it's arguably out of scope — but a bus you
+  can't tap individual bits from is half-useful, and supporting it later means
+  giving a junction vertex an optional bit index (so a 1-bit wire can attach to
+  "bus b3, bit 3"), which also relaxes the Step B homogeneity rule. Worth
+  deciding now whether to design the hook or explicitly defer it.
+
+  Q3 — Width-mismatch handling. When Step B finds a mixed-width group, what's
+  the behavior — refuse the connection at interaction time (UI prevents it), or
+  allow it and emit a flagged/partial net? I lean "prevent at interaction time,
+  and have buildNets treat any mismatch it still sees as a skipped net with a
+  logged warning" (defense in depth).
+
+  One smaller schema question rides along: should each emitted Net carry
+  provenance — e.g., {bus:"b3", bit:3, name:"DATA3"} — so the downstream
+  transpiler can label signals, or stay a bare {pins, members}? Cheap to add,
+  genuinely useful downstream, but not required by anything yet.
+
+  Want me to get your answers on Q1–Q3 (and provenance) and then fold the
+  resolution into §3 (a new ambiguity entry), §6.6, and §7.2?
+
+✻ Crunched for 2m 6s
+
+❯ For Q1, yes, let's fix it - these bus connections are an important feature
+  and I want to make sure this is all correct. Q2, Yes, the UI will need a
+  "breakout single signal" capability and the model will need to fully
+  accommodate it. Q3, yes "prevent at interaction time". Finally yes, bits in a
+  bus will require provenance. Here is a complex example  of something I
+  anticipate: there is a 16-bit ALU chip that I hope will have four separate
+  buses: two 16-bit data input buses, a 16-bit data output bus, and a 4-bit
+  output flags bus with signals called C, V, N, and Z. These potential bus
+  connections would all be described in the component's .md file. When the user
+  attempt to snap a bus to this component, if it is a 4-bit bus it will snap
+  to the output control signals (flags) because only that bus matches width. If
+  it is a 16-bit bus, the UI will pop a dialogue when the connection is
+  completed and ask the user whether this 16 bit bus should connect to 16-bit
+  input A, input B, or the output bus. Does this vision seem too ambitious or
+  is it possible?
+
+⏺ Not too ambitious — it's a natural, well-bounded extension, and most of it is
+  already in the model. Let me separate what's free, what's a small change, and
+  what's genuinely new, then show how it reshapes the net algorithm (because
+  your example actually makes the algorithm cleaner, not harder).
+
+  Your ALU example, checked against the model
+
+  - Four buses on one chip = four PinGroups in the .md: A(16), B(16), Y(16),
+  FLAGS(4) with members e.g. [C,V,N,Z]. ComponentType.pinGroups is already a
+  list, so multiple groups — even multiple of the same width — are already
+  supported. Free.
+  - 4-bit bus → flags automatically = exactly one width-match candidate →
+  auto-connect, no dialog. Free (it's just the "1 candidate" path).
+  - 16-bit bus → pick A / B / Y = three width-match candidates → prompt. This is
+  the one real change to a decision already in the doc: assumption A3 currently
+  says "on a width tie, pick the first group in MD declaration order." Your
+  vision replaces that silent guess with a disambiguation dialog. That's
+  strictly better and removes A3's footgun. So the snap-match rule becomes:
+
+  | width-matching groups | behavior
+                                    |
+  |-----------------------|-----------------------------------------------------
+  -----------------------------------|
+  | 0                     | FR-043 fallback (nearest pin) — or offer breakout
+                                    |
+  | 1                     | auto-connect (the flags case)
+                                    |
+  | ≥2                    | disambiguation dialog, list candidates by name; user
+  picks or cancels (the A/B/Y case) |
+
+  - The dialog is one new modal in dialogs.js, structurally identical to the
+  ones already specced. Not hard.
+
+  What this adds: named bits (provenance) and breakout, unified
+
+  Your flags bus carries named signals (C/V/N/Z), and you want breakout. Those
+  two pull in the same small set of additions, and they make me revise the net
+  algorithm from "expand bus into bits" to the fully-general bit-lane form:
+
+  Treat every conductor as a lane:
+  - a plain wire = 1 lane;
+  - a bus of width w = lanes (busId, 0…w-1).
+
+  Then ordinary union-find over lanes:
+  for each wire pin-end:            lane(wire) gets that pin
+  for each two wires sharing a vertex:        union their lanes
+  for each bus groupConnection (bit i ↔ pin): lane(bus,i) gets that pin
+  for each bus↔bus full junction (equal width): for i: union lane(A,i),
+  lane(B,i)
+  for each WIRE TAP on bus bit b:             union lane(wire), lane(bus,b)   #
+  breakout
+  net = each connected lane-group with ≥1 pin
+  This subsumes everything: plain wires, whole-bus snaps, bus-to-bus joins, and
+  single-bit breakout — all as lane unions. The earlier "homogeneity check"
+  stops being a special case: a wire tapping a bus is fine because it joins one
+  lane, not the whole width; only a full bus↔bus junction requires equal width
+  (enforced at interaction time per your Q3).
+
+  Model additions to support it (small):
+  - Vertex: a junction vertex gains an optional bit field. No bit → full join
+  (bus-to-bus, all lanes). bit set → single-bit tap (the breakout hook from Q2).
+  One field, and it cleanly distinguishes "splice two buses" from "rip one
+  signal."
+  - Bus: optional bitNames: string[] (length = width). On the first group snap,
+  if the bus has no names yet, it adopts the group's member pin names (so your
+  flags bus becomes C/V/N/Z and keeps them at the far end and at any breakout).
+  Connectivity is always by index; names are advisory/provenance.
+  - Net: gains provenance — { pins, members, lanes:[{bus, bit, name?}], name? }
+  — so the downstream transpiler can label a net "N" or "DATA3" instead of
+  reverse-engineering it from pins.
+
+  Two things to decide, one to note
+
+  D1 — Bus bit-naming. Adopt names from the group on first snap (my
+  recommendation), or keep buses purely index-based and let names live only on
+  Net provenance derived from pins? Adoption is what makes a flags bus running
+  between two chips keep stable C/V/N/Z identity even before you look at either
+  end.
+
+  D2 — Direction-aware disambiguation. Your dialog lists A/B/Y by name. Should
+  it also use pin direction (FR-062a) to filter or warn — e.g., not offer an
+  output group when the bus is already driven by another output? That's edging
+  into electrical-rule-checking (ERC). I'd defer ERC to a later phase and have
+  the dialog just list width-matching groups by name now; the direction data is
+  already captured so ERC can be added without a model change.
+
+  Note — interaction reality. The genuinely new UI surface here is modest: one
+  disambiguation dialog, a breakout gesture (click a bus bit in wire mode →
+  start a 1-bit wire from a tap vertex), and a small "name this bit / set bus
+  bit names" affordance. None of it is architecturally novel; it all rides the
+  Command/Store pipeline and the vertex graph you already have.
+
+  So: very possible, and it actually tightens the design — it kills the A3
+  tie-break guess and turns the bus net logic into plain union-find over lanes.
+
+  Want me to fold all of this in? It would touch: A3 (rewrite tie-break →
+  dialog), a new A7 (bit-lane nets + breakout), §6.6 (the lane algorithm), §6.9
+  (snap candidates 0/1/≥2 + breakout gesture), §6.11 (disambiguation dialog),
+  and §7.1a/§7.2 (Vertex.bit, Bus.bitNames, Net provenance). Give me D1 and D2
+  and I'll make the edits.
+
+✻ Brewed for 1m 50s
+
+❯ Ideally, should some of this have lived in the requirements document? Or is
+  it just fine to fold it into the design document alone.
+⏺ Honest answer: some of it should have, and the breakout feature in particular
+  almost certainly should. This is worth separating cleanly, because the line
+  we've been crossing is a real one.
+
+  The boundary
+
+  - Requirements = WHAT the system must do — observable, stakeholder-facing
+  behavior and constraints, testable, implementation-independent.
+  - Design = HOW it's structured to satisfy that — data model, algorithms,
+  module decomposition.
+
+  The architect legitimately discovers and resolves ambiguity during design —
+  that's what §3 (Issues/Ambiguities/Gaps/Assumptions) exists for. But there's a
+  sharp sub-rule: when a resolution merely picks a representation, it's design;
+  when it adds or changes observable behavior, it's a requirement and should
+  round-trip back to requirements.md. My own role brief even says so — for a
+  missing-but-implied feature I'm supposed to list it in §3 and ask, not
+  silently fold it in.
+
+  Classifying what we actually decided
+
+  ┌─────────────────────┬────────────────────────────┬─────────────────────┐
+  │      Decision       │   Requirement or Design?   │  Where it should    │
+  │                     │                            │        live         │
+  ├────────────────────┼──────────────────────────────┼────────────────────┤
+  │ Vertex graph model │ Design — internal            │ design.md only ✓   │
+  │  (A)               │ representation               │ (already correct)  │
+  ├────────────────────┼──────────────────────────────┼────────────────────┤
+  │ "Nets derivable    │ Requirement — already        │ requirements.md ✓  │
+  │ without pixel      │ FR-034b/FR-059a              │ (pre-existing)     │
+  │ geometry"          │                              │                    │
+  ├────────────────────┼──────────────────────────────┼────────────────────┤
+  │ Lane union-find    │ Design                       │ design.md only ✓   │
+  │ algorithm           │                              │                    │
+  ├─────────────────────┼──────────────────────────────┼────────────────────┤
+  │ "A bus is width     │ Requirement (electrical      │ should be an       │
+  │ independent         │ semantics) — only implied    │ explicit FR        │
+  │ nets/signals"       │ today by FR-042              │                    │
+  ├─────────────────────┼──────────────────────────────┼────────────────────┤
+  │ Single-signal       │ Requirement — a brand-new    │ must go to         │
+  ├────────────────────┼───────────────────────────┼────────────────────────┤
+  │ Disambiguation     │ Requirement (changes      │                        │
+  │ dialog on width    │ observable behavior;      │ should amend FR-041    │
+  │ tie (A/B/Y)        │ supersedes A3's silent    │                        │
+  │                    │ "first-declared" guess)   │                        │
+  ├────────────────────┼───────────────────────────┼────────────────────────┤
+  │                    │ Mostly requirement        │                        │
+  │ Named bus bits     │ (user-facing +            │ FR + design split      │
+  │ (C/V/N/Z)          │ downstream); struct shape │                        │
+  │                    │  is design                │                        │
+  ├────────────────────┼───────────────────────────┼────────────────────────┤
+  │ Width-mismatch     │ Requirement (a validation │                        │
+  │ prevented at       │  rule the user sees)      │ should be an FR        │
+  │ connect time (Q3)  │                           │                        │
+  ├────────────────────┼───────────────────────────┼────────────────────────┤
+  │ Net provenance     │ Design                    │ design.md only ✓       │
+  │ struct             │                           │                        │
+  ├────────────────────┼───────────────────────────┼────────────────────────┤
+  │ Direction-aware    │                           │ requirements.md        │
+  │ filtering / ERC    │ Scope decision            │ (scope/out-of-scope)   │
+  │ deferral           │                           │                        │
+  └────────────────────┴───────────────────────────┴────────────────────────┘
+
+  So roughly half of this thread was design (correctly in design.md), and half
+  was requirements-level decisions made verbally with the stakeholder that
+  currently exist only in design.md or in my chat answers. Breakout is the
+  starkest: it's a new feature with no FR at all.
+
+  Why it matters concretely (not just purism)
+
+  1. Traceability breaks. design.md §10 maps design→FR-IDs, and §11 verifies
+  "each requirement." A feature with no requirement ID is an orphan —
+  untraceable and unverifiable against intent.
+  2. Authority inverts. design.md's own preamble declares requirements.md "the
+  authoritative source if a conflict is found." If the real decisions live only
+  in design, that statement becomes false.
+  3. Scope/MVP vetting is bypassed. Breakout, the disambiguation dialog, and
+  named bits are exactly the kind of thing a stakeholder should get to
+  prioritize or defer as requirements, before they're baked into a data model.
+  4. Intent is lost to future readers. Requirements answer "why must it behave
+  this way"; design answers "how." Nobody should have to reverse-engineer "the
+  user needs to rip single bits off buses" from a Vertex.bit field.
+
+  What I'd do about it
+
+  Round-trip the behavioral decisions into requirements.md with proper IDs
+  (matching the analyst's FR-###/OQ-### scheme), then have design.md reference
+  them instead of originating them. Concretely, something like:
+
+  - FR-034c — A bus represents width independent signals (nets); each bit is its
+  own net.
+  - FR-043a — The user can break out a single signal (one bit) from a bus and
+  route it as an ordinary wire.
+  - FR-041 (amend) — On a width tie (multiple matching pin groups), prompt the
+  user to choose; auto-connect only when exactly one matches.
+  - FR-060a — A bus may carry per-bit signal names; snap-connect adopts the
+  group's pin names by default.
+  - FR-041b / NFR — A bus-to-bus connection of unequal width is prevented at
+  interaction time.
+  - Scope note — electrical-rule checking (direction conflicts) is explicitly
+  out of scope this phase.
+
+  Then design.md keeps the how (lanes, Vertex.bit, bitNames, provenance) and
+  points each piece at the new IDs.
+
+  This is also just the normal, healthy "design surfaced missing requirements"
+  loop — the fix isn't to avoid discovering them in design, it's to feed them
+  back once discovered.
+
+  Want me to draft those requirements.md deltas first (so the IDs exist), and
+  then fold the bus/breakout design in against those IDs — rather than the other
+  way around? That keeps the authority chain pointing the right way.
+
+✻ Cogitated for 1m 5s
+
+❯ yes, let's do it right.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Right. I'll do the round-trip properly: first add the new/amended requirements
+  to requirements.md (so the IDs exist and the authority chain points the right
+  way), then fold the design against those IDs.
+
+  I'm taking my recommended defaults on the two open points since you said "do
+  it right": D1 = a bus adopts the group's pin names on first snap; D2 = the
+  disambiguation dialog lists width-matching groups by name, and electrical-rule
+  checking (direction conflicts) is deferred. Both are captured in the
+  requirements below.
+
+  Starting with requirements.md — §3.11 (bus semantics):
+
+[edits elidede]
+
+requirements.md done. Now I'll fold the design against those IDs. Let me
+  re-read the current state of the design sections I need to touch:
+
+  Read 1 file (ctrl+o to expand)
+Done — the round-trip is complete, requirements-first so the authority chain
+  points the right way.
+
+  requirements.md (new/amended — the WHAT)
+
+  - FR-037a — a width-N bus is N independent nets (bit i ≠ bit j).
+  - FR-037b — buses may carry per-bit signal names; adopt the group's pin names
+  on first snap.
+  - FR-039a — joining unequal-width buses is prevented at connect time.
+  - FR-041 (amended) + FR-041a/FR-041b — match = Σ member bit-widths; one match
+  → auto, ≥2 → disambiguation dialog (kills the old silent tie-break).
+  - FR-043a — single-bit breakout as a new user feature.
+  - FR-060a — save format carries bit names, breakout taps, and per-bit net
+  provenance.
+  - Updated the Data table (Bus/Net), MVP scope, OQ-002/OQ-007, and Glossary
+  (added Breakout).
+
+  design.md (the HOW, referencing those IDs)
+  
+  - §2 restated the new FRs; A3 withdrawn (now a requirement), new A7 (bit-lane
+  model); §4.1 marks ERC out of scope.
+  - §6.6 buildNets rewritten as union-find over bit-lanes (a bus = width lanes);
+  group snap binds bit i, bus↔bus joins lanes by index, breakout taps one lane;
+  nets carry provenance.
+  - §6.9 snap branches on candidate count 0/1/≥2, plus breakout gesture and
+  FR-039a guard; §6.11 adds the disambiguation dialog and "Name bus bits…".
+  - §7.1a Vertex.bit; §7.2 Bus.bitNames and Net.provenance/name.
+  - §8 two new decision rows; §10 new traceability rows; §11 new tests (incl.
+  your ALU A/B/Y example); §12 marks A3 resolved.
+
+  Your 16-bit ALU now traces cleanly end-to-end: 4-bit bus → flags auto-connect
+  + adopt C/V/N/Z (FR-041a/FR-037b); 16-bit bus → A/B/Y dialog (FR-041b); rip
+  one flag out (FR-043a); each lands in the right per-bit net (FR-037a) with
+  provenance (FR-060a).
+Done — the round-trip is complete, requirements-first so the authority chain
+  points the right way.
+
+  requirements.md (new/amended — the WHAT)
+
+  - FR-037a — a width-N bus is N independent nets (bit i ≠ bit j).
+  - FR-037b — buses may carry per-bit signal names; adopt the group's pin names
+  on first snap.
+  - FR-039a — joining unequal-width buses is prevented at connect time.
+  - FR-041 (amended) + FR-041a/FR-041b — match = Σ member bit-widths; one match
+  → auto, ≥2 → disambiguation dialog (kills the old silent tie-break).
+  - FR-043a — single-bit breakout as a new user feature.
+  - FR-060a — save format carries bit names, breakout taps, and per-bit net
+  provenance.
+  - Updated the Data table (Bus/Net), MVP scope, OQ-002/OQ-007, and Glossary
+  (added Breakout).
+
+  design.md (the HOW, referencing those IDs)
+  
+  - §2 restated the new FRs; A3 withdrawn (now a requirement), new A7 (bit-lane
+  model); §4.1 marks ERC out of scope.
+  - §6.6 buildNets rewritten as union-find over bit-lanes (a bus = width lanes);
+  group snap binds bit i, bus↔bus joins lanes by index, breakout taps one lane;
+  nets carry provenance.
+  - §6.9 snap branches on candidate count 0/1/≥2, plus breakout gesture and
+  FR-039a guard; §6.11 adds the disambiguation dialog and "Name bus bits…".
+  - §7.1a Vertex.bit; §7.2 Bus.bitNames and Net.provenance/name.
+  - §8 two new decision rows; §10 new traceability rows; §11 new tests (incl.
+  your ALU A/B/Y example); §12 marks A3 resolved.
+
+  Your 16-bit ALU now traces cleanly end-to-end: 4-bit bus → flags auto-connect
+  + adopt C/V/N/Z (FR-041a/FR-037b); 16-bit bus → A/B/Y dialog (FR-041b); rip
+  one flag out (FR-043a); each lands in the right per-bit net (FR-037a) with
+  provenance (FR-060a).
+

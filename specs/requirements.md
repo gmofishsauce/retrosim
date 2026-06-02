@@ -91,15 +91,21 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 - FR-035: The application shall provide a Bus tool, separate from the Wire tool.
 - FR-036: Buses shall be rendered as thick blue lines. Single-bit wires shall be rendered as thin black lines.
 - FR-037: Each bus shall display a width annotation consisting of a slash mark and a digit indicating the bus width in bits.
+- FR-037a: A bus of width N shall represent N independent single-bit signals (nets). Signal identity is determined by bit position: bit i of a bus is a distinct net from bit j (i ≠ j). The connectivity rule of FR-034b applies independently to each bit.
+- FR-037b: A bus may optionally carry a signal name for each bit (e.g., C, V, N, Z). When a bus is snap-connected (FR-041) to a pin group whose member pins are named, and the bus does not already have bit names, the bus shall adopt the group's pin names in bit order. Bit position, not name, determines electrical connectivity.
 - FR-038: The user shall be able to right-click a bus and set its width from a context menu.
 - FR-039: Bus drawing, bend-point editing, and branching shall follow the same interaction model as wires (FR-026 through FR-034).
+- FR-039a: A connection that would join two buses of unequal width shall be prevented at the time the user attempts it.
 - FR-040: After a bus is placed, the application shall automatically return to select-tool mode.
 
 ### 3.12 Bus-to-Component Snap Connection
 
-- FR-041: When the user drags a bus endpoint onto a component, the system shall check whether the component's MD file declares a pin group matching the bus width.
-- FR-042: If a matching pin group exists, the system shall automatically connect each bit of the bus to the corresponding pin in the declared order, without requiring the user to wire each pin individually.
-- FR-043: If no matching pin group exists, the bus endpoint shall attach to the nearest pin only, and remaining bits shall be left unconnected.
+- FR-041: When the user drags a bus endpoint onto a component, the system shall determine which of the component's declared pin groups match the bus width. A pin group matches when the sum of its member pins' bit-widths equals the bus width.
+- FR-041a: If exactly one pin group matches the bus width, the system shall snap-connect the bus to that group automatically (per FR-042).
+- FR-041b: If more than one pin group matches the bus width, the system shall prompt the user to choose which matching group to connect to, presenting the candidate groups by name; the user may cancel the connection. (This supersedes any rule that silently selects a default group on a tie.)
+- FR-042: When a pin group is connected — automatically per FR-041a or by the user's choice per FR-041b — the system shall connect each bit of the bus to the corresponding pin in the group's declared bit order, without requiring the user to wire each pin individually.
+- FR-043: If no pin group matches the bus width, the bus endpoint shall attach to the nearest pin only, and the remaining bits shall be left unconnected.
+- FR-043a: The user shall be able to break out a single signal (one bit) from a bus and route it as an ordinary single-bit wire to a pin or other connection point. The broken-out wire shall be electrically part of that bus bit's net (per FR-037a).
 
 ### 3.13 File Operations — New Design
 
@@ -131,6 +137,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 - FR-059: Each wire route record shall include: the two endpoint references and an ordered list of bend-point grid coordinates. An endpoint reference shall be one of: (a) a component pin (U-number and pin name), (b) a junction on another wire or bus (FR-034b), or (c) a free canvas grid coordinate if the endpoint is dangling.
 - FR-059a: The saved design shall represent electrical connectivity (the set of nets per FR-034b) in a form derivable without reference to pixel geometry, so that a later tool can determine which pins are electrically connected.
 - FR-060: Each bus route record shall include: the same endpoint and bend-point data as a wire, plus the bus width in bits and any pin-group connection data for snap-connected endpoints.
+- FR-060a: For buses, the saved design shall additionally include any per-bit signal names (FR-037b) and any single-bit breakout connections (FR-043a), such that the net membership of each individual bus bit — including which bus and bit each net originates from — is derivable without reference to pixel geometry (consistent with FR-059a).
 
 ### 3.17 Component Definition (MD File)
 
@@ -164,8 +171,8 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 | Pin | name, side, position along side, direction (in/out/bidir/tristate), bit-width | Defined in MD file; referenced by wires and buses |
 | PinGroup | name, ordered list of pins | Optional; declared in MD file; enables bus snap-connect |
 | Wire | endpoint A, endpoint B (each: instance+pin, junction on another wire/bus, or free coord), ordered bend points | A wire with zero connected endpoints is not persisted |
-| Bus | same as Wire, plus width in bits, snap-connection metadata | Rendered as thick blue line with annotation |
-| Net | set of pins and wire/bus segments electrically connected through pins and junctions | Derivable from the design without pixel geometry (FR-034b, FR-059a) |
+| Bus | same as Wire, plus width in bits, snap-connection metadata, optional per-bit signal names, single-bit breakout taps | Represents N independent nets (one per bit); rendered as thick blue line with annotation |
+| Net | set of pins and wire/bus segments electrically connected through pins and junctions; a bus contributes one net per bit | Derivable from the design without pixel geometry (FR-034b, FR-059a); per-bit provenance (originating bus and bit) retained for downstream tools |
 | Design | name, save path, list of ComponentInstances, list of Wires, list of Buses | Top-level save file entity |
 
 ---
@@ -204,7 +211,7 @@ The minimum set of requirements needed for a usable first release:
 
 **Wiring:** FR-025 through FR-034b (wire tool, routing, bend points, branching, fan-out, connectivity), FR-033a (delete wire/bus).
 
-**Buses:** FR-035 through FR-040 (bus tool, rendering, width). Bus snap-connect (FR-041 through FR-043) may be deferred to a follow-on iteration.
+**Buses:** FR-035 through FR-040 (bus tool, rendering, width), plus FR-037a (per-bit net semantics) and FR-039a (unequal-width connection prevention). Bus snap-connect and its extensions — FR-041 through FR-043a (group matching, disambiguation, nearest-pin fallback, single-bit breakout) and FR-037b (bus bit names) — may be deferred to a follow-on iteration, but the save format (FR-060a) and connectivity model must accommodate them from the outset.
 
 **File format:** FR-055 through FR-060, plus FR-059a (connectivity representation).
 
@@ -215,12 +222,12 @@ The minimum set of requirements needed for a usable first release:
 ## 9. Open Questions
 
 - OQ-001: The MD file format is not yet defined. A separate design session is needed to specify the syntax and semantics before parser implementation begins.
-- OQ-002: Bus snap-connection (FR-041 through FR-043) may prove complex enough to warrant its own design pass; it is noted as potentially deferrable from the MVP.
+- OQ-002: Bus snap-connection and its extensions (FR-041 through FR-043a) may prove complex enough to warrant their own design pass; they are noted as potentially deferrable from the MVP. Disambiguation on multiple width-matches (FR-041b) and single-bit breakout (FR-043a) have now been specified following stakeholder discussion.
 - OQ-003: Server-assisted file navigation (FR-053) may be difficult to implement cleanly in the browser; the fallback to a recent-files list (FR-054) should be kept as a ready alternative.
 - OQ-004: The exact grid spacing (1 mm vs. 2 mm equivalent at default zoom) and the default zoom level are not yet specified.
 - OQ-005: Whether the Bus tool reverts to select-tool mode after placing one bus (consistent with the Wire tool) was not explicitly confirmed — assumed yes for consistency.
 - OQ-006: The platform-standard application data directory varies by OS (e.g., `~/Library/Application Support` on macOS, `~/.local/share` on Linux, `%APPDATA%` on Windows). The server should handle all three; the primary development platform is not yet confirmed.
-- OQ-007: The exact representation of electrical nets and wire-to-wire junctions in the JSON save format (FR-034b, FR-059a) needs to be settled as part of the save-format and MD-format design session, since it affects both.
+- OQ-007: The exact representation of electrical nets and wire-to-wire junctions in the JSON save format (FR-034b, FR-059a) needs to be settled as part of the save-format and MD-format design session, since it affects both. This now also covers per-bit bus net representation and provenance (FR-037a, FR-060a); the design phase has proposed a first-class-vertex graph with per-bit lanes as the chosen representation.
 - OQ-008: The set of pin directions in FR-062a (input/output/bidirectional/tristate) and how they map to the four-level logic model is assumed sufficient; this should be confirmed when the MD format is designed.
 - OQ-009: The UI for viewing and editing per-instance overrides (FR-020a) is not yet specified (e.g., a properties panel vs. a dialog).
 
@@ -232,7 +239,8 @@ The minimum set of requirements needed for a usable first release:
 |---|---|
 | Anchor point | A pin on a component where a wire or bus can connect |
 | Bend point | A moveable intermediate point on a wire or bus segment that allows the user to shape the route |
-| Bus | A multi-bit signal connection rendered as a thick blue line with a width annotation |
+| Breakout | Extracting a single bit (signal) from a bus and routing it onward as an ordinary single-bit wire |
+| Bus | A multi-bit signal connection rendered as a thick blue line with a width annotation; electrically it is N independent single-bit nets, one per bit |
 | Canvas | The drawing surface in the browser on which components and wires are placed |
 | GALasm | A logic-equation language used to describe TTL component behavior in MD files (simulation phase) |
 | Grid | A uniform lattice of points covering the canvas; all design elements snap to grid intersections |
