@@ -25,3 +25,31 @@ export async function getComponents() {
   const body = await request("/components");
   return body.components;
 }
+
+// getDefaults returns server defaults, including the designs root (FR-050).
+export async function getDefaults() {
+  return request("/defaults");
+}
+
+// listDir lists a directory for the file-navigation dialog (FR-053). An empty
+// path defaults to the designs root.
+export async function listDir(path = "") {
+  const q = path ? `?path=${encodeURIComponent(path)}` : "";
+  return request("/files" + q);
+}
+
+// loadDesign reads a design file, returning the parsed design object (FR-052).
+export async function loadDesign(path) {
+  const body = await request("/design/load?path=" + encodeURIComponent(path));
+  return body.design;
+}
+
+// saveDesign writes a design object to path (FR-046).
+export async function saveDesign(path, design) {
+  const body = await request("/design/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, design }),
+  });
+  return body.path;
+}

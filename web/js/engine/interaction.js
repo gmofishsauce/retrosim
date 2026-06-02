@@ -272,6 +272,9 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
 
   // --- keyboard ---
   window.addEventListener("keydown", (e) => {
+    // Ignore shortcuts while typing in a field (e.g., the save dialog).
+    if (e.target instanceof HTMLInputElement || e.target.isContentEditable) return;
+
     if (e.key === "Escape") {
       if (store.state.tool !== "select") setTool("select");
       else select(null);

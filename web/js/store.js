@@ -83,8 +83,23 @@ export function createStore(initial = {}) {
       notify();
     },
 
-    // markSaved clears the dirty flag after a successful save (FR-049a).
-    markSaved() {
+    // replaceDesign swaps in a new design (New/Open), resetting undo/redo,
+    // selection, and the dirty flag (FR-044/052).
+    replaceDesign(newDesign, { savePath = null } = {}) {
+      state.design = newDesign;
+      state.designName = newDesign.name ?? state.designName;
+      state.savePath = savePath;
+      state.selection = null;
+      state.dirty = false;
+      undoStack.length = 0;
+      redoStack.length = 0;
+      notify();
+    },
+
+    // markSaved clears the dirty flag after a successful save, recording the path
+    // if given (FR-046/048/049a).
+    markSaved(path) {
+      if (path !== undefined) state.savePath = path;
       state.dirty = false;
       notify();
     },

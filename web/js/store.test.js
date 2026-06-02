@@ -78,6 +78,33 @@ test("markSaved clears the dirty flag", () => {
   assert.equal(store.state.dirty, false);
 });
 
+test("replaceDesign swaps the design and resets history/selection/dirty", () => {
+  const store = newStore();
+  store.dispatch(addCmd(1));
+  store.state.selection = { kind: "component", refdes: "U1" };
+  assert.equal(store.state.dirty, true);
+  assert.equal(store.canUndo(), true);
+
+  const fresh = { v: 0, name: "loaded" };
+  store.replaceDesign(fresh, { savePath: "/tmp/x.json" });
+
+  assert.equal(store.design, fresh);
+  assert.equal(store.state.designName, "loaded");
+  assert.equal(store.state.savePath, "/tmp/x.json");
+  assert.equal(store.state.selection, null);
+  assert.equal(store.state.dirty, false);
+  assert.equal(store.canUndo(), false);
+  assert.equal(store.canRedo(), false);
+});
+
+test("markSaved records the path and clears dirty", () => {
+  const store = newStore();
+  store.dispatch(addCmd(1));
+  store.markSaved("/tmp/y.json");
+  assert.equal(store.state.savePath, "/tmp/y.json");
+  assert.equal(store.state.dirty, false);
+});
+
 test("subscribe returns an unsubscribe function", () => {
   const store = newStore();
   let calls = 0;

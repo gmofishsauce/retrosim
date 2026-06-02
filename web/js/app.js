@@ -3,12 +3,13 @@
 // only then removes the loading overlay so the canvas is not interactable until
 // the library is ready (FR-003).
 
-import { getComponents } from "./api.js";
+import { getComponents, getDefaults } from "./api.js";
 import { createDesign } from "./model/design.js";
 import { createStore } from "./store.js";
 import { initCanvas } from "./engine/canvas.js";
 import { initInteraction } from "./engine/interaction.js";
 import { initToolbar } from "./chrome/toolbar.js";
+import { makeFileOps } from "./chrome/fileops.js";
 
 // defaultDesignName builds "unnamed schematic <datetime>" from the local clock
 // (FR-004, FR-045).
@@ -38,13 +39,23 @@ async function main() {
   const name = defaultDesignName();
   const design = createDesign(name);
   const store = createStore({ design, designName: name });
-  document.getElementById("design-name").textContent = name;
+
+  // Keep the design-name label in sync, with an unsaved-changes marker (FR-049a).
+  const nameEl = document.getElementById("design-name");
+  store.subscribe(() => {
+    nameEl.textContent = store.state.designName + (store.state.dirty ? " *" : "");
+  });
+  nameEl.textContent = name;
   document.getElementById("tool-mode").textContent = store.state.tool;
 
   const renderer = initCanvas(document.getElementById("canvas"), store);
 
   try {
-    const components = await getComponents(); // FR-003: await before enabling UI
+    // Await the library (FR-003) and the server defaults before enabling the UI.
+    const [components, defaults] = await Promise.all([
+      getComponents(),
+      getDefaults().catch(() => ({ dataDir: "" })),
+    ]);
     const palette = document.getElementById("palette");
     renderPalette(palette, components);
     const interaction = initInteraction({
@@ -54,7 +65,12 @@ async function main() {
       renderer,
       library: components,
     });
-    initToolbar({ container: document.getElementById("tools"), store, interaction });
+    const fileops = makeFileOps({
+      store,
+      dataDir: defaults.dataDir,
+      defaultName: defaultDesignName,
+    });
+    initToolbar({ container: document.getElementById("tools"), store, interaction, fileops });
     overlay.classList.add("hidden");
   } catch (err) {
     overlay.classList.add("error");

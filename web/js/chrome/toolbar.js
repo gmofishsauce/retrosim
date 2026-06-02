@@ -2,7 +2,7 @@
 // via the interaction FSM; the active tool is highlighted by subscribing to the
 // store. File ops, zoom/pan land in later slices.
 
-export function initToolbar({ container, store, interaction }) {
+export function initToolbar({ container, store, interaction, fileops }) {
   const tools = [
     { tool: "select", label: "Select" },
     { tool: "wire", label: "Wire" },
@@ -27,6 +27,20 @@ export function initToolbar({ container, store, interaction }) {
   const undoBtn = button("Undo", "Undo (Ctrl/Cmd+Z)", () => store.undo());
   const redoBtn = button("Redo", "Redo (Shift+Ctrl/Cmd+Z)", () => store.redo());
   container.append(undoBtn, redoBtn);
+
+  container.appendChild(el("span", "tool-sep"));
+  container.append(
+    button("New", "New design", () => fileops.newDesign()),
+    button("Open", "Open design", () => fileops.open()),
+    button("Save", "Save design", () => fileops.save()),
+    button("Save As", "Save under a new name", () => fileops.save({ saveAs: true })),
+  );
+
+  function el(tag, className) {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    return e;
+  }
 
   function button(label, title, onClick) {
     const b = document.createElement("button");

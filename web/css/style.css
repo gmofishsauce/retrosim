@@ -115,3 +115,67 @@ body {
   font-size: 0.85rem;
   z-index: 20;
 }
+
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+}
+
+.dialog {
+  background: #fff;
+  width: 30rem;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 6px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+  padding: 0.75rem;
+  gap: 0.5rem;
+}
+
+.dialog-title { font-weight: 600; }
+.dialog-path {
+  font-size: 0.8rem;
+  color: #555;
+  word-break: break-all;
+  background: #f3f3f3;
+  padding: 0.25rem 0.4rem;
+  border-radius: 3px;
+}
+
+.dialog-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  min-height: 8rem;
+}
+
+.dialog-entry {
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.dialog-entry:hover { background: #eef; }
+.dialog-entry.selected { background: #4a90d9; color: #fff; }
+.dialog-entry.dir { font-weight: 500; }
+
+.dialog-row { display: flex; align-items: center; gap: 0.5rem; }
+.dialog-label { font-size: 0.85rem; }
+.dialog-name { flex: 1 1 auto; padding: 0.3rem; }
+
+.dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.dialog-buttons .tool-btn { background: #444; }
