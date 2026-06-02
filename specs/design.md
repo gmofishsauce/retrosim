@@ -215,17 +215,23 @@ this document adopts. **None block implementation** except where noted in §12.
 - **A1 — Junction identity / net derivation (OQ-007, FR-034b, FR-059, FR-059a).**
   FR-059 lists "a junction on another wire or bus" as an endpoint kind but does
   not say *how* a junction is identified, while FR-059a forbids relying on pixel
-  geometry to determine connectivity. **Resolution:** a junction endpoint stores
-  the **id of the target wire/bus** plus a grid coordinate. Net membership is
-  computed purely from ids (pin↔wire and wire↔wire unions via union-find — §6.6),
-  never by computing geometric intersections. The coordinate is rendering-only.
+  geometry to determine connectivity. **Resolution:** connectivity is modeled as a
+  **graph of first-class `Vertex` objects** (§7.1a). A junction is a `Vertex` with
+  a stable id; two wires connect by **referencing the same vertex id**, never by
+  comparing coordinates. Net membership is the set of connected components over
+  vertex ids (§6.6). The vertex carries the only copy of the junction's grid
+  position, so a junction can never drift off the wires that meet at it. (This
+  supersedes the earlier "junction endpoint stores a target wire id + render-only
+  coordinate" scheme; see §8 and §12/OQ-007.)
 
 - **A2 — Fan-out vs. two-endpoint wires (FR-034a vs FR-059).** A wire has exactly
   two endpoints, yet a pin may carry several wires and wires may branch.
-  **Resolution (interpretation):** fan-out is achieved by **multiple distinct
-  wires sharing a pin endpoint**, and by **junction endpoints** (one wire's
-  endpoint referencing another wire). No wire ever has more than two endpoints.
-  This is consistent with FR-059; stated here to remove doubt.
+  **Resolution (interpretation):** a wire is an ordered `path` whose **first and
+  last points are its two endpoints**; both are `Vertex` references. Fan-out is
+  achieved by **multiple wires referencing the same vertex** (a shared pin vertex
+  or a shared junction vertex). A wire's `path` may *pass through* an interior
+  junction vertex (a branch point), but that is not a third endpoint — the wire
+  still has exactly two endpoints. This is consistent with FR-059.
 
 - **A3 — "Matching pin group" for bus snap (FR-041).** Matching is by *width*;
   the requirement is silent on ties (multiple groups of the same width) and on
@@ -263,11 +269,15 @@ this document adopts. **None block implementation** except where noted in §12.
   in §7.6 for discussion. **This is an open item (see §12).**
 
 - **G2 — Delete of a wire/bus that leaves another wire's junction dangling.**
-  FR-033a deletes a wire; FR-034b says wires can reference it via a junction.
-  **Resolution:** when a wire/bus is deleted, any *other* wire endpoint that was a
-  `junction` referencing it is converted to a **`free`** endpoint at the same grid
-  coordinate (becoming dangling, per FR-029), and the FR-030 zero-endpoint sweep
-  then runs. Implied by FR-018a/FR-029/FR-030; made explicit here.
+  FR-033a deletes a wire; FR-034b says wires can branch through a shared junction
+  vertex. **Resolution (under the vertex model, §7.1a):** when a wire/bus is
+  deleted, each `junction` vertex it referenced has its reference count decremented.
+  A junction vertex referenced by **exactly one** remaining wire is **demoted to a
+  `free` vertex** (becoming dangling, per FR-029); one referenced by **zero**
+  remaining wires is **deleted**. The FR-030 sweep (a wire all of whose endpoint
+  vertices are `free` is removed) then runs. There is no coordinate copying or
+  target-id retargeting — demotion follows naturally from the shared vertex losing
+  degree. Implied by FR-018a/FR-029/FR-030; made explicit here.
 
 ### 3.4 Untestable / Vague
 
@@ -469,28 +479,42 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Purpose:** the in-browser canonical design and the operations on it; net
   derivation.
 - **Satisfies:** FR-011, FR-018, FR-030, FR-034a, FR-034b, FR-056–FR-060, FR-059a.
-- **Data:** the `Design` object (§7.2) and pure helper functions. Mutations are
-  performed **only** by Command objects (§6.10), but the low-level operations live
-  here so they are unit-testable in isolation:
+- **Data:** the `Design` object (§7.2), including its **`vertices`** collection
+  (§7.1a), and pure helper functions. Mutations are performed **only** by Command
+  objects (§6.10), but the low-level operations live here so they are
+  unit-testable in isolation:
   - `addInstance(design, type, x, y, rotation) → instance` — assigns refdes
     `U<n>` where `n = 1 + max(existing numeric suffixes)` (FR-011).
-  - `pinWorldPos(instance, pinName) → {x,y}` — applies rotation (§6.7).
-  - `addWire/addBus`, `insertBend`, `moveBend`, `deleteBend`, `deleteWire`,
-    `deleteInstance` (re-targets junctions per §3.3 G2, prunes zero-endpoint
-    wires per FR-030), `setBusWidth`, `setOverride`.
+  - `pinWorldPos(instance, pinName) → {x,y}` — applies rotation (§6.7). A `pin`
+    vertex's position is **derived** from this; when the instance moves or rotates
+    its pin vertices are recomputed, so wires referencing them **stretch
+    automatically** (FR-018) with no per-segment fix-up.
+  - `addVertex`/`removeVertex`, `addWire/addBus`, `insertBend`, `moveBend`,
+    `deleteBend`, `branchWire` (creates or reuses a `junction` vertex; if the
+    branch point lands on an interior `bend` path-point, that point flips to a
+    `node` referencing the new vertex), `deleteWire` (decrements junction-vertex
+    ref counts, demoting to `free`/deleting per §3.3 G2; prunes all-`free` wires
+    per FR-030), `deleteInstance` (converts the instance's `pin` vertices to
+    `free`, then runs the FR-030 sweep), `setBusWidth`, `setOverride`.
 - **Netlist (`netlist.js`) — `buildNets(design) → Net[]` (FR-034b/FR-059a):**
   ```
-  uf = UnionFind()                       # nodes: "pin:U3.Y0", "wire:w12", "bus:b3"
+  uf = UnionFind()
+  for each vertex V:  add node V.id
   for each wire/bus W:
-      add node "wire:W.id"
-      for endpoint E in (W.a, W.b):
-          if E.kind == "pin":      union("pin:"+E.ref+"."+E.pin, "wire:W.id")
-          if E.kind == "junction": union("wire:W.id", "wire:"+E.target)   # ids only
-          if E.kind == "free":     (no union — dangling)
-  groups = connected components of uf
-  nets = [ {pins:[…], members:[wire/bus ids…]} for each group containing ≥1 pin ]
+      nodes = [p.v for p in W.path if p.t == "node"]   # this wire's vertices
+      union all of nodes together                      # one wire = one node-set
+  # two wires sharing a vertex id are unioned by that shared id alone —
+  # no target-wire indirection, no geometric intersection.
+  # (future connector rule: union all vertices with kind=="connector"
+  #  that share a label.)
+  groups = connected components of uf            # over vertex ids
+  nets = []
+  for each group containing ≥1 vertex with kind=="pin":
+      pins    = [V.ref+"."+V.pin for pin-vertices in group]
+      members = [W.id for wires whose path references any vertex in group]
+      nets.push({pins, members})
   ```
-  This uses **ids only** — never pixel coordinates — satisfying FR-059a.
+  This uses **vertex ids only** — never pixel coordinates — satisfying FR-059a.
 - **Error handling:** operations validate references (e.g., moving a bend index
   that exists); invalid ops throw and are caught by the Store, which leaves state
   unchanged and surfaces a non-fatal toast.
@@ -553,7 +577,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | PLACE(t) | click canvas | `PlaceComponent(t,@grid)` (FR-009) | SELECT (one-shot FR-010) |
   | (palette) | drag tile→canvas drop | `PlaceComponent(t,@grid)` (FR-008) | SELECT |
   | WIRE | click pin | begin wire at pin | WIRE_AWAIT_DEST |
-  | WIRE | click existing segment | begin **branch** (junction endpoint, FR-034) | WIRE_AWAIT_DEST |
+  | WIRE | click existing segment | begin **branch**: create/reuse a `junction` vertex at the nearest grid pt, splitting that point of the host path into a `node` (FR-034) | WIRE_AWAIT_DEST |
   | WIRE_AWAIT_DEST | click pin/segment | `AddWire(a,b)` (FR-027, FR-034a/b) | SELECT (FR-028) |
   | BUS | (same as WIRE) | `AddBus(...)` | SELECT (FR-040, A6) |
   | BUS | drag endpoint onto component | snap-connect (FR-041–043, §below) | SELECT |
@@ -561,8 +585,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Hit-testing (`hittest.js`):** in world space — components are rectangles
   (their rotated bounding outline); pins are points (tolerance ≈ ½ grid);
   wire/bus segments use point-to-segment distance (tolerance ≈ ⅓ grid scaled);
-  bend points are points. Pins take priority over segments take priority over
-  component bodies when overlapping.
+  bend points and `junction`/`free` vertices are points. Pins take priority over
+  segments take priority over component bodies when overlapping.
 - **Wire-mode cursor (FR-025):** while `WIRE`/`BUS` active, set a crosshair
   cursor and show a status hint; `SELECT` uses the default pointer.
 - **Bus snap-connect (FR-041–FR-043, A3):** on dropping a bus endpoint over a
@@ -598,8 +622,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `DeleteComponent`, `SetOverride`, `AddWire`, `AddBus`, `InsertBend`, `MoveBend`,
   `DeleteBend`, `DeleteWire`, `SetBusWidth`, `BranchWire`. Each captures enough
   pre-state to `revert` exactly (e.g., `MoveComponent` stores the old position;
-  `DeleteComponent` stores the removed instance and any junction-retargeting it
-  caused, so undo restores connectivity).
+  `DeleteComponent` stores the removed instance plus any vertex conversions/
+  demotions and pruned wires it caused, so undo restores connectivity exactly).
 - **Dirty/unsaved (FR-049a):** `dirty` set on every dispatch, cleared on
   successful save. New/Open guard on `dirty` (confirm dialog); a `beforeunload`
   handler warns on tab close. *(MVP-deferrable per requirements; implement the
@@ -681,6 +705,30 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
 Group bit-width = Σ member `pin.width` (A3). Used for bus snap (FR-041).
 
+### 7.1a `Vertex` — the first-class electrical node (A1, A2, FR-034b, FR-059)
+
+Connectivity is modeled as a graph: wires/buses are edges, and every point where
+a net can be joined (a component pin, a branch/junction, or a dangling free end)
+is a `Vertex` object with a stable id. Wires reference vertices by id; two wires
+connect **iff** they reference the same vertex id.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | string | e.g. `"v17"`; stable; referenced by wire/bus `path` node-points |
+| `x`, `y` | int | grid coords of the node |
+| `kind` | enum | `pin` \| `junction` \| `free` (future: `connector`) |
+| `ref` | string? | `kind=pin` only: instance refdes, e.g. `"U3"` |
+| `pin` | string? | `kind=pin` only: pin name, e.g. `"Y0"` |
+
+**Position authority differs by kind (deliberate):**
+- `kind=pin` → `x,y` is **derived** from `pinWorldPos(instance, pin)` and
+  recomputed when the instance moves/rotates. This is why connected wires stretch
+  for free (FR-018) — they reference the pin vertex, which follows the instance.
+- `kind=junction` / `kind=free` → `x,y` is **authoritative** (user-placed/dragged).
+
+A junction vertex's grid position lives **only** here, so the host wire and every
+branch wire that meet at it share one position and cannot drift apart (A1).
+
 ### 7.2 `Design` (JSON save file — FR-055/FR-056)
 
 ```jsonc
@@ -690,6 +738,7 @@ Group bit-width = Σ member `pin.width` (A3). Used for bus snap (FR-041).
   "components": [ ComponentInstance, … ],   // (a) FR-056
   "wires":      [ Wire, … ],                // (b) FR-056
   "buses":      [ Bus,  … ],                // (c) FR-056
+  "vertices":   [ Vertex, … ],              // electrical nodes referenced by wires/buses (§7.1a)
   "nets":       [ Net,  … ]                 // derived convenience (A4, FR-059a)
 }
 ```
@@ -705,21 +754,26 @@ Group bit-width = Σ member `pin.width` (A3). Used for bus snap (FR-041).
 | `typeData` | `ComponentType` | full copy at save time (FR-057) |
 | `overrides` | object | per-instance field overrides, e.g. `{"delays":{"tpd":12}}` (FR-058) |
 
-**`Endpoint`** (FR-059, A1, A2) — exactly one `kind`:
+**`PathPoint`** (FR-059, A1, A2) — a wire/bus `path` is an ordered list of these,
+length ≥ 2. The **first and last** path-points must be `node` points (the wire's
+two endpoints); interior points are usually `bend` (geometry only).
 
 ```jsonc
-{ "kind": "pin",      "ref": "U3", "pin": "Y0" }          // component pin
-{ "kind": "junction", "target": "w12", "x": 40, "y": 16 } // on wire/bus id; x,y render-only
-{ "kind": "free",     "x": 40, "y": 24 }                  // dangling (FR-029)
+{ "t": "node", "v": "v17" }              // an electrical node — references a Vertex (§7.1a)
+{ "t": "bend", "x": 40, "y": 16 }        // geometry only; nothing connects here
 ```
+
+A `node` path-point whose vertex `kind=pin` ties the end to a component pin
+(replacing the old `pin` endpoint); `kind=free` is a dangling end (FR-029);
+`kind=junction` in the **interior** of a path is a branch point shared with
+another wire (FR-034b).
 
 **`Wire`** (FR-059)
 
 | Field | Type | Notes |
 |---|---|---|
-| `id` | string | stable, e.g. `"w12"` (junction targets reference it) |
-| `a`, `b` | `Endpoint` | exactly two (A2) |
-| `bends` | `{x,y}[]` | ordered grid coordinates (FR-059) |
+| `id` | string | stable, e.g. `"w12"` |
+| `path` | `PathPoint[]` | ordered, length ≥ 2; first & last are `node` points (A2) |
 
 **`Bus`** (FR-060) — a `Wire` plus:
 
@@ -728,31 +782,46 @@ Group bit-width = Σ member `pin.width` (A3). Used for bus snap (FR-041).
 | `width` | int | bus width in bits (FR-037, FR-038) |
 | `groupConnections` | `GroupConnection[]` | snap-connect metadata (FR-042/FR-060) |
 
-`GroupConnection`: `{ "endpoint": "a"|"b", "instance": "U3", "group": "A",
-"bitMap": ["A0","A1","A2"] }`.
+`GroupConnection` anchors to the endpoint **vertex** rather than `"a"|"b"`:
+`{ "vertex": "v31", "instance": "U3", "group": "A", "bitMap": ["A0","A1","A2"] }`.
 
 **`Net`** (derived, A4/FR-059a): `{ "pins": ["U3.Y0","U5.A1", …],
 "members": ["w12","b3", …] }`.
 
 ### 7.3 Data lifecycle (CRUD)
-- **Create:** instances by placement (FR-008/009/011); wires/buses by the
-  Wire/Bus tools (FR-027/039); bends by clicking segments (FR-031).
+- **Create:** instances by placement (FR-008/009/011) — each pin a wire later
+  binds to becomes a `pin` vertex on demand; wires/buses by the Wire/Bus tools
+  (FR-027/039), creating their endpoint vertices (`pin`/`free`); bends by clicking
+  segments (FR-031); junction vertices by branching (FR-034).
 - **Read:** the renderer reads the live model each frame; Save serializes it.
-- **Update:** moves/rotations/overrides/bend-drags/width changes, all via Commands.
-- **Delete:** components (FR-018a, retargets junctions to `free` per G2), wires/
-  buses (FR-033a), bends (FR-033). The zero-endpoint sweep (FR-030) runs after any
-  deletion.
+- **Update:** moves/rotations recompute affected `pin` vertices, so connected
+  wires **stretch automatically** (FR-018); overrides/bend-drags/width changes,
+  all via Commands. Dragging a junction vertex moves the one shared node, so all
+  wires meeting there follow (FR-032, no drift).
+- **Delete:** components (FR-018a — their `pin` vertices convert to `free`); wires/
+  buses (FR-033a — junction-vertex ref counts decremented, demoting to `free` or
+  deleting per §3.3 G2); bends (FR-033). The FR-030 sweep (remove any wire whose
+  endpoint vertices are all `free`) runs after any deletion.
 
 ### 7.4 Persistence & migration
 Files are JSON written atomically (§6.5). `formatVersion` enables future
-migration; this phase only writes/reads version `1`. Loading a file with an
-unknown `formatVersion` → server returns it as-is and the SPA shows a warning if
-it is newer than it understands (forward-compat per NFR-004 spirit).
+migration; this phase only writes/reads version `1`. Because nothing has shipped,
+the **vertex/graph model (§7.1a) is the version-`1` format from the outset — there
+is no runtime migration to write.** For the record, the conceptual map from the
+earlier endpoint-union sketch is: old `pin` endpoint → a `pin` vertex; old `free`
+→ a `free` vertex; old `junction{target,x,y}` → a `junction` vertex at `(x,y)`
+inserted as a `node` path-point in the target wire's `path`, with the branch
+wire's endpoint referencing it. Loading a file with an unknown `formatVersion` →
+server returns it as-is and the SPA warns if it is newer than it understands
+(forward-compat per NFR-004 spirit).
 
 ### 7.5 In-memory client structures
-The live model mirrors §7.2 but additionally keeps a `nextWireId` counter and a
-transient `selection`/`viewport` (not persisted). `nets` are recomputed by
-`buildNets` (§6.6) at save time and on demand (e.g., for future tools).
+The live model mirrors §7.2 but additionally keeps `nextWireId` and
+`nextVertexId` counters and a transient `selection`/`viewport` (not persisted).
+For O(1) ops it also keeps non-persisted indexes: a `vertices` map keyed by id and
+a per-vertex **ref-count** (how many wires reference it) used by the G2 demotion
+logic (§3.3). `nets` are recomputed by `buildNets` (§6.6) at save time and on
+demand (e.g., for future tools).
 
 ### 7.6 STRAWMAN MD format — **NON-BINDING, FOR DISCUSSION ONLY**
 > This is **not** part of the contract. The parser interface (§6.3) is the
@@ -794,8 +863,8 @@ behavior: |                    ; opaque GALasm, preserved & ignored (FR-066)
 | Canvas tech for the drawing surface | SVG/DOM (declarative, easy hit-testing); WebGL (fast, heavy) | **HTML5 Canvas 2D (immediate mode)** | Full control over high-frequency drag/rubber-band/pan/zoom; predictable perf on large designs (NFR-005); avoids DOM-node blowup that SVG suffers; WebGL is overkill for 2D lines/rects |
 | UI "chrome" stack | React+Vite; Preact/htm; Lit | **Vanilla ES modules, no build step** | Honors the no-build/plain-JS constraint; the chrome is modest; the complexity that grows (canvas engine) lives outside any framework anyway; a framework can be added later because chrome is decoupled (user-confirmed) |
 | Mutation path | Direct model edits from event handlers | **Single Command pipeline through the Store** | Makes undo/redo total and uniform (FR-024, NFR-006); one place to set the dirty flag (FR-049a); testable commands |
-| Net representation | Compute nets geometrically (intersections) at read time; store nets only | **Union-find over pin/wire ids; `nets` stored as derived convenience** | FR-059a forbids pixel-geometry-dependent connectivity; id-based union-find is exact and pixel-free; storing nets aids downstream tools (A1/A4) |
-| Junction identity | Reference a point on a wire by coordinate; split the target wire at the junction | **Junction endpoint stores target wire id (+ render-only coord)** | Connectivity derivable from ids alone (FR-059a); avoids brittle coordinate matching and target re-splitting (A1) |
+| Net representation | Compute nets geometrically (intersections) at read time; store nets only; connection-by-name net labels | **Graph of `Vertex` nodes + union-find over vertex ids; `nets` stored as derived convenience** | FR-059a forbids pixel-geometry-dependent connectivity; id-based union-find is exact and pixel-free; storing nets aids downstream tools (A1/A4); net labels rejected by stakeholder |
+| Junction identity | (a) reference a point on a wire by coordinate; (b) junction endpoint stores *target wire id* + render-only coord; (c) split host wire into two records on branch | **First-class `Vertex` objects shared by id; a branched wire keeps one record with the junction as an interior `node` path-point** | Symmetric (no host/branch parent-child); deleting a wire just drops a vertex ref-count (eliminates the G2 special case); shared vertex holds the only position copy so junctions can't drift; preserves "the wire I drew" as one record for select/delete (FR-033a) and aligns with FR-031/033 in-place editing; cleanly absorbs the future off-sheet **connector** tool and edge-connector components as new vertex kinds |
 | Coordinate system | Store pixels; store mm | **Store integer grid units; derive pixels via viewport** | Everything snaps to grid by construction (FR-021); zoom/pan are pure view transforms; rotation by 90° preserves grid (§6.7) |
 | Rotation pivot | Rotate about component center | **Rotate pin offsets about the instance origin** | Guarantees rotated pins stay on integer grid intersections (FR-021) without half-grid artifacts |
 | File I/O location | Browser native file picker / downloads | **All FS access server-side via REST** | FR-053 requires server-assisted navigation; keeps a single trusted FS actor; localhost-only (NFR-001) |
@@ -816,7 +885,7 @@ sim/
     mdparse.go              CREATE  ParseComponent contract (syntax TBD) (§6.3)
     storage.go              CREATE  ListDir/LoadDesign/SaveDesign (§6.5)
     paths.go                CREATE  AppDataDir per-OS (§6.5)
-    types.go                CREATE  ComponentType/Pin/PinGroup/Design/... Go structs (§7)
+    types.go                CREATE  ComponentType/Pin/PinGroup/Design/Vertex/Wire/Bus/PathPoint Go structs (§7)
   web/
     index.html              CREATE  SPA shell + <canvas> + module entry
     css/style.css           CREATE  layout for toolbar/palette/canvas/dialogs
@@ -963,9 +1032,15 @@ only the noted slices.
 - **A3 — Pin-group "width" semantics & tie-break.** This design assumes width =
   Σ member pin bit-widths and "first declared on tie." Confirm when the MD format
   is designed (ties also affect FR-041). Gates **bus snap-connect** only.
-- **OQ-007 / A1 — Junction representation.** This design fixes it (target wire id
-  + render coord). Please confirm it satisfies the downstream-tool needs you have
-  in mind before the netlist is consumed by a later phase.
+- **OQ-007 / A1 — Junction representation.** Resolved to a **graph of first-class
+  `Vertex` objects shared by id** (§7.1a), chosen with the stakeholder in light of
+  the planned off-sheet **connector tool** (and possible edge-connector
+  components), which are future `Vertex` kinds the model absorbs uniformly. A
+  branched wire keeps one record (`path[]` with an interior junction node).
+  Confirm this satisfies the downstream-tool netlist needs before a later phase
+  consumes it. *(Note: the connector tool implies a future multi-**sheet**
+  container, which this single-canvas phase does not provide; that is orthogonal
+  to the topology model and tracked as future scope.)*
 - **OQ-004 / A5 — Grid spacing & default zoom.** Defaults chosen (8 px/unit,
   0.25×–4.0×). Confirm or adjust the constants.
 - **U1 — NFR-005 threshold & target design size.** Proposed ≤16 ms at 200
