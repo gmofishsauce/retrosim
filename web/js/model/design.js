@@ -75,3 +75,266 @@ export function pinWorldPos(instance, pinName) {
   const r = rotateOffset(off.x, off.y, instance.rotation);
   return { x: instance.x + r.x, y: instance.y + r.y };
 }
+
+// --- Connectivity: vertices and wires (§7.1a, §7.2) ---
+
+// getVertex returns the vertex with the given id, or null.
+export function getVertex(design, id) {
+  return design.vertices.find((v) => v.id === id) ?? null;
+}
+
+// addVertex creates and registers a vertex with a fresh id.
+function addVertex(design, props) {
+  const v = { id: "v" + design.nextVertexId++, ...props };
+  design.vertices.push(v);
+  return v;
+}
+
+// vertexWorld returns a vertex's world coordinate. For pin vertices the position
+// is DERIVED from the instance (so wires stretch when the instance moves/rotates,
+// FR-018); junction/free vertices carry their own authoritative position (§7.1a).
+export function vertexWorld(design, v) {
+  if (v.kind === "pin") {
+    const inst = design.components.find((c) => c.refdes === v.ref);
+    if (!inst) throw new Error(`pin vertex ${v.id} references missing ${v.ref}`);
+    return pinWorldPos(inst, v.pin);
+  }
+  return { x: v.x, y: v.y };
+}
+
+// findPinVertex returns the existing vertex for a component pin, or null. A pin
+// has at most one vertex; fan-out is multiple wires sharing it (A2).
+function findPinVertex(design, refdes, pin) {
+  return (
+    design.vertices.find(
+      (v) => v.kind === "pin" && v.ref === refdes && v.pin === pin,
+    ) ?? null
+  );
+}
+
+// resolveEndpoint turns an endpoint spec into a vertex, creating pin/free
+// vertices as needed and reusing an existing pin vertex (for fan-out).
+// Specs: {kind:"pin",refdes,pin} | {kind:"free",x,y} | {kind:"vertex",id}.
+function resolveEndpoint(design, spec) {
+  switch (spec.kind) {
+    case "vertex": {
+      const v = getVertex(design, spec.id);
+      if (!v) throw new Error(`no such vertex ${spec.id}`);
+      return v;
+    }
+    case "pin": {
+      const existing = findPinVertex(design, spec.refdes, spec.pin);
+      if (existing) return existing;
+      const inst = design.components.find((c) => c.refdes === spec.refdes);
+      if (!inst) throw new Error(`no such component ${spec.refdes}`);
+      const w = pinWorldPos(inst, spec.pin);
+      return addVertex(design, {
+        kind: "pin",
+        ref: spec.refdes,
+        pin: spec.pin,
+        x: w.x,
+        y: w.y,
+      });
+    }
+    case "free":
+      return addVertex(design, { kind: "free", x: spec.x, y: spec.y });
+    default:
+      throw new Error(`bad endpoint kind ${spec.kind}`);
+  }
+}
+
+// addWire creates a straight wire between two endpoints (FR-027). Its path is two
+// node points referencing the endpoint vertices (A2); bends are added later.
+export function addWire(design, a, b) {
+  const va = resolveEndpoint(design, a);
+  const vb = resolveEndpoint(design, b);
+  const wire = {
+    id: "w" + design.nextWireId++,
+    path: [
+      { t: "node", v: va.id },
+      { t: "node", v: vb.id },
+    ],
+  };
+  design.wires.push(wire);
+  return wire;
+}
+
+// insertBend splits segment segIndex of a wire/bus path by inserting an interior
+// bend point at (x,y) (FR-031). A path of N points has N-1 segments; segIndex is
+// in [0, N-2]. Returns the new bend's path index.
+export function insertBend(wire, segIndex, x, y) {
+  const segments = wire.path.length - 1;
+  if (segIndex < 0 || segIndex >= segments) {
+    throw new Error(`segment ${segIndex} out of range (0..${segments - 1})`);
+  }
+  const at = segIndex + 1;
+  wire.path.splice(at, 0, { t: "bend", x, y });
+  return at;
+}
+
+// branchWire starts a new branch from a point on segment segIndex of a host
+// wire/bus (FR-034). It creates a junction vertex at (x,y) and inserts it into
+// the host path as an interior node, then returns the junction so the caller can
+// start a new wire from it. The junction is an electrical tie (FR-034b).
+export function branchWire(design, hostWire, segIndex, x, y) {
+  const segments = hostWire.path.length - 1;
+  if (segIndex < 0 || segIndex >= segments) {
+    throw new Error(`segment ${segIndex} out of range (0..${segments - 1})`);
+  }
+  const j = addVertex(design, { kind: "junction", x, y });
+  hostWire.path.splice(segIndex + 1, 0, { t: "node", v: j.id });
+  return j;
+}
+
+// branchAtPathPoint turns an existing interior path point into a junction: a bend
+// is promoted to a junction node at its coordinate; an existing junction node is
+// reused. Endpoints (pin/free nodes) cannot be branched this way. Returns the
+// junction vertex (§6.6).
+export function branchAtPathPoint(design, hostWire, index) {
+  const p = hostWire.path[index];
+  if (!p) throw new Error(`no path point at index ${index}`);
+  if (p.t === "bend") {
+    const j = addVertex(design, { kind: "junction", x: p.x, y: p.y });
+    hostWire.path[index] = { t: "node", v: j.id };
+    return j;
+  }
+  const v = getVertex(design, p.v);
+  if (v && v.kind === "junction") return v;
+  throw new Error(`cannot branch at a ${v ? v.kind : "missing"} endpoint`);
+}
+
+// moveBend repositions an interior bend point (FR-032). The index must reference
+// a bend, not an endpoint node.
+export function moveBend(wire, index, x, y) {
+  const p = wire.path[index];
+  if (!p || p.t !== "bend") {
+    throw new Error(`path index ${index} is not a bend`);
+  }
+  p.x = x;
+  p.y = y;
+}
+
+// deleteBend removes an interior bend, merging the two adjoining segments into
+// one (FR-033). The index must reference a bend.
+export function deleteBend(wire, index) {
+  const p = wire.path[index];
+  if (!p || p.t !== "bend") {
+    throw new Error(`path index ${index} is not a bend`);
+  }
+  wire.path.splice(index, 1);
+}
+
+// --- Deletion and connectivity cleanup (§3.3 G2, FR-029/FR-030) ---
+
+function allConductors(design) {
+  return design.wires.concat(design.buses);
+}
+
+function removeVertexById(design, id) {
+  const i = design.vertices.findIndex((v) => v.id === id);
+  if (i >= 0) design.vertices.splice(i, 1);
+}
+
+function removeConductor(design, c) {
+  let i = design.wires.indexOf(c);
+  if (i >= 0) {
+    design.wires.splice(i, 1);
+    return;
+  }
+  i = design.buses.indexOf(c);
+  if (i >= 0) design.buses.splice(i, 1);
+}
+
+// vertexRefCount counts how many conductor path nodes reference a vertex.
+function vertexRefCount(design, id) {
+  let n = 0;
+  for (const c of allConductors(design)) {
+    for (const p of c.path) {
+      if (p.t === "node" && p.v === id) n++;
+    }
+  }
+  return n;
+}
+
+function findSingleNodeRef(design, id) {
+  for (const c of allConductors(design)) {
+    for (let i = 0; i < c.path.length; i++) {
+      const p = c.path[i];
+      if (p.t === "node" && p.v === id) return { conductor: c, index: i };
+    }
+  }
+  return null;
+}
+
+// cleanup restores connectivity invariants after a structural deletion (§3.3):
+//   - a junction referenced by exactly one conductor is demoted: to a free
+//     (dangling) vertex if it is that conductor's endpoint, or back to a plain
+//     bend if it is interior;
+//   - a conductor whose both endpoints are free is removed (FR-030);
+//   - any vertex with no references is garbage-collected.
+// It iterates to a fixed point because each step can enable the next.
+export function cleanup(design) {
+  for (let guard = 0; ; guard++) {
+    let changed = false;
+
+    for (const v of [...design.vertices]) {
+      const rc = vertexRefCount(design, v.id);
+      if (rc === 0) {
+        removeVertexById(design, v.id);
+        changed = true;
+        continue;
+      }
+      if (v.kind === "junction" && rc === 1) {
+        const ref = findSingleNodeRef(design, v.id);
+        const last = ref.conductor.path.length - 1;
+        if (ref.index === 0 || ref.index === last) {
+          v.kind = "free"; // dangling endpoint (FR-029)
+        } else {
+          ref.conductor.path[ref.index] = { t: "bend", x: v.x, y: v.y };
+          removeVertexById(design, v.id);
+        }
+        changed = true;
+      }
+    }
+
+    for (const c of [...design.wires, ...design.buses]) {
+      const a = getVertex(design, c.path[0].v);
+      const b = getVertex(design, c.path[c.path.length - 1].v);
+      if (a && b && a.kind === "free" && b.kind === "free") {
+        removeConductor(design, c);
+        changed = true;
+      }
+    }
+
+    if (!changed) break;
+    if (guard > 1000) throw new Error("cleanup did not converge");
+  }
+}
+
+// deleteWire removes a wire and runs cleanup (FR-033a).
+export function deleteWire(design, wireId) {
+  const i = design.wires.findIndex((w) => w.id === wireId);
+  if (i < 0) throw new Error(`no such wire ${wireId}`);
+  design.wires.splice(i, 1);
+  cleanup(design);
+}
+
+// deleteInstance removes a component (FR-018a). Its pin vertices are converted to
+// free vertices at their current world position so connected wires remain with a
+// dangling end; cleanup then prunes any wire left fully disconnected (FR-030).
+export function deleteInstance(design, refdes) {
+  const i = design.components.findIndex((c) => c.refdes === refdes);
+  if (i < 0) throw new Error(`no such component ${refdes}`);
+  for (const v of design.vertices) {
+    if (v.kind === "pin" && v.ref === refdes) {
+      const w = vertexWorld(design, v); // instance still present
+      v.kind = "free";
+      v.x = w.x;
+      v.y = w.y;
+      delete v.ref;
+      delete v.pin;
+    }
+  }
+  design.components.splice(i, 1);
+  cleanup(design);
+}
