@@ -3,7 +3,7 @@
 // when both are hit (the caller decides ordering).
 
 import { rotateOffset } from "../geometry.js";
-import { pinWorldPos } from "../model/design.js";
+import { pinWorldPos, getVertex, vertexWorld } from "../model/design.js";
 
 // componentBBox returns the axis-aligned world bounding box of an instance's
 // outline. Since rotation is a multiple of 90 degrees the rotated rectangle is
@@ -58,4 +58,56 @@ export function hitPin(design, pt, tol = 0.5) {
     }
   }
   return null;
+}
+
+// pathPointWorld returns the world coordinate of a wire/bus path point: a node's
+// position comes from its vertex (derived for pins), a bend carries its own.
+function pathPointWorld(design, p) {
+  if (p.t === "node") return vertexWorld(design, getVertex(design, p.v));
+  return { x: p.x, y: p.y };
+}
+
+// distToSegment returns the distance from point p to segment a-b.
+function distToSegment(p, a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 === 0 ? 0 : ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  const cx = a.x + t * dx;
+  const cy = a.y + t * dy;
+  return Math.hypot(p.x - cx, p.y - cy);
+}
+
+// hitBend returns { wire, bendIndex } for an interior bend point within tol grid
+// units of the world point, or null.
+export function hitBend(design, pt, tol = 0.5) {
+  const tol2 = tol * tol;
+  for (const w of design.wires) {
+    for (let i = 1; i < w.path.length - 1; i++) {
+      const p = w.path[i];
+      if (p.t !== "bend") continue;
+      const dx = p.x - pt.x;
+      const dy = p.y - pt.y;
+      if (dx * dx + dy * dy <= tol2) return { wire: w, bendIndex: i };
+    }
+  }
+  return null;
+}
+
+// hitSegment returns { wire, segIndex, dist } for the nearest wire segment within
+// tol grid units of the world point, or null. Works in world coords (zoom-free).
+export function hitSegment(design, pt, tol = 0.5) {
+  let best = null;
+  for (const w of design.wires) {
+    for (let i = 0; i < w.path.length - 1; i++) {
+      const a = pathPointWorld(design, w.path[i]);
+      const b = pathPointWorld(design, w.path[i + 1]);
+      const d = distToSegment(pt, a, b);
+      if (d <= tol && (best === null || d < best.dist)) {
+        best = { wire: w, segIndex: i, dist: d };
+      }
+    }
+  }
+  return best;
 }

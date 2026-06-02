@@ -8,7 +8,7 @@ import {
   scaleFor,
   rotateOffset,
 } from "../geometry.js";
-import { pinWorldPos } from "../model/design.js";
+import { pinWorldPos, getVertex, vertexWorld } from "../model/design.js";
 
 const STUB_LEN = 1; // grid units
 const PIN_FONT = "10px system-ui, sans-serif";
@@ -47,6 +47,8 @@ export function initCanvas(canvasEl, store) {
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, w, h);
     drawGrid(ctx, w, h, vp);
+    drawWires(ctx, store.design, vp, store.state.selection);
+    drawVertices(ctx, store.design, vp);
     drawComponents(ctx, store.design, vp, store.state.selection);
     ctx.restore();
   }
@@ -93,7 +95,53 @@ function drawGrid(ctx, w, h, vp) {
 function drawComponents(ctx, design, vp, selection) {
   if (!design) return;
   for (const inst of design.components) {
-    drawComponent(ctx, inst, vp, inst.refdes === selection);
+    const selected =
+      selection?.kind === "component" && selection.refdes === inst.refdes;
+    drawComponent(ctx, inst, vp, selected);
+  }
+}
+
+// pathPointWorld returns a wire path point's world coordinate (node via vertex,
+// bend via its own coords).
+function pathPointWorld(design, p) {
+  if (p.t === "node") return vertexWorld(design, getVertex(design, p.v));
+  return { x: p.x, y: p.y };
+}
+
+// drawWires draws wires as thin black polylines (FR-036), highlighting the
+// selected one.
+function drawWires(ctx, design, vp, selection) {
+  if (!design) return;
+  for (const w of design.wires) {
+    const pts = w.path.map((p) => worldToScreen(pathPointWorld(design, p), vp));
+    if (pts.length < 2) continue;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    const selected = selection?.kind === "wire" && selection.id === w.id;
+    ctx.lineWidth = selected ? 2.5 : 1;
+    ctx.strokeStyle = selected ? "#4a90d9" : "#000";
+    ctx.stroke();
+  }
+}
+
+// drawVertices marks junctions (filled dots) and dangling free ends (hollow
+// squares) so connectivity is visible.
+function drawVertices(ctx, design, vp) {
+  if (!design) return;
+  for (const v of design.vertices) {
+    if (v.kind === "junction") {
+      const s = worldToScreen(vertexWorld(design, v), vp);
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = "#000";
+      ctx.fill();
+    } else if (v.kind === "free") {
+      const s = worldToScreen(vertexWorld(design, v), vp);
+      ctx.strokeStyle = "#b00020";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(s.x - 2.5, s.y - 2.5, 5, 5);
+    }
   }
 }
 
