@@ -4,6 +4,11 @@
 > requirements interview or to the architect. This document is self-contained.
 > It restates the requirements, so `requirements.md` is not required reading
 > (though it remains the authoritative source if a conflict is found).
+>
+> This document, together with `requirements.md`, is the single source of truth
+> for the system's intended state and is kept current. `CHANGELOG.md` is a
+> chronological index of change requests (history and rationale only) — it is
+> not needed to determine current behavior.
 
 ---
 

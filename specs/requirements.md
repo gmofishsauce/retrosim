@@ -1,5 +1,10 @@
 # Requirements: TTL Circuit Design Editor
 
+> This document, together with `design.md`, is the single source of truth for
+> the system's intended state and is kept current. `CHANGELOG.md` is a
+> chronological index of change requests (history and rationale only) — it is
+> not needed to determine current behavior.
+
 ## 1. Overview
 
 A localhost-only digital circuit design editor for retro computing hobbyists who design CPUs and other digital hardware using classic TTL components. The system consists of a JavaScript web application running in the browser and a small Go server running on the same machine. The browser application provides a schematic-style canvas on which the user places and wires TTL components. The server stores and retrieves designs and hosts the component library. The simulation engine and C-code transpiler described in the vision statement are out of scope for this phase.
