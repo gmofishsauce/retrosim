@@ -22,7 +22,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 ### 3.1 Application Shell and Startup
 
 - FR-001: The system shall consist of a JavaScript single-page application served by a Go HTTP server bound exclusively to `localhost`.
-- FR-002: On startup, the server shall load all component definition files (MD files) from a configured component library directory.
+- FR-002: On startup, the server shall load all component definition files (YAML files) from a configured component library directory.
 - FR-003: The browser application shall retrieve the component library from the server at startup and populate the palette before allowing the user to interact with the canvas.
 - FR-004: The application shall open in select-tool mode with an empty, unsaved design named `"unnamed schematic <datetime>"` where `<datetime>` is the current local date and time.
 
@@ -30,7 +30,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 
 - FR-005: The palette shall display one tile per loaded component type, showing the component type name (e.g., "74138").
 - FR-006: The palette shall be a flat, unordered list of tiles — no grouping or categorization in this phase.
-- FR-007: The component library shall be loaded once at server startup; the server is not required to detect or reload MD files added while running.
+- FR-007: The component library shall be loaded once at server startup; the server is not required to detect or reload YAML files added while running.
 
 ### 3.3 Component Placement
 
@@ -43,7 +43,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 ### 3.4 Component Appearance
 
 - FR-013: Each component shall be rendered as a rectangular outline with pin stubs and pin name labels on the sides of the rectangle.
-- FR-014: The position and side (left, right, top, bottom) of each pin shall be determined by the component's MD file; the editor shall not infer or rearrange pin positions automatically.
+- FR-014: The position and side (left, right, top, bottom) of each pin shall be determined by the component's YAML file; the editor shall not infer or rearrange pin positions automatically.
 - FR-015: Pin name labels shall always render upright regardless of the component's rotation.
 
 ### 3.5 Component Selection and Movement
@@ -60,7 +60,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 
 ### 3.6a Per-Instance Type Overrides
 
-- FR-020a: The user shall be able to view the type data of a selected component instance and override specific values (e.g., propagation delay) for that instance only. Overrides shall not affect other instances of the same type or the underlying MD file, and shall be persisted per FR-058.
+- FR-020a: The user shall be able to view the type data of a selected component instance and override specific values (e.g., propagation delay) for that instance only. Overrides shall not affect other instances of the same type or the underlying YAML file, and shall be persisted per FR-058.
 
 ### 3.7 The Canvas and Grid
 
@@ -137,23 +137,23 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 
 - FR-055: Designs shall be saved as JSON files.
 - FR-056: The JSON file shall contain at minimum three distinct collections: (a) component instances, (b) wire routes, and (c) bus routes.
-- FR-057: Each component instance record shall include: component type name, reference designator, canvas position, rotation, and a full copy of the type's data from the MD file at the time of save.
+- FR-057: Each component instance record shall include: component type name, reference designator, canvas position, rotation, and a full copy of the type's data from the YAML file at the time of save.
 - FR-058: Per-instance overrides of type data (e.g., a custom propagation delay for a specific instance) shall be stored alongside the copied type data in the instance record.
 - FR-059: Each wire route record shall include: the two endpoint references and an ordered list of bend-point grid coordinates. An endpoint reference shall be one of: (a) a component pin (U-number and pin name), (b) a junction on another wire or bus (FR-034b), or (c) a free canvas grid coordinate if the endpoint is dangling.
 - FR-059a: The saved design shall represent electrical connectivity (the set of nets per FR-034b) in a form derivable without reference to pixel geometry, so that a later tool can determine which pins are electrically connected.
 - FR-060: Each bus route record shall include: the same endpoint and bend-point data as a wire, plus the bus width in bits and any pin-group connection data for snap-connected endpoints.
 - FR-060a: For buses, the saved design shall additionally include any per-bit signal names (FR-037b) and any single-bit breakout connections (FR-043a), such that the net membership of each individual bus bit — including which bus and bit each net originates from — is derivable without reference to pixel geometry (consistent with FR-059a).
 
-### 3.17 Component Definition (MD File)
+### 3.17 Component Definition (YAML File)
 
-- FR-061: Each TTL component type shall be defined by an MD file whose format is to be designed collaboratively and then parsed by the server.
-- FR-062: The MD file shall specify: component type name; the rectangular outline dimensions (either stated directly or derived from a declared package type per FR-062b); and for each pin: its name, the side of the rectangle it appears on (left, right, top, bottom), and its position along that side.
-- FR-062a: The MD file shall specify each pin's electrical direction (at minimum: input, output, bidirectional, and tristate-capable), so that high-impedance behavior and signal direction can be represented in a later simulation phase.
-- FR-062b: The MD file may declare a standard physical package type (e.g., `DIP-16`, `DIP-24/0.6`). The server shall resolve the package — via a built-in package table/generator — to the component's outline dimensions and to each pin's physical pin number, so the author need not state outline dimensions explicitly. A declared package supplies defaults and physical metadata only; it shall not override author-specified pin side/position (FR-014). The component remains a functional schematic symbol, not a pictorial package drawing.
-- FR-063: The MD file shall optionally specify one or more named pin groups, each listing the pins that form a bus and their bit order, to support bus snap-connection (FR-041 through FR-043).
-- FR-064: The MD file shall optionally specify propagation delay values for the component.
+- FR-061: Each TTL component type shall be defined by a YAML file (`.yaml` extension), parsed by the server. (The format was designed collaboratively; see design.md §7.6.)
+- FR-062: The YAML file shall specify: component type name; the rectangular outline dimensions (either stated directly or derived from the author-placed pins per FR-062b); and for each pin: its name, the side of the rectangle it appears on (left, right, top, bottom), and its position along that side. Power and ground pins shall not be represented in the YAML file, the editor, or the simulation.
+- FR-062a: The YAML file shall specify each pin's electrical direction, which shall be one of exactly: input, output, bidirectional, or tristate-capable, so that high-impedance behavior and signal direction can be represented in a later simulation phase. There is no power/ground direction (see FR-062).
+- FR-062b: Outline dimensions may be stated explicitly in the YAML file; if omitted, the server shall derive the outline from the author-placed pins. Each pin may optionally carry a physical pin number, which is footprint/BOM metadata only and shall not be used for drawing or simulation. (Supersedes the earlier declared-package mechanism: the standard-physical-package keyword, the package-name grammar, and the package table/generator are removed entirely, because power/ground — the only reason the physical package affected the symbol — are no longer represented.)
+- FR-063: The YAML file shall optionally specify one or more named pin groups, each listing the pins that form a bus and their bit order, to support bus snap-connection (FR-041 through FR-043).
+- FR-064: The YAML file shall optionally specify propagation delay values for the component.
 - FR-065: The server shall expose the parsed component library to the browser application via an API endpoint.
-- FR-066: The MD file format shall be designed so that behavioral logic equations (in GALasm form, per the vision statement) can be added to a component definition later without requiring changes to the editor or breaking the existing parser. The editor phase shall ignore any behavioral content present.
+- FR-066: The YAML file format shall accommodate later addition of behavioral logic equations (in GALasm form, per the vision statement) to a component definition without requiring changes to the editor or breaking the existing parser. The editor phase shall ignore any behavioral content present.
 
 ---
 
@@ -172,10 +172,10 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 
 | Entity | Key Attributes | Notes |
 |---|---|---|
-| ComponentType | name, optional package type, outline dimensions (stated or package-derived), pins (name, side, position, direction, optional pin number), pin groups, propagation delays, (future) behavioral equations | Loaded from MD files at server startup |
+| ComponentType | name, outline dimensions (stated or derived from pins), pins (name, side, position, direction, optional pin number), pin groups, propagation delays, (future) behavioral equations | Loaded from YAML files at server startup |
 | ComponentInstance | type name, U-number, canvas position (x, y), rotation (0/90/180/270), copied type data, per-instance overrides | One per placed component in a design |
-| Pin | name, side, position along side, direction (in/out/bidir/tristate), bit-width, optional physical pin number | Defined in MD file; referenced by wires and buses |
-| PinGroup | name, ordered list of pins | Optional; declared in MD file; enables bus snap-connect |
+| Pin | name, side, position along side, direction (in/out/bidir/tristate), bit-width, optional physical pin number | Defined in YAML file; referenced by wires and buses |
+| PinGroup | name, ordered list of pins | Optional; declared in YAML file; enables bus snap-connect |
 | Wire | endpoint A, endpoint B (each: instance+pin, junction on another wire/bus, or free coord), ordered bend points | A wire with zero connected endpoints is not persisted |
 | Bus | same as Wire, plus width in bits, snap-connection metadata, optional per-bit signal names, single-bit breakout taps | Represents N independent nets (one per bit); rendered as thick blue line with annotation |
 | Net | set of pins and wire/bus segments electrically connected through pins and junctions; a bus contributes one net per bit | Derivable from the design without pixel geometry (FR-034b, FR-059a); per-bit provenance (originating bus and bit) retained for downstream tools |
@@ -201,7 +201,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 
 **Assumptions:**
 - The user runs a modern desktop browser (Chrome or Firefox); mobile browser support is not required.
-- The component MD file format will be designed and agreed upon before implementation of the parser begins; these requirements assume that format will be capable of expressing all data described in FR-062 through FR-064.
+- The component-definition file format has been designed and agreed upon (YAML; design.md §7.6) and is capable of expressing all data described in FR-062 through FR-064.
 - A single instance of the server runs per user; concurrent multi-session access is not required.
 - Design files fit comfortably in memory; no streaming or chunked I/O is needed for save/load.
 
@@ -211,7 +211,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 
 The minimum set of requirements needed for a usable first release:
 
-**Server:** FR-001, FR-002, FR-003, FR-050, FR-061 through FR-066 (component library loading, pin direction, MD forward-compat, API), FR-046 through FR-048 (save), FR-052 through FR-053 (open/list).
+**Server:** FR-001, FR-002, FR-003, FR-050, FR-061 through FR-066 (component library loading, pin direction, YAML forward-compat, API), FR-046 through FR-048 (save), FR-052 through FR-053 (open/list).
 
 **Canvas and tools:** FR-004, FR-007, FR-021 through FR-024 (grid, zoom, pan, undo/redo), FR-005 through FR-006 (palette), FR-008 through FR-015 (placement and appearance), FR-016 through FR-018a (selection, movement, delete), FR-019 through FR-020 (rotation).
 
@@ -227,14 +227,14 @@ The minimum set of requirements needed for a usable first release:
 
 ## 9. Open Questions
 
-- OQ-001: The MD file format is not yet defined. A separate design session is needed to specify the syntax and semantics before parser implementation begins. The data content now includes an optional package type (FR-062b); the concrete package-naming grammar (e.g., `DIP-16` vs `DIP-24/0.6`) and the package table/generator contents are part of that session.
+- OQ-001: RESOLVED. The component-definition file format is YAML (design.md §7.6, binding). The previously-contemplated package mechanism (optional package type, the `DIP-16`/`DIP-24/0.6` naming grammar, and the package table/generator) was removed entirely; outlines are stated explicitly or derived from pins (FR-062b).
 - OQ-002: Bus snap-connection and its extensions (FR-041 through FR-043a) may prove complex enough to warrant their own design pass; they are noted as potentially deferrable from the MVP. Disambiguation on multiple width-matches (FR-041b) and single-bit breakout (FR-043a) have now been specified following stakeholder discussion.
 - OQ-003: Server-assisted file navigation (FR-053) may be difficult to implement cleanly in the browser; the fallback to a recent-files list (FR-054) should be kept as a ready alternative.
 - OQ-004: The exact grid spacing (1 mm vs. 2 mm equivalent at default zoom) and the default zoom level are not yet specified.
 - OQ-005: Whether the Bus tool reverts to select-tool mode after placing one bus (consistent with the Wire tool) was not explicitly confirmed — assumed yes for consistency.
 - OQ-006: The platform-standard application data directory varies by OS (e.g., `~/Library/Application Support` on macOS, `~/.local/share` on Linux, `%APPDATA%` on Windows). The server should handle all three; the primary development platform is not yet confirmed.
-- OQ-007: The exact representation of electrical nets and wire-to-wire junctions in the JSON save format (FR-034b, FR-059a) needs to be settled as part of the save-format and MD-format design session, since it affects both. This now also covers per-bit bus net representation and provenance (FR-037a, FR-060a); the design phase has proposed a first-class-vertex graph with per-bit lanes as the chosen representation.
-- OQ-008: The set of pin directions in FR-062a (input/output/bidirectional/tristate) and how they map to the four-level logic model is assumed sufficient; this should be confirmed when the MD format is designed.
+- OQ-007: The exact representation of electrical nets and wire-to-wire junctions in the JSON save format (FR-034b, FR-059a) needs to be settled as part of the save-format and YAML-format design session, since it affects both. This now also covers per-bit bus net representation and provenance (FR-037a, FR-060a); the design phase has proposed a first-class-vertex graph with per-bit lanes as the chosen representation.
+- OQ-008: RESOLVED. The pin-direction set is exactly input/output/bidirectional/tristate (FR-062a). Power and ground are not represented anywhere, so no power/ground direction is required; the four directions map cleanly to the future four-level logic model.
 - OQ-009: The UI for viewing and editing per-instance overrides (FR-020a) is not yet specified (e.g., a properties panel vs. a dialog).
 
 ---
@@ -248,14 +248,12 @@ The minimum set of requirements needed for a usable first release:
 | Breakout | Extracting a single bit (signal) from a bus and routing it onward as an ordinary single-bit wire |
 | Bus | A multi-bit signal connection rendered as a thick blue line with a width annotation; electrically it is N independent single-bit nets, one per bit |
 | Canvas | The drawing surface in the browser on which components and wires are placed |
-| GALasm | A logic-equation language used to describe TTL component behavior in MD files (simulation phase) |
+| GALasm | A logic-equation language used to describe TTL component behavior in YAML files (simulation phase) |
 | Grid | A uniform lattice of points covering the canvas; all design elements snap to grid intersections |
 | Junction | A point at which a wire branches from another wire or bus, electrically tying them together |
-| MD file | A text file (format TBD) that defines the name, pin layout, pin directions, pin groups, optional timing, and (eventually) the GALasm behavior of one TTL component type |
-| Package | The physical package of a TTL part (e.g., DIP-16, DIP-24/0.6). Declared optionally in the MD file; the server resolves it to outline dimensions and physical pin numbers. It is metadata/defaults — the schematic symbol's pin placement is still author-controlled (FR-014) |
 | Net | The set of pins and wire/bus segments that are all electrically connected through pins and junctions |
 | Palette | The panel displaying available component types as tiles, from which the user selects components to place |
-| Pin group | A named set of pins declared in an MD file that collectively form a bus interface |
+| Pin group | A named set of pins declared in a YAML file that collectively form a bus interface |
 | Rat's nest wire | A straight-line wire drawn directly between two pins before the user has routed it with bend points |
 | Reference designator | A unique identifier assigned to each component instance (e.g., U1, U2) |
 | Rubber-banding | The real-time stretching of wire segments as the user drags a bend point or component |
@@ -263,3 +261,4 @@ The minimum set of requirements needed for a usable first release:
 | Snap-connect | The automatic connection of all pins in a declared pin group when a matching bus is dragged onto a component |
 | TTL | Transistor-Transistor Logic; a family of digital logic components (e.g., 74xx series) |
 | Wire | A single-bit signal connection rendered as a thin black line |
+| YAML file | The component-definition file (`.yaml`; design.md §7.6) defining the name, pin layout, pin directions, pin groups, optional timing, and (eventually) the GALasm behavior of one TTL component type |

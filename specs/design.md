@@ -40,7 +40,7 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 
 **Application Shell and Startup**
 - **FR-001** — JS SPA served by a Go HTTP server bound exclusively to localhost.
-- **FR-002** — On startup the server loads all component-definition (MD) files
+- **FR-002** — On startup the server loads all component-definition (YAML) files
   from a configured component-library directory.
 - **FR-003** — The SPA fetches the component library at startup and populates the
   palette *before* allowing canvas interaction.
@@ -51,7 +51,7 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-005** — One palette tile per loaded component type, showing the type name
   (e.g., `74138`).
 - **FR-006** — Palette is a flat, unordered list of tiles (no grouping).
-- **FR-007** — Library loaded once at startup; no live reload of MD files.
+- **FR-007** — Library loaded once at startup; no live reload of YAML files.
 
 **Component Placement**
 - **FR-008** — Place by dragging a tile from the palette onto the canvas.
@@ -66,7 +66,7 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 **Component Appearance**
 - **FR-013** — Each component is a rectangular outline with pin stubs and pin
   name labels on the rectangle's sides.
-- **FR-014** — Pin side (left/right/top/bottom) and position come from the MD
+- **FR-014** — Pin side (left/right/top/bottom) and position come from the YAML
   file; the editor never infers or rearranges pins.
 - **FR-015** — Pin name labels always render upright regardless of rotation.
 
@@ -86,7 +86,7 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 **Per-Instance Type Overrides**
 - **FR-020a** — View a selected instance's type data and override specific values
   (e.g., propagation delay) for that instance only. Overrides do not affect other
-  instances or the MD file; persisted per FR-058.
+  instances or the YAML file; persisted per FR-058.
 
 **Canvas and Grid**
 - **FR-021** — Entire canvas backed by a uniform fine grid (~1–2 mm at default
@@ -177,7 +177,7 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-056** — JSON contains at minimum three collections: (a) component
   instances, (b) wire routes, (c) bus routes.
 - **FR-057** — Each instance record includes: type name, refdes, canvas position,
-  rotation, and a **full copy** of the type's MD data at save time.
+  rotation, and a **full copy** of the type's YAML data at save time.
 - **FR-058** — Per-instance overrides stored alongside the copied type data.
 - **FR-059** — Each wire record includes two endpoint references plus an ordered
   list of bend-point grid coordinates. An endpoint is one of: (a) a component pin
@@ -188,18 +188,22 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-060** — Each bus record includes the same endpoint/bend data as a wire,
   plus bus width (bits) and pin-group connection data for snap-connected ends.
 
-**Component Definition (MD File)**
-- **FR-061** — Each TTL type is defined by an MD file; the format is to be
-  designed collaboratively, then parsed by the server.
-- **FR-062** — The MD file specifies: type name, outline dimensions, and per pin:
+**Component Definition (YAML File)**
+- **FR-061** — Each TTL type is defined by a YAML file (`.yaml`), parsed by the
+  server; the format is specified in §7.6.
+- **FR-062** — The YAML file specifies: type name, outline dimensions, and per pin:
   name, side, and position along that side.
-- **FR-062a** — The MD file specifies each pin's electrical direction (at least:
+- **FR-062a** — The YAML file specifies each pin's electrical direction (at least:
   input, output, bidirectional, tristate-capable).
-- **FR-063** — The MD file may declare named pin groups (ordered pins forming a
+- **FR-062b** — Outline dimensions may be stated explicitly; if omitted, the
+  server derives them from the author-placed pins. A pin may carry an optional
+  physical pin number as footprint/BOM metadata only. (No package mechanism: the
+  earlier declared-package idea was removed.)
+- **FR-063** — The YAML file may declare named pin groups (ordered pins forming a
   bus) for snap-connection (FR-041…FR-043).
-- **FR-064** — The MD file may specify propagation-delay values.
+- **FR-064** — The YAML file may specify propagation-delay values.
 - **FR-065** — Server exposes the parsed library to the SPA via an API endpoint.
-- **FR-066** — The MD format is designed so behavioral logic (GALasm) can be added
+- **FR-066** — The YAML format is designed so behavioral logic (GALasm) can be added
   later without changing the editor or breaking the parser. This phase **ignores**
   any behavioral content present (but preserves it on round-trip — see §7).
 
@@ -250,7 +254,7 @@ this document adopts. **None block implementation** except where noted in §12.
   still has exactly two endpoints. This is consistent with FR-059.
 
 - **A3 — "Matching pin group" for bus snap (FR-041).** *Previously* this design
-  guessed "first group in MD order" on a width tie. That guess is **withdrawn**:
+  guessed "first group in file order" on a width tie. That guess is **withdrawn**:
   the stakeholder confirmed the behavior and it is now a requirement. Group width
   = **Σ member pin bit-widths** (FR-041); **one** match → auto-connect (FR-041a);
   **≥2** matches → **disambiguation dialog** by group name (FR-041b); **0** matches
@@ -288,11 +292,11 @@ this document adopts. **None block implementation** except where noted in §12.
 
 ### 3.3 Gaps
 
-- **G1 — Concrete MD file syntax is undefined (OQ-001, FR-061).** By your
-  instruction this is deferred to a later collaborative session. This design
-  pins down the **in-memory `ComponentType` model and the parser contract**
-  (§7.1) so all other work proceeds; a **non-binding strawman syntax** is offered
-  in §7.6 for discussion. **This is an open item (see §12).**
+- **G1 — Concrete YAML file syntax (OQ-001, FR-061) — RESOLVED.** Originally a
+  gap deferred to a collaborative session; that session concluded and the syntax
+  is now the **binding YAML format in §7.6**, decoded against the in-memory
+  `ComponentType` model and parser contract (§7.1). No longer an open item
+  (see §12, OQ-001).
 
 - **G2 — Delete of a wire/bus that leaves another wire's junction dangling.**
   FR-033a deletes a wire; FR-034b says wires can branch through a shared junction
@@ -336,7 +340,7 @@ as authoritative and raise it — do not silently diverge.
 ### 4.2 Assumptions
 - The repository is already a Go module (`github.com/gmofishsauce/wut4`); the
   server lives under `sim/` as new packages. (Greenfield: no existing sim code.)
-- The user authors valid MD files; the parser reports errors but need not repair
+- The user authors valid YAML files; the parser reports errors but need not repair
   them.
 - Design files fit in memory; no streaming I/O for save/load.
 - One server instance per user; no concurrent sessions.
@@ -369,7 +373,7 @@ as authoritative and raise it — do not silently diverge.
                                                  │ HTTP/REST (localhost only)
 ┌────────────────────────────────────────────────┴─────────────────── Go server ───────────┐
 │  api.go (router /api/v1/*)                                                                 │
-│   ├─ GET  /components   ─▶ components.go  ─▶ mdparse.go  (load library at startup)         │
+│   ├─ GET  /components   ─▶ components.go  ─▶ yamlparse.go  (load library at startup)      │
 │   ├─ GET  /files        ─▶ storage.go (list directory)                                     │
 │   ├─ GET  /design/load  ─▶ storage.go (read JSON)                                          │
 │   ├─ POST /design/save  ─▶ storage.go (write JSON)                                         │
@@ -379,7 +383,7 @@ as authoritative and raise it — do not silently diverge.
 ```
 
 ### 5.2 Control & data flow
-1. **Startup:** server parses every MD file in the component dir into
+1. **Startup:** server parses every YAML file in the component dir into
    `ComponentType` structs (FR-002), then serves. The SPA fetches
    `/api/v1/components` and `/api/v1/defaults`, builds the palette, and only then
    enables canvas interaction (FR-003) — a loading overlay covers the canvas until
@@ -416,14 +420,14 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Interface (CLI flags):**
   - `--addr` (default `127.0.0.1:8137`) — **must** be a loopback host; reject any
     non-loopback host at startup with a fatal error.
-  - `--components-dir` (default: `./components`) — MD library directory.
+  - `--components-dir` (default: `./components`) — YAML library directory.
   - `--data-dir` (default: platform app-data dir from `paths.go`) — designs root.
   - `--web-dir` (default: `./web`) — static SPA assets.
 - **Behavior:** load library (§6.2) → if zero components, log a warning but
   continue → construct `http.Server` with the router (§6.4) → `ListenAndServe`.
 - **Error handling:** invalid/non-loopback `--addr` → exit non-zero with message.
   Missing `--components-dir` → warn, serve an empty palette. Port in use → exit
-  non-zero. MD parse errors → see §6.3 (server still starts).
+  non-zero. YAML parse errors → see §6.3 (server still starts).
 - **Dependencies:** `components.go`, `api.go`, `paths.go`, std `net/http`, `flag`.
 
 ### 6.2 Go: component library loader (`sim/server/components.go`)
@@ -431,7 +435,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Satisfies:** FR-002, FR-005, FR-007, FR-065.
 - **Types:** see §7.1 (`ComponentType`, `Pin`, `PinGroup`).
 - **Interface:**
-  - `LoadLibrary(dir string) (*Library, error)` — read every `*.md` in `dir`
+  - `LoadLibrary(dir string) (*Library, error)` — read every `*.yaml` in `dir`
     (non-recursive), parse each (§6.3), collect into a `Library` keyed by type
     name. Loaded **once** (FR-007).
   - `(*Library) List() []ComponentType` — stable, deterministic order (sorted by
@@ -441,44 +445,41 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Error handling:** a single file's parse error does **not** abort startup; the
   bad file is skipped and logged (file + line + reason). `LoadLibrary` returns an
   error only on an unreadable directory.
-- **Dependencies:** `mdparse.go`.
+- **Dependencies:** `yamlparse.go`.
 
-### 6.3 Go: MD parser + package registry (`sim/server/mdparse.go`, `sim/server/packages.go`)
-- **Purpose:** convert one MD file's bytes into a `ComponentType`; resolve a
-  declared package type to outline geometry and physical pin numbers.
+### 6.3 Go: YAML parser (`sim/server/yamlparse.go`)
+- **Purpose:** convert one YAML file's bytes (YAML — §7.6) into a `ComponentType`.
 - **Satisfies:** FR-061, FR-062, FR-062a, FR-062b, FR-063, FR-064, FR-066.
-- **Interface (the deferral boundary — stable even though syntax is TBD):**
+- **Interface (the deferral boundary — now bound to the YAML format in §7.6):**
   - `ParseComponent(path string) (ComponentType, error)`
   - The returned `ComponentType` MUST be fully populated for the fields in §7.1.
   - Any **behavioral / GALasm** content MUST be captured verbatim into
     `ComponentType.Behavior` (a single string) and otherwise ignored (FR-066).
-  - Unknown sections/keys MUST be ignored (not error) so future additions don't
-    break the parser (FR-066).
-- **Behavior:** to be specified in the MD-format session. A strawman is in §7.6.
-  The parser validates: type name present; every pin has a valid `side` ∈
-  {left,right,top,bottom}, integer `position ≥ 0`, `direction` ∈
-  {in,out,bidir,tristate}, `width ≥ 1`; every pin-group member names an existing
-  pin.
+  - Unknown keys MUST be ignored (not error) so future additions don't break the
+    parser (FR-066). With `gopkg.in/yaml.v3` this means **not** enabling
+    `KnownFields(true)`.
+- **Behavior:** decode the file with `gopkg.in/yaml.v3` (YAML 1.2 core schema, so
+  single-letter scalars like `N`/`Y` stay strings) into an intermediate struct,
+  then build and validate the `ComponentType`. The parser validates: `type`
+  present (a non-empty string); every pin has a valid `side` ∈
+  {left,right,top,bottom}, integer `pos ≥ 0`, `dir` ∈ {in,out,bidir,tristate},
+  `width ≥ 1`; every pin-group member names an existing pin. Power and ground pins
+  are **not represented** — there is no `pwr`/`power` direction and such pins are
+  simply omitted from the file (and thus from the symbol and the simulation).
 - **Outline resolution (FR-062b) — at parse time, in this order:**
-  1. if the MD states an explicit outline, use it;
-  2. else if a `package` is declared, resolve it via `packages.go` to outline
-     dimensions (and fill each pin's `number` where the package defines it);
-  3. else derive a default rectangle sized to fit the author-placed pins
-     (`width`/`height` = max pin `position` per side + margin).
+  1. if the file states an explicit `outline: [w, h]`, use it;
+  2. else derive a default rectangle sized to fit the author-placed pins
+     (`width`/`height` = max pin `pos` per side + margin).
   The result is **always concrete** `width`/`height` in the returned
-  `ComponentType` (§7.1). A declared `package` never moves pins (FR-014) — it only
-  supplies geometry defaults and pin numbers; the original `package` string is
-  retained. After resolving, validate outline dims > 0.
-- **Package registry (`packages.go`):** `ResolvePackage(name string) (PackageGeom,
-  error)`. For the DIP family this is a **parametric generator**
-  `DIP(pins, rowSpacingMils)` (pins must be even; rows of `pins/2`), plus a tiny
-  table for any non-parametric oddballs. Names like `DIP-16`, `DIP-24/0.6` (exact
-  grammar is an OQ-001 detail). Unknown package → parse error (file + reason);
-  TTL's "few packages" means the registry stays small.
-- **Error handling:** return an `error` with file + line + human-readable reason
-  on any validation failure (including an unknown/unresolvable `package`); the
+  `ComponentType` (§7.1). After resolving, validate outline dims > 0. There is no
+  package mechanism: physical packages, a package-name grammar, and a parametric
+  outline/pin-number generator were considered and **removed** (see §8) — outlines
+  come from pins (or `outline:`) and physical pin `number`s, if present at all,
+  are author-stated optional metadata used by neither drawing nor simulation.
+- **Error handling:** return an `error` with file + human-readable reason (and
+  YAML line where `yaml.v3` supplies one) on any decode or validation failure; the
   loader logs and skips (§6.2). Never panic.
-- **Dependencies:** `packages.go`; none beyond std lib.
+- **Dependencies:** `gopkg.in/yaml.v3`; otherwise std lib.
 
 ### 6.4 Go: HTTP API (`sim/server/api.go`)
 - **Purpose:** route and handle all REST endpoints; serve static SPA.
@@ -596,7 +597,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Satisfies:** FR-012, FR-015, FR-017, FR-020, FR-021.
 - **Rotation (grid-preserving):** an instance has origin `(x,y)` (its unrotated
   top-left, on the grid) and `rotation ∈ {0,90,180,270}`. A pin's unrotated
-  offset `(dx,dy)` (integers, from the MD layout) maps to a rotated offset:
+  offset `(dx,dy)` (integers, from the pin layout) maps to a rotated offset:
   ```
     0:   ( dx,  dy)      90:  (-dy,  dx)
     180: (-dx, -dy)      270: ( dy, -dx)
@@ -772,19 +773,18 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 | Field | Type | Notes |
 |---|---|---|
 | `name` | string | unique type name, e.g. `"74138"` (FR-062) |
-| `package` | string? | optional declared package, e.g. `"DIP-16"` (FR-062b); preserved verbatim for later footprint/BOM phases |
-| `width` | int | outline width in grid units (>0); **resolved** value (stated, derived from pins, or from `package` — §6.3) |
+| `width` | int | outline width in grid units (>0); **resolved** value (stated as `outline:`, or derived from pins — §6.3) |
 | `height` | int | outline height in grid units (>0); resolved value |
 | `pins` | `Pin[]` | FR-062, FR-062a |
 | `pinGroups` | `PinGroup[]` | optional (FR-063) |
 | `delays` | `map[string]number` | optional propagation delays, ns (FR-064) |
 | `behavior` | string | opaque GALasm text, preserved & ignored (FR-066) |
 
-Note: `width`/`height` are always **concrete in the parsed `ComponentType`** even
-when the MD file states only a `package` — resolution happens at parse time (§6.3)
-so the canvas, the save format, and FR-057's full-copy all keep consuming explicit
-geometry. The `package` string is retained alongside (not instead of) the resolved
-dimensions.
+Note: `width`/`height` are always **concrete in the parsed `ComponentType`** —
+resolution happens at parse time (§6.3) so the canvas, the save format, and
+FR-057's full-copy all keep consuming explicit geometry. There is no package
+field: physical packages were removed in favor of an explicit `outline:` or a
+pin-derived default (see §8).
 
 **`Pin`**
 
@@ -795,7 +795,7 @@ dimensions.
 | `position` | int | grid units along the side from its origin (top for L/R, left for T/B) |
 | `direction` | enum | `in` \| `out` \| `bidir` \| `tristate` (FR-062a) |
 | `width` | int | bit-width, default `1` |
-| `number` | int? | optional physical pin number (e.g., DIP pin 7); supplied by `package` or stated (FR-062b); footprint/BOM metadata, not used for drawing |
+| `number` | int? | optional physical pin number (e.g., DIP pin 7); author-stated (FR-062b); footprint/BOM metadata only, used by neither drawing nor simulation |
 
 **`PinGroup`**
 
@@ -937,44 +937,72 @@ a per-vertex **ref-count** (how many wires reference it) used by the G2 demotion
 logic (§3.3). `nets` are recomputed by `buildNets` (§6.6) at save time and on
 demand (e.g., for future tools).
 
-### 7.6 STRAWMAN MD format — **NON-BINDING, FOR DISCUSSION ONLY**
-> This is **not** part of the contract. The parser interface (§6.3) is the
-> contract; the concrete syntax below is a starting point for the dedicated
-> MD-format session (G1/OQ-001). Do **not** finalize the parser against it
-> without sign-off.
+### 7.6 YAML file format — **BINDING**
+This is the concrete component-definition file syntax (OQ-001 resolved with the
+stakeholder). Files are **YAML** (decoded with `gopkg.in/yaml.v3`, YAML 1.2 core
+schema) and use the `.yaml` extension in the component-library directory (§6.2).
+The parser maps each document onto the `ComponentType` of §7.1.
 
-```
-# 74138                        ; type name (FR-062)
-package: DIP-16                ; FR-062b: resolves to outline + pin numbers.
-                               ; `outline: 6 x 12` may still be given to override.
+```yaml
+# 74138 — 3-to-8 line decoder
+type: "74138"            # REQUIRED string. Quote it: bare 74138 is a YAML integer.
+outline: [6, 12]         # optional [width, height] in grid units; omit to derive from pins
 
-pins:                          ; name  side  pos  dir       pin#  [width]
-  A0    left    2   in    1    ; side/pos are author-chosen (functional, FR-014);
-  A1    left    3   in    2    ; pin# is physical (from package or stated), used
-  A2    left    4   in    3    ; only for footprint/BOM, never for drawing.
-  /E1   left    6   in    4
-  /E2   left    7   in    5
-  E3    left    8   in    6
-  /Y0   right   2   out   15   ; note: /Y7 is physical pin 7 (left side of the
-  /Y1   right   3   out   14   ; DIP) yet sits on the RIGHT of the symbol — proof
-  ; …                          ; the package can't derive symbol layout.
-  GND   bottom  3   pwr   8
-  Vcc   top     3   pwr   16   ; tristate example: DQ0  right 2  tristate  9
-groups:                        ; name: ordered pins (FR-063)
-  A: A0, A1, A2                ; 3-bit address group
+pins:                    # one flow-mapping per line: name, side, pos, dir [, width, number]
+  - { name: A0,  side: left,  pos: 2, dir: in }
+  - { name: A1,  side: left,  pos: 3, dir: in }
+  - { name: A2,  side: left,  pos: 4, dir: in }
+  - { name: /E1, side: left,  pos: 6, dir: in }
+  - { name: /E2, side: left,  pos: 7, dir: in }
+  - { name: E3,  side: left,  pos: 8, dir: in }
+  - { name: /Y0, side: right, pos: 2, dir: out }
+  - { name: /Y1, side: right, pos: 3, dir: out }
+  # … width defaults to 1; add `width: 8` for a multi-bit pin; add `number: 15`
+  #   to record a physical DIP pin number (optional footprint/BOM metadata only).
+  # Power and ground pins (GND, Vcc) are NOT listed — they do not exist in the
+  # file, the editor, or the simulation.
 
-delays:                        ; optional, ns (FR-064)
+groups:                  # optional, for bus snap-connect (FR-063)
+  - { name: A, pins: [A0, A1, A2] }
+
+delays:                  # optional map, ns (FR-064)
   tpd: 7
 
-behavior: |                    ; opaque GALasm, preserved & ignored (FR-066)
+behavior: |              # opaque GALasm, captured verbatim & ignored this phase (FR-066)
   /Y0 = /(/E1 * /E2 * E3 * /A2 * /A1 * /A0)
-  ; …
+  /Y1 = /(/E1 * /E2 * E3 * /A2 * /A1 *  A0)
+  ; GALasm's own ';' starts a comment inside this block
 ```
 
-The parser resolves `package: DIP-16` to concrete `width`/`height` and fills any
-omitted pin numbers (§6.3); if both `package` and `outline` are absent, the
-outline defaults to a box sized to the placed pins. `package` is retained in the
-parsed `ComponentType` for later footprint/BOM use.
+**Field reference** (maps 1:1 onto §7.1):
+
+| Key | Required | Maps to | Notes |
+|---|---|---|---|
+| `type` | yes | `ComponentType.name` | quote if all-digits (`"74138"`) |
+| `outline` | no | `width`,`height` | `[w, h]` grid units; omitted ⇒ derived from pins (§6.3) |
+| `pins[].name` | yes | `Pin.name` | e.g. `A0`, `/Y3`; leading `/` is a safe plain scalar |
+| `pins[].side` | yes | `Pin.side` | `left`\|`right`\|`top`\|`bottom` (FR-014) |
+| `pins[].pos` | yes | `Pin.position` | int ≥ 0, grid units along the side |
+| `pins[].dir` | yes | `Pin.direction` | `in`\|`out`\|`bidir`\|`tristate` (FR-062a) |
+| `pins[].width` | no (def 1) | `Pin.width` | bit-width ≥ 1 |
+| `pins[].number` | no | `Pin.number` | physical pin #; footprint/BOM metadata only |
+| `groups[].name` | — | `PinGroup.name` | optional section (FR-063) |
+| `groups[].pins` | — | `PinGroup.pins` | ordered member names (bit order) |
+| `delays` | no | `delays` | `map[string]number`, ns (FR-064) |
+| `behavior` | no | `behavior` | literal block scalar; verbatim & ignored (FR-066) |
+
+**Why a YAML literal block for `behavior`.** Under `|` every line is literal text
+with newlines preserved and **no escaping**, so GALasm operators (`/ * + = ( )`)
+pass through untouched — exactly what FR-066's "capture verbatim" needs, and the
+lowest-ceremony way to hand-type equations. Two gotchas the author must know:
+(1) `#` inside the block is literal text, not a YAML comment — use GALasm's `;`
+for comments there; (2) the block's indentation is stripped, so indent the whole
+block consistently.
+
+**Authoring gotchas (hand- or AI-written).** Quote any all-digit scalar (`type:
+"74138"`); single-letter names such as `N`/`Y` stay strings under the 1.2 core
+schema (`yaml.v3`) and need no quoting; unknown top-level keys are ignored, not
+errors (FR-066), so future sections (e.g., richer timing) are additive.
 
 ---
 
@@ -988,8 +1016,9 @@ parsed `ComponentType` for later footprint/BOM use.
 | Net representation | Compute nets geometrically (intersections) at read time; store nets only; connection-by-name net labels | **Graph of `Vertex` nodes + union-find over vertex ids; `nets` stored as derived convenience** | FR-059a forbids pixel-geometry-dependent connectivity; id-based union-find is exact and pixel-free; storing nets aids downstream tools (A1/A4); net labels rejected by stakeholder |
 | Junction identity | (a) reference a point on a wire by coordinate; (b) junction endpoint stores *target wire id* + render-only coord; (c) split host wire into two records on branch | **First-class `Vertex` objects shared by id; a branched wire keeps one record with the junction as an interior `node` path-point** | Symmetric (no host/branch parent-child); deleting a wire just drops a vertex ref-count (eliminates the G2 special case); shared vertex holds the only position copy so junctions can't drift; preserves "the wire I drew" as one record for select/delete (FR-033a) and aligns with FR-031/033 in-place editing; cleanly absorbs the future off-sheet **connector** tool and edge-connector components as new vertex kinds |
 | Bus connectivity (N nets) | Treat a bus as one net; expand bits only in a downstream tool; per-bit explicit net objects | **Bit-lane union-find: a bus = `width` lanes `(busId,i)`; group snap binds bit i, bus↔bus joins lanes by index, breakout taps one lane** | A bus is genuinely *width* signals (FR-037a); lanes make wires, group snaps, bus joins, and breakout all the same union; subsumes the old "one net per bus" bug; provenance (`{bus,bit,name}`) serves downstream tools (FR-060a) |
-| Bus group-match tie | First group in MD order (silent) | **Auto-connect only on a single match; prompt to disambiguate on ≥2 (FR-041b)** | Silent guessing is wrong for chips with multiple equal-width groups (e.g., ALU A/B/Y); stakeholder confirmed → promoted to requirement; withdraws design-only assumption A3 |
-| Component outline source | Author states `outline: W x H` per part; package drives a *pictorial* DIP drawing | **Optional `package:` resolved by a parser registry to outline + pin numbers; functional pin placement stays author-controlled** | Avoids hand-computing outlines; "few TTL packages" makes the registry tiny; a package is a *footprint*, not a symbol, so it can't derive functional pin layout (FR-014) — pictorial drawing would break readable symbols and bus groups; resolving at parse time keeps `ComponentType`/save format unchanged (FR-062b) |
+| Bus group-match tie | First group in file order (silent) | **Auto-connect only on a single match; prompt to disambiguate on ≥2 (FR-041b)** | Silent guessing is wrong for chips with multiple equal-width groups (e.g., ALU A/B/Y); stakeholder confirmed → promoted to requirement; withdraws design-only assumption A3 |
+| YAML file format | Bespoke line-oriented grammar; Markdown-with-frontmatter; TOML; **YAML** | **YAML (`gopkg.in/yaml.v3`, 1.2 core schema)** | A well-known format an LLM can emit reliably when transcribing datasheets (a stakeholder goal); free comment/escape/unknown-key handling (FR-066); the `\|` block scalar makes hand-typing GALasm equations ceremony-free. Supersedes the earlier "syntax TBD / strawman" and closes OQ-001 |
+| Component outline source | Declared physical `package:` resolved by a parser registry/parametric generator to outline + pin numbers (earlier design) | **Explicit `outline: [w, h]` else a pin-derived default box; no package mechanism at all** | Stakeholder removed packages: power/ground (the only reason the physical package mattered for the symbol) do not exist in file/editor/sim, and outlines are better derived from author-placed pins (FR-014). Eliminates `packages.go`, the package-name grammar, and the `pincount`/generator entirely; physical pin `number`s, if used, are author-stated optional metadata. Supersedes the package-registry decision (was FR-062b) |
 | Coordinate system | Store pixels; store mm | **Store integer grid units; derive pixels via viewport** | Everything snaps to grid by construction (FR-021); zoom/pan are pure view transforms; rotation by 90° preserves grid (§6.7) |
 | Rotation pivot | Rotate about component center | **Rotate pin offsets about the instance origin** | Guarantees rotated pins stay on integer grid intersections (FR-021) without half-grid artifacts |
 | File I/O location | Browser native file picker / downloads | **All FS access server-side via REST** | FR-053 requires server-assisted navigation; keeps a single trusted FS actor; localhost-only (NFR-001) |
@@ -1007,8 +1036,7 @@ sim/
   server/
     api.go                  CREATE  /api/v1 router + handlers + static (§6.4)
     components.go           CREATE  library load/hold/List (§6.2)
-    mdparse.go              CREATE  ParseComponent contract (syntax TBD) (§6.3)
-    packages.go             CREATE  package registry: DIP generator + table (§6.3)
+    yamlparse.go            CREATE  ParseComponent: YAML → ComponentType (§6.3, §7.6)
     storage.go              CREATE  ListDir/LoadDesign/SaveDesign (§6.5)
     paths.go                CREATE  AppDataDir per-OS (§6.5)
     types.go                CREATE  ComponentType/Pin/PinGroup/Design/Vertex/Wire/Bus/PathPoint Go structs (§7)
@@ -1030,8 +1058,8 @@ sim/
     js/chrome/properties.js CREATE  per-instance overrides panel (§6.11)
     js/chrome/contextmenu.js CREATE right-click menu (§6.11)
   components/
-    74138.md                CREATE  (user-authored sample; format TBD)
-    74xxx.md                CREATE  (additional user-authored samples)
+    74138.yaml              CREATE  (user-authored sample; §7.6)
+    74xxx.yaml              CREATE  (additional user-authored samples)
   specs/
     design.md               (this document)
 ```
@@ -1045,7 +1073,7 @@ No files are modified (greenfield).
 | Requirement | Design Section | Files |
 |---|---|---|
 | FR-001 | §6.1, §6.4, §5 | `main.go`, `api.go` |
-| FR-002 | §6.2 | `components.go`, `mdparse.go` |
+| FR-002 | §6.2 | `components.go`, `yamlparse.go` |
 | FR-003 | §6.4, §6.11, §6.12 | `api.go`, `palette.js`, `app.js` |
 | FR-004 | §6.12 | `app.js`, `store.js` |
 | FR-005, FR-006 | §6.2, §6.11 | `components.go`, `palette.js` |
@@ -1085,10 +1113,10 @@ No files are modified (greenfield).
 | FR-057, FR-058 | §7.2 | `types.go`, `model/design.js`, `properties.js` |
 | FR-059, FR-059a, FR-060 | §6.6, §7.2 | `model/netlist.js`, `types.go` |
 | FR-060a | §6.6, §7.2, A7 | `model/netlist.js`, `types.go` |
-| FR-061…FR-064 | §6.3, §7.1, §7.6 | `mdparse.go`, `types.go` |
-| FR-062b | §6.3, §7.1, §7.6 | `mdparse.go`, `packages.go`, `types.go` |
+| FR-061…FR-064 | §6.3, §7.1, §7.6 | `yamlparse.go`, `types.go` |
+| FR-062b | §6.3, §7.1, §7.6 | `yamlparse.go`, `types.go` |
 | FR-065 | §6.4 | `api.go` |
-| FR-066 | §6.3, §7.1 | `mdparse.go` |
+| FR-066 | §6.3, §7.1 | `yamlparse.go` |
 | NFR-001 | §6.1 | `main.go` |
 | NFR-002 | §6.12 | `api.js` |
 | NFR-003 | all | server `*.go`, `web/js/*` |
@@ -1106,16 +1134,17 @@ snap FR-041–043) are fully designed so they are additive when implemented.
 ## 11. Testing Strategy
 
 ### 11.1 Unit tests
-- **Go `mdparse`:** valid file → correct `ComponentType`; missing name / bad side
-  / bad direction / non-integer position / group referencing unknown pin → error
-  with file+line; behavioral block captured into `Behavior` and unknown keys
-  ignored (FR-061–FR-066).
-- **Go `mdparse` + `packages` (FR-062b):** `package: DIP-16` → resolved
-  `width`/`height` > 0 with `package` preserved; unknown package → error;
-  author `outline:` overrides the package; no `package`/`outline` → outline
-  derived from pin positions; a declared package never alters pin `side`/`position`
-  (FR-014); `DIP(pins, mils)` generator: odd pin count → error, `DIP-24/0.3` vs
-  `DIP-24/0.6` yield different widths.
+- **Go `yamlparse` (YAML, §7.6):** valid file → correct `ComponentType`; missing
+  `type` / bad `side` / bad `dir` / non-integer `pos` / `width < 1` / group
+  referencing unknown pin → error with file (+YAML line); behavioral block
+  captured verbatim into `Behavior`; unknown top-level keys ignored (FR-061–
+  FR-066). YAML-specific: `type: "74138"` round-trips as the string `"74138"`; a
+  pin or bit name `N`/`Y` stays a string (1.2 core schema), not a boolean; a `#`
+  inside the `behavior:` block is preserved as literal text.
+- **Go `yamlparse` outline (FR-062b):** explicit `outline: [6, 12]` → `width`/
+  `height` = 6/12; omitted `outline` → outline derived from pin positions (> 0);
+  optional `number:` is preserved but never affects geometry. (No package
+  mechanism exists; there is nothing to resolve or disambiguate.)
 - **Go `storage`:** atomic save does not corrupt an existing file when the write
   fails midway; `ListDir` returns only `.json`+dirs with a correct `parent`;
   load of malformed JSON → 422 (FR-046–FR-053, FR-055).
@@ -1178,16 +1207,13 @@ machine. (Confirm the target numbers in §12 if different.)
 Implementation of the **core editor and server can begin now**; these items gate
 only the noted slices.
 
-- **OQ-001 / G1 — MD file syntax (BLOCKS `mdparse.go` + `packages.go` bodies
-  only).** The concrete syntax must be settled collaboratively (strawman in §7.6).
-  Decided in principle: a part may declare a **package** (`DIP-16`, …) that the
-  parser resolves to outline + pin numbers (FR-062b), keeping functional pin
-  placement author-controlled. Still open for the format session: the exact
-  package-naming grammar (esp. width disambiguation, e.g. `DIP-24/0.6`) and the
-  registry's initial contents. All other modules proceed against the
-  `ComponentType` contract (§7.1) and can be exercised with a hand-written stub
-  library. *Do not finalize the parser/registry until the format session
-  concludes.*
+- **OQ-001 / G1 — YAML file syntax — RESOLVED.** Settled with the stakeholder: the
+  YAML file is **YAML** (§7.6, binding; §6.3 parser). The package mechanism is
+  **removed entirely** — no `package`/`pincount`, no package-name grammar, no
+  parametric generator (`packages.go` deleted). Outlines come from an explicit
+  `outline: [w, h]` or a pin-derived default; physical pin `number`s are
+  author-stated optional metadata. `yamlparse.go` may now be implemented against
+  §7.6.
 - **A3 — Pin-group "width" semantics & tie-break — RESOLVED.** Width = Σ member
   pin bit-widths; on a tie the user is **prompted** (no silent pick). This was
   confirmed with the stakeholder and **promoted to requirements** (FR-041/041a/
@@ -1210,10 +1236,12 @@ only the noted slices.
 - **OQ-003 — File navigation vs recent-files.** Design includes server-assisted
   navigation with a ready `localStorage` recent-files fallback (FR-054). Decide at
   implementation which ships first; both are designed.
-- **OQ-008 — Pin-direction set.** Assumed `{in,out,bidir,tristate}` is sufficient
-  and maps cleanly to the future four-level model. Confirm with the MD format.
+- **OQ-008 — Pin-direction set — RESOLVED.** Final set is `{in,out,bidir,
+  tristate}`. Power and ground are not represented anywhere (file, editor, or
+  simulation), so no `pwr`/`power` direction is needed; the four directions map
+  cleanly to the future four-level model.
 
 None of the above prevent starting the server skeleton, the canvas engine, the
-store/undo pipeline, or the chrome. Only the MD **parser body** and the **bus
+store/undo pipeline, or the chrome. Only the YAML **parser body** and the **bus
 snap** slice should wait on their respective confirmations.
 ```
