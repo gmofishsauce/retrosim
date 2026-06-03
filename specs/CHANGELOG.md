@@ -19,6 +19,16 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-03 — Remove multi-bit pins; every pin is one bit
+What: Removed the `Pin.width`/`bit-width` attribute. Every pin carries exactly
+one bit; a parallel bus is modeled as a `PinGroup` of single-bit pins. Restated
+pin-group bus matching as "member pin count == bus width" (was "Σ member pin
+bit-widths == width") in FR-041 and design §2.1/§3.1/§6.3/§6.9/§7.1/§7.6/§8/§11.
+Why: Physically every TTL pin is a single bit; multi-bit pins were a vestigial,
+unused concept that contradicted the symbol model and the pin-group mechanism.
+Touches: FR-041; requirements Pin entity; design §2.1, §3.1, §6.3, §6.9, §7.1
+(Pin/PinGroup), §7.6, §8 (A3), §11, §12 (A3).
+
 ## 2026-06-03 — Rename parser source file `mdparse.go` → `yamlparse.go`
 What: Renamed the planned Go parser source file from `mdparse.go` to
 `yamlparse.go` everywhere it appears in the design (§5.2 diagram, §6.1/§6.2

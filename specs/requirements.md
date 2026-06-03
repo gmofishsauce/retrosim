@@ -105,7 +105,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 
 ### 3.12 Bus-to-Component Snap Connection
 
-- FR-041: When the user drags a bus endpoint onto a component, the system shall determine which of the component's declared pin groups match the bus width. A pin group matches when the sum of its member pins' bit-widths equals the bus width.
+- FR-041: When the user drags a bus endpoint onto a component, the system shall determine which of the component's declared pin groups match the bus width. Each pin carries one bit, so a pin group matches when its number of member pins equals the bus width.
 - FR-041a: If exactly one pin group matches the bus width, the system shall snap-connect the bus to that group automatically (per FR-042).
 - FR-041b: If more than one pin group matches the bus width, the system shall prompt the user to choose which matching group to connect to, presenting the candidate groups by name; the user may cancel the connection. (This supersedes any rule that silently selects a default group on a tie.)
 - FR-042: When a pin group is connected — automatically per FR-041a or by the user's choice per FR-041b — the system shall connect each bit of the bus to the corresponding pin in the group's declared bit order, without requiring the user to wire each pin individually.
@@ -174,7 +174,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 |---|---|---|
 | ComponentType | name, outline dimensions (stated or derived from pins), pins (name, side, position, direction, optional pin number), pin groups, propagation delays, (future) behavioral equations | Loaded from YAML files at server startup |
 | ComponentInstance | type name, U-number, canvas position (x, y), rotation (0/90/180/270), copied type data, per-instance overrides | One per placed component in a design |
-| Pin | name, side, position along side, direction (in/out/bidir/tristate), bit-width, optional physical pin number | Defined in YAML file; referenced by wires and buses |
+| Pin | name, side, position along side, direction (in/out/bidir/tristate), optional physical pin number | Defined in YAML file; carries exactly one bit; referenced by wires and buses |
 | PinGroup | name, ordered list of pins | Optional; declared in YAML file; enables bus snap-connect |
 | Wire | endpoint A, endpoint B (each: instance+pin, junction on another wire/bus, or free coord), ordered bend points | A wire with zero connected endpoints is not persisted |
 | Bus | same as Wire, plus width in bits, snap-connection metadata, optional per-bit signal names, single-bit breakout taps | Represents N independent nets (one per bit); rendered as thick blue line with annotation |

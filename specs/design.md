@@ -139,7 +139,7 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 
 **Bus-to-Component Snap Connection**
 - **FR-041** — Dragging a bus endpoint onto a component determines which declared
-  pin groups **match the bus width** (match = Σ member pin bit-widths == width).
+  pin groups **match the bus width** (match = member pin count == width).
 - **FR-041a** — Exactly **one** matching group → snap-connect automatically.
 - **FR-041b** — **More than one** matching group → prompt the user to choose by
   name (may cancel). Supersedes the old "first declared on tie" guess.
@@ -256,7 +256,7 @@ this document adopts. **None block implementation** except where noted in §12.
 - **A3 — "Matching pin group" for bus snap (FR-041).** *Previously* this design
   guessed "first group in file order" on a width tie. That guess is **withdrawn**:
   the stakeholder confirmed the behavior and it is now a requirement. Group width
-  = **Σ member pin bit-widths** (FR-041); **one** match → auto-connect (FR-041a);
+  = **member pin count** (FR-041); **one** match → auto-connect (FR-041a);
   **≥2** matches → **disambiguation dialog** by group name (FR-041b); **0** matches
   → nearest pin (FR-043). See §6.9/§6.11.
 
@@ -462,8 +462,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   single-letter scalars like `N`/`Y` stay strings) into an intermediate struct,
   then build and validate the `ComponentType`. The parser validates: `type`
   present (a non-empty string); every pin has a valid `side` ∈
-  {left,right,top,bottom}, integer `pos ≥ 0`, `dir` ∈ {in,out,bidir,tristate},
-  `width ≥ 1`; every pin-group member names an existing pin. Power and ground pins
+  {left,right,top,bottom}, integer `pos ≥ 0`, `dir` ∈ {in,out,bidir,tristate};
+  every pin-group member names an existing pin. Power and ground pins
   are **not represented** — there is no `pwr`/`power` direction and such pins are
   simply omitted from the file (and thus from the symbol and the simulation).
 - **Outline resolution (FR-062b) — at parse time, in this order:**
@@ -665,7 +665,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Wire-mode cursor (FR-025):** while `WIRE`/`BUS` active, set a crosshair
   cursor and show a status hint; `SELECT` uses the default pointer.
 - **Bus snap-connect (FR-041–FR-043a, A3/A7):** on dropping a bus endpoint over a
-  component, compute the candidate pin groups whose **Σ member bit-width == bus
+  component, compute the candidate pin groups whose **member pin count == bus
   width**, then branch on the candidate count:
   - **0 candidates** → attach the endpoint to the **nearest pin** only (FR-043).
   - **1 candidate** → snap-connect automatically: store a `groupConnection`
@@ -794,8 +794,10 @@ pin-derived default (see §8).
 | `side` | enum | `left` \| `right` \| `top` \| `bottom` (FR-014) |
 | `position` | int | grid units along the side from its origin (top for L/R, left for T/B) |
 | `direction` | enum | `in` \| `out` \| `bidir` \| `tristate` (FR-062a) |
-| `width` | int | bit-width, default `1` |
 | `number` | int? | optional physical pin number (e.g., DIP pin 7); author-stated (FR-062b); footprint/BOM metadata only, used by neither drawing nor simulation |
+
+Every pin carries exactly one bit; a parallel bus is modeled as a `PinGroup` of
+single-bit pins (FR-063), not as a multi-bit pin.
 
 **`PinGroup`**
 
@@ -804,7 +806,8 @@ pin-derived default (see §8).
 | `name` | string | e.g. `"A"`, `"DATA"` |
 | `pins` | string[] | ordered member pin names (bit order) (FR-063) |
 
-Group bit-width = Σ member `pin.width` (A3). Used for bus snap (FR-041).
+Group width = number of member pins (each pin is one bit; A3). Used for bus snap
+(FR-041).
 
 ### 7.1a `Vertex` — the first-class electrical node (A1, A2, FR-034b, FR-059)
 
@@ -948,7 +951,7 @@ The parser maps each document onto the `ComponentType` of §7.1.
 type: "74138"            # REQUIRED string. Quote it: bare 74138 is a YAML integer.
 outline: [6, 12]         # optional [width, height] in grid units; omit to derive from pins
 
-pins:                    # one flow-mapping per line: name, side, pos, dir [, width, number]
+pins:                    # one flow-mapping per line: name, side, pos, dir [, number]
   - { name: A0,  side: left,  pos: 2, dir: in }
   - { name: A1,  side: left,  pos: 3, dir: in }
   - { name: A2,  side: left,  pos: 4, dir: in }
@@ -957,10 +960,10 @@ pins:                    # one flow-mapping per line: name, side, pos, dir [, wi
   - { name: E3,  side: left,  pos: 8, dir: in }
   - { name: /Y0, side: right, pos: 2, dir: out }
   - { name: /Y1, side: right, pos: 3, dir: out }
-  # … width defaults to 1; add `width: 8` for a multi-bit pin; add `number: 15`
-  #   to record a physical DIP pin number (optional footprint/BOM metadata only).
-  # Power and ground pins (GND, Vcc) are NOT listed — they do not exist in the
-  # file, the editor, or the simulation.
+  # … each pin is one bit (a parallel bus is a `group` of single-bit pins, below);
+  #   add `number: 15` to record a physical DIP pin number (optional footprint/BOM
+  #   metadata only). Power and ground pins (GND, Vcc) are NOT listed — they do
+  #   not exist in the file, the editor, or the simulation.
 
 groups:                  # optional, for bus snap-connect (FR-063)
   - { name: A, pins: [A0, A1, A2] }
@@ -984,7 +987,6 @@ behavior: |              # opaque GALasm, captured verbatim & ignored this phase
 | `pins[].side` | yes | `Pin.side` | `left`\|`right`\|`top`\|`bottom` (FR-014) |
 | `pins[].pos` | yes | `Pin.position` | int ≥ 0, grid units along the side |
 | `pins[].dir` | yes | `Pin.direction` | `in`\|`out`\|`bidir`\|`tristate` (FR-062a) |
-| `pins[].width` | no (def 1) | `Pin.width` | bit-width ≥ 1 |
 | `pins[].number` | no | `Pin.number` | physical pin #; footprint/BOM metadata only |
 | `groups[].name` | — | `PinGroup.name` | optional section (FR-063) |
 | `groups[].pins` | — | `PinGroup.pins` | ordered member names (bit order) |
@@ -1135,7 +1137,7 @@ snap FR-041–043) are fully designed so they are additive when implemented.
 
 ### 11.1 Unit tests
 - **Go `yamlparse` (YAML, §7.6):** valid file → correct `ComponentType`; missing
-  `type` / bad `side` / bad `dir` / non-integer `pos` / `width < 1` / group
+  `type` / bad `side` / bad `dir` / non-integer `pos` / group
   referencing unknown pin → error with file (+YAML line); behavioral block
   captured verbatim into `Behavior`; unknown top-level keys ignored (FR-061–
   FR-066). YAML-specific: `type: "74138"` round-trips as the string `"74138"`; a
@@ -1187,8 +1189,8 @@ snap FR-041–043) are fully designed so they are additive when implemented.
 - Fan-out: one pin with three wires forms one net (FR-034a/b).
 - Junction chain A→B→C: all three wires + their pins are one net, computed from
   ids only — moving any vertex does not change the net (FR-059a).
-- Bus width with a pin group whose summed bit-width matches via multi-bit pins
-  (A3); width tie (≥2 matching groups) → disambiguation dialog, not a silent pick
+- Bus width matched by a pin group whose member-pin count equals the width (A3);
+  width tie (≥2 matching groups) → disambiguation dialog, not a silent pick
   (FR-041b).
 - Bus-to-bus chain bit alignment: bit 3 at one end equals bit 3 at the other; a
   breakout off bit 3 anywhere along the chain lands in that same net (FR-037a/043a).
@@ -1214,8 +1216,9 @@ only the noted slices.
   `outline: [w, h]` or a pin-derived default; physical pin `number`s are
   author-stated optional metadata. `yamlparse.go` may now be implemented against
   §7.6.
-- **A3 — Pin-group "width" semantics & tie-break — RESOLVED.** Width = Σ member
-  pin bit-widths; on a tie the user is **prompted** (no silent pick). This was
+- **A3 — Pin-group "width" semantics & tie-break — RESOLVED.** Group width =
+  number of member pins (each pin is one bit); on a tie the user is **prompted**
+  (no silent pick). This was
   confirmed with the stakeholder and **promoted to requirements** (FR-041/041a/
   041b); it is no longer an open question. Bus snap, breakout, and bus bit-names
   (FR-037b/043a) are MVP-deferrable but fully designed (A7) and the save format
