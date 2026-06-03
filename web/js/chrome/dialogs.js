@@ -20,6 +20,86 @@ function joinPath(dir, name) {
   return dir.replace(/\/+$/, "") + "/" + name;
 }
 
+// chooseGroupDialog asks the user to pick one pin group when a bus width matches
+// more than one (FR-041b). Resolves to the chosen group name, or null on cancel.
+export function chooseGroupDialog(groups) {
+  return new Promise((resolve) => {
+    const overlay = el("div", "dialog-overlay");
+    const box = el("div", "dialog");
+    overlay.appendChild(box);
+
+    box.appendChild(el("div", "dialog-title", "Connect bus to group"));
+    box.appendChild(
+      el("div", "dialog-path", "More than one pin group matches the bus width:"),
+    );
+    const listEl = el("ul", "dialog-list");
+    box.appendChild(listEl);
+    for (const g of groups) {
+      const li = el("li", "dialog-entry", `${g.name} (${g.pins.join(", ")})`);
+      li.addEventListener("click", () => done(g.name));
+      listEl.appendChild(li);
+    }
+
+    const buttons = el("div", "dialog-buttons");
+    buttons.append(button("Cancel", () => done(null)));
+    box.appendChild(buttons);
+
+    function done(result) {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(null);
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+  });
+}
+
+// chooseBitDialog asks which bus bit to break out (FR-043a). Lists bits
+// 0..width-1, labeled with the bit name when the bus has one. Resolves to the bit
+// index, or null on cancel.
+export function chooseBitDialog(bus) {
+  return new Promise((resolve) => {
+    const overlay = el("div", "dialog-overlay");
+    const box = el("div", "dialog");
+    overlay.appendChild(box);
+
+    box.appendChild(el("div", "dialog-title", "Break out bus bit"));
+    box.appendChild(el("div", "dialog-path", `Choose a bit (bus width ${bus.width}):`));
+    const listEl = el("ul", "dialog-list");
+    box.appendChild(listEl);
+    for (let i = 0; i < bus.width; i++) {
+      const named = bus.bitNames && bus.bitNames[i] != null;
+      const li = el("li", "dialog-entry", named ? `${i}: ${bus.bitNames[i]}` : `${i}`);
+      li.addEventListener("click", () => done(i));
+      listEl.appendChild(li);
+    }
+
+    const buttons = el("div", "dialog-buttons");
+    buttons.append(button("Cancel", () => done(null)));
+    box.appendChild(buttons);
+
+    function done(result) {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(null);
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+  });
+}
+
 // openFileDialog resolves to { path } on confirm, or null on cancel.
 export function openFileDialog({ mode, startPath, defaultName = "" }) {
   return new Promise((resolve) => {

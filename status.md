@@ -1,6 +1,6 @@
 # wut4-editor — Implementation Status
 
-_Last updated: 2026-06-02_
+_Last updated: 2026-06-03_
 
 A localhost-only TTL circuit design editor (Go server + plain-JS SPA), built per
 `sim/specs/requirements.md` and `sim/specs/design.md`. This file tracks what is
@@ -9,13 +9,14 @@ implemented, how it's verified, and what remains.
 ## Summary
 
 The editor is a usable MVP: place/select/move/rotate/delete components, draw and
-route wires (bends, branches/junctions, fan-out), draw buses (width, branch), and
-save/open designs. Tools are available from a toolbar; zoom and pan work. The MD
-component library is served from **hardcoded stub fixtures** pending the MD-format
-design session (OQ-001); the real parser is not yet written.
+route wires (bends, branches/junctions, fan-out), draw buses (width, branch,
+group snap-connect, single-bit breakout), and save/open designs. Tools are
+available from a toolbar; zoom and pan work. The MD component library is served
+from **hardcoded stub fixtures** pending the MD-format design session (OQ-001);
+the real parser is not yet written.
 
 - **Go server tests:** all green (`cd sim/srv && go test ./...`)
-- **JS unit tests:** 82 passing (`cd sim/web && node --test`)
+- **JS unit tests:** 104 passing (`cd sim/web && node --test`)
 - **End-to-end:** verified in headless Chrome via the DevTools Protocol
   (placement, rotate, move, wire, branch, delete, bus draw/width/branch, file
   save→new→open round-trip, zoom, pan).
@@ -41,7 +42,7 @@ sim/
 - Loopback-only bind with a fatal guard on non-loopback `--addr` (NFR-001).
 - Flags: `--addr`, `--components-dir`, `--data-dir`, `--web-dir`.
 - `GET /api/v1/components` — component library (currently stub fixtures: 74138,
-  7400). MD parsing **deferred** (OQ-001); `LoadLibrary` returns fixtures.
+  7400, 74245). MD parsing **deferred** (OQ-001); `LoadLibrary` returns fixtures.
 - `GET /api/v1/defaults` — platform app-data dir (per-OS, table-tested seam).
 - `GET /api/v1/files` — directory listing for the file dialog (.json + dirs).
 - `GET /api/v1/design/load`, `POST /api/v1/design/save` — JSON designs, atomic
@@ -56,16 +57,21 @@ sim/
   `branchAtPathPoint`).
 - `cleanup`: G2 junction demotion (interior→bend, endpoint→free), FR-030 prune,
   vertex GC; `deleteWire`, `deleteInstance` (FR-018a/029/033a).
-- Buses: `addBus`/`deleteBus`/`setBusWidth`.
-- `buildNets`: union-find over wires, derived from ids only (FR-034b/059a).
+- Buses: `addBus`/`deleteBus`/`setBusWidth`; `snapBusGroup` (group snap-connect +
+  bit-name adoption, FR-042/037b), `setBusBitNames`, `breakoutBit` (FR-043a);
+  `matchingGroups` (width-match query, FR-041).
+- `buildNets`: union-find over **bit-lanes**, derived from ids/bit indices only
+  (FR-034b/059a/037a); handles group snap, bus↔bus join, breakout, with per-net
+  provenance and resolved name (FR-060a/037b).
 - `serializeDesign`/`deserializeDesign` (FR-055/056); id counters rebuilt on load.
 
 ### Store & commands
 - Single command pipeline with undo/redo (UNDO_CAP=100, NFR-006), dirty flag,
   pub/sub; `replaceDesign`/`markSaved` for New/Open/Save.
 - Commands: place/move/rotate/delete component; add/delete wire; insert/move
-  bend; add/delete bus; set bus width. Cascade-causing deletes use snapshot
-  revert for exact undo.
+  bend; add/delete bus; set bus width; snap bus group (also folded into
+  `addBusCmd` for one-undo drops); break out bus bit; set bus bit names. Cascade-
+  causing deletes use snapshot revert for exact undo.
 
 ### UI
 - Canvas renderer (rAF, render-on-dirty): grid, component outlines + pin stubs +
@@ -73,7 +79,10 @@ sim/
   buses (thick blue + `/n` width annotation).
 - Interaction FSM: SELECT / PLACE / WIRE / BUS. Placement (click or drag,
   one-shot); select/move(snap)/rotate(R)/delete; wire click-to-select,
-  drag-to-bend, branch; bus draw with equal-width guard (FR-039a).
+  drag-to-bend, branch; bus draw with equal-width guard (FR-039a). Bus endpoint
+  dropped on a component snap-connects: auto on a single width-matching pin group
+  (FR-041a), disambiguation dialog on ≥2 (FR-041b). WIRE-click on a bus breaks out
+  a single bit via a bit picker (FR-043a). Verified end-to-end in headless Chrome.
 - Toolbar: Select/Wire/Bus, zoom −/+, Undo/Redo, New/Open/Save/Save As;
   active-tool highlight; design-name with unsaved `*` marker.
 - File dialogs (server-assisted navigation) for Save/Open.
@@ -85,12 +94,14 @@ sim/
 
 - **MD parser + package registry (S21)** — BLOCKED on OQ-001 (MD file format).
   The server serves stub fixtures until the format session concludes.
-- **Bus snap-connect / breakout (S17, MVP-deferrable)** — FR-041–043 (group
-  match + disambiguation), FR-043a (breakout), FR-037b (bit names), and the
-  bit-lane/provenance `buildNets` extension (FR-037a/060a). The save format and
-  vertex model already accommodate these.
-- **Right-click context menu** — bus width / bit names (FR-038/037b); bus width
-  currently has a `+`/`-` keyboard stopgap.
+- **Nearest-pin fallback (FR-043)** — when a bus is dropped on a component and
+  **no** pin group matches its width, the endpoint is currently left free; it
+  should instead attach to the nearest pin. (Snap-connect on a match, FR-041a/b,
+  and breakout, FR-043a, are done.)
+- **Right-click context menu** — bus width / bit names (FR-038/037b); `setBusWidth`
+  and `setBusBitNames` ops exist (bit names are also adopted automatically on
+  snap), but bus width still has only a `+`/`-` keyboard stopgap and there is no
+  bit-name editing UI yet.
 - **Properties panel** — per-instance overrides UI (FR-020a).
 - **Recent-files fallback** (FR-054) — server-assisted navigation is used.
 - Minor: pin-label crowding at low zoom (readable when zoomed in).

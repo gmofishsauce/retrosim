@@ -13,6 +13,9 @@ import {
   addBus,
   deleteBus,
   setBusWidth,
+  snapBusGroup,
+  breakoutBit,
+  setBusBitNames,
 } from "./model/design.js";
 
 function findInstance(design, refdes) {
@@ -202,11 +205,20 @@ export function moveBendCmd(wireId, bendIndex, x, y) {
 }
 
 // addBusCmd adds a bus between two endpoint specs at the given width (FR-035).
-export function addBusCmd(specA, specB, width) {
+// snaps optionally group-snaps an endpoint to a component at creation time
+// (FR-041a/042): each entry is { end:"a"|"b", refdes, group }. Folding the snap
+// into this command keeps the whole drop gesture a single undo step; the snapshot
+// revert already covers the added groupConnection and adopted bit names.
+export function addBusCmd(specA, specB, width, snaps = []) {
   return snapshotCommand("Add bus", (design) => {
     const a = resolveSpec(design, specA);
     const b = resolveSpec(design, specB);
-    addBus(design, a, b, width);
+    const bus = addBus(design, a, b, width);
+    for (const s of snaps) {
+      const last = bus.path.length - 1;
+      const vid = s.end === "a" ? bus.path[0].v : bus.path[last].v;
+      snapBusGroup(design, bus.id, vid, s.refdes, s.group);
+    }
   });
 }
 
@@ -231,6 +243,55 @@ export function setBusWidthCmd(busId, width) {
     revert(design) {
       const bus = design.buses.find((b) => b.id === busId);
       bus.width = old.width;
+      bus.bitNames = old.bitNames;
+    },
+  };
+}
+
+// snapBusGroupCmd connects a bus endpoint to a component pin group (FR-042). It
+// adds a group connection and may adopt bit names (FR-037b); undo drops the added
+// connection and restores the prior bit names. No connectivity cascade, so a
+// snapshot is unnecessary.
+export function snapBusGroupCmd(busId, vertexId, instanceRefdes, groupName) {
+  let old = null;
+  return {
+    label: "Snap bus to group",
+    apply(design) {
+      const bus = design.buses.find((b) => b.id === busId);
+      if (old === null) {
+        old = { connCount: bus.groupConnections.length, bitNames: bus.bitNames };
+      }
+      snapBusGroup(design, busId, vertexId, instanceRefdes, groupName);
+    },
+    revert(design) {
+      const bus = design.buses.find((b) => b.id === busId);
+      bus.groupConnections.length = old.connCount;
+      bus.bitNames = old.bitNames;
+    },
+  };
+}
+
+// breakoutBitCmd taps one bus bit onto a new single-bit wire (FR-043a). Like a
+// branch, it creates a junction vertex and a wire, so it is snapshot-based.
+export function breakoutBitCmd(busId, segIndex, x, y, bit, dest) {
+  return snapshotCommand("Break out bus bit", (design) =>
+    breakoutBit(design, busId, segIndex, x, y, bit, dest),
+  );
+}
+
+// setBusBitNamesCmd sets a bus's per-bit names (FR-037b), capturing the old names
+// so undo restores them.
+export function setBusBitNamesCmd(busId, names) {
+  let old = null;
+  return {
+    label: "Set bus bit names",
+    apply(design) {
+      const bus = design.buses.find((b) => b.id === busId);
+      if (old === null) old = { bitNames: bus.bitNames };
+      setBusBitNames(design, busId, names);
+    },
+    revert(design) {
+      const bus = design.buses.find((b) => b.id === busId);
       bus.bitNames = old.bitNames;
     },
   };

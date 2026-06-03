@@ -93,5 +93,40 @@ func stubComponents() []ComponentType {
 				{Name: "Vcc", Side: "top", Position: 3, Direction: "in", Width: 1},
 			},
 		},
+		{
+			// Octal bus transceiver: two 8-bit groups A and B (so a width-8 bus
+			// matches both, exercising the snap disambiguation, FR-041b), plus a
+			// direction (DIR) and active-low enable (/OE) control.
+			Name:    "74245",
+			Package: "DIP-20",
+			Width:   8,
+			Height:  12,
+			Pins: []Pin{
+				{Name: "A0", Side: "left", Position: 2, Direction: "bidir", Width: 1},
+				{Name: "A1", Side: "left", Position: 3, Direction: "bidir", Width: 1},
+				{Name: "A2", Side: "left", Position: 4, Direction: "bidir", Width: 1},
+				{Name: "A3", Side: "left", Position: 5, Direction: "bidir", Width: 1},
+				{Name: "A4", Side: "left", Position: 6, Direction: "bidir", Width: 1},
+				{Name: "A5", Side: "left", Position: 7, Direction: "bidir", Width: 1},
+				{Name: "A6", Side: "left", Position: 8, Direction: "bidir", Width: 1},
+				{Name: "A7", Side: "left", Position: 9, Direction: "bidir", Width: 1},
+				{Name: "B0", Side: "right", Position: 2, Direction: "bidir", Width: 1},
+				{Name: "B1", Side: "right", Position: 3, Direction: "bidir", Width: 1},
+				{Name: "B2", Side: "right", Position: 4, Direction: "bidir", Width: 1},
+				{Name: "B3", Side: "right", Position: 5, Direction: "bidir", Width: 1},
+				{Name: "B4", Side: "right", Position: 6, Direction: "bidir", Width: 1},
+				{Name: "B5", Side: "right", Position: 7, Direction: "bidir", Width: 1},
+				{Name: "B6", Side: "right", Position: 8, Direction: "bidir", Width: 1},
+				{Name: "B7", Side: "right", Position: 9, Direction: "bidir", Width: 1},
+				{Name: "DIR", Side: "top", Position: 2, Direction: "in", Width: 1},
+				{Name: "Vcc", Side: "top", Position: 4, Direction: "in", Width: 1},
+				{Name: "/OE", Side: "top", Position: 6, Direction: "in", Width: 1},
+				{Name: "GND", Side: "bottom", Position: 4, Direction: "in", Width: 1},
+			},
+			PinGroups: []PinGroup{
+				{Name: "A", Pins: []string{"A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7"}},
+				{Name: "B", Pins: []string{"B0", "B1", "B2", "B3", "B4", "B5", "B6", "B7"}},
+			},
+		},
 	}
 }

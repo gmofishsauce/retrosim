@@ -180,6 +180,25 @@ export function addBus(design, a, b, width) {
   return bus;
 }
 
+// groupBitWidth returns a pin group's total bit-width: the sum of its member
+// pins' widths (§7.1, A3). Throws if the group names a pin the type lacks.
+function groupBitWidth(type, group) {
+  let sum = 0;
+  for (const name of group.pins) {
+    const pin = type.pins.find((p) => p.name === name);
+    if (!pin) throw new Error(`group ${group.name}: unknown pin ${name}`);
+    sum += pin.width ?? 1;
+  }
+  return sum;
+}
+
+// matchingGroups returns the component type's pin groups whose total bit-width
+// equals busWidth (FR-041). Zero matches → nearest-pin fallback (FR-043); one →
+// auto-snap (FR-041a); more than one → user disambiguation (FR-041b).
+export function matchingGroups(type, busWidth) {
+  return (type.pinGroups ?? []).filter((g) => groupBitWidth(type, g) === busWidth);
+}
+
 // setBusWidth changes a bus's width (FR-038). Per-bit names that no longer match
 // the new width are dropped (they will be re-adopted on a later snap, FR-037b).
 export function setBusWidth(design, busId, width) {
@@ -187,6 +206,74 @@ export function setBusWidth(design, busId, width) {
   if (!bus) throw new Error(`no such bus ${busId}`);
   bus.width = width;
   if (bus.bitNames && bus.bitNames.length !== width) bus.bitNames = null;
+}
+
+// expandGroupBitMap returns the per-bus-bit pin-name list for a group: each
+// member pin contributes one entry per bit of its width, in declared order
+// (FR-042). Length equals the group's total bit-width.
+function expandGroupBitMap(type, group) {
+  const bitMap = [];
+  for (const name of group.pins) {
+    const pin = type.pins.find((p) => p.name === name);
+    if (!pin) throw new Error(`group ${group.name}: unknown pin ${name}`);
+    for (let i = 0; i < (pin.width ?? 1); i++) bitMap.push(name);
+  }
+  return bitMap;
+}
+
+// snapBusGroup connects a bus endpoint to a component's pin group (FR-042): it
+// records a GroupConnection binding bus bit i to bitMap[i]. On the first snap of
+// an as-yet-unnamed bus, the bus adopts the group's pin names in bit order
+// (FR-037b). The group's bit-width must equal the bus width (the caller ensures
+// this via matchingGroups, FR-041).
+export function snapBusGroup(design, busId, vertexId, instanceRefdes, groupName) {
+  const bus = design.buses.find((b) => b.id === busId);
+  if (!bus) throw new Error(`no such bus ${busId}`);
+  const inst = design.components.find((c) => c.refdes === instanceRefdes);
+  if (!inst) throw new Error(`no such component ${instanceRefdes}`);
+  const group = (inst.typeData.pinGroups ?? []).find((g) => g.name === groupName);
+  if (!group) throw new Error(`${instanceRefdes} has no pin group ${groupName}`);
+  const bitMap = expandGroupBitMap(inst.typeData, group);
+  if (bitMap.length !== bus.width) {
+    throw new Error(
+      `group ${groupName} width ${bitMap.length} != bus width ${bus.width}`,
+    );
+  }
+  bus.groupConnections.push({
+    vertex: vertexId,
+    instance: instanceRefdes,
+    group: groupName,
+    bitMap,
+  });
+  if (!bus.bitNames) bus.bitNames = [...bitMap];
+  return bus;
+}
+
+// setBusBitNames sets a bus's per-bit signal names (FR-037b); pass null to clear.
+// names, when given, must have length equal to the bus width.
+export function setBusBitNames(design, busId, names) {
+  const bus = design.buses.find((b) => b.id === busId);
+  if (!bus) throw new Error(`no such bus ${busId}`);
+  if (names != null && names.length !== bus.width) {
+    throw new Error(`expected ${bus.width} bit names, got ${names.length}`);
+  }
+  bus.bitNames = names == null ? null : [...names];
+}
+
+// breakoutBit taps a single bit of a bus and routes it on as an ordinary
+// single-bit wire (FR-043a). It inserts a junction vertex at (x,y) on segment
+// segIndex of the bus with `bit` set to the tapped lane, then starts a wire from
+// that junction to dest. The wire becomes electrically part of that bus bit's net
+// (FR-037a), derived by buildNets. Returns the new wire.
+export function breakoutBit(design, busId, segIndex, x, y, bit, dest) {
+  const bus = design.buses.find((b) => b.id === busId);
+  if (!bus) throw new Error(`no such bus ${busId}`);
+  if (bit < 0 || bit >= bus.width) {
+    throw new Error(`bit ${bit} out of range (0..${bus.width - 1})`);
+  }
+  const j = branchWire(design, bus, segIndex, x, y);
+  j.bit = bit;
+  return addWire(design, { kind: "vertex", id: j.id }, dest);
 }
 
 // deleteBus removes a bus and runs the connectivity cleanup (FR-033a).

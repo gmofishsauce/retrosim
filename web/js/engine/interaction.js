@@ -23,10 +23,29 @@ import {
   addBusCmd,
   deleteBusCmd,
   setBusWidthCmd,
+  breakoutBitCmd,
 } from "../commands.js";
-import { insertBend, moveBend } from "../model/design.js";
+import { insertBend, moveBend, matchingGroups } from "../model/design.js";
+import { chooseGroupDialog, chooseBitDialog } from "../chrome/dialogs.js";
 
 const DEFAULT_BUS_WIDTH = 8;
+
+// planBusEndpoint converts a bus endpoint target into an addBus endpoint spec, an
+// optional snap directive, and the list of width-matching pin groups. A component
+// target with exactly one match auto-snaps (FR-041a); with zero it stays free
+// (FR-043 nearest-pin attach is a later refinement); with two-or-more it stays
+// free here and the caller opens the disambiguation dialog (FR-041b). Non-component
+// targets pass through unchanged. Exported for testing.
+export function planBusEndpoint(target, width) {
+  if (target.kind === "component") {
+    const spec = { kind: "free", x: target.x, y: target.y };
+    const groups = matchingGroups(target.type, width);
+    const snap =
+      groups.length === 1 ? { refdes: target.refdes, group: groups[0].name } : null;
+    return { spec, snap, groups, refdes: target.refdes };
+  }
+  return { spec: target, snap: null, groups: [] };
+}
 
 // showToast surfaces a brief non-fatal message (e.g., a rejected connection).
 function showToast(msg) {
@@ -90,9 +109,9 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     return null;
   }
 
-  // busTargetAt returns a bus endpoint spec: a branch on an existing bus, or a
-  // free grid point (buses connect to components via snap-connect in a later
-  // slice).
+  // busTargetAt returns a bus endpoint spec: a branch on an existing bus, a
+  // component (for snap-connect, FR-041), or a free grid point. Bus segments take
+  // priority over component bodies (§6.9).
   function busTargetAt(e) {
     const world = worldOf(e);
     const bh = hitBusSegment(store.design, world, 0.4);
@@ -107,6 +126,59 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
         busWidth: bh.bus.width,
       };
     }
+    const comp = hitComponent(store.design, world);
+    if (comp) {
+      return { kind: "component", refdes: comp.refdes, type: comp.typeData, x: g.x, y: g.y };
+    }
+    return { kind: "free", x: g.x, y: g.y };
+  }
+
+  // commitBus resolves both endpoints and dispatches one AddBus command with the
+  // chosen snaps. For any endpoint matching two or more pin groups it opens the
+  // disambiguation dialog (FR-041b); the bus is still created with that endpoint
+  // unconnected if the user cancels. Async because the dialog is awaited.
+  async function commitBus(srcTarget, dstTarget, width) {
+    const a = planBusEndpoint(srcTarget, width);
+    const b = planBusEndpoint(dstTarget, width);
+    const snaps = [];
+    for (const [end, plan] of [
+      ["a", a],
+      ["b", b],
+    ]) {
+      let snap = plan.snap;
+      if (!snap && plan.groups.length >= 2) {
+        const chosen = await chooseGroupDialog(plan.groups);
+        if (chosen) snap = { refdes: plan.refdes, group: chosen };
+      }
+      if (snap) snaps.push({ end, ...snap });
+    }
+    store.dispatch(addBusCmd(a.spec, b.spec, width, snaps));
+  }
+
+  // startBreakout begins a single-bit tap off a bus (FR-043a): it picks the bit
+  // (a dialog over the bus's bits/names) and, unless cancelled, arms a "breakout"
+  // wire source. The destination is taken on the next click. Async for the dialog.
+  async function startBreakout(busHit, e) {
+    const g = gridOf(e);
+    const bit = await chooseBitDialog(busHit.bus);
+    if (bit === null) return; // cancelled — no partial wire
+    wireSource = {
+      kind: "breakout",
+      busId: busHit.bus.id,
+      segIndex: busHit.segIndex,
+      x: g.x,
+      y: g.y,
+      bit,
+    };
+  }
+
+  // breakoutDestAt returns the destination spec for a breakout wire's second
+  // click: a component pin, or a free grid point (a dangling end is allowed,
+  // FR-029). Branching onto another wire is not a breakout destination.
+  function breakoutDestAt(e) {
+    const ph = hitPin(store.design, worldOf(e), 0.5);
+    if (ph) return { kind: "pin", refdes: ph.refdes, pin: ph.pin };
+    const g = gridOf(e);
     return { kind: "free", x: g.x, y: g.y };
   }
 
@@ -151,12 +223,43 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     }
 
     if (store.state.tool === "wire") {
-      const target = wireTargetAt(e);
-      if (!target) return; // ignore empty-space clicks (no partial wire)
       if (!wireSource) {
-        wireSource = target;
+        const world = worldOf(e);
+        // Priority: pin > bus (breakout) > wire segment (branch). Empty space is
+        // ignored (no partial wire).
+        const ph = hitPin(store.design, world, 0.5);
+        if (ph) {
+          wireSource = { kind: "pin", refdes: ph.refdes, pin: ph.pin };
+          return;
+        }
+        const bh = hitBusSegment(store.design, world, 0.4);
+        if (bh) {
+          startBreakout(bh, e); // async: pick bit, then await the destination click
+          return;
+        }
+        const sh = hitSegment(store.design, world, 0.4);
+        if (sh) {
+          const g = gridOf(e);
+          wireSource = { kind: "branch", wireId: sh.wire.id, segIndex: sh.segIndex, x: g.x, y: g.y };
+        }
         return;
       }
+      if (wireSource.kind === "breakout") {
+        store.dispatch(
+          breakoutBitCmd(
+            wireSource.busId,
+            wireSource.segIndex,
+            wireSource.x,
+            wireSource.y,
+            wireSource.bit,
+            breakoutDestAt(e),
+          ),
+        );
+        setTool("select"); // one-shot (FR-028)
+        return;
+      }
+      const target = wireTargetAt(e);
+      if (!target) return; // ignore empty-space clicks (no partial wire)
       store.dispatch(addWireCmd(wireSource, target));
       setTool("select"); // one-shot (FR-028)
       return;
@@ -181,7 +284,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
         return;
       }
       const width = wireSource.busWidth ?? target.busWidth ?? DEFAULT_BUS_WIDTH;
-      store.dispatch(addBusCmd(wireSource, target, width));
+      commitBus(wireSource, target, width);
       setTool("select"); // one-shot (FR-040)
       return;
     }
