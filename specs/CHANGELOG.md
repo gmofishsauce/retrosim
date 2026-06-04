@@ -19,6 +19,20 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-04 — Draw pins as connection bubbles instead of stubs
+What: Each pin is drawn as a small circle (bubble) just outside the body, tangent
+to the outline edge and anchored on the pin's grid point, rather than a stub bar;
+the bubble is the wire-connection target. Sized to not overlap adjacent pins and
+to lie fully within the pin hit tolerance.
+Why: Easier, clearer connection targets; cleaner symbols.
+Touches: FR-013, FR-020; design §6.8
+
+## 2026-06-04 — Raise default zoom to 1.6×
+What: Initial viewport opens at zoom 1.6 (was 1.0) for easier clicking and less
+label/pin-name crowding.
+Why: UX — pins were small and labels collided at the old default.
+Touches: design §A5
+
 ## 2026-06-04 — Pan by left-drag on empty canvas
 What: Allow panning by left-dragging on bare canvas (press begins off any
 object); middle-drag and Space+left-drag remain available.

@@ -12,7 +12,7 @@ export function createStore(initial = {}) {
     design: initial.design ?? null,
     tool: initial.tool ?? "select",
     selection: initial.selection ?? null,
-    viewport: initial.viewport ?? { pan: { x: 0, y: 0 }, zoom: 1 },
+    viewport: initial.viewport ?? { pan: { x: 0, y: 0 }, zoom: 1.6 },
     dirty: false,
     savePath: initial.savePath ?? null,
     designName: initial.designName ?? initial.design?.name ?? null,

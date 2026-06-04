@@ -42,7 +42,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 
 ### 3.4 Component Appearance
 
-- FR-013: Each component shall be rendered as a rectangular outline with pin stubs and pin name labels on the sides of the rectangle.
+- FR-013: Each component shall be rendered as a rectangular outline with a small connection bubble (circle) at each pin and pin name labels on the sides of the rectangle. Each bubble shall be drawn just outside the body, tangent to the outline edge and anchored on the pin's grid point (the grid point remains the wire-connection coordinate). The bubble shall be small enough that adjacent pins (one grid unit apart) do not overlap, and shall serve as the wire-connection target: clicking anywhere within a pin's bubble starts or ends a wire.
 - FR-014: The position and side (left, right, top, bottom) of each pin shall be determined by the component's YAML file; the editor shall not infer or rearrange pin positions automatically.
 - FR-015: Pin name labels shall always render upright regardless of the component's rotation.
 
@@ -56,7 +56,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 ### 3.6 Component Rotation
 
 - FR-019: The user shall be able to rotate a selected component 90° clockwise or 90° counter-clockwise.
-- FR-020: Rotation shall reposition pin stubs accordingly; all text labels (pin names, reference designator, type name) shall remain upright after rotation.
+- FR-020: Rotation shall reposition pin bubbles accordingly; all text labels (pin names, reference designator, type name) shall remain upright after rotation.
 
 ### 3.6a Per-Instance Type Overrides
 

@@ -64,8 +64,13 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
   rotation.
 
 **Component Appearance**
-- **FR-013** — Each component is a rectangular outline with pin stubs and pin
-  name labels on the rectangle's sides.
+- **FR-013** — Each component is a rectangular outline with a small connection
+  bubble (circle) just outside the body at each pin and pin name labels on the
+  rectangle's sides. The bubble is tangent to the outline edge and anchored on the
+  pin's grid point (that grid point stays the connection coordinate). It is sized
+  so adjacent pins (1 grid unit apart) never overlap and so the whole bubble lies
+  within the pin hit tolerance, and is the wire-connection target (click anywhere
+  within it to start/end a wire).
 - **FR-014** — Pin side (left/right/top/bottom) and position come from the YAML
   file; the editor never infers or rearranges pins.
 - **FR-015** — Pin name labels always render upright regardless of rotation.
@@ -81,7 +86,7 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 
 **Component Rotation**
 - **FR-019** — Rotate a selected component 90° CW or CCW.
-- **FR-020** — Rotation repositions pin stubs; all text labels stay upright.
+- **FR-020** — Rotation repositions pin bubbles; all text labels stay upright.
 
 **Per-Instance Type Overrides**
 - **FR-020a** — View a selected instance's type data and override specific values
@@ -267,9 +272,11 @@ this document adopts. **None block implementation** except where noted in §12.
   wires/buses/instances remain the source of truth.
 
 - **A5 — Grid spacing & default zoom (OQ-004).** **Resolution:** one grid unit =
-  a "~2 mm" cell; the default viewport renders **8 device pixels per grid unit**;
-  zoom range **0.25×–4.0×**. These are constants (`GRID_MM`, `PX_PER_UNIT_DEFAULT`,
-  `ZOOM_MIN`, `ZOOM_MAX`) in one module so they are trivially tunable.
+  a "~2 mm" cell; `PX_PER_UNIT_DEFAULT` is **8 device pixels per grid unit** at
+  zoom 1, and the initial viewport opens at **zoom 1.6** (≈12.8 px/grid-unit) so
+  pins are easy to click and labels stay legible; zoom range **0.25×–4.0×**.
+  These are constants (`GRID_MM`, `PX_PER_UNIT_DEFAULT`, `ZOOM_MIN`, `ZOOM_MAX`,
+  default viewport zoom) in one place so they are trivially tunable.
 
 - **A6 — Bus-tool one-shot (OQ-005).** Assumed **yes**: the Bus tool returns to
   select mode after placing one bus, mirroring the Wire tool (FR-040 confirms).
@@ -619,7 +626,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   (a render is requested), to meet NFR-005 without busy-spinning.
 - **Draw order:** grid → buses (thick blue, width annotation `/n` at midpoint,
   FR-036/FR-037) → wires (thin black) → junction dots → components (outline, pin
-  stubs, pin labels) → upright text labels → selection highlight → tool preview
+  bubbles, pin labels) → upright text labels → selection highlight → tool preview
   (rubber-band line, placement ghost).
 - **Grid (FR-021):** draw grid dots/lines only when `scale` is large enough that
   spacing ≥ a threshold (e.g., 6 px); otherwise draw a coarser grid to avoid

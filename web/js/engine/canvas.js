@@ -10,7 +10,11 @@ import {
 } from "../geometry.js";
 import { pinWorldPos, getVertex, vertexWorld } from "../model/design.js";
 
-const STUB_LEN = 1; // grid units
+// Pin bubble radius in grid units. The bubble is drawn tangent to the body edge
+// (center one radius outside the pin point), so its far edge is 2*PIN_RADIUS from
+// the pin point; keeping that <= the 0.5-unit pin hit tolerance makes the whole
+// bubble clickable while staying clear of adjacent pins 1 unit away (FR-013).
+const PIN_RADIUS = 0.25;
 const PIN_FONT = "10px system-ui, sans-serif";
 const LABEL_FONT = "bold 11px system-ui, sans-serif";
 
@@ -226,30 +230,34 @@ function drawComponent(ctx, inst, vp, selected) {
   ctx.strokeStyle = selected ? "#4a90d9" : "#333";
   ctx.stroke();
 
-  // Pin stubs + upright pin name labels.
+  // Pin connection bubbles + upright pin name labels.
   ctx.font = PIN_FONT;
-  ctx.fillStyle = "#333";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+  const r = PIN_RADIUS * scaleFor(vp);
   for (const pin of td.pins) {
     const pw = pinWorldPos(inst, pin.name);
     const ps = worldToScreen(pw, vp);
     const out = sideOutward(pin.side);
     const outR = rotateOffset(out.x, out.y, inst.rotation);
-    const stub = worldToScreen(
-      { x: pw.x + outR.x * STUB_LEN, y: pw.y + outR.y * STUB_LEN },
+
+    // Bubble sits just outside the body, tangent to the edge: center is one
+    // radius outward from the pin point (which stays the connection target, FR-013).
+    const bc = worldToScreen(
+      { x: pw.x + outR.x * PIN_RADIUS, y: pw.y + outR.y * PIN_RADIUS },
       vp,
     );
-
+    ctx.beginPath();
+    ctx.arc(bc.x, bc.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
     ctx.strokeStyle = "#333";
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(ps.x, ps.y);
-    ctx.lineTo(stub.x, stub.y);
     ctx.stroke();
 
     // Label sits just inside the body (opposite the outward direction), drawn
     // in screen space so it stays upright regardless of rotation (FR-015).
+    ctx.fillStyle = "#333";
     ctx.fillText(pin.name, ps.x - Math.sign(outR.x) * 8, ps.y - Math.sign(outR.y) * 8);
   }
 
