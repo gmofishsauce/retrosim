@@ -19,8 +19,8 @@ function ty() {
     width: 6,
     height: 12,
     pins: [
-      { name: "A0", side: "left", position: 2, direction: "in", width: 1 },
-      { name: "/Y0", side: "right", position: 2, direction: "out", width: 1 },
+      { name: "A0", side: "left", position: 2, direction: "in" },
+      { name: "/Y0", side: "right", position: 2, direction: "out" },
     ],
   };
 }

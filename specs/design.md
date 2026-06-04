@@ -720,7 +720,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 ### 6.11 JS: chrome widgets (`web/js/chrome/*.js`)
 - **Toolbar (`toolbar.js`)** — Satisfies FR-026, FR-035, FR-022, FR-023, FR-024,
   FR-044, FR-046, FR-049, FR-052. Buttons: Select, Wire, Bus, Zoom +/−, Pan
-  (or pan via space-drag/middle-drag), Undo, Redo, New, Open, Save, Save As. The
+  (or pan via left-drag on empty canvas, space-drag, or middle-drag — FR-023a),
+  Undo, Redo, New, Open, Save, Save As. The
   active tool is highlighted; clicking a tool sets `store.tool`.
 - **Palette (`palette.js`)** — Satisfies FR-003, FR-005, FR-006, FR-008, FR-009.
   Renders one tile per `ComponentType` (flat, sorted). A tile is `draggable`

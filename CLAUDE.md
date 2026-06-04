@@ -22,3 +22,8 @@ For every change request, in order:
 3. Then implement the code change.
 
 If the specs and code disagree, the specs win — stop and flag the discrepancy.
+
+## Temp files
+
+Always use `/Users/jeff/tmp` for temporary files (set `CLAUDE_CODE_TMPDIR` and
+any `--tmp`/`TMPDIR` paths there). Never use `/tmp` — it fills up constantly.

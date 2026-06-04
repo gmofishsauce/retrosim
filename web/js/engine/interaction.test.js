@@ -6,9 +6,9 @@ import { planBusEndpoint } from "./interaction.js";
 // A type with a single 3-bit group "A".
 const typeA = {
   pins: [
-    { name: "A0", width: 1 },
-    { name: "A1", width: 1 },
-    { name: "A2", width: 1 },
+    { name: "A0" },
+    { name: "A1" },
+    { name: "A2" },
   ],
   pinGroups: [{ name: "A", pins: ["A0", "A1", "A2"] }],
 };
@@ -16,10 +16,10 @@ const typeA = {
 // A type with two equal-width (2-bit) groups, A and B.
 const typeAB = {
   pins: [
-    { name: "A0", width: 1 },
-    { name: "A1", width: 1 },
-    { name: "B0", width: 1 },
-    { name: "B1", width: 1 },
+    { name: "A0" },
+    { name: "A1" },
+    { name: "B0" },
+    { name: "B1" },
   ],
   pinGroups: [
     { name: "A", pins: ["A0", "A1"] },

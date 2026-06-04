@@ -15,7 +15,7 @@ import (
 
 func main() {
 	addr := flag.String("addr", "127.0.0.1:8137", "loopback host:port to bind (must be loopback)")
-	componentsDir := flag.String("components-dir", "./components", "MD component library directory")
+	componentsDir := flag.String("components-dir", "./components", "YAML component library directory")
 	dataDir := flag.String("data-dir", "", "designs root (default: platform app-data dir)")
 	webDir := flag.String("web-dir", "./web", "static SPA assets directory")
 	flag.Parse()

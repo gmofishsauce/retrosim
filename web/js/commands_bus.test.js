@@ -27,9 +27,9 @@ function type74138Grp() {
     width: 6,
     height: 12,
     pins: [
-      { name: "A0", side: "left", position: 2, direction: "in", width: 1 },
-      { name: "A1", side: "left", position: 3, direction: "in", width: 1 },
-      { name: "A2", side: "left", position: 4, direction: "in", width: 1 },
+      { name: "A0", side: "left", position: 2, direction: "in" },
+      { name: "A1", side: "left", position: 3, direction: "in" },
+      { name: "A2", side: "left", position: 4, direction: "in" },
     ],
     pinGroups: [{ name: "A", pins: ["A0", "A1", "A2"] }],
   };

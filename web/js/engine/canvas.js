@@ -20,6 +20,7 @@ export function initCanvas(canvasEl, store) {
   const ctx = canvasEl.getContext("2d");
   let dirty = true;
   let frame = null;
+  let preview = null; // transient {from:{x,y}, to:{x,y}} in world coords
 
   function requestRender() {
     dirty = true;
@@ -51,6 +52,7 @@ export function initCanvas(canvasEl, store) {
     drawWires(ctx, store.design, vp, store.state.selection);
     drawVertices(ctx, store.design, vp);
     drawComponents(ctx, store.design, vp, store.state.selection);
+    if (preview) drawPreview(ctx, preview, vp);
     ctx.restore();
   }
 
@@ -60,6 +62,10 @@ export function initCanvas(canvasEl, store) {
 
   return {
     requestRender,
+    setPreview(seg) {
+      preview = seg;
+      requestRender();
+    },
     setViewport(viewport) {
       store.state.viewport = viewport;
       requestRender();
@@ -157,6 +163,22 @@ function drawBuses(ctx, design, vp, selection) {
     ctx.textBaseline = "bottom";
     ctx.fillText(String(b.width), mx + 5, my - 4);
   }
+}
+
+// drawPreview strokes the transient rubber-band line from the wire/bus source to
+// the cursor while a draw gesture is in progress (FR-027a).
+function drawPreview(ctx, seg, vp) {
+  const a = worldToScreen(seg.from, vp);
+  const b = worldToScreen(seg.to, vp);
+  ctx.save();
+  ctx.setLineDash([4, 4]);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "#888";
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+  ctx.restore();
 }
 
 // drawVertices marks junctions (filled dots) and dangling free ends (hollow

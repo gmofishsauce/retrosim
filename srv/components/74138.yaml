@@ -1,0 +1,22 @@
+# 74138 — 3-to-8 line decoder/demultiplexer
+type: "74138"
+outline: [6, 12]
+
+pins:
+  - { name: A0,  side: left,  pos: 2, dir: in }
+  - { name: A1,  side: left,  pos: 3, dir: in }
+  - { name: A2,  side: left,  pos: 4, dir: in }
+  - { name: /E1, side: left,  pos: 6, dir: in }
+  - { name: /E2, side: left,  pos: 7, dir: in }
+  - { name: E3,  side: left,  pos: 8, dir: in }
+  - { name: /Y0, side: right, pos: 2, dir: out }
+  - { name: /Y1, side: right, pos: 3, dir: out }
+  - { name: /Y2, side: right, pos: 4, dir: out }
+  - { name: /Y3, side: right, pos: 5, dir: out }
+  - { name: /Y4, side: right, pos: 6, dir: out }
+  - { name: /Y5, side: right, pos: 7, dir: out }
+  - { name: /Y6, side: right, pos: 8, dir: out }
+  - { name: /Y7, side: right, pos: 9, dir: out }
+
+groups:
+  - { name: A, pins: [A0, A1, A2] }

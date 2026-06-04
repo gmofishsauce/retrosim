@@ -19,6 +19,18 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-04 — Pan by left-drag on empty canvas
+What: Allow panning by left-dragging on bare canvas (press begins off any
+object); middle-drag and Space+left-drag remain available.
+Why: Space+left-drag is awkward for some users.
+Touches: FR-023a; design §6.11
+
+## 2026-06-04 — Rubber-band preview while drawing a wire/bus
+What: After the source click and before the destination click, draw a straight
+rubber-band line from the source to the cursor (wire and bus tools).
+Why: Drawing currently gives no visible feedback between the two clicks.
+Touches: FR-027a; design §6.8, §6.9
+
 ## 2026-06-03 — Remove multi-bit pins; every pin is one bit
 What: Removed the `Pin.width`/`bit-width` attribute. Every pin carries exactly
 one bit; a parallel bus is modeled as a `PinGroup` of single-bit pins. Restated

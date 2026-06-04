@@ -11,16 +11,16 @@ implemented, how it's verified, and what remains.
 The editor is a usable MVP: place/select/move/rotate/delete components, draw and
 route wires (bends, branches/junctions, fan-out), draw buses (width, branch,
 group snap-connect, single-bit breakout), and save/open designs. Tools are
-available from a toolbar; zoom and pan work. The component library is served
-from **hardcoded stub fixtures**.
+available from a toolbar; zoom and pan work. The component library is loaded
+from **YAML files** (`components/*.yaml`) parsed at startup.
 
 **Spec sync note (2026-06-03):** the component-definition format is now fully
 specified — it is **YAML** (design §7.6), the **package mechanism is removed**,
 **every pin is one bit** (no `Pin.width`), and **power/ground are not
-represented** anywhere (OQ-001 and OQ-008 resolved). This unblocks the real
-parser but also leaves the current Go code **out of sync** with the spec. The
-required and now-enabled follow-up work is listed under
-[Spec changes — follow-up work](#spec-changes-2026-06-03--follow-up-work).
+represented** anywhere (OQ-001 and OQ-008 resolved). The code has been brought
+back in sync: `ComponentType.Package` and `Pin.Width` removed; the real YAML
+parser (`yamlparse.go`) is written and `LoadLibrary` now globs and parses
+`components/*.yaml` (stub fixtures retired).
 
 - **Go server tests:** all green (`cd sim/srv && go test ./...`)
 - **JS unit tests:** 104 passing (`cd sim/web && node --test`)
@@ -34,7 +34,8 @@ required and now-enabled follow-up work is listed under
 sim/
   srv/                 Go module: github.com/gmofishsauce/wut4/sim/srv
     cmd/wut4-editor/   entry point (loopback-only bind, flags)
-    server/            api, components(+stub), storage, paths, types
+    server/            api, components, yamlparse, storage, paths, types
+    components/        YAML component library (74138, 7400, 74245)
   web/                 SPA (plain ES modules, no build step)
     js/                app, api, store, geometry, commands
       model/           design, netlist, persist
@@ -48,10 +49,13 @@ sim/
 ### Server (Go, `net/http` only)
 - Loopback-only bind with a fatal guard on non-loopback `--addr` (NFR-001).
 - Flags: `--addr`, `--components-dir`, `--data-dir`, `--web-dir`.
-- `GET /api/v1/components` — component library (currently stub fixtures: 74138,
-  7400, 74245). YAML parsing now unblocked (OQ-001 resolved) but not yet written;
-  `LoadLibrary` still returns the in-code fixtures (which need the spec-sync edits
-  below).
+- `GET /api/v1/components` — component library, parsed at startup from
+  `components/*.yaml` (74138, 7400, 74245) by `yamlparse.go`. `LoadLibrary` globs
+  the dir, skips+logs bad files, and treats a missing dir as an empty palette.
+- `yamlparse.go` — `ParseComponent` decodes a `.yaml` file (`gopkg.in/yaml.v3`,
+  unknown keys ignored per FR-066), validates `type`/pin `side`/`pos`/`dir` and
+  group members, resolves the outline (explicit `outline:` else derived from
+  pins), and captures `behavior:` verbatim (§6.3/§7.6). Unit-tested.
 - `GET /api/v1/defaults` — platform app-data dir (per-OS, table-tested seam).
 - `GET /api/v1/files` — directory listing for the file dialog (.json + dirs).
 - `GET /api/v1/design/load`, `POST /api/v1/design/save` — JSON designs, atomic
@@ -101,11 +105,6 @@ sim/
 
 ## Not yet implemented
 
-- **YAML parser (S21)** — was BLOCKED on OQ-001; **now unblocked** — the format
-  is specified (design §7.6). The server still serves stub fixtures until
-  `yamlparse.go` is written. The package registry is **removed** (no
-  `packages.go`). See [Spec changes — follow-up
-  work](#spec-changes-2026-06-03--follow-up-work) for the full task list.
 - **Nearest-pin fallback (FR-043)** — when a bus is dropped on a component and
   **no** pin group matches its width, the endpoint is currently left free; it
   should instead attach to the nearest pin. (Snap-connect on a match, FR-041a/b,
@@ -117,43 +116,6 @@ sim/
 - **Properties panel** — per-instance overrides UI (FR-020a).
 - **Recent-files fallback** (FR-054) — server-assisted navigation is used.
 - Minor: pin-label crowding at low zoom (readable when zoomed in).
-
-## Spec changes (2026-06-03) — follow-up work
-
-The 2026-06-03 spec updates (YAML format finalized; package mechanism removed;
-every pin one bit; power/ground not represented — see `specs/CHANGELOG.md`)
-changed the contract the server implements. The items below bring the code back
-in sync and pick up the now-unblocked parser work.
-
-### Required — code currently contradicts the spec
-
-- **`srv/server/types.go`** — remove `ComponentType.Package` (FR-062b: the
-  package mechanism is deleted) and `Pin.Width` (every pin is one bit). Drop the
-  now-stale field comments. Note: `ComponentType.Width`/`Height` (outline) stay.
-- **`srv/server/components.go`** (stub fixtures) — for each stub:
-  - remove the `Package: "DIP-16"` / `"DIP-14"` / `"DIP-20"` lines;
-  - remove the per-pin `Width: 1` fields;
-  - **remove the `GND` and `Vcc` pins** — power/ground are not represented in the
-    file, the editor, or the simulation (FR-062, OQ-008). Re-check each stub's
-    explicit outline (`Width`/`Height`) still bounds the remaining pins.
-- **`web/js/model/design.js`** (non-blocking; behavior is identical while pins
-  are 1-bit) — group width should be the **member pin count**, not Σ `pin.width`
-  (see `matchingGroups` / the `sum += pin.width ?? 1` near L187 and the
-  `pin.width`-repeat in the bit-map builder near L219). Simplify to drop the
-  vestigial `pin.width`; the bit-map is just `group.pins` in order.
-
-### Enabled — now unblocked by the resolved format (OQ-001)
-
-- **Write `srv/server/yamlparse.go`** (`ParseComponent(path) (ComponentType,
-  error)`) per design §6.3 + §7.6: decode with `gopkg.in/yaml.v3` (1.2 core
-  schema; do **not** set `KnownFields(true)` so unknown keys are ignored, FR-066);
-  capture `behavior:` verbatim; validate `type`, pin `side`/`pos`/`dir`, and that
-  group members name real pins; resolve outline from `outline:` else derive from
-  pins. (This is the file the design previously called `mdparse.go`.)
-- **`srv/server/components.go`** — change `LoadLibrary` to glob `*.yaml` and parse
-  via `yamlparse.go`, then retire the hardcoded fixtures in favor of real
-  `*.yaml` files (a `components/` dir with `74138.yaml`, `7400.yaml`,
-  `74245.yaml`, authored per §7.6).
 
 ## Deviations from the design (agreed with stakeholder)
 

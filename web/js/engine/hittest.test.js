@@ -9,7 +9,7 @@ function ty() {
     name: "T",
     width: 6,
     height: 12,
-    pins: [{ name: "A0", side: "left", position: 2, direction: "in", width: 1 }],
+    pins: [{ name: "A0", side: "left", position: 2, direction: "in" }],
   };
 }
 

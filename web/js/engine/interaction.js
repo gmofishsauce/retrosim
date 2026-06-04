@@ -25,7 +25,7 @@ import {
   setBusWidthCmd,
   breakoutBitCmd,
 } from "../commands.js";
-import { insertBend, moveBend, matchingGroups } from "../model/design.js";
+import { insertBend, moveBend, matchingGroups, pinWorldPos } from "../model/design.js";
 import { chooseGroupDialog, chooseBitDialog } from "../chrome/dialogs.js";
 
 const DEFAULT_BUS_WIDTH = 8;
@@ -72,7 +72,18 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     const label = document.getElementById("tool-mode");
     if (label) label.textContent = tool === "place" ? `place ${type.name}` : tool;
     canvas.style.cursor = tool === "select" ? "default" : "crosshair";
+    renderer.setPreview(null); // clear any in-progress rubber-band
     store.setTool(tool); // notifies subscribers (toolbar highlight)
+  }
+
+  // previewAnchorWorld returns the world-space start point of an in-progress
+  // wire/bus, used for the rubber-band preview (FR-027a).
+  function previewAnchorWorld(src) {
+    if (src.kind === "pin") {
+      const inst = store.design.components.find((c) => c.refdes === src.refdes);
+      return inst ? pinWorldPos(inst, src.pin) : null;
+    }
+    return { x: src.x, y: src.y };
   }
 
   function select(sel) {
@@ -316,7 +327,10 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       drag = { type: "component", refdes: comp.refdes, origX: comp.x, origY: comp.y, moved: false };
       return;
     }
+    // Empty canvas: deselect now; a drag pans, a plain click just deselects
+    // (FR-023a).
     select(null);
+    startPan(e);
   });
 
   window.addEventListener("mousemove", (e) => {
@@ -329,6 +343,14 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
         },
         zoom: store.state.viewport.zoom,
       });
+      return;
+    }
+    if (wireSource) {
+      const anchor = previewAnchorWorld(wireSource);
+      if (anchor) {
+        const g = gridOf(e);
+        renderer.setPreview({ from: anchor, to: { x: g.x, y: g.y } });
+      }
       return;
     }
     if (!drag) return;

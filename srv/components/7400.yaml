@@ -1,0 +1,11 @@
+# 7400 — quad 2-input NAND gate (two gates shown)
+type: "7400"
+outline: [6, 10]
+
+pins:
+  - { name: 1A, side: left,  pos: 2, dir: in }
+  - { name: 1B, side: left,  pos: 3, dir: in }
+  - { name: 2A, side: left,  pos: 5, dir: in }
+  - { name: 2B, side: left,  pos: 6, dir: in }
+  - { name: 1Y, side: right, pos: 2, dir: out }
+  - { name: 2Y, side: right, pos: 5, dir: out }

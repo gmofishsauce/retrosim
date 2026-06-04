@@ -67,6 +67,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 - FR-021: The entire canvas shall be backed by a uniform fine grid (approximately 1–2 mm screen spacing at default zoom). All components, pins, wire endpoints, and bend points shall be located on grid intersections.
 - FR-022: The user shall be able to zoom in and out on the canvas.
 - FR-023: The user shall be able to pan the canvas.
+- FR-023a: In select-tool mode, the user shall be able to pan by dragging with the left mouse button on empty canvas (a drag whose press begins on bare canvas, not on a component, wire, bus, or pin); a left press on empty canvas that does not drag clears the selection. Panning by middle-button drag and by Space+left-drag shall remain available in all tool modes.
 - FR-024: Undo and redo shall be supported for all user actions that modify the design.
 
 ### 3.8 Wire Drawing
@@ -74,6 +75,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 - FR-025: The application shall provide a Wire tool. While the Wire tool is active the cursor shall provide clear visual feedback indicating wire-drawing mode.
 - FR-026: The user shall activate the Wire tool by clicking a wire-tool button in the toolbar.
 - FR-027: To draw a wire, the user shall click a source pin, then click a destination pin. The system shall draw a straight line (rat's nest wire) between the two pins.
+- FR-027a: After the source is clicked and before the destination is clicked, the system shall display a rubber-band preview: a straight line from the source point to the current cursor position, following the cursor until the wire is committed or the gesture is cancelled. The same preview applies to bus drawing (FR-039).
 - FR-028: After a wire is placed, the application shall automatically return to select-tool mode.
 - FR-029: A wire or bus with exactly one connected endpoint shall be permitted (e.g., as a result of deleting a component).
 - FR-030: A wire or bus with no connected endpoints shall be automatically removed from the design.

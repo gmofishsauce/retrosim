@@ -180,20 +180,19 @@ export function addBus(design, a, b, width) {
   return bus;
 }
 
-// groupBitWidth returns a pin group's total bit-width: the sum of its member
-// pins' widths (§7.1, A3). Throws if the group names a pin the type lacks.
+// groupBitWidth returns a pin group's width: its member pin count, since every
+// pin is one bit (§7.1, A3). Throws if the group names a pin the type lacks.
 function groupBitWidth(type, group) {
-  let sum = 0;
   for (const name of group.pins) {
-    const pin = type.pins.find((p) => p.name === name);
-    if (!pin) throw new Error(`group ${group.name}: unknown pin ${name}`);
-    sum += pin.width ?? 1;
+    if (!type.pins.some((p) => p.name === name)) {
+      throw new Error(`group ${group.name}: unknown pin ${name}`);
+    }
   }
-  return sum;
+  return group.pins.length;
 }
 
-// matchingGroups returns the component type's pin groups whose total bit-width
-// equals busWidth (FR-041). Zero matches → nearest-pin fallback (FR-043); one →
+// matchingGroups returns the component type's pin groups whose width equals
+// busWidth (FR-041). Zero matches → nearest-pin fallback (FR-043); one →
 // auto-snap (FR-041a); more than one → user disambiguation (FR-041b).
 export function matchingGroups(type, busWidth) {
   return (type.pinGroups ?? []).filter((g) => groupBitWidth(type, g) === busWidth);
@@ -208,17 +207,16 @@ export function setBusWidth(design, busId, width) {
   if (bus.bitNames && bus.bitNames.length !== width) bus.bitNames = null;
 }
 
-// expandGroupBitMap returns the per-bus-bit pin-name list for a group: each
-// member pin contributes one entry per bit of its width, in declared order
-// (FR-042). Length equals the group's total bit-width.
+// expandGroupBitMap returns the per-bus-bit pin-name list for a group: one entry
+// per member pin in declared order, since every pin is one bit (FR-042). Length
+// equals the group's width (member pin count).
 function expandGroupBitMap(type, group) {
-  const bitMap = [];
   for (const name of group.pins) {
-    const pin = type.pins.find((p) => p.name === name);
-    if (!pin) throw new Error(`group ${group.name}: unknown pin ${name}`);
-    for (let i = 0; i < (pin.width ?? 1); i++) bitMap.push(name);
+    if (!type.pins.some((p) => p.name === name)) {
+      throw new Error(`group ${group.name}: unknown pin ${name}`);
+    }
   }
-  return bitMap;
+  return [...group.pins];
 }
 
 // snapBusGroup connects a bus endpoint to a component's pin group (FR-042): it
