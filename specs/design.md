@@ -150,8 +150,8 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
   name (may cancel). Supersedes the old "first declared on tie" guess.
 - **FR-042** — On connect (auto or chosen), connect each bit to the corresponding
   group pin in declared bit order (no per-pin wiring).
-- **FR-043** — **No** matching group → attach the endpoint to the nearest pin
-  only; remaining bits unconnected.
+- **FR-043** — **No** matching group → leave the endpoint **unconnected**.
+  (Supersedes the earlier nearest-pin-attach rule.)
 - **FR-043a** — The user can **break out** a single bit from a bus and route it as
   an ordinary single-bit wire; the wire joins that bus bit's net (FR-037a).
 
@@ -263,7 +263,7 @@ this document adopts. **None block implementation** except where noted in §12.
   the stakeholder confirmed the behavior and it is now a requirement. Group width
   = **member pin count** (FR-041); **one** match → auto-connect (FR-041a);
   **≥2** matches → **disambiguation dialog** by group name (FR-041b); **0** matches
-  → nearest pin (FR-043). See §6.9/§6.11.
+  → leave unconnected (FR-043). See §6.9/§6.11.
 
 - **A4 — Net storage vs derivation (FR-059a).** "Derivable" does not say whether
   to *store* nets. **Resolution:** the save file **includes** a `nets` array
@@ -509,6 +509,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Behavior:** decode JSON, delegate to `storage.go`/`components.go`, encode
   JSON. All responses `Content-Type: application/json`. Static handler serves
   `web/` for any non-`/api/` path; unknown SPA routes fall back to `index.html`.
+  Static responses carry `Cache-Control: no-store` so a plain browser reload
+  always picks up edited SPA assets (localhost-only authoring tool served from the
+  source tree — no hard-refresh / DevTools cache toggle needed).
 - **Error handling:** consistent error envelope `{"error":"<message>"}` with the
   HTTP status above. No stack traces leak to the client; full detail is logged
   server-side.
@@ -674,7 +677,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Bus snap-connect (FR-041–FR-043a, A3/A7):** on dropping a bus endpoint over a
   component, compute the candidate pin groups whose **member pin count == bus
   width**, then branch on the candidate count:
-  - **0 candidates** → attach the endpoint to the **nearest pin** only (FR-043).
+  - **0 candidates** → leave the endpoint **unconnected** (FR-043).
   - **1 candidate** → snap-connect automatically: store a `groupConnection`
     mapping bit *i* → `group.pins[i]` (FR-041a/FR-042). If the bus has no
     `bitNames`, adopt the group's member pin names (FR-037b).
@@ -749,13 +752,22 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     promise the interaction FSM awaits before dispatching `snapBusGroup`. Does
     **not** filter by pin direction (electrical-rule checking is out of scope this
     phase — see §4.1, OQ-008/D2).
-- **Properties panel (`properties.js`)** — Satisfies FR-020a. Shows the selected
-  instance's copied type data; editable fields (e.g., propagation delay) dispatch
-  `SetOverride`. *(MVP-deferrable; the data model and `SetOverride` command exist
-  regardless so the panel is purely additive — see §7.2 `overrides`.)*
-- **Context menu (`contextmenu.js`)** — Satisfies FR-033, FR-038, FR-037b.
-  Right-click surfaces "Delete bend point" (on a bend), "Set bus width…" and
-  "Name bus bits…" (on a bus, FR-037b).
+- **Properties panel (`properties.js`)** — Satisfies FR-020a. A docked right-edge
+  panel showing the selected instance's copied type data (refdes, type, size, pin
+  count) read-only, plus one numeric field per `delays` entry for per-instance
+  propagation-delay overrides. Editing dispatches `setOverride` (model + command,
+  §6.9/§6.10); entering the type default or pressing the reset button clears the
+  override. Overrides live in `inst.overrides.delays` (§7.2) and persist via the
+  full-instance save (FR-058). The panel re-renders on every store notification,
+  which is why selection now flows through `store.setSelection` (notifying).
+- **Context menu (`contextmenu.js`)** — Satisfies FR-033, FR-033b, FR-038, FR-037b,
+  FR-033a, FR-018a. Right-click hit-tests the cursor (bend → wire → bus → component
+  priority) and surfaces the matching actions: "Delete bend point" (on a bend);
+  "Delete wire" (on a wire); "Set width…", "Edit bit names…", and "Delete bus" (on
+  a bus); "Delete component" (on a component). Dismissed by choosing an item,
+  Escape, or an outside click. `interaction.js` builds the item list and dispatches
+  the commands; `contextmenu.js` only renders and positions the menu. Width and
+  bit-name entry use small modal prompts in `dialogs.js`.
 - **Dependencies:** store, api, geometry.
 
 ### 6.12 JS: API client & bootstrap (`web/js/api.js`, `web/js/app.js`)
@@ -1178,7 +1190,7 @@ snap FR-041–043) are fully designed so they are additive when implemented.
 - Draw wire, add/drag/delete bend, branch in wire mode (FR-027–FR-034).
 - Move a component; connected segments stretch (FR-018).
 - Bus: thick blue, `/n` annotation, right-click width, snap to a matching pin
-  group, fallback to nearest pin (FR-035–FR-043).
+  group, leave unconnected when no group matches (FR-035–FR-043).
 - Bus disambiguation: snap a 16-bit bus to an ALU with three 16-bit groups (A/B/Y)
   → dialog lists all three by name; pick `B` → connects to B; cancel → unconnected
   (FR-041b). Snap a 4-bit bus to the same ALU → flags group auto-connects, no

@@ -83,6 +83,13 @@ export function createStore(initial = {}) {
       notify();
     },
 
+    // setSelection updates the current selection and notifies, so the canvas
+    // highlight and the properties panel (FR-020a) stay in sync.
+    setSelection(sel) {
+      state.selection = sel;
+      notify();
+    },
+
     // replaceDesign swaps in a new design (New/Open), resetting undo/redo,
     // selection, and the dirty flag (FR-044/052).
     replaceDesign(newDesign, { savePath = null } = {}) {

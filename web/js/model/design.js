@@ -77,6 +77,24 @@ export function pinWorldPos(instance, pinName) {
   return { x: instance.x + r.x, y: instance.y + r.y };
 }
 
+// setOverride sets or clears a per-instance propagation-delay override (FR-020a/
+// FR-058): overrides are stored as `inst.overrides.delays[key]` and shadow the
+// type's `delays[key]` for this instance only. A value of null clears the
+// override, reverting to the type default.
+export function setOverride(design, refdes, key, value) {
+  const inst = design.components.find((c) => c.refdes === refdes);
+  if (!inst) throw new Error(`no such component ${refdes}`);
+  if (value === null) {
+    if (inst.overrides.delays) {
+      delete inst.overrides.delays[key];
+      if (Object.keys(inst.overrides.delays).length === 0) delete inst.overrides.delays;
+    }
+    return;
+  }
+  if (!inst.overrides.delays) inst.overrides.delays = {};
+  inst.overrides.delays[key] = value;
+}
+
 // --- Connectivity: vertices and wires (§7.1a, §7.2) ---
 
 // getVertex returns the vertex with the given id, or null.

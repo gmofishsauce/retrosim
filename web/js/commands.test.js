@@ -8,6 +8,7 @@ import {
   moveComponent,
   rotateComponent,
   deleteComponent,
+  setOverrideCmd,
 } from "./commands.js";
 
 function ty(name = "74138") {
@@ -88,4 +89,26 @@ test("deleteComponent removes an instance; undo restores it at its index", () =>
   assert.equal(store.design.components.length, 2);
   assert.equal(store.design.components[0].refdes, "U1");
   assert.equal(store.design.components[1].refdes, "U2");
+});
+
+test("setOverrideCmd sets and clears a per-instance delay override; undo restores", () => {
+  const store = newStore();
+  const t = ty();
+  t.delays = { tpd: 7 };
+  store.dispatch(placeComponent(t, 0, 0, 0)); // U1
+
+  store.dispatch(setOverrideCmd("U1", "tpd", 12));
+  assert.equal(find(store.design, "U1").overrides.delays.tpd, 12);
+
+  store.undo(); // back to no override
+  assert.equal(find(store.design, "U1").overrides.delays, undefined);
+
+  store.redo();
+  assert.equal(find(store.design, "U1").overrides.delays.tpd, 12);
+
+  // Clearing the override removes the delays map again.
+  store.dispatch(setOverrideCmd("U1", "tpd", null));
+  assert.equal(find(store.design, "U1").overrides.delays, undefined);
+  store.undo(); // undo clear -> override back
+  assert.equal(find(store.design, "U1").overrides.delays.tpd, 12);
 });

@@ -10,6 +10,7 @@ import {
   deleteWireCmd,
   insertBendCmd,
   moveBendCmd,
+  deleteBendCmd,
 } from "./commands.js";
 
 function ty() {
@@ -114,4 +115,19 @@ test("insertBendCmd / moveBendCmd are reversible", () => {
   assert.deepEqual(store.design.wires[0].path[1], { t: "bend", x: 25, y: 26 });
   store.undo(); // undo insert
   assert.equal(store.design.wires[0].path.length, 2);
+});
+
+test("deleteBendCmd removes a bend and undo restores it (FR-033)", () => {
+  const store = newStore();
+  store.dispatch(addWireCmd(pin("U1", "/Y0"), pin("U2", "A0")));
+  const wid = store.design.wires[0].id;
+  store.dispatch(insertBendCmd(wid, 0, 25, 26));
+  assert.equal(store.design.wires[0].path.length, 3);
+
+  store.dispatch(deleteBendCmd(wid, 1));
+  assert.equal(store.design.wires[0].path.length, 2);
+
+  store.undo(); // undo delete -> bend back at index 1
+  assert.equal(store.design.wires[0].path.length, 3);
+  assert.deepEqual(store.design.wires[0].path[1], { t: "bend", x: 25, y: 26 });
 });

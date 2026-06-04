@@ -100,6 +100,102 @@ export function chooseBitDialog(bus) {
   });
 }
 
+// promptWidthDialog asks for a bus width (FR-038). Resolves to a positive integer,
+// or null on cancel / invalid input.
+export function promptWidthDialog(current) {
+  return new Promise((resolve) => {
+    const overlay = el("div", "dialog-overlay");
+    const box = el("div", "dialog");
+    overlay.appendChild(box);
+
+    box.appendChild(el("div", "dialog-title", "Set bus width"));
+    const row = el("div", "dialog-row");
+    const input = el("input", "dialog-name");
+    input.type = "number";
+    input.min = "1";
+    input.value = String(current);
+    row.append(el("label", "dialog-label", "Width (bits):"), input);
+    box.appendChild(row);
+
+    const buttons = el("div", "dialog-buttons");
+    buttons.append(button("Cancel", () => done(null)), button("OK", onOk));
+    box.appendChild(buttons);
+
+    function onOk() {
+      const n = parseInt(input.value, 10);
+      done(Number.isInteger(n) && n >= 1 ? n : null);
+    }
+    function done(result) {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(null);
+      } else if (e.key === "Enter") {
+        e.stopPropagation();
+        onOk();
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+    input.focus();
+    input.select();
+  });
+}
+
+// promptBitNamesDialog edits a bus's per-bit names (FR-037b): one field per bit,
+// prefilled with any current names. Resolves to { names } where names is a
+// length-width array (or null when every field is blank, to clear names), or null
+// on cancel.
+export function promptBitNamesDialog(bus) {
+  return new Promise((resolve) => {
+    const overlay = el("div", "dialog-overlay");
+    const box = el("div", "dialog");
+    overlay.appendChild(box);
+
+    box.appendChild(el("div", "dialog-title", "Edit bus bit names"));
+    box.appendChild(el("div", "dialog-path", `One name per bit (bus width ${bus.width}):`));
+    const listEl = el("div", "dialog-list");
+    box.appendChild(listEl);
+    const inputs = [];
+    for (let i = 0; i < bus.width; i++) {
+      const row = el("div", "dialog-row");
+      const input = el("input", "dialog-name");
+      input.type = "text";
+      input.value = bus.bitNames && bus.bitNames[i] != null ? bus.bitNames[i] : "";
+      row.append(el("label", "dialog-label", `bit ${i}:`), input);
+      listEl.appendChild(row);
+      inputs.push(input);
+    }
+
+    const buttons = el("div", "dialog-buttons");
+    buttons.append(button("Cancel", () => done(null)), button("OK", onOk));
+    box.appendChild(buttons);
+
+    function onOk() {
+      const names = inputs.map((i) => i.value.trim());
+      done({ names: names.every((n) => n === "") ? null : names });
+    }
+    function done(result) {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(null);
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+    if (inputs[0]) inputs[0].focus();
+  });
+}
+
 // openFileDialog resolves to { path } on confirm, or null on cancel.
 export function openFileDialog({ mode, startPath, defaultName = "" }) {
   return new Promise((resolve) => {

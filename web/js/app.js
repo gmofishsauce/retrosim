@@ -10,6 +10,7 @@ import { initCanvas } from "./engine/canvas.js";
 import { initInteraction } from "./engine/interaction.js";
 import { initToolbar } from "./chrome/toolbar.js";
 import { makeFileOps } from "./chrome/fileops.js";
+import { initProperties } from "./chrome/properties.js";
 
 // defaultDesignName builds "unnamed schematic <datetime>" from the local clock
 // (FR-004, FR-045).
@@ -71,6 +72,7 @@ async function main() {
       defaultName: defaultDesignName,
     });
     initToolbar({ container: document.getElementById("tools"), store, interaction, fileops });
+    initProperties({ container: document.getElementById("properties"), store });
     overlay.classList.add("hidden");
   } catch (err) {
     overlay.classList.add("error");

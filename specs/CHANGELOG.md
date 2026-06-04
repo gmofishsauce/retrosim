@@ -19,6 +19,34 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-04 — Static assets served with Cache-Control: no-store
+What: The static SPA handler now sets `Cache-Control: no-store`, so a normal
+browser reload always loads edited assets (no hard-refresh / DevTools toggle).
+Why: Stale-cache confusion during development of a localhost-only tool.
+Touches: design §6.4
+
+## 2026-06-04 — Properties panel for per-instance delay overrides
+What: Add a docked right-edge properties panel (FR-020a): shows the selected
+instance's type data read-only and lets the user override propagation delays for
+that instance only. Adds the model `setOverride` + `setOverrideCmd` (previously
+referenced in the design but unimplemented) and a notifying `store.setSelection`.
+Why: Implements the long-deferred FR-020a.
+Touches: FR-020a; design §6.9, §6.10, §6.11
+
+## 2026-06-04 — Right-click context menu (incl. delete actions)
+What: Add a right-click context menu: delete bend point (FR-033), set bus width
+(FR-038), edit bus bit names (FR-037b), and delete the wire/bus/component under
+the cursor (FR-033a/FR-018a, new FR-033b).
+Why: Implements the long-specified context menu; delete was keyboard-only.
+Touches: FR-033b (new); FR-033/037b/038/033a/018a; design §6.11
+
+## 2026-06-04 — Unmatched bus drop is left unconnected (was nearest-pin)
+What: When a bus endpoint is dropped on a component and no pin group matches its
+width, the endpoint is left unconnected instead of attaching to the nearest pin.
+Why: Stakeholder reversed the earlier nearest-pin rule — guessing a single pin is
+worse than connecting nothing. (Code already behaved this way.)
+Touches: FR-043; design §6.9, §A3
+
 ## 2026-06-04 — Draw pins as connection bubbles instead of stubs
 What: Each pin is drawn as a small circle (bubble) just outside the body, tangent
 to the outline edge and anchored on the pin's grid point, rather than a stub bar;

@@ -10,12 +10,14 @@ import {
   branchWire,
   insertBend,
   moveBend,
+  deleteBend,
   addBus,
   deleteBus,
   setBusWidth,
   snapBusGroup,
   breakoutBit,
   setBusBitNames,
+  setOverride,
 } from "./model/design.js";
 
 function findInstance(design, refdes) {
@@ -154,6 +156,29 @@ export function deleteComponent(refdes) {
   );
 }
 
+// setOverrideCmd sets or clears a per-instance propagation-delay override
+// (FR-020a/FR-058). It captures the prior value once so undo restores it (null
+// meaning "no override"). value === null clears the override.
+export function setOverrideCmd(refdes, key, value) {
+  let captured = false;
+  let old = null;
+  return {
+    label: "Set override",
+    apply(design) {
+      const inst = findInstance(design, refdes);
+      if (!captured) {
+        const cur = inst.overrides.delays?.[key];
+        old = cur === undefined ? null : cur;
+        captured = true;
+      }
+      setOverride(design, refdes, key, value);
+    },
+    revert(design) {
+      setOverride(design, refdes, key, old);
+    },
+  };
+}
+
 // addWireCmd adds a wire between two endpoint specs (FR-027/034). Branch specs
 // create a junction on a host wire first (FR-034b).
 export function addWireCmd(specA, specB) {
@@ -200,6 +225,24 @@ export function moveBendCmd(wireId, bendIndex, x, y) {
     revert(design) {
       const w = design.wires.find((wr) => wr.id === wireId);
       moveBend(w, bendIndex, old.x, old.y);
+    },
+  };
+}
+
+// deleteBendCmd removes an interior bend, merging the two adjoining segments
+// (FR-033), capturing the removed point so undo re-inserts it at the same index.
+export function deleteBendCmd(wireId, bendIndex) {
+  let removed = null;
+  return {
+    label: "Delete bend",
+    apply(design) {
+      const w = design.wires.find((wr) => wr.id === wireId);
+      removed = { ...w.path[bendIndex] };
+      deleteBend(w, bendIndex);
+    },
+    revert(design) {
+      const w = design.wires.find((wr) => wr.id === wireId);
+      w.path.splice(bendIndex, 0, removed);
     },
   };
 }

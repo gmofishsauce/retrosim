@@ -86,6 +86,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 - FR-032: The user shall be able to drag a bend point to any grid intersection while holding the mouse button down; the two segments touching the bend point shall rubber-band continuously during the drag.
 - FR-033: The user shall be able to right-click a bend point and select "Delete bend point"; the bend point shall be removed and the two segments it connected shall merge into one straight segment between the surrounding endpoints.
 - FR-033a: In select-tool mode, the user shall be able to delete an entire wire or bus.
+- FR-033b: A right-click on the canvas shall open a context menu offering the actions appropriate to the item under the cursor: a bend point offers "Delete bend point" (FR-033); a wire offers "Delete wire" (FR-033a); a bus offers "Set width…" (FR-038), "Edit bit names…" (FR-037b), and "Delete bus" (FR-033a); a component offers "Delete component" (FR-018a). The menu is dismissed by choosing an item, pressing Escape, or clicking elsewhere.
 
 ### 3.10 Wire Branching and Connectivity
 
@@ -111,7 +112,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 - FR-041a: If exactly one pin group matches the bus width, the system shall snap-connect the bus to that group automatically (per FR-042).
 - FR-041b: If more than one pin group matches the bus width, the system shall prompt the user to choose which matching group to connect to, presenting the candidate groups by name; the user may cancel the connection. (This supersedes any rule that silently selects a default group on a tie.)
 - FR-042: When a pin group is connected — automatically per FR-041a or by the user's choice per FR-041b — the system shall connect each bit of the bus to the corresponding pin in the group's declared bit order, without requiring the user to wire each pin individually.
-- FR-043: If no pin group matches the bus width, the bus endpoint shall attach to the nearest pin only, and the remaining bits shall be left unconnected.
+- FR-043: If no pin group matches the bus width, the bus endpoint shall be left unconnected. (Supersedes the earlier rule that attached the endpoint to the nearest pin only: an unmatched drop now connects nothing rather than guessing a single pin.)
 - FR-043a: The user shall be able to break out a single signal (one bit) from a bus and route it as an ordinary single-bit wire to a pin or other connection point. The broken-out wire shall be electrically part of that bus bit's net (per FR-037a).
 
 ### 3.13 File Operations — New Design
@@ -219,7 +220,7 @@ The minimum set of requirements needed for a usable first release:
 
 **Wiring:** FR-025 through FR-034b (wire tool, routing, bend points, branching, fan-out, connectivity), FR-033a (delete wire/bus).
 
-**Buses:** FR-035 through FR-040 (bus tool, rendering, width), plus FR-037a (per-bit net semantics) and FR-039a (unequal-width connection prevention). Bus snap-connect and its extensions — FR-041 through FR-043a (group matching, disambiguation, nearest-pin fallback, single-bit breakout) and FR-037b (bus bit names) — may be deferred to a follow-on iteration, but the save format (FR-060a) and connectivity model must accommodate them from the outset.
+**Buses:** FR-035 through FR-040 (bus tool, rendering, width), plus FR-037a (per-bit net semantics) and FR-039a (unequal-width connection prevention). Bus snap-connect and its extensions — FR-041 through FR-043a (group matching, disambiguation, leave-unconnected on no match, single-bit breakout) and FR-037b (bus bit names) — may be deferred to a follow-on iteration, but the save format (FR-060a) and connectivity model must accommodate them from the outset.
 
 **File format:** FR-055 through FR-060, plus FR-059a (connectivity representation).
 

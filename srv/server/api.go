@@ -37,6 +37,10 @@ func NewRouter(lib *Library, dataDir, webDir string) http.Handler {
 			api.ServeHTTP(w, r)
 			return
 		}
+		// This is a localhost-only authoring tool served straight from the source
+		// tree (§6.4); never let the browser cache the SPA assets, so edits show up
+		// on a plain reload without a hard-refresh or DevTools cache toggle.
+		w.Header().Set("Cache-Control", "no-store")
 		static.ServeHTTP(w, r)
 	})
 	return mux

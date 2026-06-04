@@ -99,22 +99,19 @@ sim/
 - Toolbar: Select/Wire/Bus, zoom −/+, Undo/Redo, New/Open/Save/Save As;
   active-tool highlight; design-name with unsaved `*` marker.
 - File dialogs (server-assisted navigation) for Save/Open.
-- Zoom (wheel to cursor, buttons) and pan (middle-drag, space+drag).
+- Right-click context menu (FR-033b): delete bend point (FR-033), delete wire
+  (FR-033a), bus set-width (FR-038) / edit-bit-names (FR-037b) / delete-bus, and
+  delete component (FR-018a). Width/bit-name entry via small modal prompts.
+- Properties panel (FR-020a): docked right-edge panel showing the selected
+  instance's type data; per-instance propagation-delay overrides via
+  `setOverride`/`setOverrideCmd`, persisted in the instance record (FR-058).
+- Zoom (wheel to cursor, buttons) and pan (left-drag empty canvas, middle-drag,
+  space+drag).
 - Keyboard: `w`/`b` tools, `R`/`Shift+R` rotate, Delete, Esc, Ctrl/Cmd+Z /
   Shift+Ctrl/Cmd+Z / Ctrl/Cmd+Y undo-redo.
 
 ## Not yet implemented
 
-- **Nearest-pin fallback (FR-043)** — when a bus is dropped on a component and
-  **no** pin group matches its width, the endpoint is currently left free; it
-  should instead attach to the nearest pin. (Snap-connect on a match, FR-041a/b,
-  and breakout, FR-043a, are done.)
-- **Right-click context menu** — bus width / bit names (FR-038/037b); `setBusWidth`
-  and `setBusBitNames` ops exist (bit names are also adopted automatically on
-  snap), but bus width still has only a `+`/`-` keyboard stopgap and there is no
-  bit-name editing UI yet.
-- **Properties panel** — per-instance overrides UI (FR-020a).
-- **Recent-files fallback** (FR-054) — server-assisted navigation is used.
 - Minor: pin-label crowding at low zoom (readable when zoomed in).
 
 ## Deviations from the design (agreed with stakeholder)
@@ -128,6 +125,9 @@ sim/
   (reconciles FR-031 with FR-033a; stakeholder-confirmed).
 - The bit-lane `buildNets` extension was moved from S16 to S17 (needs snap/pin
   connections to be observable).
+- Recent-files list (FR-054) is **not** built: it is an optional fallback for
+  when server-assisted navigation is impractical, and server-assisted navigation
+  (FR-052/053) works, so FR-054 is satisfied by that alternative.
 
 ## How to run
 

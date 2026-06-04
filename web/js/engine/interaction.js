@@ -23,18 +23,26 @@ import {
   addBusCmd,
   deleteBusCmd,
   setBusWidthCmd,
+  setBusBitNamesCmd,
   breakoutBitCmd,
+  deleteBendCmd,
 } from "../commands.js";
 import { insertBend, moveBend, matchingGroups, pinWorldPos } from "../model/design.js";
-import { chooseGroupDialog, chooseBitDialog } from "../chrome/dialogs.js";
+import {
+  chooseGroupDialog,
+  chooseBitDialog,
+  promptWidthDialog,
+  promptBitNamesDialog,
+} from "../chrome/dialogs.js";
+import { openContextMenu } from "../chrome/contextmenu.js";
 
 const DEFAULT_BUS_WIDTH = 8;
 
 // planBusEndpoint converts a bus endpoint target into an addBus endpoint spec, an
 // optional snap directive, and the list of width-matching pin groups. A component
-// target with exactly one match auto-snaps (FR-041a); with zero it stays free
-// (FR-043 nearest-pin attach is a later refinement); with two-or-more it stays
-// free here and the caller opens the disambiguation dialog (FR-041b). Non-component
+// target with exactly one match auto-snaps (FR-041a); with zero it is left
+// unconnected (FR-043); with two-or-more it stays free here and the caller opens
+// the disambiguation dialog (FR-041b). Non-component
 // targets pass through unchanged. Exported for testing.
 export function planBusEndpoint(target, width) {
   if (target.kind === "component") {
@@ -87,8 +95,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   }
 
   function select(sel) {
-    store.state.selection = sel;
-    renderer.requestRender();
+    store.setSelection(sel); // notifies → canvas re-renders + properties panel updates
   }
 
   function canvasPoint(e) {
@@ -331,6 +338,62 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     // (FR-023a).
     select(null);
     startPan(e);
+  });
+
+  // Right-click context menu (FR-033b): hit-test the cursor and offer the actions
+  // for the item under it. Priority mirrors select-mode: bend > wire > bus >
+  // component. interaction.js builds the items; contextmenu.js renders them.
+  canvas.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    const world = worldOf(e);
+    const items = [];
+    const bend = hitBend(store.design, world, 0.5);
+    const seg = bend ? null : hitSegment(store.design, world, 0.4);
+    const busSeg = bend || seg ? null : hitBusSegment(store.design, world, 0.4);
+    const comp = bend || seg || busSeg ? null : hitComponent(store.design, world);
+
+    if (bend) {
+      items.push({
+        label: "Delete bend point",
+        onClick: () => store.dispatch(deleteBendCmd(bend.wire.id, bend.bendIndex)),
+      });
+    } else if (seg) {
+      items.push({
+        label: "Delete wire",
+        danger: true,
+        onClick: () => store.dispatch(deleteWireCmd(seg.wire.id)),
+      });
+    } else if (busSeg) {
+      const bus = busSeg.bus;
+      items.push({
+        label: "Set width…",
+        onClick: async () => {
+          const width = await promptWidthDialog(bus.width);
+          if (width != null) store.dispatch(setBusWidthCmd(bus.id, width));
+        },
+      });
+      items.push({
+        label: "Edit bit names…",
+        onClick: async () => {
+          const r = await promptBitNamesDialog(bus);
+          if (r) store.dispatch(setBusBitNamesCmd(bus.id, r.names));
+        },
+      });
+      items.push({ separator: true });
+      items.push({
+        label: "Delete bus",
+        danger: true,
+        onClick: () => store.dispatch(deleteBusCmd(bus.id)),
+      });
+    } else if (comp) {
+      items.push({
+        label: "Delete component",
+        danger: true,
+        onClick: () => store.dispatch(deleteComponent(comp.refdes)),
+      });
+    }
+
+    if (items.length) openContextMenu(e.clientX, e.clientY, items);
   });
 
   window.addEventListener("mousemove", (e) => {
