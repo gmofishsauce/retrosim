@@ -27,3 +27,8 @@ If the specs and code disagree, the specs win — stop and flag the discrepancy.
 
 Always use `/Users/jeff/tmp` for temporary files (set `CLAUDE_CODE_TMPDIR` and
 any `--tmp`/`TMPDIR` paths there). Never use `/tmp` — it fills up constantly.
+
+## Git
+
+Single-contributor repo; GitHub is just a backup. **Never create branches** —
+commit directly to `main`. Do not push; the user pushes manually.
