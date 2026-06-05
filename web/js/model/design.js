@@ -3,6 +3,12 @@
 // operations live here so they are unit-testable in isolation.
 
 import { rotateOffset } from "../geometry.js";
+import {
+  gateInputCount,
+  pinSlot,
+  symbolFootprint,
+  pinSlotOffset,
+} from "../engine/symbols.js";
 
 // createDesign returns an empty design (FR-004/FR-045). It mirrors the save
 // shape (§7.2) plus non-persisted id counters.
@@ -25,7 +31,8 @@ export function createDesign(name) {
 function nextRefNum(components) {
   let max = 0;
   for (const c of components) {
-    const m = /^U(\d+)$/.exec(c.refdes);
+    // ignore any trailing subunit letter so "U5A" counts as 5 (FR-011).
+    const m = /^U(\d+)[A-Z]*$/.exec(c.refdes);
     if (m) max = Math.max(max, Number(m[1]));
   }
   return max + 1;
@@ -47,9 +54,50 @@ export function addInstance(design, type, x, y, rotation) {
   return inst;
 }
 
+// addSubunitPackage drops a subunit-rendered package (FR-013a): it allocates one
+// U-number and creates one sibling instance per functional unit (refdes U<n>A,
+// U<n>B, …), each with a per-unit typeData (only that unit's pins, plus the
+// symbol footprint from §6.8a). Units are stacked vertically so they don't
+// overlap on drop. Returns the created instances (caller groups them as one undo
+// step). Power/ground aside, all geometry comes from the symbol module.
+export function addSubunitPackage(design, type, x, y) {
+  const num = nextRefNum(design.components);
+  const letters = [];
+  for (const p of type.pins) if (!letters.includes(p.unit)) letters.push(p.unit);
+
+  const created = [];
+  let offsetY = 0;
+  for (const letter of letters) {
+    const td = structuredClone(type);
+    td.pins = td.pins.filter((p) => p.unit === letter);
+    td.unit = letter;
+    const fp = symbolFootprint(type.renderAs, gateInputCount(td));
+    td.width = fp.width;
+    td.height = fp.height;
+    const inst = {
+      refdes: "U" + num + letter,
+      type: type.name,
+      x,
+      y: y + offsetY,
+      rotation: 0,
+      typeData: td,
+      overrides: {},
+    };
+    design.components.push(inst);
+    created.push(inst);
+    offsetY += fp.height + 1;
+  }
+  return created;
+}
+
 // pinOffset returns a pin's unrotated offset (grid units) from the instance
-// origin, derived from its side and position along that side (§6.7).
+// origin. For subunit components it comes from the schematic-symbol geometry
+// (§6.8a); otherwise from the pin's side and position along that side (§6.7).
 function pinOffset(typeData, pin) {
+  if (typeData.renderAs) {
+    const { role, slot } = pinSlot(typeData, pin);
+    return pinSlotOffset(typeData.renderAs, gateInputCount(typeData), role, slot);
+  }
   switch (pin.side) {
     case "left":
       return { x: 0, y: pin.position };
@@ -478,4 +526,19 @@ export function deleteInstance(design, refdes) {
   }
   design.components.splice(i, 1);
   cleanup(design);
+}
+
+// packageSiblings returns every refdes belonging to the same physical package as
+// `refdes`. For a subunit component (FR-018b) that is all siblings sharing its
+// U-number (e.g. U5A…U5D); for a unit component it is just [refdes].
+export function packageSiblings(design, refdes) {
+  const inst = design.components.find((c) => c.refdes === refdes);
+  if (!inst || inst.typeData?.renderType !== "subunit") return [refdes];
+  const key = /^U\d+/.exec(refdes)?.[0];
+  return design.components
+    .filter(
+      (c) =>
+        c.typeData?.renderType === "subunit" && /^U\d+/.exec(c.refdes)?.[0] === key,
+    )
+    .map((c) => c.refdes);
 }

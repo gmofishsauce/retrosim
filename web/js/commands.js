@@ -4,6 +4,8 @@
 
 import {
   addInstance,
+  addSubunitPackage,
+  packageSiblings,
   addWire,
   deleteWire,
   deleteInstance,
@@ -92,19 +94,26 @@ function resolveSpec(design, spec) {
 // placeComponent adds a new instance (FR-008/009/011). The instance is created
 // on first apply and re-used on redo so its reference designator is stable.
 export function placeComponent(type, x, y, rotation = 0) {
-  let inst = null;
+  let created = null; // instances made on first apply, re-used on redo
   return {
     label: `Place ${type.name}`,
     apply(design) {
-      if (inst === null) {
-        inst = addInstance(design, type, x, y, rotation);
+      if (created === null) {
+        // A subunit package drops all of its units at once (FR-013a); a unit
+        // component drops a single instance.
+        created =
+          type.renderType === "subunit"
+            ? addSubunitPackage(design, type, x, y)
+            : [addInstance(design, type, x, y, rotation)];
       } else {
-        design.components.push(inst);
+        for (const inst of created) design.components.push(inst);
       }
     },
     revert(design) {
-      const i = design.components.indexOf(inst);
-      if (i >= 0) design.components.splice(i, 1);
+      for (const inst of created) {
+        const i = design.components.indexOf(inst);
+        if (i >= 0) design.components.splice(i, 1);
+      }
     },
   };
 }
@@ -151,9 +160,11 @@ export function rotateComponent(refdes, delta) {
 // wires dangling and pruning any left fully disconnected (FR-018a/029/030).
 // Snapshot-based so undo restores the full connectivity cascade.
 export function deleteComponent(refdes) {
-  return snapshotCommand(`Delete ${refdes}`, (design) =>
-    deleteInstance(design, refdes),
-  );
+  return snapshotCommand(`Delete ${refdes}`, (design) => {
+    // Deleting a subunit deletes its whole package (FR-018b); a unit deletes only
+    // itself. The user confirmation is a chrome-layer concern (interaction.js).
+    for (const r of packageSiblings(design, refdes)) deleteInstance(design, r);
+  });
 }
 
 // setOverrideCmd sets or clears a per-instance propagation-delay override

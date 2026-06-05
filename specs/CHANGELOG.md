@@ -19,6 +19,17 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-05 — Subunit rendering (multi-unit packages drawn as schematic symbols)
+What: Packages that contain independent functional units (e.g. 7400 = quad NAND)
+declare `rendertype: subunit` + `numunits` + `renderas` and per-pin `unit` (in
+place of `pos`); they drop as N sibling instances sharing one U-number (refdes
+`U5A`…), each drawn as a traditional schematic symbol (gates, mux trapezoid) and
+independently movable/rotatable. Deleting any subunit deletes the whole package
+after a confirmation dialog. A new `web/js/engine/symbols.js` owns symbol geometry.
+Why: Match conventional digital-schematic rendering, omitted from the original spec.
+Touches: FR-011, FR-013a, FR-013b, FR-014a, FR-018b, FR-062c;
+design §6.3, §6.6, §6.7, §6.8, §6.8a, §7.1, §7.6, §8
+
 ## 2026-06-04 — Static assets served with Cache-Control: no-store
 What: The static SPA handler now sets `Cache-Control: no-store`, so a normal
 browser reload always loads edited assets (no hard-refresh / DevTools toggle).

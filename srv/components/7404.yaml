@@ -1,19 +1,19 @@
-# 7400 — quad 2-input NAND gate
-type: "7400"
+# 7404 — hex inverter
+type: "7404"
 rendertype: subunit
-numunits: 4
-renderas: nand
+numunits: 6
+renderas: not
 
 pins:
   - { name: 1A, side: left,  unit: A, dir: in }
-  - { name: 1B, side: left,  unit: A, dir: in }
   - { name: 1Y, side: right, unit: A, dir: out }
   - { name: 2A, side: left,  unit: B, dir: in }
-  - { name: 2B, side: left,  unit: B, dir: in }
   - { name: 2Y, side: right, unit: B, dir: out }
   - { name: 3A, side: left,  unit: C, dir: in }
-  - { name: 3B, side: left,  unit: C, dir: in }
   - { name: 3Y, side: right, unit: C, dir: out }
   - { name: 4A, side: left,  unit: D, dir: in }
-  - { name: 4B, side: left,  unit: D, dir: in }
   - { name: 4Y, side: right, unit: D, dir: out }
+  - { name: 5A, side: left,  unit: E, dir: in }
+  - { name: 5Y, side: right, unit: E, dir: out }
+  - { name: 6A, side: left,  unit: F, dir: in }
+  - { name: 6Y, side: right, unit: F, dir: out }

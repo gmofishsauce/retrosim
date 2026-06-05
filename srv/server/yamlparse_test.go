@@ -44,9 +44,10 @@ behavior: |
 
 	two := 2
 	want := ComponentType{
-		Name:   "74138",
-		Width:  6,
-		Height: 12,
+		Name:       "74138",
+		RenderType: "unit",
+		Width:      6,
+		Height:     12,
 		Pins: []Pin{
 			{Name: "A0", Side: "left", Position: 2, Direction: "in"},
 			{Name: "A1", Side: "left", Position: 3, Direction: "in", Number: &two},
@@ -55,6 +56,47 @@ behavior: |
 		PinGroups: []PinGroup{{Name: "A", Pins: []string{"A0", "A1"}}},
 		Delays:    map[string]float64{"tpd": 7},
 		Behavior:  "/Y0 = /(/A1 * /A0)\n; a comment\n",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ParseComponent = %+v\nwant %+v", got, want)
+	}
+}
+
+// A subunit package maps onto renderType/numUnits/renderAs + per-pin unit, with
+// pos ignored and width/height left zero (§7.6, FR-062c).
+func TestParseComponentSubunit(t *testing.T) {
+	path := writeYAML(t, `
+type: "7400"
+rendertype: subunit
+numunits: 2
+renderas: nand
+pins:
+  - { name: 1A, side: left,  unit: A, dir: in }
+  - { name: 1B, side: left,  unit: A, dir: in }
+  - { name: 1Y, side: right, unit: A, dir: out }
+  - { name: 2A, side: left,  unit: B, dir: in }
+  - { name: 2B, side: left,  unit: B, dir: in }
+  - { name: 2Y, side: right, unit: B, dir: out }
+`)
+
+	got, err := ParseComponent(path)
+	if err != nil {
+		t.Fatalf("ParseComponent: %v", err)
+	}
+
+	want := ComponentType{
+		Name:       "7400",
+		RenderType: "subunit",
+		NumUnits:   2,
+		RenderAs:   "nand",
+		Pins: []Pin{
+			{Name: "1A", Side: "left", Unit: "A", Direction: "in"},
+			{Name: "1B", Side: "left", Unit: "A", Direction: "in"},
+			{Name: "1Y", Side: "right", Unit: "A", Direction: "out"},
+			{Name: "2A", Side: "left", Unit: "B", Direction: "in"},
+			{Name: "2B", Side: "left", Unit: "B", Direction: "in"},
+			{Name: "2Y", Side: "right", Unit: "B", Direction: "out"},
+		},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("ParseComponent = %+v\nwant %+v", got, want)
@@ -127,6 +169,12 @@ func TestParseComponentErrors(t *testing.T) {
 		{"group unknown pin", "type: T\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\ngroups:\n  - { name: G, pins: [A9] }\n", "unknown pin"},
 		{"outline wrong length", "type: T\noutline: [6]\npins: []\n", "outline must be"},
 		{"outline non-positive", "type: T\noutline: [0, 5]\npins: []\n", "must be > 0"},
+		{"bad rendertype", "type: T\nrendertype: weird\npins: []\n", "invalid rendertype"},
+		{"subunit bad renderas", "type: T\nrendertype: subunit\nnumunits: 1\nrenderas: zorp\npins:\n  - { name: A, side: left, unit: A, dir: in }\n  - { name: Y, side: right, unit: A, dir: out }\n", "invalid renderas"},
+		{"subunit missing unit", "type: T\nrendertype: subunit\nnumunits: 1\nrenderas: nand\npins:\n  - { name: A, side: left, dir: in }\n  - { name: Y, side: right, unit: A, dir: out }\n", "missing 'unit'"},
+		{"subunit numunits mismatch", "type: T\nrendertype: subunit\nnumunits: 2\nrenderas: nand\npins:\n  - { name: A, side: left, unit: A, dir: in }\n  - { name: Y, side: right, unit: A, dir: out }\n", "distinct units"},
+		{"subunit two outputs", "type: T\nrendertype: subunit\nnumunits: 1\nrenderas: nand\npins:\n  - { name: A, side: left, unit: A, dir: in }\n  - { name: Y, side: right, unit: A, dir: out }\n  - { name: Z, side: right, unit: A, dir: out }\n", "exactly 1 output"},
+		{"mux wrong arity", "type: T\nrendertype: subunit\nnumunits: 1\nrenderas: mux2\npins:\n  - { name: I0, side: left, unit: A, dir: in }\n  - { name: S, side: top, unit: A, dir: in }\n  - { name: Y, side: right, unit: A, dir: out }\n", "data inputs"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

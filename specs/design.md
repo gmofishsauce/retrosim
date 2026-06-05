@@ -456,7 +456,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
 ### 6.3 Go: YAML parser (`sim/server/yamlparse.go`)
 - **Purpose:** convert one YAML file's bytes (YAML — §7.6) into a `ComponentType`.
-- **Satisfies:** FR-061, FR-062, FR-062a, FR-062b, FR-063, FR-064, FR-066.
+- **Satisfies:** FR-061, FR-062, FR-062a, FR-062b, FR-062c, FR-063, FR-064, FR-066.
 - **Interface (the deferral boundary — now bound to the YAML format in §7.6):**
   - `ParseComponent(path string) (ComponentType, error)`
   - The returned `ComponentType` MUST be fully populated for the fields in §7.1.
@@ -483,6 +483,16 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   outline/pin-number generator were considered and **removed** (see §8) — outlines
   come from pins (or `outline:`) and physical pin `number`s, if present at all,
   are author-stated optional metadata used by neither drawing nor simulation.
+- **Subunit components (FR-062c):** `rendertype` defaults to `unit`; a `unit`
+  component is parsed exactly as above. For `rendertype: subunit` the parser
+  instead validates: `renderas` ∈ the symbol set (§6.8a); `numunits > 0`; every
+  pin carries a non-empty `unit` (and `pos` is ignored, not required); the set of
+  distinct `unit` letters equals `numunits`; and each unit holds exactly one
+  output (`out`/`bidir`/`tristate`) plus an input count that satisfies `renderas`
+  (`mux2`=2 data + 1 select, `mux4`=4+2, `mux8`=8+3 where selects are the `top`
+  pins; `not`=1 input; other gates ≥ 1 input). Outline resolution is **skipped**
+  for subunits (`width`/`height` left 0 — the symbol module §6.8a owns geometry on
+  the client).
 - **Error handling:** return an `error` with file + human-readable reason (and
   YAML line where `yaml.v3` supplies one) on any decode or validation failure; the
   loader logs and skips (§6.2). Never panic.
@@ -544,8 +554,19 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   objects (§6.10), but the low-level operations live here so they are
   unit-testable in isolation:
   - `addInstance(design, type, x, y, rotation) → instance` — assigns refdes
-    `U<n>` where `n = 1 + max(existing numeric suffixes)` (FR-011).
-  - `pinWorldPos(instance, pinName) → {x,y}` — applies rotation (§6.7). A `pin`
+    `U<n>` where `n = 1 + max(existing numeric suffixes)` (FR-011); the
+    numeric-suffix scan ignores any trailing unit letter so `U5A` counts as 5.
+  - `addSubunitPackage(design, type, x, y) → instance[]` (FR-013a/FR-011) —
+    allocates **one** U-number and creates `type.numUnits` sibling instances
+    `U<n>A`, `U<n>B`, … Each sibling gets a per-unit `typeData` holding only that
+    unit's pins (in list order) plus `renderAs`/`unit`, and `width`/`height` from
+    the symbol footprint (§6.8a). The units are offset (stacked vertically by
+    footprint height + 1) so they do not overlap on drop.
+  - `pinWorldPos(instance, pinName) → {x,y}` — applies rotation (§6.7). For
+    subunit instances the unrotated pin offset comes from the symbol module
+    (§6.8a) keyed by `renderAs`, input count, pin role, and slot index (the pin's
+    order among same-role pins of its unit); for `unit` instances it comes from
+    `side`/`position` as before. A `pin`
     vertex's position is **derived** from this; when the instance moves or rotates
     its pin vertices are recomputed, so wires referencing them **stretch
     automatically** (FR-018) with no per-segment fix-up.
@@ -557,8 +578,10 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     single-bit wire from it), `deleteWire` (decrements junction-vertex ref counts,
     demoting to `free`/deleting per §3.3 G2; prunes all-`free` wires per FR-030),
     `deleteInstance` (converts the instance's `pin` vertices to `free`, then runs
-    the FR-030 sweep), `setBusWidth`, `setBusBitNames`, `snapBusGroup`,
-    `setOverride`.
+    the FR-030 sweep; for a subunit instance it expands to **all** siblings
+    sharing the package U-number — FR-018b — as one operation, the confirmation
+    dialog being a chrome-layer concern §6.11), `setBusWidth`, `setBusBitNames`,
+    `snapBusGroup`, `setOverride`.
 - **Netlist (`netlist.js`) — `buildNets(design) → Net[]` (FR-034b/FR-059a/FR-037a):**
   Union-find runs over **bit-lanes**, not raw vertices, so a width-*w* bus
   contributes *w* independent nets (A7). A *lane* is one electrical conductor:
@@ -614,6 +637,10 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   ```
   `pinWorld = (x,y) + rotatedOffset`. Because offsets are integers and 90° turns
   map integers→integers, **pins always land on grid intersections** (FR-021).
+  Subunit pins use the same rotation math; their unrotated integer offsets come
+  from the symbol module (§6.8a) instead of `side`/`position`, so they too stay
+  on the grid (including mux selects, whose bubble is on-grid with a cosmetic stub
+  to the sloped edge — FR-013b).
 - **Upright labels (FR-012/FR-015/FR-020):** the outline and pin stubs are drawn
   through the rotated transform, but each text label (pin name, refdes, type) is
   drawn **in screen space with identity rotation**, anchored at the label's
@@ -631,13 +658,40 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   FR-036/FR-037) → wires (thin black) → junction dots → components (outline, pin
   bubbles, pin labels) → upright text labels → selection highlight → tool preview
   (rubber-band line, placement ghost).
+- **Component drawing dispatches on `renderType`:** a `unit` instance draws the
+  rectangle path as today; a `subunit` instance draws its schematic symbol via the
+  symbol module (§6.8a) — the gate/mux outline path plus pin bubbles at
+  `pinWorldPos` and an upright refdes (e.g. `U5A`). Pin bubbles and the
+  grid-point/stub rule are common to both paths (FR-013/FR-013b).
 - **Grid (FR-021):** draw grid dots/lines only when `scale` is large enough that
   spacing ≥ a threshold (e.g., 6 px); otherwise draw a coarser grid to avoid
   moiré and cost.
 - **Error handling:** rendering is read-only over the model; a malformed instance
   (e.g., unknown type) is drawn as a red placeholder box with the type name, never
   throwing out of the loop.
-- **Dependencies:** `geometry.js`, model (read-only), store (subscribe).
+- **Dependencies:** `geometry.js`, `engine/symbols.js` (§6.8a), model (read-only),
+  store (subscribe).
+
+### 6.8a JS: schematic symbol geometry (`web/js/engine/symbols.js`)
+- **Purpose:** the single source of truth for subunit symbol geometry, in grid
+  units, shared by the model (pin positions, §6.6), the renderer (§6.8), and
+  hit-test (§6.9) so they cannot drift apart.
+- **Satisfies:** FR-013a, FR-013b, FR-014a.
+- **Interface (pure functions, no rendering state):**
+  - `symbolFootprint(renderAs, nIn) → {width, height}` — grid-unit bounding box.
+  - `pinSlotOffset(renderAs, nIn, role, slotIndex) → {x, y}` — unrotated grid
+    offset from the instance origin for the `slotIndex`-th pin of role
+    `in`\|`out`\|`sel`. Every returned offset is integer (on-grid).
+  - `drawSymbol(ctx, renderAs, nIn, instance, vp)` — strokes the gate/mux outline
+    and any mux select stubs (bubbles are drawn by the common pin path in §6.8).
+- **Geometry (representative; tuned in code):** gates are width 4, height
+  `max(nIn+1, 3)`, inputs on rows `1..nIn`, output centered on the right edge
+  (snapped to a grid row); `not`/buffer width 3 with an output bubble for `not`.
+  Multiplexers draw as a trapezoid whose long left side has height `nData+1`
+  (data inputs on rows `1..nData`), short right side carries the centered output,
+  top/bottom edges slope ~30° toward the right, and select bubbles sit on their
+  grid point on the top with a short stub to the sloped edge (FR-013b).
+- **Dependencies:** `geometry.js`.
 
 ### 6.9 JS: interaction / tool FSM (`web/js/engine/interaction.js`, `hittest.js`)
 - **Purpose:** translate pointer/keyboard events into Commands; hit-testing.
@@ -793,18 +847,23 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 | Field | Type | Notes |
 |---|---|---|
 | `name` | string | unique type name, e.g. `"74138"` (FR-062) |
-| `width` | int | outline width in grid units (>0); **resolved** value (stated as `outline:`, or derived from pins — §6.3) |
-| `height` | int | outline height in grid units (>0); resolved value |
+| `renderType` | enum | `unit` (default) \| `subunit` (FR-062c) |
+| `numUnits` | int | subunit packages only: number of functional units (FR-062c); 0/omitted for `unit` |
+| `renderAs` | string | subunit packages only: schematic symbol — `nand`\|`and`\|`or`\|`nor`\|`xor`\|`xnor`\|`not`\|`mux2`\|`mux4`\|`mux8` (FR-013b) |
+| `width` | int | `unit` only: outline width in grid units (>0); **resolved** value (stated as `outline:`, or derived from pins — §6.3). Unused for `subunit` (symbol geometry owns size — §6.8a) |
+| `height` | int | `unit` only: outline height in grid units (>0); resolved value. Unused for `subunit` |
 | `pins` | `Pin[]` | FR-062, FR-062a |
 | `pinGroups` | `PinGroup[]` | optional (FR-063) |
 | `delays` | `map[string]number` | optional propagation delays, ns (FR-064) |
 | `behavior` | string | opaque GALasm text, preserved & ignored (FR-066) |
 
-Note: `width`/`height` are always **concrete in the parsed `ComponentType`** —
-resolution happens at parse time (§6.3) so the canvas, the save format, and
-FR-057's full-copy all keep consuming explicit geometry. There is no package
-field: physical packages were removed in favor of an explicit `outline:` or a
-pin-derived default (see §8).
+Note: for `unit` components `width`/`height` are always **concrete in the parsed
+`ComponentType`** — resolution happens at parse time (§6.3) so the canvas, the
+save format, and FR-057's full-copy all keep consuming explicit geometry. For
+`subunit` components the rectangle is not drawn; each unit's footprint and pin
+positions come from the schematic-symbol geometry module (§6.8a), so `outline:`
+and per-pin `pos` are ignored. There is no package field: physical packages were
+removed in favor of an explicit `outline:` or a pin-derived default (see §8).
 
 **`Pin`**
 
@@ -812,7 +871,8 @@ pin-derived default (see §8).
 |---|---|---|
 | `name` | string | e.g. `"A0"`, `"/Y3"` |
 | `side` | enum | `left` \| `right` \| `top` \| `bottom` (FR-014) |
-| `position` | int | grid units along the side from its origin (top for L/R, left for T/B) |
+| `position` | int | `unit` only: grid units along the side from its origin (top for L/R, left for T/B). Ignored for `subunit` |
+| `unit` | string? | `subunit` only: the functional unit this pin belongs to (a letter, `A`, `B`, …); replaces `position` (FR-014a). List order within a unit sets slot order |
 | `direction` | enum | `in` \| `out` \| `bidir` \| `tristate` (FR-062a) |
 | `number` | int? | optional physical pin number (e.g., DIP pin 7); author-stated (FR-062b); footprint/BOM metadata only, used by neither drawing nor simulation |
 
@@ -997,15 +1057,39 @@ behavior: |              # opaque GALasm, captured verbatim & ignored this phase
   ; GALasm's own ';' starts a comment inside this block
 ```
 
+A **subunit** package (FR-062c) omits `outline`/`pos` and instead names the symbol
+and the unit each pin belongs to; list order within a unit sets slot order:
+
+```yaml
+# 7400 — quad 2-input NAND
+type: "7400"
+rendertype: subunit
+numunits: 4
+renderas: nand
+
+pins:                    # unit + dir; pos is not used (FR-014a)
+  - { name: 1A, side: left,  unit: A, dir: in }
+  - { name: 1B, side: left,  unit: A, dir: in }
+  - { name: 1Y, side: right, unit: A, dir: out }
+  - { name: 2A, side: left,  unit: B, dir: in }
+  - { name: 2B, side: left,  unit: B, dir: in }
+  - { name: 2Y, side: right, unit: B, dir: out }
+  # … units C and D likewise
+```
+
 **Field reference** (maps 1:1 onto §7.1):
 
 | Key | Required | Maps to | Notes |
 |---|---|---|---|
 | `type` | yes | `ComponentType.name` | quote if all-digits (`"74138"`) |
-| `outline` | no | `width`,`height` | `[w, h]` grid units; omitted ⇒ derived from pins (§6.3) |
+| `rendertype` | no | `renderType` | `unit` (default) \| `subunit` (FR-062c) |
+| `numunits` | subunit | `numUnits` | unit count; required for `subunit` (FR-062c) |
+| `renderas` | subunit | `renderAs` | symbol name (FR-013b); required for `subunit` |
+| `outline` | no | `width`,`height` | `unit` only: `[w, h]` grid units; omitted ⇒ derived from pins (§6.3). Ignored for `subunit` |
 | `pins[].name` | yes | `Pin.name` | e.g. `A0`, `/Y3`; leading `/` is a safe plain scalar |
 | `pins[].side` | yes | `Pin.side` | `left`\|`right`\|`top`\|`bottom` (FR-014) |
-| `pins[].pos` | yes | `Pin.position` | int ≥ 0, grid units along the side |
+| `pins[].pos` | unit | `Pin.position` | int ≥ 0, grid units along the side; required for `unit`, ignored for `subunit` |
+| `pins[].unit` | subunit | `Pin.unit` | unit letter (FR-014a); required for `subunit`; list order within a unit = slot order |
 | `pins[].dir` | yes | `Pin.direction` | `in`\|`out`\|`bidir`\|`tristate` (FR-062a) |
 | `pins[].number` | no | `Pin.number` | physical pin #; footprint/BOM metadata only |
 | `groups[].name` | — | `PinGroup.name` | optional section (FR-063) |
@@ -1041,6 +1125,7 @@ errors (FR-066), so future sections (e.g., richer timing) are additive.
 | Bus group-match tie | First group in file order (silent) | **Auto-connect only on a single match; prompt to disambiguate on ≥2 (FR-041b)** | Silent guessing is wrong for chips with multiple equal-width groups (e.g., ALU A/B/Y); stakeholder confirmed → promoted to requirement; withdraws design-only assumption A3 |
 | YAML file format | Bespoke line-oriented grammar; Markdown-with-frontmatter; TOML; **YAML** | **YAML (`gopkg.in/yaml.v3`, 1.2 core schema)** | A well-known format an LLM can emit reliably when transcribing datasheets (a stakeholder goal); free comment/escape/unknown-key handling (FR-066); the `\|` block scalar makes hand-typing GALasm equations ceremony-free. Supersedes the earlier "syntax TBD / strawman" and closes OQ-001 |
 | Component outline source | Declared physical `package:` resolved by a parser registry/parametric generator to outline + pin numbers (earlier design) | **Explicit `outline: [w, h]` else a pin-derived default box; no package mechanism at all** | Stakeholder removed packages: power/ground (the only reason the physical package mattered for the symbol) do not exist in file/editor/sim, and outlines are better derived from author-placed pins (FR-014). Eliminates `packages.go`, the package-name grammar, and the `pincount`/generator entirely; physical pin `number`s, if used, are author-stated optional metadata. Supersedes the package-registry decision (was FR-062b) |
+| Subunit package model (FR-013a) | One instance owning a `subunits[]` array of positions; teach wires/netlist/hittest/persistence about sub-identities | **N sibling instances sharing a U-number (refdes `U5A`…), one per unit** | Each gate is independently placeable/movable/rotatable like any instance, so wiring, netlist (`U5A.1Y`), hit-test, and persistence work unchanged; the "package" is just a shared U-number + grouped drop/delete (FR-018b). Symbol geometry lives in one module (§6.8a) consumed by model/renderer/hittest so they cannot drift |
 | Coordinate system | Store pixels; store mm | **Store integer grid units; derive pixels via viewport** | Everything snaps to grid by construction (FR-021); zoom/pan are pure view transforms; rotation by 90° preserves grid (§6.7) |
 | Rotation pivot | Rotate about component center | **Rotate pin offsets about the instance origin** | Guarantees rotated pins stay on integer grid intersections (FR-021) without half-grid artifacts |
 | File I/O location | Browser native file picker / downloads | **All FS access server-side via REST** | FR-053 requires server-assisted navigation; keeps a single trusted FS actor; localhost-only (NFR-001) |
@@ -1072,6 +1157,7 @@ sim/
     js/model/design.js      CREATE  design ops (§6.6)
     js/model/netlist.js     CREATE  buildNets union-find (§6.6)
     js/engine/canvas.js     CREATE  renderer + render loop (§6.8)
+    js/engine/symbols.js    CREATE  schematic symbol geometry (§6.8a)
     js/engine/interaction.js CREATE tool FSM + event handling (§6.9)
     js/engine/hittest.js    CREATE  hit-testing (§6.9)
     js/chrome/toolbar.js    CREATE  toolbar (§6.11)
@@ -1104,9 +1190,11 @@ No files are modified (greenfield).
 | FR-011 | §6.6 | `model/design.js` |
 | FR-012, FR-015, FR-020 | §6.7, §6.8 | `geometry.js`, `canvas.js` |
 | FR-013, FR-014 | §6.8, §7.1 | `canvas.js`, `types.go` |
+| FR-013a, FR-013b, FR-014a | §6.6, §6.8, §6.8a, §7.1 | `symbols.js`, `canvas.js`, `model/design.js` |
 | FR-016, FR-017 | §6.9 | `interaction.js`, `hittest.js` |
 | FR-018 | §6.6, §6.9 | `model/design.js`, `interaction.js` |
 | FR-018a | §6.6, §6.9, §6.10 | `model/design.js`, `store.js` |
+| FR-018b | §6.6, §6.11 | `model/design.js`, `dialogs.js`, `contextmenu.js` |
 | FR-019, FR-020 | §6.7, §6.9, §6.10 | `geometry.js`, `interaction.js`, `store.js` |
 | FR-020a | §6.11, §7.2 | `properties.js`, `store.js` |
 | FR-021 | §6.7, §6.8 | `geometry.js`, `canvas.js` |
@@ -1137,6 +1225,7 @@ No files are modified (greenfield).
 | FR-060a | §6.6, §7.2, A7 | `model/netlist.js`, `types.go` |
 | FR-061…FR-064 | §6.3, §7.1, §7.6 | `yamlparse.go`, `types.go` |
 | FR-062b | §6.3, §7.1, §7.6 | `yamlparse.go`, `types.go` |
+| FR-062c | §6.3, §6.8a, §7.1, §7.6 | `yamlparse.go`, `types.go`, `symbols.js` |
 | FR-065 | §6.4 | `api.go` |
 | FR-066 | §6.3, §7.1 | `yamlparse.go` |
 | NFR-001 | §6.1 | `main.go` |

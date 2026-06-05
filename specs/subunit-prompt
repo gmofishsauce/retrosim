@@ -1,0 +1,42 @@
+Hi Claude. I am about to begin requesting major changes to the
+requirements, the design, and the code. These change requests are
+not the result of bugs. They are a recognition of features I have
+observed in other digital simulators but forgot to specify in this
+one.
+
+The first major feature change is called "subunit rendering".  Some
+7400–series parts are single functional units and should be drawn
+as they are currently drawn, with rectangles and pins. A 74138 is
+a good example. But other 7400–series parts contain completely
+separate subunits that should be rendered separately using
+traditional schematic imagery.  A 7400 is an example. The 7400
+package contains four NAND gates that should be rendered separately as
+traditional NAND gate symbols. If the next U-number is, say, 5,
+then the four gates should be labeled 5-A, 5-B, 5-C, and 5-D. All
+four subunits should be placed on the display when the component is dropped
+from the palette.
+
+This requires significant changes to the YAML format. I suggest:
+  rendertype: subunit # or "unit" (the default if rendertype is not given)
+  numunits: 4 # or whatever
+  renderas: nand # and, or, nor, xor, xnor, not, mux2, mux4, mux8.
+
+If the render type is "unit", the existing rectangular rendering
+is used.  When it is "subunit", for e.g. a 7400,  each NAND symbol
+would have two input pins.  The image generator code must know how
+to generate the schematic symbols for each of the list  of gate
+types and logic elements shown in the YAML comment above. The "pins"
+array can still be used to establish direction and labeled the pin
+bubbles; but for subunit rendering, the "pos:" field is not used,
+since the positions of the inputs and outputs are dictated by the
+gate symbol which is known to th renderer.
+
+Multiplexers are to be drawn as symmetrical trapezoids with the
+angled sides at top and bottom angled about 30° toward the short
+side on the right.  The long left side of the trapezoid must allow
+enough space for the number of input pins. The multiplexers control
+lines should enter on the top. This will be tricky to implement
+because the bubbles should be on the grid and should also be on the
+sloping top side.
+
+Let's discuss these requirements and then I will put you in plan mode.

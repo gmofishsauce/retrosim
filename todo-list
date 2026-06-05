@@ -1,0 +1,16 @@
+subunit rendering
+slow simulator
+logic families with per-family delay
+fast sim gen
+split tool palette
+additional hardwired components:
+   pull-up
+   pull-down
+   set high or low as input
+   "LED"
+   clock
+   logic analyzer?
+auto wire tool over bubbles
+status bar with message area and mode {select, wire, move, bus, others?}
+GALASM extension for memories
+

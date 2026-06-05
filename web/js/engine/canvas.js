@@ -9,6 +9,7 @@ import {
   rotateOffset,
 } from "../geometry.js";
 import { pinWorldPos, getVertex, vertexWorld } from "../model/design.js";
+import { drawSymbol } from "./symbols.js";
 
 // Pin bubble radius in grid units. The bubble is drawn tangent to the body edge
 // (center one radius outside the pin point), so its far edge is 2*PIN_RADIUS from
@@ -209,26 +210,30 @@ function drawComponent(ctx, inst, vp, selected) {
   const td = inst.typeData;
   if (!td) return;
 
-  // Outline rectangle, rotated about the instance origin.
-  const corners = [
-    [0, 0],
-    [td.width, 0],
-    [td.width, td.height],
-    [0, td.height],
-  ].map(([dx, dy]) => {
-    const r = rotateOffset(dx, dy, inst.rotation);
-    return worldToScreen({ x: inst.x + r.x, y: inst.y + r.y }, vp);
-  });
-
-  ctx.beginPath();
-  ctx.moveTo(corners[0].x, corners[0].y);
-  for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
-  ctx.closePath();
+  // Body: a schematic symbol for subunit components (§6.8a), else the outline
+  // rectangle. Both rotate about the instance origin and share the pin path below.
   ctx.fillStyle = "#ffffff";
-  ctx.fill();
   ctx.lineWidth = selected ? 2 : 1;
   ctx.strokeStyle = selected ? "#4a90d9" : "#333";
-  ctx.stroke();
+  if (td.renderType === "subunit") {
+    drawSymbol(ctx, inst, vp);
+  } else {
+    const corners = [
+      [0, 0],
+      [td.width, 0],
+      [td.width, td.height],
+      [0, td.height],
+    ].map(([dx, dy]) => {
+      const r = rotateOffset(dx, dy, inst.rotation);
+      return worldToScreen({ x: inst.x + r.x, y: inst.y + r.y }, vp);
+    });
+    ctx.beginPath();
+    ctx.moveTo(corners[0].x, corners[0].y);
+    for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
 
   // Pin connection bubbles + upright pin name labels.
   ctx.font = PIN_FONT;
@@ -261,13 +266,18 @@ function drawComponent(ctx, inst, vp, selected) {
     ctx.fillText(pin.name, ps.x - Math.sign(outR.x) * 8, ps.y - Math.sign(outR.y) * 8);
   }
 
-  // Refdes + type labels at the body center, upright (FR-012).
+  // Center labels, upright (FR-012). A subunit shows just its refdes (e.g. U5A);
+  // a unit component shows refdes + type name.
   const cr = rotateOffset(td.width / 2, td.height / 2, inst.rotation);
   const center = worldToScreen({ x: inst.x + cr.x, y: inst.y + cr.y }, vp);
   ctx.fillStyle = "#111";
   ctx.font = LABEL_FONT;
-  ctx.fillText(inst.refdes, center.x, center.y - 6);
-  ctx.fillText(inst.type, center.x, center.y + 6);
+  if (td.renderType === "subunit") {
+    ctx.fillText(inst.refdes, center.x, center.y);
+  } else {
+    ctx.fillText(inst.refdes, center.x, center.y - 6);
+    ctx.fillText(inst.type, center.x, center.y + 6);
+  }
 }
 
 // sideOutward is the unit vector pointing away from the body for a pin's side,

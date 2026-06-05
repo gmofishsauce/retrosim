@@ -27,7 +27,13 @@ import {
   breakoutBitCmd,
   deleteBendCmd,
 } from "../commands.js";
-import { insertBend, moveBend, matchingGroups, pinWorldPos } from "../model/design.js";
+import {
+  insertBend,
+  moveBend,
+  matchingGroups,
+  pinWorldPos,
+  packageSiblings,
+} from "../model/design.js";
 import {
   chooseGroupDialog,
   chooseBitDialog,
@@ -96,6 +102,18 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
 
   function select(sel) {
     store.setSelection(sel); // notifies → canvas re-renders + properties panel updates
+  }
+
+  // deleteComponentConfirmed deletes a component, warning first before removing a
+  // whole subunit package (FR-018b). Returns true if the delete was dispatched.
+  function deleteComponentConfirmed(refdes) {
+    const inst = store.design.components.find((c) => c.refdes === refdes);
+    if (inst?.typeData?.renderType === "subunit") {
+      const n = packageSiblings(store.design, refdes).length;
+      if (!window.confirm(`Delete all ${n} units of package ${refdes}?`)) return false;
+    }
+    store.dispatch(deleteComponent(refdes));
+    return true;
   }
 
   function canvasPoint(e) {
@@ -389,7 +407,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       items.push({
         label: "Delete component",
         danger: true,
-        onClick: () => store.dispatch(deleteComponent(comp.refdes)),
+        onClick: () => deleteComponentConfirmed(comp.refdes),
       });
     }
 
@@ -545,10 +563,13 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
 
     if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
-      if (sel.kind === "component") store.dispatch(deleteComponent(sel.refdes));
-      else if (sel.kind === "wire") store.dispatch(deleteWireCmd(sel.id));
-      else if (sel.kind === "bus") store.dispatch(deleteBusCmd(sel.id));
-      select(null);
+      if (sel.kind === "component") {
+        if (deleteComponentConfirmed(sel.refdes)) select(null);
+      } else {
+        if (sel.kind === "wire") store.dispatch(deleteWireCmd(sel.id));
+        else if (sel.kind === "bus") store.dispatch(deleteBusCmd(sel.id));
+        select(null);
+      }
     } else if (e.key.toLowerCase() === "r" && sel.kind === "component") {
       e.preventDefault();
       store.dispatch(rotateComponent(sel.refdes, e.shiftKey ? -90 : 90));

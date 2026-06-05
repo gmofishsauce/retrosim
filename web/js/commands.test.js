@@ -15,6 +15,23 @@ function ty(name = "74138") {
   return { name, width: 6, height: 12, pins: [] };
 }
 
+function ty7400() {
+  return {
+    name: "7400",
+    renderType: "subunit",
+    numUnits: 2,
+    renderAs: "nand",
+    pins: [
+      { name: "1A", side: "left", unit: "A", direction: "in" },
+      { name: "1B", side: "left", unit: "A", direction: "in" },
+      { name: "1Y", side: "right", unit: "A", direction: "out" },
+      { name: "2A", side: "left", unit: "B", direction: "in" },
+      { name: "2B", side: "left", unit: "B", direction: "in" },
+      { name: "2Y", side: "right", unit: "B", direction: "out" },
+    ],
+  };
+}
+
 function newStore() {
   return createStore({ design: createDesign("t") });
 }
@@ -35,6 +52,37 @@ test("placeComponent adds an instance; undo removes; redo restores same refdes",
   store.redo();
   assert.equal(store.design.components.length, 1);
   assert.equal(store.design.components[0].refdes, "U1");
+});
+
+test("placeComponent drops a whole subunit package as one undo step (FR-013a)", () => {
+  const store = newStore();
+  store.dispatch(placeComponent(ty7400(), 4, 5, 0));
+  assert.deepEqual(
+    store.design.components.map((c) => c.refdes),
+    ["U1A", "U1B"],
+  );
+
+  store.undo();
+  assert.equal(store.design.components.length, 0);
+
+  store.redo();
+  assert.deepEqual(
+    store.design.components.map((c) => c.refdes),
+    ["U1A", "U1B"],
+  );
+});
+
+test("deleteComponent on a subunit removes the whole package; undo restores it (FR-018b)", () => {
+  const store = newStore();
+  store.dispatch(placeComponent(ty7400(), 4, 5, 0));
+  store.dispatch(deleteComponent("U1A"));
+  assert.equal(store.design.components.length, 0);
+
+  store.undo();
+  assert.deepEqual(
+    store.design.components.map((c) => c.refdes),
+    ["U1A", "U1B"],
+  );
 });
 
 test("moveComponent updates position and undo restores it", () => {

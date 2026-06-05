@@ -34,6 +34,24 @@ func TestLibraryDuplicateLastWins(t *testing.T) {
 	}
 }
 
+// Every shipped component file in ../components must parse: a parse failure is
+// logged and skipped by LoadLibrary, so it would simply be absent here.
+func TestShippedComponentsParse(t *testing.T) {
+	lib, err := LoadLibrary("../components")
+	if err != nil {
+		t.Fatalf("LoadLibrary: %v", err)
+	}
+	got := map[string]bool{}
+	for _, c := range lib.List() {
+		got[c.Name] = true
+	}
+	for _, want := range []string{"7400", "7404", "7432", "74138", "74153"} {
+		if !got[want] {
+			t.Errorf("component %q missing from library (parse error?)", want)
+		}
+	}
+}
+
 func names(types []ComponentType) []string {
 	out := make([]string, len(types))
 	for i, t := range types {

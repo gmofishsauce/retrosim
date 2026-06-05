@@ -5,24 +5,30 @@
 // (FR-057).
 package server
 
-// ComponentType is one TTL component definition, parsed from an MD file
-// (FR-062). width/height are always concrete grid-unit dimensions once parsed
-// (stated or derived from pins — §6.3).
+// ComponentType is one TTL component definition, parsed from a YAML file
+// (FR-062). For "unit" components width/height are always concrete grid-unit
+// dimensions once parsed (stated or derived from pins — §6.3). For "subunit"
+// components (FR-062c) width/height are unused — the client symbol module owns
+// geometry (§6.8a).
 type ComponentType struct {
-	Name      string             `json:"name"`                // unique type name, e.g. "74138"
-	Width     int                `json:"width"`               // outline width in grid units (>0)
-	Height    int                `json:"height"`              // outline height in grid units (>0)
-	Pins      []Pin              `json:"pins"`                // FR-062, FR-062a
-	PinGroups []PinGroup         `json:"pinGroups,omitempty"` // optional (FR-063)
-	Delays    map[string]float64 `json:"delays,omitempty"`    // optional propagation delays, ns (FR-064)
-	Behavior  string             `json:"behavior,omitempty"`  // opaque GALasm text, preserved & ignored (FR-066)
+	Name       string             `json:"name"`                // unique type name, e.g. "74138"
+	RenderType string             `json:"renderType"`          // "unit" (default) | "subunit" (FR-062c)
+	NumUnits   int                `json:"numUnits,omitempty"`  // subunit: number of functional units (FR-062c)
+	RenderAs   string             `json:"renderAs,omitempty"`  // subunit: schematic symbol (FR-013b)
+	Width      int                `json:"width"`               // unit only: outline width in grid units (>0)
+	Height     int                `json:"height"`              // unit only: outline height in grid units (>0)
+	Pins       []Pin              `json:"pins"`                // FR-062, FR-062a
+	PinGroups  []PinGroup         `json:"pinGroups,omitempty"` // optional (FR-063)
+	Delays     map[string]float64 `json:"delays,omitempty"`    // optional propagation delays, ns (FR-064)
+	Behavior   string             `json:"behavior,omitempty"`  // opaque GALasm text, preserved & ignored (FR-066)
 }
 
 // Pin is one connection point on a component's outline (FR-062, FR-062a).
 type Pin struct {
 	Name      string `json:"name"`             // e.g. "A0", "/Y3"
 	Side      string `json:"side"`             // "left" | "right" | "top" | "bottom" (FR-014)
-	Position  int    `json:"position"`         // grid units along the side from its origin
+	Position  int    `json:"position"`         // unit only: grid units along the side from its origin
+	Unit      string `json:"unit,omitempty"`   // subunit only: unit letter this pin belongs to (FR-014a)
 	Direction string `json:"direction"`        // "in" | "out" | "bidir" | "tristate" (FR-062a)
 	Number    *int   `json:"number,omitempty"` // optional physical pin number (FR-062b)
 }

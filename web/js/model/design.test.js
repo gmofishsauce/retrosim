@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   createDesign,
   addInstance,
+  addSubunitPackage,
   addBus,
   pinWorldPos,
   matchingGroups,
@@ -42,6 +43,61 @@ test("addInstance assigns sequential refdes from U1", () => {
   assert.equal(u1.refdes, "U1");
   assert.equal(u2.refdes, "U2");
   assert.equal(d.components.length, 2);
+});
+
+// A subunit package: quad 2-input NAND (two units shown).
+function type7400() {
+  return {
+    name: "7400",
+    renderType: "subunit",
+    numUnits: 2,
+    renderAs: "nand",
+    pins: [
+      { name: "1A", side: "left", unit: "A", direction: "in" },
+      { name: "1B", side: "left", unit: "A", direction: "in" },
+      { name: "1Y", side: "right", unit: "A", direction: "out" },
+      { name: "2A", side: "left", unit: "B", direction: "in" },
+      { name: "2B", side: "left", unit: "B", direction: "in" },
+      { name: "2Y", side: "right", unit: "B", direction: "out" },
+    ],
+  };
+}
+
+test("addSubunitPackage creates one instance per unit sharing a U-number (FR-013a)", () => {
+  const d = createDesign("t");
+  addInstance(d, type74138(), 0, 0, 0); // U1
+  const units = addSubunitPackage(d, type7400(), 10, 10);
+  assert.equal(units.length, 2);
+  assert.deepEqual(units.map((u) => u.refdes), ["U2A", "U2B"]);
+  assert.equal(d.components.length, 3);
+  // each sibling carries only its own unit's pins and a symbol footprint.
+  assert.deepEqual(units[0].typeData.pins.map((p) => p.name), ["1A", "1B", "1Y"]);
+  assert.equal(units[0].typeData.width, 5); // nand: bodyW 4 + inversion column
+  assert.equal(units[0].typeData.height, 4);
+});
+
+test("addSubunitPackage stacks units vertically so they don't overlap", () => {
+  const d = createDesign("t");
+  const [a, b] = addSubunitPackage(d, type7400(), 10, 10);
+  assert.deepEqual({ x: a.x, y: a.y }, { x: 10, y: 10 });
+  assert.equal(b.x, 10);
+  assert.equal(b.y, 10 + a.typeData.height + 1);
+});
+
+test("subunit pin world positions come from symbol geometry (FR-014a)", () => {
+  const d = createDesign("t");
+  const [a] = addSubunitPackage(d, type7400(), 10, 10);
+  // inputs on the left at rows 1 and 3; output centered on the right at row 2.
+  assert.deepEqual(pinWorldPos(a, "1A"), { x: 10, y: 11 });
+  assert.deepEqual(pinWorldPos(a, "1B"), { x: 10, y: 13 });
+  assert.deepEqual(pinWorldPos(a, "1Y"), { x: 15, y: 12 });
+});
+
+test("a subunit U-number counts despite its letter suffix (FR-011)", () => {
+  const d = createDesign("t");
+  addSubunitPackage(d, type7400(), 0, 0); // U1A, U1B
+  const next = addInstance(d, type74138(), 0, 0, 0);
+  assert.equal(next.refdes, "U2");
 });
 
 test("addInstance increments past gaps (FR-011)", () => {
