@@ -1,24 +1,26 @@
 # 74153 — dual 4-to-1 multiplexer
-# The select lines A,B are common to both units on the real chip; here each mux
-# symbol shows its own select inputs (tie them together when wiring). The
-# active-low strobe/enable inputs are omitted from this rendering sample.
+# Rendered as a single unit (one rectangle): the select lines A,B are common to
+# both halves of the chip, so it cannot be split into independent mux subunits
+# (KiCAD renders it as one symbol for the same reason). The active-low
+# strobe/enable inputs are omitted from this rendering sample.
 type: "74153"
-rendertype: subunit
-numunits: 2
-renderas: mux4
+outline: [6, 12]
 
 pins:
-  - { name: 1C0, side: left,  unit: A, dir: in }
-  - { name: 1C1, side: left,  unit: A, dir: in }
-  - { name: 1C2, side: left,  unit: A, dir: in }
-  - { name: 1C3, side: left,  unit: A, dir: in }
-  - { name: A,   side: top,   unit: A, dir: in }
-  - { name: B,   side: top,   unit: A, dir: in }
-  - { name: 1Y,  side: right, unit: A, dir: out }
-  - { name: 2C0, side: left,  unit: B, dir: in }
-  - { name: 2C1, side: left,  unit: B, dir: in }
-  - { name: 2C2, side: left,  unit: B, dir: in }
-  - { name: 2C3, side: left,  unit: B, dir: in }
-  - { name: A,   side: top,   unit: B, dir: in }
-  - { name: B,   side: top,   unit: B, dir: in }
-  - { name: 2Y,  side: right, unit: B, dir: out }
+  - { name: 1C0, side: left,  pos: 2,  dir: in }
+  - { name: 1C1, side: left,  pos: 3,  dir: in }
+  - { name: 1C2, side: left,  pos: 4,  dir: in }
+  - { name: 1C3, side: left,  pos: 5,  dir: in }
+  - { name: 2C0, side: left,  pos: 7,  dir: in }
+  - { name: 2C1, side: left,  pos: 8,  dir: in }
+  - { name: 2C2, side: left,  pos: 9,  dir: in }
+  - { name: 2C3, side: left,  pos: 10, dir: in }
+  - { name: A,   side: top,   pos: 2,  dir: in }
+  - { name: B,   side: top,   pos: 4,  dir: in }
+  - { name: 1Y,  side: right, pos: 3,  dir: out }
+  - { name: 2Y,  side: right, pos: 8,  dir: out }
+
+groups:
+  - { name: 1C, pins: [1C0, 1C1, 1C2, 1C3] }
+  - { name: 2C, pins: [2C0, 2C1, 2C2, 2C3] }
+  - { name: S,  pins: [A, B] }

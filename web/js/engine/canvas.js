@@ -9,7 +9,7 @@ import {
   rotateOffset,
 } from "../geometry.js";
 import { pinWorldPos, getVertex, vertexWorld } from "../model/design.js";
-import { drawSymbol } from "./symbols.js";
+import { drawSymbol, pinHasOwnBubble, pinLabelEdge } from "./symbols.js";
 
 // Pin bubble radius in grid units. The bubble is drawn tangent to the body edge
 // (center one radius outside the pin point), so its far edge is 2*PIN_RADIUS from
@@ -248,22 +248,34 @@ function drawComponent(ctx, inst, vp, selected) {
 
     // Bubble sits just outside the body, tangent to the edge: center is one
     // radius outward from the pin point (which stays the connection target, FR-013).
-    const bc = worldToScreen(
-      { x: pw.x + outR.x * PIN_RADIUS, y: pw.y + outR.y * PIN_RADIUS },
-      vp,
-    );
-    ctx.beginPath();
-    ctx.arc(bc.x, bc.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = "#fff";
-    ctx.fill();
-    ctx.strokeStyle = "#333";
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    // Inverting-gate outputs already carry an inversion bubble drawn by the
+    // symbol, so the common bubble is suppressed there to avoid a double bubble.
+    if (!(td.renderType === "subunit" && pinHasOwnBubble(td, pin))) {
+      const bc = worldToScreen(
+        { x: pw.x + outR.x * PIN_RADIUS, y: pw.y + outR.y * PIN_RADIUS },
+        vp,
+      );
+      ctx.beginPath();
+      ctx.arc(bc.x, bc.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = "#fff";
+      ctx.fill();
+      ctx.strokeStyle = "#333";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
 
     // Label sits just inside the body (opposite the outward direction), drawn
-    // in screen space so it stays upright regardless of rotation (FR-015).
+    // in screen space so it stays upright regardless of rotation (FR-015). For
+    // subunit symbols it hangs from the body outline rather than the pin point,
+    // so stubs (mux selects, inverting outputs, concave OR inputs) never bisect it.
+    let lref = ps;
+    if (td.renderType === "subunit") {
+      const e = pinLabelEdge(td, pin);
+      const er = rotateOffset(e.x, e.y, inst.rotation);
+      lref = worldToScreen({ x: inst.x + er.x, y: inst.y + er.y }, vp);
+    }
     ctx.fillStyle = "#333";
-    ctx.fillText(pin.name, ps.x - Math.sign(outR.x) * 8, ps.y - Math.sign(outR.y) * 8);
+    ctx.fillText(pin.name, lref.x - Math.sign(outR.x) * 8, lref.y - Math.sign(outR.y) * 8);
   }
 
   // Center labels, upright (FR-012). A subunit shows just its refdes (e.g. U5A);

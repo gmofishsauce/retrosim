@@ -662,7 +662,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   rectangle path as today; a `subunit` instance draws its schematic symbol via the
   symbol module (§6.8a) — the gate/mux outline path plus pin bubbles at
   `pinWorldPos` and an upright refdes (e.g. `U5A`). Pin bubbles and the
-  grid-point/stub rule are common to both paths (FR-013/FR-013b).
+  grid-point/stub rule are common to both paths (FR-013/FR-013b), except an
+  inverting output's bubble is owned by the symbol (`pinHasOwnBubble`, §6.8a) so
+  the common path skips it. For subunit symbols the common path anchors each pin's
+  upright name label to the body outline (`pinLabelEdge`, §6.8a) rather than the
+  pin point, so stubs never bisect labels.
 - **Grid (FR-021):** draw grid dots/lines only when `scale` is large enough that
   spacing ≥ a threshold (e.g., 6 px); otherwise draw a coarser grid to avoid
   moiré and cost.
@@ -682,15 +686,27 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   - `pinSlotOffset(renderAs, nIn, role, slotIndex) → {x, y}` — unrotated grid
     offset from the instance origin for the `slotIndex`-th pin of role
     `in`\|`out`\|`sel`. Every returned offset is integer (on-grid).
-  - `drawSymbol(ctx, renderAs, nIn, instance, vp)` — strokes the gate/mux outline
-    and any mux select stubs (bubbles are drawn by the common pin path in §6.8).
+  - `drawSymbol(ctx, renderAs, nIn, instance, vp)` — strokes the gate/mux outline,
+    any mux select stubs, the inverting-gate inversion bubble + output stub, and
+    OR-family input stubs (connection bubbles are drawn by the common pin path in
+    §6.8, except where suppressed below).
+  - `pinHasOwnBubble(typeData, pin) → bool` — true for an inverting gate's output:
+    the symbol's inversion bubble is that pin's single connection bubble, so §6.8
+    must not draw a second one.
+  - `pinLabelEdge(typeData, pin) → {x, y}` — grid point on the body outline from
+    which the pin's upright name label hangs (§6.8 nudges a few px inward). Anchors
+    to the body, not the pin point, so stubs never bisect the label.
 - **Geometry (representative; tuned in code):** gates are width 4, height
-  `max(nIn+1, 3)`, inputs on rows `1..nIn`, output centered on the right edge
-  (snapped to a grid row); `not`/buffer width 3 with an output bubble for `not`.
-  Multiplexers draw as a trapezoid whose long left side has height `nData+1`
-  (data inputs on rows `1..nData`), short right side carries the centered output,
-  top/bottom edges slope ~30° toward the right, and select bubbles sit on their
-  grid point on the top with a short stub to the sloped edge (FR-013b).
+  `2·nIn`, inputs on rows `1, 3, …`, output centered on the right edge; `not`
+  width 3. Inverting gates (`nand`/`nor`/`xnor`/`not`) carry one inversion bubble
+  tangent to the tip with a short stub out to the on-grid output pin; that bubble
+  is the connection point (no separate pin bubble). OR-family gates
+  (`or`/`nor`/`xor`/`xnor`) have a concave back, so each input pin point on the
+  left edge gets a short stub to the back curve. Multiplexers draw as a trapezoid
+  whose long left side has height `nData+1` (data inputs on rows `1..nData`),
+  short right side carries the centered output, top/bottom edges slope toward the
+  right, and select bubbles sit on their grid point on the top with a short stub
+  to the sloped edge (FR-013b).
 - **Dependencies:** `geometry.js`.
 
 ### 6.9 JS: interaction / tool FSM (`web/js/engine/interaction.js`, `hittest.js`)

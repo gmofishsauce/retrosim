@@ -12,8 +12,10 @@ import { worldToScreen, scaleFor, rotateOffset } from "../geometry.js";
 const MUX_ARITY = { mux2: { data: 2, sel: 1 }, mux4: { data: 4, sel: 2 }, mux8: { data: 8, sel: 3 } };
 
 const INVERTING = new Set(["nand", "nor", "xnor", "not"]);
+const OR_FAMILY = new Set(["or", "nor", "xor", "xnor"]); // concave-back gates
 const GATE_BODY_W = 4; // and/or/xor families
 const NOT_BODY_W = 3;
+const OR_BACK_BULGE = 1.1; // concave-back control-point x for or/nor/xor/xnor
 
 function isMux(renderAs) {
   return Object.prototype.hasOwnProperty.call(MUX_ARITY, renderAs);
@@ -50,6 +52,42 @@ export function pinSlot(typeData, pin) {
     if (pinRole(p) === role) slot++;
   }
   return { role, slot };
+}
+
+// pinHasOwnBubble reports whether the symbol itself draws a bubble for this pin,
+// so the common pin path (canvas.js) must not draw a second one. An inverting
+// gate draws an inversion bubble at its output; that single bubble is both the
+// negation indicator and the connection point.
+export function pinHasOwnBubble(typeData, pin) {
+  return INVERTING.has(typeData.renderAs) && pinRole(pin) === "out";
+}
+
+// pinLabelEdge returns the grid point on the symbol body from which a pin's name
+// label hangs (the renderer then nudges a few px inward, drawing it upright). It
+// is the body outline — not the pin point — so for stubbed pins (mux selects,
+// inverting outputs) and the concave OR inputs the label sits inside the body and
+// is never bisected by a stub.
+export function pinLabelEdge(typeData, pin) {
+  const renderAs = typeData.renderAs;
+  const nIn = gateInputCount(typeData);
+  const { role, slot } = pinSlot(typeData, pin);
+  if (isMux(renderAs)) {
+    const { sel } = MUX_ARITY[renderAs];
+    const W = sel + 1;
+    if (role === "sel") {
+      const x = 1 + slot;
+      return { x, y: (Math.round(W / 2) * x) / W }; // on the sloped top edge
+    }
+    // data input (left edge) and output (right edge) sit on the outline already.
+    return pinSlotOffset(renderAs, nIn, role, slot);
+  }
+  if (role === "out") return { x: bodyWidth(renderAs), y: nIn }; // body tip
+  const y = 1 + 2 * slot;
+  if (OR_FAMILY.has(renderAs)) {
+    const t = y / (2 * nIn);
+    return { x: 2 * OR_BACK_BULGE * t * (1 - t), y }; // concave back at this row
+  }
+  return { x: 0, y }; // flat left edge (and/nand/not)
 }
 
 // symbolFootprint returns the unit's grid-unit bounding box {width, height}.
@@ -136,10 +174,23 @@ function drawGate(ctx, renderAs, nIn, P, ring, scale) {
     const pts = [];
     pushQuad(pts, [0, 0], [w * 0.5, 0], [w, cy]); // top
     pushQuad(pts, [w, cy], [w * 0.5, H], [0, H]); // bottom
-    pushQuad(pts, [0, H], [1.1, cy], [0, 0]); // concave back
+    pushQuad(pts, [0, H], [OR_BACK_BULGE, cy], [0, 0]); // concave back
     ring(pts);
     if (renderAs === "xor" || renderAs === "xnor") {
       strokeQuad(ctx, P, [-0.6, H], [0.5, cy], [-0.6, 0]); // double back line
+    }
+    // Input stubs: bridge each input pin point (x=0) to the concave back edge,
+    // which is inset to x≈0.41 at the input rows, so inputs are not left floating.
+    for (let i = 0; i < nIn; i++) {
+      const y = 1 + 2 * i;
+      const t = y / H;
+      const xback = 2 * OR_BACK_BULGE * t * (1 - t);
+      const a = P(0, y);
+      const b = P(xback, y);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
     }
   }
 

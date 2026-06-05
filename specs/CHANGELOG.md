@@ -19,6 +19,25 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-05 — Subunit rendering fixes (bubbles, OR inputs, label placement)
+What: Three rendering bugs in subunit symbols: (1) pin name labels were anchored
+to the pin point/bubble, so for stubbed pins they landed on the stub — now they
+hang from the body outline (`pinLabelEdge`); (2) inverting gates (7404, 7400)
+drew both an inversion bubble and a common connection bubble — now the inversion
+bubble is the sole bubble (`pinHasOwnBubble`); (3) OR-family gates (7432) left
+their inputs floating off the concave back — now each input has a short stub to
+the back curve.
+Why: Bug fixes to the subunit feature; symbols looked wrong.
+Touches: FR-013a, FR-013b, FR-015; design §6.8, §6.8a.
+
+## 2026-06-05 — 74153 reverts to unit rendering (shared selects can't be subunits)
+What: Changed `srv/components/74153.yaml` from `rendertype: subunit` (dual mux4)
+to a single `unit` rectangle. The dual 4-to-1 mux shares its A/B select lines
+across both halves, so it cannot be split into independently-wired mux subunits.
+Why: Bug — subunit rendering duplicated the shared selects; KiCAD renders the
+'153 as one symbol for the same reason. Data-only; FR-062c already allows both.
+Touches: none (component library data only).
+
 ## 2026-06-05 — Subunit rendering (multi-unit packages drawn as schematic symbols)
 What: Packages that contain independent functional units (e.g. 7400 = quad NAND)
 declare `rendertype: subunit` + `numunits` + `renderas` and per-pin `unit` (in
