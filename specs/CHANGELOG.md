@@ -19,6 +19,18 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-08 — Subunit pins: ticks on hover/select instead of resting bubbles
+What: Subunit (gate/mux) pins no longer draw a resting connection bubble; the
+circle is now reserved exclusively for logic negation. A pin's connection point
+is instead marked with a short perpendicular tick, shown only when the subunit is
+hovered or selected. Inverting outputs are exempt (their negation bubble is the
+mark). Rectangle `unit` components keep their FR-013 bubble. Adds transient
+`hover` state to the store.
+Why: Pin bubbles were visually identical to negation bubbles, so positive-true
+gate inputs/outputs read as inverted (e.g. NAND looked like its inputs were
+negated; an OR looked like a NOR).
+Touches: FR-013, FR-013b, FR-013c (new); design §6.8, §6.8a, §6.10
+
 ## 2026-06-05 — Subunit rendering fixes (bubbles, OR inputs, label placement)
 What: Three rendering bugs in subunit symbols: (1) pin name labels were anchored
 to the pin point/bubble, so for stubbed pins they landed on the stub — now they

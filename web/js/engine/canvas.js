@@ -56,7 +56,7 @@ export function initCanvas(canvasEl, store) {
     drawBuses(ctx, store.design, vp, store.state.selection);
     drawWires(ctx, store.design, vp, store.state.selection);
     drawVertices(ctx, store.design, vp);
-    drawComponents(ctx, store.design, vp, store.state.selection);
+    drawComponents(ctx, store.design, vp, store.state.selection, store.state.hover);
     if (preview) drawPreview(ctx, preview, vp);
     ctx.restore();
   }
@@ -104,12 +104,13 @@ function drawGrid(ctx, w, h, vp) {
   }
 }
 
-function drawComponents(ctx, design, vp, selection) {
+function drawComponents(ctx, design, vp, selection, hover) {
   if (!design) return;
   for (const inst of design.components) {
     const selected =
       selection?.kind === "component" && selection.refdes === inst.refdes;
-    drawComponent(ctx, inst, vp, selected);
+    const hovered = hover === inst.refdes;
+    drawComponent(ctx, inst, vp, selected, hovered);
   }
 }
 
@@ -206,7 +207,7 @@ function drawVertices(ctx, design, vp) {
   }
 }
 
-function drawComponent(ctx, inst, vp, selected) {
+function drawComponent(ctx, inst, vp, selected, hovered) {
   const td = inst.typeData;
   if (!td) return;
 
@@ -246,11 +247,29 @@ function drawComponent(ctx, inst, vp, selected) {
     const out = sideOutward(pin.side);
     const outR = rotateOffset(out.x, out.y, inst.rotation);
 
-    // Bubble sits just outside the body, tangent to the edge: center is one
-    // radius outward from the pin point (which stays the connection target, FR-013).
-    // Inverting-gate outputs already carry an inversion bubble drawn by the
-    // symbol, so the common bubble is suppressed there to avoid a double bubble.
-    if (!(td.renderType === "subunit" && pinHasOwnBubble(td, pin))) {
+    // Connection mark at the pin point (which stays the connection target, FR-013).
+    // Unit components draw the FR-013 bubble, tangent to the body one radius
+    // outward. Subunit symbols draw no resting bubble — the circle is reserved for
+    // logic negation (FR-013c) — and instead get a short perpendicular tick on the
+    // pin point, shown only while the symbol is hovered or selected. Inverting-gate
+    // outputs are exempt in both cases: the symbol's inversion bubble is their mark.
+    if (td.renderType === "subunit") {
+      if (!pinHasOwnBubble(td, pin) && (selected || hovered)) {
+        // Short tick along the pin axis (an outward lead from the grid point), so
+        // it reads as a connection stub and never hides inside a body edge.
+        const a = worldToScreen(pw, vp);
+        const b = worldToScreen(
+          { x: pw.x + outR.x * 2 * PIN_RADIUS, y: pw.y + outR.y * 2 * PIN_RADIUS },
+          vp,
+        );
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.strokeStyle = "#333";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+    } else {
       const bc = worldToScreen(
         { x: pw.x + outR.x * PIN_RADIUS, y: pw.y + outR.y * PIN_RADIUS },
         vp,

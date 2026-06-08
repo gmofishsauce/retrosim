@@ -123,6 +123,17 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   const worldOf = (e) => screenToWorld(canvasPoint(e), store.state.viewport);
   const gridOf = (e) => snapToGrid(canvasPoint(e), store.state.viewport);
 
+  // setHover records the refdes under the cursor (transient UI state) so the
+  // renderer can show subunit connection ticks (FR-013c); re-renders only on
+  // change, outside the command/undo path.
+  function setHover(comp) {
+    const refdes = comp ? comp.refdes : null;
+    if (store.state.hover !== refdes) {
+      store.state.hover = refdes;
+      renderer.requestRender();
+    }
+  }
+
   function placeAt(screenPt) {
     const g = snapToGrid(screenPt, store.state.viewport);
     store.dispatch(placeComponent(placeType, g.x, g.y, 0));
@@ -434,7 +445,10 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       }
       return;
     }
-    if (!drag) return;
+    if (!drag) {
+      setHover(hitComponent(store.design, worldOf(e)));
+      return;
+    }
     const g = gridOf(e);
 
     if (drag.type === "component") {

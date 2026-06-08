@@ -12,6 +12,7 @@ export function createStore(initial = {}) {
     design: initial.design ?? null,
     tool: initial.tool ?? "select",
     selection: initial.selection ?? null,
+    hover: initial.hover ?? null, // refdes under the cursor; transient UI state (FR-013c)
     viewport: initial.viewport ?? { pan: { x: 0, y: 0 }, zoom: 1.6 },
     dirty: false,
     savePath: initial.savePath ?? null,

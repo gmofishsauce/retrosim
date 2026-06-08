@@ -660,11 +660,15 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   (rubber-band line, placement ghost).
 - **Component drawing dispatches on `renderType`:** a `unit` instance draws the
   rectangle path as today; a `subunit` instance draws its schematic symbol via the
-  symbol module (§6.8a) — the gate/mux outline path plus pin bubbles at
-  `pinWorldPos` and an upright refdes (e.g. `U5A`). Pin bubbles and the
-  grid-point/stub rule are common to both paths (FR-013/FR-013b), except an
-  inverting output's bubble is owned by the symbol (`pinHasOwnBubble`, §6.8a) so
-  the common path skips it. For subunit symbols the common path anchors each pin's
+  symbol module (§6.8a) — the gate/mux outline path plus an upright refdes (e.g.
+  `U5A`). The grid-point/stub rule is common to both paths (FR-013/FR-013b). A
+  `unit` instance draws the FR-013 connection bubble at each `pinWorldPos`. A
+  `subunit` instance draws no resting bubble (FR-013c); instead, when that
+  subunit is hovered (`state.hover`) or selected, the common path draws a short
+  tick as an outward lead along the pin axis from the pin's grid point. In
+  both paths an inverting output's bubble is owned by the symbol
+  (`pinHasOwnBubble`, §6.8a), so the common path draws neither a bubble nor a tick
+  there. For subunit symbols the common path anchors each pin's
   upright name label to the body outline (`pinLabelEdge`, §6.8a) rather than the
   pin point, so stubs never bisect labels.
 - **Grid (FR-021):** draw grid dots/lines only when `scale` is large enough that
@@ -688,11 +692,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     `in`\|`out`\|`sel`. Every returned offset is integer (on-grid).
   - `drawSymbol(ctx, renderAs, nIn, instance, vp)` — strokes the gate/mux outline,
     any mux select stubs, the inverting-gate inversion bubble + output stub, and
-    OR-family input stubs (connection bubbles are drawn by the common pin path in
-    §6.8, except where suppressed below).
+    OR-family input stubs (connection marks — unit bubbles or subunit hover/select
+    ticks per FR-013/FR-013c — are drawn by the common pin path in §6.8, except for
+    the inverting output, whose bubble the symbol owns).
   - `pinHasOwnBubble(typeData, pin) → bool` — true for an inverting gate's output:
-    the symbol's inversion bubble is that pin's single connection bubble, so §6.8
-    must not draw a second one.
+    the symbol's inversion bubble is that pin's single connection mark, so §6.8
+    must not draw a second one (no extra bubble and no hover/select tick, FR-013c).
   - `pinLabelEdge(typeData, pin) → {x, y}` — grid point on the body outline from
     which the pin's upright name label hangs (§6.8 nudges a few px inward). Anchors
     to the body, not the pin point, so stubs never bisect the label.
@@ -772,7 +777,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Purpose:** single source of truth and the only mutation path; undo/redo;
   dirty tracking; pub/sub.
 - **Satisfies:** FR-024, FR-049a, NFR-006.
-- **State:** `{ design, tool, selection, viewport, dirty, savePath, designName }`.
+- **State:** `{ design, tool, selection, hover, viewport, dirty, savePath, designName }`.
+  `hover` is the refdes of the component currently under the cursor (or `null`),
+  used only to show subunit connection ticks (FR-013c). It is transient UI state:
+  set directly by the interaction layer with a plain renderer re-render, never
+  through the command/undo path, and not persisted.
 - **Command interface:** every mutating action is an object
   `{ apply(design), revert(design), label }`. The store:
   ```
@@ -1207,6 +1216,7 @@ No files are modified (greenfield).
 | FR-012, FR-015, FR-020 | §6.7, §6.8 | `geometry.js`, `canvas.js` |
 | FR-013, FR-014 | §6.8, §7.1 | `canvas.js`, `types.go` |
 | FR-013a, FR-013b, FR-014a | §6.6, §6.8, §6.8a, §7.1 | `symbols.js`, `canvas.js`, `model/design.js` |
+| FR-013c | §6.8, §6.8a, §6.10 | `canvas.js`, `symbols.js`, `store.js`, `interaction.js` |
 | FR-016, FR-017 | §6.9 | `interaction.js`, `hittest.js` |
 | FR-018 | §6.6, §6.9 | `model/design.js`, `interaction.js` |
 | FR-018a | §6.6, §6.9, §6.10 | `model/design.js`, `store.js` |
