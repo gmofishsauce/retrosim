@@ -44,6 +44,17 @@ import { openContextMenu } from "../chrome/contextmenu.js";
 
 const DEFAULT_BUS_WIDTH = 8;
 
+// WIRE_CURSOR is the wire-drawing cursor (FR-025): a short lower-right→upper-left
+// diagonal line, supplied inline as an SVG data-URI so no asset file or server
+// MIME mapping is required. Hotspot is centered; `crosshair` is the fallback.
+const WIRE_CURSOR =
+  "url('data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22">' +
+      '<line x1="5" y1="5" x2="17" y2="17" stroke="black" stroke-width="2.5" stroke-linecap="round"/></svg>',
+  ) +
+  "') 11 11, crosshair";
+
 // planBusEndpoint converts a bus endpoint target into an addBus endpoint spec, an
 // optional snap directive, and the list of width-matching pin groups. A component
 // target with exactly one match auto-snaps (FR-041a); with zero it is left
@@ -85,7 +96,8 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     wireSource = null;
     const label = document.getElementById("tool-mode");
     if (label) label.textContent = tool === "place" ? `place ${type.name}` : tool;
-    canvas.style.cursor = tool === "select" ? "default" : "crosshair";
+    canvas.style.cursor =
+      tool === "select" ? "default" : tool === "wire" ? WIRE_CURSOR : "crosshair";
     renderer.setPreview(null); // clear any in-progress rubber-band
     store.setTool(tool); // notifies subscribers (toolbar highlight)
   }
@@ -338,6 +350,15 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
 
     // SELECT tool.
     const world = worldOf(e);
+    // A pin is a wire hotspot (FR-027b): clicking one arms WIRE from that pin
+    // (pins take priority over the component body, so this doesn't select/drag
+    // the component) and reuses the WIRE machinery for preview/completion.
+    const pinHit = hitPin(store.design, world, 0.5);
+    if (pinHit) {
+      setTool("wire"); // clears wireSource, sets wire cursor, highlights toolbar
+      wireSource = { kind: "pin", refdes: pinHit.refdes, pin: pinHit.pin };
+      return;
+    }
     const bend = hitBend(store.design, world, 0.5);
     if (bend) {
       select({ kind: "wire", id: bend.wire.id });
@@ -446,7 +467,14 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       return;
     }
     if (!drag) {
-      setHover(hitComponent(store.design, worldOf(e)));
+      const world = worldOf(e);
+      setHover(hitComponent(store.design, world));
+      // In select mode a pin is a wire hotspot (FR-027b): show the wire cursor
+      // while hovering one, else the default pointer.
+      if (store.state.tool === "select") {
+        const overPin = !!hitPin(store.design, world, 0.5);
+        canvas.style.cursor = overPin ? WIRE_CURSOR : "default";
+      }
       return;
     }
     const g = gridOf(e);

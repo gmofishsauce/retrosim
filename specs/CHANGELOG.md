@@ -19,6 +19,17 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-08 — Start wires from pins in select mode; wire-cursor icon
+What: A component pin is now a wire hotspot in select-tool mode: hovering a pin
+shows the wire cursor and clicking a pin starts a wire from it (auto-arming the
+Wire tool, one-shot back to select), so wiring no longer requires selecting the
+Wire tool first. The wire cursor is a short diagonal line (lower-right→upper-left)
+inline SVG; the Wire toolbar button now shows that icon instead of the word
+"Wire".
+Why: Manually switching to the Wire tool for every wire is tedious; pins are the
+natural place to begin a wire.
+Touches: FR-025, FR-027b (new); design §6.9, §6.11
+
 ## 2026-06-08 — Subunit pins: ticks on hover/select instead of resting bubbles
 What: Subunit (gate/mux) pins no longer draw a resting connection bubble; the
 circle is now reserved exclusively for logic negation. A pin's connection point

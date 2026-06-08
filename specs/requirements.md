@@ -77,10 +77,11 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 
 ### 3.8 Wire Drawing
 
-- FR-025: The application shall provide a Wire tool. While the Wire tool is active the cursor shall provide clear visual feedback indicating wire-drawing mode.
+- FR-025: The application shall provide a Wire tool. While the Wire tool is active the cursor shall provide clear visual feedback indicating wire-drawing mode: a wire cursor drawn as a short diagonal line running from lower-right to upper-left. The Wire tool's toolbar button (FR-026) shall display this same wire icon in place of a text label.
 - FR-026: The user shall activate the Wire tool by clicking a wire-tool button in the toolbar.
 - FR-027: To draw a wire, the user shall click a source pin, then click a destination pin. The system shall draw a straight line (rat's nest wire) between the two pins.
 - FR-027a: After the source is clicked and before the destination is clicked, the system shall display a rubber-band preview: a straight line from the source point to the current cursor position, following the cursor until the wire is committed or the gesture is cancelled. The same preview applies to bus drawing (FR-039).
+- FR-027b: In select-tool mode, a component pin shall act as a wire hotspot, so the user can draw a wire without first activating the Wire tool. While in select-tool mode, hovering the cursor over a pin shall change the cursor to the wire cursor (FR-025), and clicking a pin shall begin a wire from that pin exactly as the Wire tool does (FR-027/FR-027a); the wire is completed by the destination click and the application returns to select-tool mode (FR-028). Only pins are select-tool wire hotspots; clicks on wire segments, buses, bend points, and component bodies retain their existing select-tool meanings (FR-016, FR-031, FR-033b, FR-023a).
 - FR-028: After a wire is placed, the application shall automatically return to select-tool mode.
 - FR-029: A wire or bus with exactly one connected endpoint shall be permitted (e.g., as a result of deleting a component).
 - FR-030: A wire or bus with no connected endpoints shall be automatically removed from the design.

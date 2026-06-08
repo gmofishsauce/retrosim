@@ -2,10 +2,16 @@
 // via the interaction FSM; the active tool is highlighted by subscribing to the
 // store. File ops, zoom/pan land in later slices.
 
+// WIRE_ICON is the wire cursor's glyph (a short lower-right→upper-left diagonal
+// line, FR-025) reused as the Wire button's label.
+const WIRE_ICON =
+  '<svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true">' +
+  '<line x1="5" y1="5" x2="17" y2="17" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>';
+
 export function initToolbar({ container, store, interaction, fileops }) {
   const tools = [
     { tool: "select", label: "Select" },
-    { tool: "wire", label: "Wire" },
+    { tool: "wire", icon: WIRE_ICON },
     { tool: "bus", label: "Bus" },
   ];
 
@@ -13,8 +19,13 @@ export function initToolbar({ container, store, interaction, fileops }) {
   for (const t of tools) {
     const b = document.createElement("button");
     b.className = "tool-btn";
-    b.textContent = t.label;
-    b.title = `${t.label} tool`;
+    if (t.icon) {
+      b.innerHTML = t.icon;
+      b.setAttribute("aria-label", "Wire tool");
+    } else {
+      b.textContent = t.label;
+    }
+    b.title = `${t.label ?? "Wire"} tool`;
     b.addEventListener("click", () => interaction.setTool(t.tool));
     container.appendChild(b);
     toolEls[t.tool] = b;

@@ -716,8 +716,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
 ### 6.9 JS: interaction / tool FSM (`web/js/engine/interaction.js`, `hittest.js`)
 - **Purpose:** translate pointer/keyboard events into Commands; hit-testing.
-- **Satisfies:** FR-008–FR-010, FR-016–FR-019, FR-026–FR-034, FR-038–FR-043a,
-  FR-039a.
+- **Satisfies:** FR-008–FR-010, FR-016–FR-019, FR-025, FR-026–FR-034, FR-027b,
+  FR-038–FR-043a, FR-039a.
 - **Tools / states:** `SELECT` (default, FR-004), `PLACE(type)` (transient, set by
   palette click), `WIRE`, `BUS`. The FSM also has transient sub-states for
   in-progress gestures (e.g., `WIRE_AWAIT_DEST`, `DRAGGING_BEND`,
@@ -725,6 +725,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
   | State | Event | Action → Command | Next state |
   |---|---|---|---|
+  | SELECT | hover pin | show wire cursor (FR-027b) | SELECT |
+  | SELECT | click pin | begin wire at pin, auto-arming WIRE from select (FR-027b) | WIRE_AWAIT_DEST |
   | SELECT | click component | select it | SELECT |
   | SELECT | drag component | `MoveComponent` (snap, stretch connected segs FR-018) | SELECT |
   | SELECT | press Delete on selection | `DeleteComponent`/`DeleteWire` (FR-018a/FR-033a) | SELECT |
@@ -747,8 +749,15 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   wire/bus segments use point-to-segment distance (tolerance ≈ ⅓ grid scaled);
   bend points and `junction`/`free` vertices are points. Pins take priority over
   segments take priority over component bodies when overlapping.
-- **Wire-mode cursor (FR-025):** while `WIRE`/`BUS` active, set a crosshair
-  cursor and show a status hint; `SELECT` uses the default pointer.
+- **Wire-mode cursor (FR-025/FR-027b):** the wire cursor is a short diagonal line
+  (lower-right→upper-left), supplied as an inline SVG data-URI so no asset file or
+  server MIME mapping is needed. It is set while `WIRE` is active, and in `SELECT`
+  while the pointer is over a pin (a wire hotspot, FR-027b). `BUS` keeps a
+  crosshair; `SELECT` off any pin uses the default pointer. **Select-mode wire
+  start:** clicking a pin in `SELECT` (pins take hit priority over component
+  bodies, so the click does not select/drag the component) arms `WIRE` from that
+  pin — reusing the WIRE machinery (rubber-band preview, destination click,
+  one-shot return to `SELECT` per FR-028) rather than duplicating it.
 - **Bus snap-connect (FR-041–FR-043a, A3/A7):** on dropping a bus endpoint over a
   component, compute the candidate pin groups whose **member pin count == bus
   width**, then branch on the candidate count:
@@ -810,7 +819,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Toolbar (`toolbar.js`)** — Satisfies FR-026, FR-035, FR-022, FR-023, FR-024,
   FR-044, FR-046, FR-049, FR-052. Buttons: Select, Wire, Bus, Zoom +/−, Pan
   (or pan via left-drag on empty canvas, space-drag, or middle-drag — FR-023a),
-  Undo, Redo, New, Open, Save, Save As. The
+  Undo, Redo, New, Open, Save, Save As. The Wire button shows the wire-cursor
+  icon (the lower-right→upper-left diagonal line, inline SVG) instead of a text
+  label (FR-025), keeping a `Wire tool` tooltip/aria-label. The
   active tool is highlighted; clicking a tool sets `store.tool`.
 - **Palette (`palette.js`)** — Satisfies FR-003, FR-005, FR-006, FR-008, FR-009.
   Renders one tile per `ComponentType` (flat, sorted). A tile is `draggable`
@@ -1227,7 +1238,7 @@ No files are modified (greenfield).
 | FR-022, FR-023 | §6.8, §6.11 | `canvas.js`, `toolbar.js` |
 | FR-024 | §6.10 | `store.js` |
 | FR-025, FR-026 | §6.9, §6.11 | `interaction.js`, `toolbar.js` |
-| FR-027, FR-028 | §6.9, §6.10 | `interaction.js`, `store.js` |
+| FR-027, FR-027b, FR-028 | §6.9, §6.10 | `interaction.js`, `store.js` |
 | FR-029, FR-030 | §6.6 | `model/design.js` |
 | FR-031, FR-032, FR-033, FR-033a | §6.9, §6.10, §6.11 | `interaction.js`, `store.js`, `contextmenu.js` |
 | FR-034, FR-034a, FR-034b | §6.6, §6.9 | `model/netlist.js`, `interaction.js` |
