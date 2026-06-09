@@ -21,16 +21,33 @@ function defaultDesignName(now = new Date()) {
   return `unnamed schematic ${date} ${time}`;
 }
 
-function renderPalette(paletteEl, components) {
+// label drops the leading "74" family prefix, leaving a 2-3 digit label (FR-005).
+const paletteLabel = (name) => name.slice(2);
+
+function renderPalette(paletteEl, components, store) {
   paletteEl.replaceChildren();
-  for (const type of components) {
+  const tiles = {};
+  // Ascending by abbreviated part number, packed left→right top→bottom (FR-006).
+  const sorted = [...components].sort(
+    (a, b) => Number(paletteLabel(a.name)) - Number(paletteLabel(b.name)),
+  );
+  for (const type of sorted) {
     const tile = document.createElement("div");
     tile.className = "palette-tile";
-    tile.textContent = type.name; // FR-005: type name per tile
+    tile.textContent = paletteLabel(type.name); // FR-005: abbreviated label
+    tile.title = type.name; // full name in tooltip (FR-005)
     tile.dataset.type = type.name;
-    tile.draggable = true; // wired to placement in a later slice
+    tile.draggable = true;
     paletteEl.appendChild(tile);
+    tiles[type.name] = tile;
   }
+  // Reflect the armed click-to-place tile with a pressed-in look (FR-009a).
+  store.subscribe((state) => {
+    const armed = state.tool === "place" ? state.placeType : null;
+    for (const [name, tile] of Object.entries(tiles)) {
+      tile.classList.toggle("armed", name === armed);
+    }
+  });
 }
 
 async function main() {
@@ -58,7 +75,7 @@ async function main() {
       getDefaults().catch(() => ({ dataDir: "" })),
     ]);
     const palette = document.getElementById("palette");
-    renderPalette(palette, components);
+    renderPalette(palette, components, store);
     const interaction = initInteraction({
       canvas: document.getElementById("canvas"),
       palette,

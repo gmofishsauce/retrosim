@@ -19,6 +19,15 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-09 — Palette as a 3D tile grid, abbreviated part-number labels
+What: Replaced the labeled horizontal-bar palette buttons with fixed-size raised
+(drop-shadow) tiles in a 3-column grid, sorted ascending by part number. Tile
+labels drop the leading "74" (e.g. "138", "00") with the full name in a tooltip;
+the panel shrinks to tightly fit the grid. An armed click-to-place tile shows a
+pressed-in look.
+Touches: FR-005, FR-006 (rework), FR-009a (new); design §6.11
+- requirements §3.2/§3.3
+
 ## 2026-06-09 — Wire-cursor hotspot at line's upper-left endpoint
 What: Moved the wire cursor's hotspot from the icon center to the upper-left
 endpoint of the diagonal line (its bounding-box upper-left corner).

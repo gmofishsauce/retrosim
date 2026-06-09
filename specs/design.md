@@ -48,14 +48,16 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
   named `unnamed schematic <datetime>` (local date/time).
 
 **Component Palette**
-- **FR-005** — One palette tile per loaded component type, showing the type name
-  (e.g., `74138`).
-- **FR-006** — Palette is a flat, unordered list of tiles (no grouping).
+- **FR-005** — One fixed-size palette tile per loaded component type, labeled with
+  the type name minus its leading `74` (e.g., `138`, `00`); full name in tooltip.
+- **FR-006** — Palette is a fixed-width grid of equal tiles (3/row), packed
+  left→right, top→bottom in ascending part-number order (supersedes flat list).
 - **FR-007** — Library loaded once at startup; no live reload of YAML files.
 
 **Component Placement**
 - **FR-008** — Place by dragging a tile from the palette onto the canvas.
 - **FR-009** — Place by clicking a tile, then clicking a canvas point.
+- **FR-009a** — An armed click-to-place tile shows a pressed-in (inset) look.
 - **FR-010** — Placement is **one-shot**: after placing, return to select mode.
 - **FR-011** — On placement assign a unique reference designator `U1, U2, …`,
   incremented from the highest existing designator in the design.
@@ -824,10 +826,16 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   icon (the lower-right→upper-left diagonal line, inline SVG) instead of a text
   label (FR-025), keeping a `Wire tool` tooltip/aria-label. The
   active tool is highlighted; clicking a tool sets `store.tool`.
-- **Palette (`palette.js`)** — Satisfies FR-003, FR-005, FR-006, FR-008, FR-009.
-  Renders one tile per `ComponentType` (flat, sorted). A tile is `draggable`
-  (HTML5 DnD → drop on canvas, FR-008) and click-selectable (sets `PLACE(type)`,
-  FR-009). Disabled/overlaid until the library load resolves (FR-003).
+- **Palette (`palette.js`)** — Satisfies FR-003, FR-005, FR-006, FR-008, FR-009,
+  FR-009a. Renders one fixed-size tile per `ComponentType` in a 3-column CSS grid,
+  sorted ascending by the numeric abbreviated part number (`Number(name.slice(2))`).
+  Each tile is labeled `name.slice(2)` (the `74` prefix dropped) with the full
+  `name` as its `title`/tooltip; `dataset.type` keeps the full name so placement is
+  unaffected. Tiles are raised (drop shadow); a tile is `draggable` (HTML5 DnD →
+  drop on canvas, FR-008) and click-selectable (sets `PLACE(type)`, FR-009). The
+  armed tile shows a pressed-in (inset) look (FR-009a) by subscribing to the store
+  and matching `state.placeType` while `tool === "place"`. Disabled/overlaid until
+  the library load resolves (FR-003).
 - **Dialogs (`dialogs.js`)** — Satisfies FR-046–FR-049, FR-052–FR-054. Modal DOM
   dialogs:
   - *Save* — on first save (no `savePath`) prompt with name prefilled to the

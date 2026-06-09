@@ -11,6 +11,7 @@ export function createStore(initial = {}) {
   const state = {
     design: initial.design ?? null,
     tool: initial.tool ?? "select",
+    placeType: initial.placeType ?? null, // type name armed for click-to-place (FR-009a)
     selection: initial.selection ?? null,
     hover: initial.hover ?? null, // refdes under the cursor; transient UI state (FR-013c)
     viewport: initial.viewport ?? { pan: { x: 0, y: 0 }, zoom: 1.6 },
@@ -79,8 +80,11 @@ export function createStore(initial = {}) {
     },
 
     // setTool changes the active tool and notifies (so chrome can reflect it).
-    setTool(tool) {
+    // placeType (a type name) is recorded while tool === "place" so the palette
+    // can show the armed tile (FR-009a); it is cleared for any other tool.
+    setTool(tool, placeType = null) {
       state.tool = tool;
+      state.placeType = tool === "place" ? placeType : null;
       notify();
     },
 

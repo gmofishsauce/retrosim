@@ -28,14 +28,15 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 
 ### 3.2 Component Palette
 
-- FR-005: The palette shall display one tile per loaded component type, showing the component type name (e.g., "74138").
-- FR-006: The palette shall be a flat, unordered list of tiles — no grouping or categorization in this phase.
+- FR-005: The palette shall display one fixed-size tile per loaded component type. Each tile shall show the component type name with its leading two characters (the "74" family prefix) removed, leaving a 2- or 3-digit label (e.g., "138" for "74138", "00" for "7400"); the full unabbreviated type name shall be available as the tile's tooltip.
+- FR-006: The palette shall arrange tiles in a fixed-width grid of equal-size tiles (3 per row), packed left-to-right then top-to-bottom in ascending order of the numeric abbreviated part number. (Supersedes the prior flat, unordered list.)
 - FR-007: The component library shall be loaded once at server startup; the server is not required to detect or reload YAML files added while running.
 
 ### 3.3 Component Placement
 
 - FR-008: The user shall be able to place a component by dragging its tile from the palette onto the canvas.
 - FR-009: The user shall be able to place a component by clicking its tile in the palette and then clicking a point on the canvas.
+- FR-009a: While a palette tile is armed for click-to-place (FR-009), that tile shall show a pressed-in (inset) appearance distinguishing it from the unarmed, raised tiles, and shall return to the raised appearance once placement completes or is cancelled.
 - FR-010: In both cases, placement shall be one-shot: after the component is placed the application shall return to select-tool mode automatically.
 - FR-011: On placement, the system shall assign the component a unique reference designator (U1, U2, U3, …) incremented from the highest existing designator in the design. A subunit-rendered package (FR-013a) consumes a single U-number shared by all of its subunits, whose designators append a letter suffix in unit order (e.g., U5A, U5B, U5C, U5D).
 - FR-012: Each component instance shall display its reference designator (e.g., "U3") and its type name (e.g., "74138") as text labels on the canvas. These labels shall always render upright regardless of the component's rotation.

@@ -100,7 +100,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     canvas.style.cursor =
       tool === "select" ? "default" : tool === "wire" ? WIRE_CURSOR : "crosshair";
     renderer.setPreview(null); // clear any in-progress rubber-band
-    store.setTool(tool); // notifies subscribers (toolbar highlight)
+    store.setTool(tool, type ? type.name : null); // notifies subscribers (toolbar highlight, armed tile)
   }
 
   // previewAnchorWorld returns the world-space start point of an in-progress
