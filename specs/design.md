@@ -751,7 +751,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   segments take priority over component bodies when overlapping.
 - **Wire-mode cursor (FR-025/FR-027b):** the wire cursor is a short diagonal line
   (lower-right→upper-left), supplied as an inline SVG data-URI so no asset file or
-  server MIME mapping is needed. It is set while `WIRE` is active, and in `SELECT`
+  server MIME mapping is needed. Its hotspot is the upper-left endpoint of the
+  line (the line's bounding-box upper-left corner), not the icon center. It is set while `WIRE` is active, and in `SELECT`
   while the pointer is over a pin (a wire hotspot, FR-027b). `BUS` keeps a
   crosshair; `SELECT` off any pin uses the default pointer. **Select-mode wire
   start:** clicking a pin in `SELECT` (pins take hit priority over component

@@ -46,14 +46,15 @@ const DEFAULT_BUS_WIDTH = 8;
 
 // WIRE_CURSOR is the wire-drawing cursor (FR-025): a short lower-right→upper-left
 // diagonal line, supplied inline as an SVG data-URI so no asset file or server
-// MIME mapping is required. Hotspot is centered; `crosshair` is the fallback.
+// MIME mapping is required. Hotspot is the line's upper-left endpoint (5,5);
+// `crosshair` is the fallback.
 const WIRE_CURSOR =
   "url('data:image/svg+xml;utf8," +
   encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22">' +
       '<line x1="5" y1="5" x2="17" y2="17" stroke="black" stroke-width="2.5" stroke-linecap="round"/></svg>',
   ) +
-  "') 11 11, crosshair";
+  "') 5 5, crosshair";
 
 // planBusEndpoint converts a bus endpoint target into an addBus endpoint spec, an
 // optional snap directive, and the list of width-matching pin groups. A component

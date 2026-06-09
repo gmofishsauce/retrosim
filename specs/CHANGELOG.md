@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-09 — Wire-cursor hotspot at line's upper-left endpoint
+What: Moved the wire cursor's hotspot from the icon center to the upper-left
+endpoint of the diagonal line (its bounding-box upper-left corner).
+Touches: FR-025; design §6.11
+
 ## 2026-06-08 — Start wires from pins in select mode; wire-cursor icon
 What: A component pin is now a wire hotspot in select-tool mode: hovering a pin
 shows the wire cursor and clicking a pin starts a wire from it (auto-arming the
