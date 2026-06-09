@@ -4,6 +4,7 @@
 // the library is ready (FR-003).
 
 import { getComponents, getDefaults } from "./api.js";
+import { BUILTINS } from "./builtins.js";
 import { createDesign } from "./model/design.js";
 import { createStore } from "./store.js";
 import { initCanvas } from "./engine/canvas.js";
@@ -24,23 +25,42 @@ function defaultDesignName(now = new Date()) {
 // label drops the leading "74" family prefix, leaving a 2-3 digit label (FR-005).
 const paletteLabel = (name) => name.slice(2);
 
-function renderPalette(paletteEl, components, store) {
-  paletteEl.replaceChildren();
+// makeTile builds one draggable palette tile, recording it in `tiles` for the
+// armed-state subscription. `content` is either {text} or {html} (an icon).
+function makeTile(type, content, title, tiles) {
+  const tile = document.createElement("div");
+  tile.className = "palette-tile";
+  if (content.html) tile.innerHTML = content.html;
+  else tile.textContent = content.text;
+  tile.title = title;
+  tile.dataset.type = type.name; // full name; placement uses this (FR-005)
+  tile.draggable = true;
+  tiles[type.name] = tile;
+  return tile;
+}
+
+// renderPalette fills the two palette regions (FR-006a): 74-series parts up top,
+// built-in objects below, then wires the armed-tile highlight across both.
+function renderPalette({ partsEl, builtinsEl, components, builtins, store }) {
+  partsEl.replaceChildren();
+  builtinsEl.replaceChildren();
   const tiles = {};
-  // Ascending by abbreviated part number, packed left→right top→bottom (FR-006).
+
+  // Parts: ascending by abbreviated part number, packed left→right top→bottom.
   const sorted = [...components].sort(
     (a, b) => Number(paletteLabel(a.name)) - Number(paletteLabel(b.name)),
   );
   for (const type of sorted) {
-    const tile = document.createElement("div");
-    tile.className = "palette-tile";
-    tile.textContent = paletteLabel(type.name); // FR-005: abbreviated label
-    tile.title = type.name; // full name in tooltip (FR-005)
-    tile.dataset.type = type.name;
-    tile.draggable = true;
-    paletteEl.appendChild(tile);
-    tiles[type.name] = tile;
+    partsEl.appendChild(
+      makeTile(type, { text: paletteLabel(type.name) }, type.name, tiles),
+    );
   }
+
+  // Built-ins: icon + descriptive tooltip per object (FR-067).
+  for (const type of builtins) {
+    builtinsEl.appendChild(makeTile(type, { html: type.icon }, type.title, tiles));
+  }
+
   // Reflect the armed click-to-place tile with a pressed-in look (FR-009a).
   store.subscribe((state) => {
     const armed = state.tool === "place" ? state.placeType : null;
@@ -75,13 +95,20 @@ async function main() {
       getDefaults().catch(() => ({ dataDir: "" })),
     ]);
     const palette = document.getElementById("palette");
-    renderPalette(palette, components, store);
+    renderPalette({
+      partsEl: document.getElementById("palette-parts"),
+      builtinsEl: document.getElementById("palette-builtins"),
+      components,
+      builtins: BUILTINS,
+      store,
+    });
     const interaction = initInteraction({
       canvas: document.getElementById("canvas"),
       palette,
       store,
       renderer,
-      library: components,
+      // Built-ins are placeable too, so they must be findable by type name.
+      library: [...components, ...BUILTINS],
     });
     const fileops = makeFileOps({
       store,

@@ -30,6 +30,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 
 - FR-005: The palette shall display one fixed-size tile per loaded component type. Each tile shall show the component type name with its leading two characters (the "74" family prefix) removed, leaving a 2- or 3-digit label (e.g., "138" for "74138", "00" for "7400"); the full unabbreviated type name shall be available as the tile's tooltip.
 - FR-006: The palette shall arrange tiles in a fixed-width grid of equal-size tiles (3 per row), packed left-to-right then top-to-bottom in ascending order of the numeric abbreviated part number. (Supersedes the prior flat, unordered list.)
+- FR-006a: The palette shall be divided into two equal-height regions by a horizontal divider at its vertical midpoint. The upper region shall hold the 74-series component tiles (FR-005, FR-006). The lower region shall hold built-in editor objects (FR-067). Each region shall scroll independently when its contents overflow. The lower-region tiles follow the same grid and click/drag-to-place behavior as the upper region (FR-006, FR-008, FR-009, FR-009a) but are labeled by a distinct icon and tooltip per object rather than an abbreviated part number.
 - FR-007: The component library shall be loaded once at server startup; the server is not required to detect or reload YAML files added while running.
 
 ### 3.3 Component Placement
@@ -39,6 +40,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 - FR-009a: While a palette tile is armed for click-to-place (FR-009), that tile shall show a pressed-in (inset) appearance distinguishing it from the unarmed, raised tiles, and shall return to the raised appearance once placement completes or is cancelled.
 - FR-010: In both cases, placement shall be one-shot: after the component is placed the application shall return to select-tool mode automatically.
 - FR-011: On placement, the system shall assign the component a unique reference designator (U1, U2, U3, …) incremented from the highest existing designator in the design. A subunit-rendered package (FR-013a) consumes a single U-number shared by all of its subunits, whose designators append a letter suffix in unit order (e.g., U5A, U5B, U5C, U5D).
+- FR-011a: Built-in editor objects (FR-067) shall instead be assigned a reference designator from a separate series (A-1, A-2, A-3, …), incremented from the highest existing A-number in the design, so they do not consume IC U-numbers (FR-011).
 - FR-012: Each component instance shall display its reference designator (e.g., "U3") and its type name (e.g., "74138") as text labels on the canvas. These labels shall always render upright regardless of the component's rotation.
 
 ### 3.4 Component Appearance
@@ -50,6 +52,11 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 - FR-014: The position and side (left, right, top, bottom) of each pin shall be determined by the component's YAML file; the editor shall not infer or rearrange pin positions automatically.
 - FR-014a: For subunit-rendered components (FR-013a) the position of each pin is dictated by its symbol, not by the YAML; such pins specify their `unit` (a letter) instead of a position, and their order within a unit in the YAML determines slot order on the symbol (inputs top-to-bottom; multiplexer selects in least-significant-first order).
 - FR-015: Pin name labels shall always render upright regardless of the component's rotation.
+
+### 3.4a Built-in Objects
+
+- FR-067: The editor shall provide a set of built-in objects — entities with functionality built into the editor and eventual simulator, as distinct from 74-series parts loaded from YAML. Built-in objects are defined by the client application (not by YAML files), placed from the lower palette region (FR-006a), and once placed behave as component instances: selectable, movable, rotatable, deletable, persisted in the design, and wireable through their connection points. They are designated A-1, A-2, … (FR-011a).
+- FR-068: The first built-in object shall be a state indicator. It occupies a 2×2 grid-unit footprint and exposes a single input connection point on the bottom edge (centered) that may be wired to any wire or driven output. It is drawn as a round bubble sized to fit comfortably within the square. The indicator is not independently stateful: it always displays the state of the wire to which it is attached. It has three displayed states: undriven/undefined — a medium-gray bubble with a black "?"; logic 1 — a white bubble with a black "1"; logic 0 — a black bubble with a white "0". Until the simulator exists, the indicator always displays the undriven state. The same bubble image is used for the palette icon (FR-006a) and the placed object.
 
 ### 3.5 Component Selection and Movement
 

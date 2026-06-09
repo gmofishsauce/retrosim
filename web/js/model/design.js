@@ -26,23 +26,28 @@ export function createDesign(name) {
   };
 }
 
-// nextRefNum returns one more than the highest U-number currently in use, so
-// reference designators increment past gaps left by deletions (FR-011).
-function nextRefNum(components) {
+// nextRefNum returns one more than the highest designator matching `re` (whose
+// first capture group is the number), so designators increment past gaps left by
+// deletions (FR-011, FR-011a).
+function nextRefNum(components, re) {
   let max = 0;
   for (const c of components) {
-    // ignore any trailing subunit letter so "U5A" counts as 5 (FR-011).
-    const m = /^U(\d+)[A-Z]*$/.exec(c.refdes);
+    const m = re.exec(c.refdes);
     if (m) max = Math.max(max, Number(m[1]));
   }
   return max + 1;
 }
 
 // addInstance places a component instance, assigning it a unique reference
-// designator and a private copy of the type data (FR-011, FR-057).
+// designator and a private copy of the type data (FR-011, FR-057). Built-in
+// objects (FR-067) use a separate A-<n> series (FR-011a); ICs use U<n>, ignoring
+// any trailing subunit letter so "U5A" counts as 5.
 export function addInstance(design, type, x, y, rotation) {
+  const refdes = type.builtin
+    ? "A-" + nextRefNum(design.components, /^A-(\d+)$/)
+    : "U" + nextRefNum(design.components, /^U(\d+)[A-Z]*$/);
   const inst = {
-    refdes: "U" + nextRefNum(design.components),
+    refdes,
     type: type.name,
     x,
     y,
@@ -61,7 +66,7 @@ export function addInstance(design, type, x, y, rotation) {
 // overlap on drop. Returns the created instances (caller groups them as one undo
 // step). Power/ground aside, all geometry comes from the symbol module.
 export function addSubunitPackage(design, type, x, y) {
-  const num = nextRefNum(design.components);
+  const num = nextRefNum(design.components, /^U(\d+)[A-Z]*$/);
   const letters = [];
   for (const p of type.pins) if (!letters.includes(p.unit)) letters.push(p.unit);
 

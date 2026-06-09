@@ -19,6 +19,17 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-09 — Palette built-in objects region; state indicator
+What: Split the palette 50/50 with a midpoint divider — upper region keeps the
+74-series tiles, lower region holds client-defined built-in objects (icon+tooltip
+tiles), each region scrolling independently. Built-ins are placed like components
+but get an A-1, A-2, … designator series. First built-in: a state indicator (2×2,
+one bottom-center input pin) drawn as a bubble showing wire state (gray ? / white
+1 / black 0); only the ? state exists until the simulator does.
+Touches: FR-006a (new), FR-011a (new), FR-067/FR-068 (new); design §6.6, §6.8,
+§6.11; requirements §3.2/§3.3/§3.4a
+- new file js/builtins.js
+
 ## 2026-06-09 — Palette as a 3D tile grid, abbreviated part-number labels
 What: Replaced the labeled horizontal-bar palette buttons with fixed-size raised
 (drop-shadow) tiles in a 3-column grid, sorted ascending by part number. Tile

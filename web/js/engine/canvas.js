@@ -16,6 +16,9 @@ import { drawSymbol, pinHasOwnBubble, pinLabelEdge } from "./symbols.js";
 // the pin point; keeping that <= the 0.5-unit pin hit tolerance makes the whole
 // bubble clickable while staying clear of adjacent pins 1 unit away (FR-013).
 const PIN_RADIUS = 0.25;
+// Bubble radius (grid units) for the state-indicator built-in, sized to sit
+// comfortably inside its 2x2 footprint (FR-068).
+const INDICATOR_RADIUS = 0.85;
 const PIN_FONT = "10px system-ui, sans-serif";
 const LABEL_FONT = "bold 11px system-ui, sans-serif";
 
@@ -218,6 +221,8 @@ function drawComponent(ctx, inst, vp, selected, hovered) {
   ctx.strokeStyle = selected ? "#4a90d9" : "#333";
   if (td.renderType === "subunit") {
     drawSymbol(ctx, inst, vp);
+  } else if (td.renderType === "indicator") {
+    drawIndicator(ctx, inst, vp, selected);
   } else {
     const corners = [
       [0, 0],
@@ -293,8 +298,12 @@ function drawComponent(ctx, inst, vp, selected, hovered) {
       const er = rotateOffset(e.x, e.y, inst.rotation);
       lref = worldToScreen({ x: inst.x + er.x, y: inst.y + er.y }, vp);
     }
-    ctx.fillStyle = "#333";
-    ctx.fillText(pin.name, lref.x - Math.sign(outR.x) * 8, lref.y - Math.sign(outR.y) * 8);
+    // The indicator's glyph owns its bubble center, so skip the pin name (it
+    // would land on top of the glyph).
+    if (td.renderType !== "indicator") {
+      ctx.fillStyle = "#333";
+      ctx.fillText(pin.name, lref.x - Math.sign(outR.x) * 8, lref.y - Math.sign(outR.y) * 8);
+    }
   }
 
   // Center labels, upright (FR-012). A subunit shows just its refdes (e.g. U5A);
@@ -305,10 +314,46 @@ function drawComponent(ctx, inst, vp, selected, hovered) {
   ctx.font = LABEL_FONT;
   if (td.renderType === "subunit") {
     ctx.fillText(inst.refdes, center.x, center.y);
+  } else if (td.renderType === "indicator") {
+    // Refdes above the bubble so it clears the state glyph.
+    const r = INDICATOR_RADIUS * scaleFor(vp);
+    ctx.fillText(inst.refdes, center.x, center.y - r - 7);
   } else {
     ctx.fillText(inst.refdes, center.x, center.y - 6);
     ctx.fillText(inst.type, center.x, center.y + 6);
   }
+}
+
+// drawIndicator renders the state-indicator bubble (FR-068). The indicator is
+// not stateful — it reflects the attached wire's state — and until the simulator
+// exists that is always "undriven": a medium-gray bubble with a black "?".
+// (Driven states: white bubble/black "1", black bubble/white "0".)
+function drawIndicator(ctx, inst, vp, selected) {
+  const td = inst.typeData;
+  const cr = rotateOffset(td.width / 2, td.height / 2, inst.rotation);
+  const center = worldToScreen({ x: inst.x + cr.x, y: inst.y + cr.y }, vp);
+  const r = INDICATOR_RADIUS * scaleFor(vp);
+
+  const state = indicatorState(inst);
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, r, 0, Math.PI * 2);
+  ctx.fillStyle = state.bg;
+  ctx.fill();
+  ctx.lineWidth = selected ? 2 : 1;
+  ctx.strokeStyle = selected ? "#4a90d9" : "#333";
+  ctx.stroke();
+
+  ctx.fillStyle = state.fg;
+  ctx.font = "bold " + Math.round(r * 1.2) + "px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(state.glyph, center.x, center.y);
+}
+
+// indicatorState maps an indicator instance to its bubble colors and glyph. With
+// no simulator the wire state is always undriven (FR-068).
+function indicatorState(_inst) {
+  return { bg: "#9a9a9a", fg: "#000", glyph: "?" };
 }
 
 // sideOutward is the unit vector pointing away from the body for a pin's side,

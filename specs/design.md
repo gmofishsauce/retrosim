@@ -52,6 +52,9 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
   the type name minus its leading `74` (e.g., `138`, `00`); full name in tooltip.
 - **FR-006** — Palette is a fixed-width grid of equal tiles (3/row), packed
   left→right, top→bottom in ascending part-number order (supersedes flat list).
+- **FR-006a** — Palette split 50/50 by a midpoint divider: upper region = 74-series
+  tiles, lower region = built-in objects (FR-067) with icon+tooltip tiles; each
+  region scrolls independently.
 - **FR-007** — Library loaded once at startup; no live reload of YAML files.
 
 **Component Placement**
@@ -61,6 +64,8 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-010** — Placement is **one-shot**: after placing, return to select mode.
 - **FR-011** — On placement assign a unique reference designator `U1, U2, …`,
   incremented from the highest existing designator in the design.
+- **FR-011a** — Built-in objects (FR-067) use a separate `A-1, A-2, …` series so
+  they don't consume IC U-numbers.
 - **FR-012** — Each instance displays its refdes (e.g., `U3`) and type name
   (e.g., `74138`) as canvas labels, **always rendered upright** regardless of
   rotation.
@@ -76,6 +81,15 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-014** — Pin side (left/right/top/bottom) and position come from the YAML
   file; the editor never infers or rearranges pins.
 - **FR-015** — Pin name labels always render upright regardless of rotation.
+
+**Built-in Objects**
+- **FR-067** — Editor-defined objects (not YAML), placed from the lower palette;
+  once placed they are ordinary instances (select/move/rotate/delete/persist/wire),
+  designated `A-1, A-2, …`.
+- **FR-068** — State indicator: 2×2 footprint, one bottom-center input pin; a round
+  bubble showing wire state — gray `?` (undriven), white `1`, black `0`. Not
+  independently stateful; displays `?` until the simulator exists. Same bubble for
+  palette icon and placed object.
 
 **Component Selection and Movement**
 - **FR-016** — In select mode, click a component to select it.
@@ -836,6 +850,20 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   armed tile shows a pressed-in (inset) look (FR-009a) by subscribing to the store
   and matching `state.placeType` while `tool === "place"`. Disabled/overlaid until
   the library load resolves (FR-003).
+  The palette is split 50/50 (FR-006a) into an upper region (#palette-parts) for
+  the 74-series tiles and a lower region (#palette-builtins) for built-in objects;
+  each scrolls independently. Lower-region tiles render an SVG icon (the object's
+  glyph, e.g. the indicator bubble) with a descriptive `title`, and `dataset.type`
+  set to the built-in type name; the armed-state subscription covers both regions.
+- **Built-in objects (`builtins.js`)** — Satisfies FR-067, FR-068. Exports a
+  client-side array of synthetic `ComponentType`s (no server/YAML). Each carries
+  `builtin: true` plus the usual `name`/`width`/`height`/`pins`/`renderType`. The
+  first is the **state indicator**: `renderType:"indicator"`, `width:2`,`height:2`,
+  one `in` pin on the bottom side (centered). On placement these flow through the
+  normal non-subunit `addInstance` path; `addInstance` assigns an `A-<n>` refdes
+  (FR-011a) when `type.builtin`. `drawComponent` renders the `"indicator"`
+  renderType as a bubble whose fill/glyph reflects wire state — gray `?` (the only
+  state until the simulator exists), white `1`, black `0` (FR-068).
 - **Dialogs (`dialogs.js`)** — Satisfies FR-046–FR-049, FR-052–FR-054. Modal DOM
   dialogs:
   - *Save* — on first save (no `savePath`) prompt with name prefilled to the
@@ -1198,6 +1226,7 @@ sim/
     js/app.js               CREATE  bootstrap (§6.12)
     js/api.js               CREATE  REST client (§6.12)
     js/store.js             CREATE  store + commands + undo/redo (§6.10)
+    js/builtins.js          CREATE  client-side built-in object registry (§6.11, FR-067/FR-068)
     js/geometry.js          CREATE  grid/viewport/rotation math (§6.7)
     js/model/design.js      CREATE  design ops (§6.6)
     js/model/netlist.js     CREATE  buildNets union-find (§6.6)
@@ -1230,9 +1259,12 @@ No files are modified (greenfield).
 | FR-003 | §6.4, §6.11, §6.12 | `api.go`, `palette.js`, `app.js` |
 | FR-004 | §6.12 | `app.js`, `store.js` |
 | FR-005, FR-006 | §6.2, §6.11 | `components.go`, `palette.js` |
+| FR-006a | §6.11 | `app.js`, `style.css`, `builtins.js` |
 | FR-007 | §6.2 | `components.go` |
 | FR-008, FR-009, FR-010 | §6.9, §6.11 | `interaction.js`, `palette.js`, `store.js` |
 | FR-011 | §6.6 | `model/design.js` |
+| FR-011a | §6.6 | `model/design.js` |
+| FR-067, FR-068 | §6.6, §6.8, §6.11 | `builtins.js`, `model/design.js`, `canvas.js`, `app.js` |
 | FR-012, FR-015, FR-020 | §6.7, §6.8 | `geometry.js`, `canvas.js` |
 | FR-013, FR-014 | §6.8, §7.1 | `canvas.js`, `types.go` |
 | FR-013a, FR-013b, FR-014a | §6.6, §6.8, §6.8a, §7.1 | `symbols.js`, `canvas.js`, `model/design.js` |

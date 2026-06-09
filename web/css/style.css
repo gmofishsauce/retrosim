@@ -58,15 +58,27 @@ body {
 #palette {
   flex: 0 0 auto;
   width: fit-content;
-  overflow-y: auto;
-  padding: 6px;
   background: #f3f3f3;
   border-right: 1px solid #ccc;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Two equal-height regions split by a midpoint divider (FR-006a): parts above,
+   built-in objects below; each scrolls independently. */
+#palette-parts,
+#palette-builtins {
+  flex: 1 1 50%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
   display: grid;
   grid-template-columns: repeat(3, 48px);
   align-content: start;
   gap: 2px;
 }
+
+#palette-builtins { border-top: 2px solid #bbb; }
 
 .palette-tile {
   width: 48px;
