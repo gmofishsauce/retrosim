@@ -223,6 +223,12 @@ function drawComponent(ctx, inst, vp, selected, hovered) {
     drawSymbol(ctx, inst, vp);
   } else if (td.renderType === "indicator") {
     drawIndicator(ctx, inst, vp, selected);
+  } else if (td.renderType === "pullup") {
+    drawPullup(ctx, inst, vp, selected);
+  } else if (td.renderType === "pulldown") {
+    drawPulldown(ctx, inst, vp, selected);
+  } else if (td.renderType === "clock") {
+    drawClock(ctx, inst, vp, selected);
   } else {
     const corners = [
       [0, 0],
@@ -298,9 +304,9 @@ function drawComponent(ctx, inst, vp, selected, hovered) {
       const er = rotateOffset(e.x, e.y, inst.rotation);
       lref = worldToScreen({ x: inst.x + er.x, y: inst.y + er.y }, vp);
     }
-    // The indicator's glyph owns its bubble center, so skip the pin name (it
-    // would land on top of the glyph).
-    if (td.renderType !== "indicator") {
+    // A built-in's glyph owns its body, so skip the pin name (it would land on
+    // top of the glyph).
+    if (!td.builtin) {
       ctx.fillStyle = "#333";
       ctx.fillText(pin.name, lref.x - Math.sign(outR.x) * 8, lref.y - Math.sign(outR.y) * 8);
     }
@@ -314,10 +320,11 @@ function drawComponent(ctx, inst, vp, selected, hovered) {
   ctx.font = LABEL_FONT;
   if (td.renderType === "subunit") {
     ctx.fillText(inst.refdes, center.x, center.y);
-  } else if (td.renderType === "indicator") {
-    // Refdes above the bubble so it clears the state glyph.
-    const r = INDICATOR_RADIUS * scaleFor(vp);
-    ctx.fillText(inst.refdes, center.x, center.y - r - 7);
+  } else if (td.builtin) {
+    // Refdes above the symbol so it clears the glyph; the upper bound on any
+    // 90°-rotation's vertical extent is max(width,height).
+    const off = (Math.max(td.width, td.height) / 2) * scaleFor(vp) + 7;
+    ctx.fillText(inst.refdes, center.x, center.y - off);
   } else {
     ctx.fillText(inst.refdes, center.x, center.y - 6);
     ctx.fillText(inst.type, center.x, center.y + 6);
@@ -354,6 +361,89 @@ function drawIndicator(ctx, inst, vp, selected) {
 // no simulator the wire state is always undriven (FR-068).
 function indicatorState(_inst) {
   return { bg: "#9a9a9a", fg: "#000", glyph: "?" };
+}
+
+// strokePaths strokes one or more polylines given in the instance's unrotated
+// local grid frame ([dx,dy] from the origin), applying rotation and the viewport.
+// Used by the line-art built-ins (pull-up, pull-down).
+function strokePaths(ctx, inst, vp, paths, selected) {
+  ctx.beginPath();
+  for (const path of paths) {
+    path.forEach(([dx, dy], i) => {
+      const r = rotateOffset(dx, dy, inst.rotation);
+      const p = worldToScreen({ x: inst.x + r.x, y: inst.y + r.y }, vp);
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    });
+  }
+  ctx.lineWidth = selected ? 2 : 1.5;
+  ctx.strokeStyle = selected ? "#4a90d9" : "#333";
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.stroke();
+}
+
+// drawPullup renders the two-headed up-arrow (FR-069): two stacked up-chevrons
+// over a vertical shaft rising from the bottom-center pin to just below them.
+function drawPullup(ctx, inst, vp, selected) {
+  strokePaths(
+    ctx,
+    inst,
+    vp,
+    [
+      [[0.4, 0.65], [1, 0.15], [1.6, 0.65]], // upper chevron
+      [[0.4, 1.1], [1, 0.6], [1.6, 1.1]], // lower chevron
+      [[1, 1.25], [1, 2]], // shaft to the bottom pin
+    ],
+    selected,
+  );
+}
+
+// drawPulldown renders the upside-down "T" (FR-070): a long stem from the
+// top-center pin down to a short horizontal bar near the bottom.
+function drawPulldown(ctx, inst, vp, selected) {
+  strokePaths(
+    ctx,
+    inst,
+    vp,
+    [
+      [[1, 0], [1, 1.6]], // stem from the top pin
+      [[0.45, 1.6], [1.55, 1.6]], // short bar
+    ],
+    selected,
+  );
+}
+
+// drawClock renders the clock box reading "CLK" (FR-071), with its pin on the
+// right-center edge.
+function drawClock(ctx, inst, vp, selected) {
+  const td = inst.typeData;
+  const corners = [
+    [0, 0],
+    [td.width, 0],
+    [td.width, td.height],
+    [0, td.height],
+  ].map(([dx, dy]) => {
+    const r = rotateOffset(dx, dy, inst.rotation);
+    return worldToScreen({ x: inst.x + r.x, y: inst.y + r.y }, vp);
+  });
+  ctx.beginPath();
+  ctx.moveTo(corners[0].x, corners[0].y);
+  for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
+  ctx.closePath();
+  ctx.fillStyle = "#fff";
+  ctx.fill();
+  ctx.lineWidth = selected ? 2 : 1;
+  ctx.strokeStyle = selected ? "#4a90d9" : "#333";
+  ctx.stroke();
+
+  const cr = rotateOffset(td.width / 2, td.height / 2, inst.rotation);
+  const center = worldToScreen({ x: inst.x + cr.x, y: inst.y + cr.y }, vp);
+  ctx.fillStyle = "#000";
+  ctx.font = "bold " + Math.round(0.6 * scaleFor(vp)) + "px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("CLK", center.x, center.y);
 }
 
 // sideOutward is the unit vector pointing away from the body for a pin's side,

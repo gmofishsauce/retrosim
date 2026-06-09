@@ -90,6 +90,12 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
   bubble showing wire state — gray `?` (undriven), white `1`, black `0`. Not
   independently stateful; displays `?` until the simulator exists. Same bubble for
   palette icon and placed object.
+- **FR-069** — Pull-up: 2×2, one bottom-center pin; a two-headed up-arrow (two
+  stacked up-chevrons + a vertical shaft from the pin to just below them). Tooltip
+  "pull up".
+- **FR-070** — Pull-down: 2×2, one top-center pin; an upside-down `T` (long stem
+  + short bottom bar). Tooltip "pull down".
+- **FR-071** — Clock: a box reading `CLK`, one right-center pin. Tooltip "clock".
 
 **Component Selection and Movement**
 - **FR-016** — In select mode, click a component to select it.
@@ -855,15 +861,20 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   each scrolls independently. Lower-region tiles render an SVG icon (the object's
   glyph, e.g. the indicator bubble) with a descriptive `title`, and `dataset.type`
   set to the built-in type name; the armed-state subscription covers both regions.
-- **Built-in objects (`builtins.js`)** — Satisfies FR-067, FR-068. Exports a
+- **Built-in objects (`builtins.js`)** — Satisfies FR-067–FR-071. Exports a
   client-side array of synthetic `ComponentType`s (no server/YAML). Each carries
-  `builtin: true` plus the usual `name`/`width`/`height`/`pins`/`renderType`. The
-  first is the **state indicator**: `renderType:"indicator"`, `width:2`,`height:2`,
-  one `in` pin on the bottom side (centered). On placement these flow through the
-  normal non-subunit `addInstance` path; `addInstance` assigns an `A-<n>` refdes
-  (FR-011a) when `type.builtin`. `drawComponent` renders the `"indicator"`
-  renderType as a bubble whose fill/glyph reflects wire state — gray `?` (the only
-  state until the simulator exists), white `1`, black `0` (FR-068).
+  `builtin: true`, an `icon` (inline-SVG palette glyph), a `title` (tooltip), plus
+  the usual `name`/`width`/`height`/`pins`/`renderType`. Entries: **indicator**
+  (`renderType:"indicator"`, 2×2, one bottom-center `in` pin, FR-068); **pull-up**
+  (`"pullup"`, 2×2, one bottom-center pin, FR-069); **pull-down** (`"pulldown"`,
+  2×2, one top-center pin, FR-070); **clock** (`"clock"`, 3×2, one right-center
+  pin, FR-071). On placement these flow through the normal non-subunit
+  `addInstance` path; `addInstance` assigns an `A-<n>` refdes (FR-011a) when
+  `type.builtin`. `drawComponent` has a render branch per built-in renderType: the
+  indicator bubble (gray `?` until the simulator, then white `1`/black `0`), the
+  pull-up two-headed arrow, the pull-down upside-down `T`, and the clock box. Pin
+  name labels are suppressed for built-ins (the glyph owns the body); the refdes is
+  drawn above the symbol.
 - **Dialogs (`dialogs.js`)** — Satisfies FR-046–FR-049, FR-052–FR-054. Modal DOM
   dialogs:
   - *Save* — on first save (no `savePath`) prompt with name prefilled to the
@@ -1264,7 +1275,7 @@ No files are modified (greenfield).
 | FR-008, FR-009, FR-010 | §6.9, §6.11 | `interaction.js`, `palette.js`, `store.js` |
 | FR-011 | §6.6 | `model/design.js` |
 | FR-011a | §6.6 | `model/design.js` |
-| FR-067, FR-068 | §6.6, §6.8, §6.11 | `builtins.js`, `model/design.js`, `canvas.js`, `app.js` |
+| FR-067–FR-071 | §6.6, §6.8, §6.11 | `builtins.js`, `model/design.js`, `canvas.js`, `app.js` |
 | FR-012, FR-015, FR-020 | §6.7, §6.8 | `geometry.js`, `canvas.js` |
 | FR-013, FR-014 | §6.8, §7.1 | `canvas.js`, `types.go` |
 | FR-013a, FR-013b, FR-014a | §6.6, §6.8, §6.8a, §7.1 | `symbols.js`, `canvas.js`, `model/design.js` |

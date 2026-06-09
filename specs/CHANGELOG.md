@@ -19,6 +19,13 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-09 — Three more built-ins: pull-up, pull-down, clock
+What: Added three built-in objects below the palette divider. Pull-up (2×2, bottom
+pin) drawn as a two-headed up-arrow; pull-down (2×2, top pin) as an upside-down T;
+clock (3×2, right pin) as a "CLK" box. Tooltips: "pull up", "pull down", "clock".
+Touches: FR-069/FR-070/FR-071 (new); design §6.6, §6.8, §6.11
+- registry entries in js/builtins.js; render branches in canvas.js
+
 ## 2026-06-09 — Palette built-in objects region; state indicator
 What: Split the palette 50/50 with a midpoint divider — upper region keeps the
 74-series tiles, lower region holds client-defined built-in objects (icon+tooltip
