@@ -82,6 +82,13 @@ This is the hard part. Conventions (established with the stakeholder on the
   `.T` output equation fed from its source plus a single-term `.E` enable,
   and appears as a feedback input in the opposite direction's equations.
   The `.E` terms for the two directions must be mutually exclusive.
+- **Subunit (multi-gate) parts** (`rendertype: subunit`) get a full behavior
+  block too (convention established on the 7400): the gates are independent,
+  so write **one sum-of-products equation per unit**, each using that unit's
+  own pin names (`1Y = /1A + /1B`, `2Y = …`). `renderas` fixes only the drawn
+  symbol; the equations are the authoritative logic. GALasm pin names may
+  begin with a digit (galasmManual.txt §1.3), so the datasheet's `1A`/`1Y`
+  names are used verbatim.
 - **Physical GAL capacity is NOT a constraint**: behavior blocks use the
   GALasm language, not the 22V10's pin count, OLMC count, or per-pin
   product-term limits (galasmManual.txt §5).
