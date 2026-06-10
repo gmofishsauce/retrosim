@@ -1,0 +1,72 @@
+GALasm
+
+.pld is the GAL specification file. 
+galasm creates several files, all are text files:
+.chp - Generated ASCII art of the IC.
+.fus - The fuse map. It contains a map of fuses for each pin. Here it is
+       clear how much AND terms are allowed for each pin. The lines 
+       match the JED map in the manual. 
+.jed - This is the input file for the programmer. 
+.pin - A list of pins and how the assembler sees them.
+
+; is the comment character. All that follows on the line is ignored by 
+the assembler.
+Empty lines (whitespace only) are also ignored.
+
+First line specifies the GAL; GAL22V10, GAL18V10, ...
+Second line specifies the name of the configuration, to be saved in the 
+GAL. Usually the same as the name of the pld file.
+
+The third and fourth line declare the pin names. It is convenient to 
+precede the third line and follow the fourth line with a comment line 
+specifying the pin numbers for orientation.
+
+The third line defines the side with pin 1, the fourth the upper half
+of the pins. The last pin on the lower side is usually GND, The highest
+pin is usually Vcc.
+
+Pin names are separated by one or more spaces.
+
+Example:
+
+;1     2    3      4      5     6    7     8     9     10    11     12
+M1   IORQ   WR     A0     A1    A2   A3    A4    A5    A6    A7     GND
+WP   WLOAD WMIAD  WHIAD  DATCS  COM  STA  RAMWR  WIClk  RD  DlyDCS  VCC
+;13  14    15     16     17     18    19    20    21    22  23      24
+
+Pin names can be proceeded by a '/' to indicate their active state. This 
+can simplify or complicate the output pin definitions. No '/' means high 
+is active, low is in-active. The '/' reverses this. As both sides of the 
+output pin definition also allows this reversal, the one in the 
+declaration is optional.
+
+The following lines define the output pins. The presence of a pin 
+definition here makes the pin output. All other pins are inputs. This 
+also have to match with the hardware capabilities of the pins.
+An output pin definition can be preceeded with a '/', indicating the pin 
+is active low.
+A output pin definition can contain one or more AND terms. All elements
+in the AND term are ANDed. If more than one AND term is used, they are
+separated by an OR. The maximum number of AND terms is limited and varies
+per pin and mode. Combinatorial mode contains just logic, registered mode
+allows latching with a pin defined as clock (usually a fixed pin). 
+
+Example (single AND term):
+/WLOAD =  A7 * /A6 * /A5 *  A4 * /A3 * /A2 * /A1 * /A0 * /M1 * IORQ * WR  ; 090h write
+
+
+The pin definitions can be followed by a line starting with 'DESCRIPTION'
+all following lines are ignored by the assembler.
+
+This usually contains an ASCII art of the pinout. This is more intuitive 
+than the declaration where the second line is 'reversed'. But note it is
+just comment.
+
+A output pin definition can contain both input pins and (other) output 
+pins. Just the pin name means active high and preceeded with a '/' means
+active low.
+
+As the active low specifier can be used in the declaration and in both 
+sides of the definition, it can be very confusing. 
+In the declaration it decouples the high level from 'active'. 
+

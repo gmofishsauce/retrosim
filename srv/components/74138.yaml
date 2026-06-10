@@ -1,22 +1,50 @@
 # 74138 — 3-to-8 line decoder/demultiplexer
+# Source: Nexperia, "74HC138; 74HCT138 3-to-8 line decoder/demultiplexer;
+# inverting", product data sheet Rev. 10 — 26 February 2024.
+# https://assets.nexperia.com/documents/data-sheet/74HC_HCT138.pdf
 type: "74138"
 outline: [6, 12]
 
-pins:
-  - { name: A0,  side: left,  pos: 2, dir: in }
-  - { name: A1,  side: left,  pos: 3, dir: in }
-  - { name: A2,  side: left,  pos: 4, dir: in }
-  - { name: /E1, side: left,  pos: 6, dir: in }
-  - { name: /E2, side: left,  pos: 7, dir: in }
-  - { name: E3,  side: left,  pos: 8, dir: in }
-  - { name: /Y0, side: right, pos: 2, dir: out }
-  - { name: /Y1, side: right, pos: 3, dir: out }
-  - { name: /Y2, side: right, pos: 4, dir: out }
-  - { name: /Y3, side: right, pos: 5, dir: out }
-  - { name: /Y4, side: right, pos: 6, dir: out }
-  - { name: /Y5, side: right, pos: 7, dir: out }
-  - { name: /Y6, side: right, pos: 8, dir: out }
-  - { name: /Y7, side: right, pos: 9, dir: out }
+pins: # number: physical DIP16/SO16 pin (datasheet Table 2)
+  - { name: A0,  side: left,  pos: 2, dir: in,  number: 1 }
+  - { name: A1,  side: left,  pos: 3, dir: in,  number: 2 }
+  - { name: A2,  side: left,  pos: 4, dir: in,  number: 3 }
+  - { name: /E1, side: left,  pos: 6, dir: in,  number: 4 }
+  - { name: /E2, side: left,  pos: 7, dir: in,  number: 5 }
+  - { name: E3,  side: left,  pos: 8, dir: in,  number: 6 }
+  - { name: /Y0, side: right, pos: 2, dir: out, number: 15 }
+  - { name: /Y1, side: right, pos: 3, dir: out, number: 14 }
+  - { name: /Y2, side: right, pos: 4, dir: out, number: 13 }
+  - { name: /Y3, side: right, pos: 5, dir: out, number: 12 }
+  - { name: /Y4, side: right, pos: 6, dir: out, number: 11 }
+  - { name: /Y5, side: right, pos: 7, dir: out, number: 10 }
+  - { name: /Y6, side: right, pos: 8, dir: out, number: 9 }
+  - { name: /Y7, side: right, pos: 9, dir: out, number: 7 }
 
 groups:
   - { name: A, pins: [A0, A1, A2] }
+
+delays: # ns, 74HC138 typical at Vcc=4.5V, 25C (datasheet Table 7)
+  tpd_a: 15 # An -> Yn
+  tpd_e: 17 # E1/E2/E3 -> Yn
+
+behavior: |
+  ; 74138 — 3-to-8 line decoder/demultiplexer, inverting.
+  ; Derived from the function table (datasheet Table 3): every output is HIGH
+  ; unless E1 and E2 are LOW and E3 is HIGH; when enabled, the one output
+  ; addressed by A2..A0 (A0 = LSB) is LOW.
+  ;
+  ; Equations are physical-level GALasm: '/' is the complement operator and
+  ; signal names are this file's pin names with any active-low '/' prefix
+  ; dropped (pin /E1 is GAL signal E1, so '/E1' below means "pin /E1 is
+  ; LOW"). Each output is a single AND term; '/Yn = term' drives pin Yn LOW
+  ; exactly when the term is true, so the three disabled rows of the function
+  ; table (all outputs HIGH) fall out of the same equations.
+  /Y0 = /E1 * /E2 * E3 * /A2 * /A1 * /A0
+  /Y1 = /E1 * /E2 * E3 * /A2 * /A1 *  A0
+  /Y2 = /E1 * /E2 * E3 * /A2 *  A1 * /A0
+  /Y3 = /E1 * /E2 * E3 * /A2 *  A1 *  A0
+  /Y4 = /E1 * /E2 * E3 *  A2 * /A1 * /A0
+  /Y5 = /E1 * /E2 * E3 *  A2 * /A1 *  A0
+  /Y6 = /E1 * /E2 * E3 *  A2 *  A1 * /A0
+  /Y7 = /E1 * /E2 * E3 *  A2 *  A1 *  A0
