@@ -1,0 +1,75 @@
+# 74574 — octal D-type flip-flop; positive edge-trigger; 3-state
+# Source: Nexperia, "74HC574; 74HCT574 Octal D-type flip-flop; positive
+# edge-trigger; 3-state", product data sheet Rev. 10 — 5 August 2024.
+# https://assets.nexperia.com/documents/data-sheet/74HC_HCT574.pdf
+type: "74574"
+outline: [8, 12]
+
+pins: # number: physical DIP20/SO20 pin (datasheet Table 2)
+  - { name: D0,  side: left,  pos: 2, dir: in,       number: 2 }
+  - { name: D1,  side: left,  pos: 3, dir: in,       number: 3 }
+  - { name: D2,  side: left,  pos: 4, dir: in,       number: 4 }
+  - { name: D3,  side: left,  pos: 5, dir: in,       number: 5 }
+  - { name: D4,  side: left,  pos: 6, dir: in,       number: 6 }
+  - { name: D5,  side: left,  pos: 7, dir: in,       number: 7 }
+  - { name: D6,  side: left,  pos: 8, dir: in,       number: 8 }
+  - { name: D7,  side: left,  pos: 9, dir: in,       number: 9 }
+  - { name: Q0,  side: right, pos: 2, dir: tristate, number: 19 }
+  - { name: Q1,  side: right, pos: 3, dir: tristate, number: 18 }
+  - { name: Q2,  side: right, pos: 4, dir: tristate, number: 17 }
+  - { name: Q3,  side: right, pos: 5, dir: tristate, number: 16 }
+  - { name: Q4,  side: right, pos: 6, dir: tristate, number: 15 }
+  - { name: Q5,  side: right, pos: 7, dir: tristate, number: 14 }
+  - { name: Q6,  side: right, pos: 8, dir: tristate, number: 13 }
+  - { name: Q7,  side: right, pos: 9, dir: tristate, number: 12 }
+  - { name: CP,  side: top,   pos: 2, dir: in,       number: 11 }
+  - { name: /OE, side: top,   pos: 6, dir: in,       number: 1 }
+
+groups:
+  - { name: D, pins: [D0, D1, D2, D3, D4, D5, D6, D7] }
+  - { name: Q, pins: [Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7] }
+
+delays: # ns, 74HC574 typical at Vcc=4.5V, 25C (datasheet Table 7)
+  tpd_cp: 17 # CP -> Qn
+  ten: 16    # /OE -> output enabled (tPZH/tPZL)
+  tdis: 14   # /OE -> output high-Z (tPHZ/tPLZ)
+  tsu: 12    # Dn setup before CP edge (minimum)
+  th: 5      # Dn hold after CP edge (minimum)
+
+behavior: |
+  ; 74574 — octal D-type flip-flop, positive edge-trigger, 3-state,
+  ; non-inverting. Derived from the function table (datasheet Table 3):
+  ; each output Qn loads the value of Dn at the LOW->HIGH transition of CP;
+  ; /OE HIGH puts all outputs in the high-impedance state without disturbing
+  ; the stored value.
+  ;
+  ; SEQUENTIAL-PART CLOCK CONVENTION (first established here): GALasm's .R
+  ; registered outputs are clocked by the GAL22V10's dedicated pin-1 clock
+  ; (galasmManual.txt section 3.4). In this project that pin-1 clock role is
+  ; played by the part's named clock pin — here CP, rising-edge triggered.
+  ; CP therefore does NOT appear as a term in any equation below; the .R
+  ; suffix implies it.
+  ;
+  ; Equations are physical-level GALasm: '/' is the complement operator and
+  ; signal names are this file's pin names with any active-low '/' prefix
+  ; dropped (pin /OE is GAL signal OE, so '/OE' below means "pin /OE is
+  ; LOW"). Each Qn is a registered output (.R) loaded from Dn, gated by a
+  ; single-term tristate enable (.E) that drives the pin only while /OE is
+  ; LOW; when /OE is HIGH the .E term is false and Qn is high-impedance,
+  ; covering the two disabled rows of the function table.
+  Q0.R = D0
+  Q0.E = /OE
+  Q1.R = D1
+  Q1.E = /OE
+  Q2.R = D2
+  Q2.E = /OE
+  Q3.R = D3
+  Q3.E = /OE
+  Q4.R = D4
+  Q4.E = /OE
+  Q5.R = D5
+  Q5.E = /OE
+  Q6.R = D6
+  Q6.E = /OE
+  Q7.R = D7
+  Q7.E = /OE

@@ -88,13 +88,14 @@ This is the hard part. Conventions (established with the stakeholder on the
 - Cite the datasheet table number in the block's comments.
 - **Sequential parts** (latches, flip-flops, counters): registered outputs
   are fully documented — `.R` outputs, AR/SP, and `.E` are galasmManual.txt
-  §3.4/§3.6; the Counter example in §4.2 shows the equation style. One
-  project convention is **not yet established**: GALasm's `.R` implies the
-  GAL22V10's dedicated pin-1 clock, but a 74xx part has a *named* clock pin.
-  For the first sequential part, propose a mapping (e.g. a header comment
-  declaring which YAML pin plays the pin-1 clock role) and **get the user's
-  approval before treating it as precedent**; then record the decision here
-  and in the exemplar.
+  §3.4/§3.6; the Counter example in §4.2 shows the equation style. The
+  **named-clock convention** (established on the 74574, the first sequential
+  part): GALasm's `.R` implies the GAL22V10's dedicated pin-1 clock, so the
+  part's named clock pin (e.g. `CP`) plays that pin-1 role and does **not**
+  appear as a term in any equation — a header comment in the `behavior` block
+  states this and names the clock pin and its active edge. Registered outputs
+  are then `Qn.R = <data>` with an optional single-term `.E` enable for
+  3-state outputs (see `srv/components/74574.yaml`).
 
 ## 5. Validate
 
