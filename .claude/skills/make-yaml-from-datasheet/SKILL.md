@@ -14,7 +14,8 @@ match its structure, comment style, and conventions exactly.
 - `specs/design.md` §7.6 — the **binding** YAML format and field reference.
 - `specs/design.md` §6.3 — the server-side validation rules the file must pass
   (unique pin/group names, pins within outline, valid side/dir, etc.).
-- `specs/galasmManual.txt` — the GALasm language (partial manual).
+- `specs/galasmManual.txt` — the **authoritative** GALasm reference
+  (parser-verified, GAL22V10 dialect); equations must conform to it.
 - `srv/components/74138.yaml` — the exemplar (unit part with behavior).
 - `srv/components/7400.yaml` — exemplar for `rendertype: subunit` parts.
 
@@ -71,15 +72,21 @@ This is the hard part. Conventions (established with the stakeholder on the
   **no parentheses** — `/(A * B)` is not in the language. If the function
   needs a complemented product, apply De Morgan by hand or put the `/` on the
   output (LHS `/Yn = term` drives pin Yn LOW exactly when the term is true).
+  The full polarity rule (declaration/use XOR) is galasmManual.txt §3.3.
 - Derive the equations from the function/truth table and then **verify every
   row**, including the disabled/default rows (for active-low outputs these
   usually fall out of the same equations — say so in a comment rather than
   adding rows).
 - Cite the datasheet table number in the block's comments.
-- **Sequential parts** (latches, flip-flops, counters): the partial manual
-  only sketches registered mode. Work out a proposal, but **flag it to the
-  user for review instead of presenting it as settled** — do not invent GALasm
-  syntax silently.
+- **Sequential parts** (latches, flip-flops, counters): registered outputs
+  are fully documented — `.R` outputs, AR/SP, and `.E` are galasmManual.txt
+  §3.4/§3.6; the Counter example in §4.2 shows the equation style. One
+  project convention is **not yet established**: GALasm's `.R` implies the
+  GAL22V10's dedicated pin-1 clock, but a 74xx part has a *named* clock pin.
+  For the first sequential part, propose a mapping (e.g. a header comment
+  declaring which YAML pin plays the pin-1 clock role) and **get the user's
+  approval before treating it as precedent**; then record the decision here
+  and in the exemplar.
 
 ## 5. Validate
 
