@@ -25,6 +25,16 @@ function defaultDesignName(now = new Date()) {
 // label drops the leading "74" family prefix, leaving a 2-3 digit label (FR-005).
 const paletteLabel = (name) => name.slice(2);
 
+// toast surfaces a brief non-fatal message (duplicated in interaction/fileops;
+// consolidation is an R5 cleanup for the refactor pass).
+function toast(msg) {
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2500);
+}
+
 // makeTile builds one draggable palette tile, recording it in `tiles` for the
 // armed-state subscription. `content` is either {text} or {html} (an icon).
 function makeTile(type, content, title, tiles) {
@@ -76,7 +86,13 @@ async function main() {
   // Open in select-tool mode with an empty, unsaved design (FR-004).
   const name = defaultDesignName();
   const design = createDesign(name);
-  const store = createStore({ design, designName: name });
+  const store = createStore({
+    design,
+    designName: name,
+    // A throwing command is contained by the store (§6.6/§6.10): surface it as
+    // a non-fatal toast rather than killing the event handler mid-gesture.
+    onError: (err) => toast("Operation failed: " + err.message),
+  });
 
   // Keep the design-name label in sync, with an unsaved-changes marker (FR-049a).
   const nameEl = document.getElementById("design-name");
@@ -85,6 +101,11 @@ async function main() {
   });
   nameEl.textContent = name;
   document.getElementById("tool-mode").textContent = store.state.tool;
+
+  // Warn before discarding unsaved changes on tab close (FR-049a, §6.10).
+  window.addEventListener("beforeunload", (e) => {
+    if (store.state.dirty) e.preventDefault();
+  });
 
   const renderer = initCanvas(document.getElementById("canvas"), store);
 

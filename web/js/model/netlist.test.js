@@ -194,15 +194,12 @@ test("a breakout wire taps exactly one bus bit (FR-043a)", () => {
   assert.deepEqual(nets[0].provenance, [{ bus: bus.id, bit: 2 }]);
 });
 
-// KNOWN BUG (fable-review.md C4): attachments bind pins to lanes but never
-// union lanes that share a pin, so a wire on U1.A0 plus a bus whose bit 0 is
-// snapped to A0 yields TWO nets, both listing U1.A0. FR-034b: everything
-// transitively connected through pins and junctions is ONE net. Fix by unioning
-// all lanes attached to the same pin key in buildNets. Remove the `todo`
-// option once fixed.
+// Regression for fable-review.md C4: all lanes attached to the same pin key
+// must be unioned — FR-034b says everything transitively connected through
+// pins and junctions is ONE net, so a wire on U1.A0 plus a bus whose bit 0 is
+// snapped to A0 is one net, not two nets both listing U1.A0.
 test(
   "a wire and a group-snapped bus sharing a pin form one net (FR-034b)",
-  { todo: "known bug — see fable-review.md C4" },
   () => {
     const d = createDesign("t");
     addInstance(d, tyA(), 10, 20, 0); // U1

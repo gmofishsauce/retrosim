@@ -117,18 +117,13 @@ test("insertBendCmd / moveBendCmd are reversible", () => {
   assert.equal(store.design.wires[0].path.length, 2);
 });
 
-// KNOWN BUG (fable-review.md C2): during a bend drag, interaction.js moves the
-// bend live for preview, then dispatches moveBendCmd with the FINAL coordinates.
-// moveBendCmd captures "old" on first apply — by then the bend is already at the
-// final position, so undo restores the final position (a no-op). This test
-// simulates the gesture exactly as interaction.js performs it (no rewind).
-// Fix either by capturing/passing the pre-drag position into moveBendCmd, or by
-// rewinding the live preview in interaction.js before dispatch (the component
-// drag branch already does this — if you choose that fix, add the rewind to the
-// simulated gesture below). Remove the `todo` option once fixed.
+// Regression for fable-review.md C2: during a bend drag, interaction.js moves
+// the bend live for preview, then on mouseup rewinds it to the pre-drag
+// position before dispatching moveBendCmd with the final coordinates, so the
+// command captures the true old position for undo. This test simulates the
+// gesture exactly as interaction.js performs it (including the rewind).
 test(
   "undo of a live-previewed bend drag restores the pre-drag position (FR-024/FR-032)",
-  { todo: "known bug — see fable-review.md C2" },
   () => {
     const store = newStore();
     store.dispatch(addWireCmd(pin("U1", "/Y0"), pin("U2", "A0")));
@@ -138,7 +133,9 @@ test(
     // The drag gesture: live preview mutates the path directly...
     const w = store.design.wires[0];
     moveBend(w, 1, 28, 30);
-    // ...then mouseup dispatches the command with the final coordinates.
+    // ...then mouseup rewinds to the pre-drag position and dispatches the
+    // command with the final coordinates.
+    moveBend(w, 1, 25, 26);
     store.dispatch(moveBendCmd(wid, 1, 28, 30));
     assert.deepEqual(store.design.wires[0].path[1], { t: "bend", x: 28, y: 30 });
 

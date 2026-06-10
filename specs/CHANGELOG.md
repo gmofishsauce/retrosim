@@ -19,6 +19,30 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-10 — FR-031 reworked: click selects, drag inserts a bend
+What: A plain click on a wire/bus segment now (per spec) selects it; a
+press-and-drag beginning on a segment inserts a bend at the nearest grid point
+and drags it until release. Supersedes the original "click inserts a bend".
+Why: matches the long-standing implementation (fable-review.md W2/Q1);
+selection-on-click is needed for delete/properties. Spec-only change.
+Touches: FR-031; design §2.1, §6.9 (FSM table), §7.3
+
+## 2026-06-10 — Code-review fixes (fable-review.md C1–C4, W1, W3–W8)
+What: Fixed four confirmed bugs — cleanup() no longer prunes group-snap-connected
+buses (C1); bend-drag undo restores the pre-drag position (C2); placeComponent
+reverts by refdes, never by object reference (C3); buildNets unions all lanes
+sharing a pin (C4). Warnings: bus bend editing enabled via id-based conductor
+lookup (W1/FR-039); Open guards unsaved changes + beforeunload handler added
+(W3/FR-049a); store.dispatch contains command failures (W4); degenerate
+same-vertex wires rejected (W5); load warns on newer formatVersion and
+structurally validates the file (W6); YAML parser rejects duplicate pin/group
+names and pins outside an explicit outline (W7); netlist warns on unequal-width
+bus joins instead of silently minimizing (W8).
+Why: full-repo code review (fable-review.md); regression tests were checked in
+ahead of the fixes and their `todo` markers are now removed.
+Touches: FR-024, FR-030, FR-032, FR-034b, FR-039, FR-039a, FR-041a, FR-049a;
+design §3.3 G2, §6.3, §6.6, §6.9, §6.10, §7.3, §7.4
+
 ## 2026-06-09 — Three more built-ins: pull-up, pull-down, clock
 What: Added three built-in objects below the palette divider. Pull-up (2×2, bottom
 pin) drawn as a two-headed up-arrow; pull-down (2×2, top pin) as an upside-down T;

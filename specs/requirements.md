@@ -99,7 +99,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 
 ### 3.9 Wire Routing (Bend Points)
 
-- FR-031: In select-tool mode, the user shall be able to click any point on a wire segment. The system shall insert a bend point at the nearest grid intersection to the click, dividing the segment in two.
+- FR-031: In select-tool mode, a plain click on a wire segment shall select the wire (enabling delete, FR-033a, and the context-menu/properties actions). A press-and-drag beginning on a wire segment shall insert a bend point at the nearest grid intersection to the cursor, dividing the segment in two, and shall continue dragging the new bend until release (FR-032). (Reworked 2026-06-10; supersedes the original "click inserts a bend" — selection-on-click matches the implementation and is needed for delete/properties.)
 - FR-032: The user shall be able to drag a bend point to any grid intersection while holding the mouse button down; the two segments touching the bend point shall rubber-band continuously during the drag.
 - FR-033: The user shall be able to right-click a bend point and select "Delete bend point"; the bend point shall be removed and the two segments it connected shall merge into one straight segment between the surrounding endpoints.
 - FR-033a: In select-tool mode, the user shall be able to delete an entire wire or bus.

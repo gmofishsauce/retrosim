@@ -114,14 +114,12 @@ test("deleteInstance frees its pins; a half-connected wire stays (FR-018a/029)",
   assert.deepEqual({ x: freeEnd.x, y: freeEnd.y }, oldPos);
 });
 
-// KNOWN BUG (fable-review.md C1): a snap-connected bus keeps free-kind endpoint
-// vertices (the attachment lives only in bus.groupConnections), so the global
-// FR-030 sweep run by any unrelated deletion wrongly prunes it. A group
-// connection means the endpoint IS connected (FR-041a/FR-042). Remove the
-// `todo` option once cleanup() treats group-connected endpoints as connected.
+// Regression for fable-review.md C1: a snap-connected bus keeps free-kind
+// endpoint vertices (the attachment lives in bus.groupConnections), but a group
+// connection means the endpoint IS connected (FR-041a/FR-042), so the global
+// FR-030 sweep must not prune it.
 test(
   "cleanup keeps a snap-connected bus when an unrelated wire is deleted (FR-030/FR-041a)",
-  { todo: "known bug — see fable-review.md C1" },
   () => {
     const d = createDesign("t");
     addInstance(

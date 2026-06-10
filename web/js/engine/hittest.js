@@ -97,10 +97,11 @@ export function hitBusSegment(design, pt, tol = 0.5) {
 }
 
 // hitBend returns { wire, bendIndex } for an interior bend point within tol grid
-// units of the world point, or null.
+// units of the world point, or null. Buses carry bends under the same path model
+// (FR-039), so both conductor kinds are searched; `wire` may be a bus.
 export function hitBend(design, pt, tol = 0.5) {
   const tol2 = tol * tol;
-  for (const w of design.wires) {
+  for (const w of [...design.wires, ...design.buses]) {
     for (let i = 1; i < w.path.length - 1; i++) {
       const p = w.path[i];
       if (p.t !== "bend") continue;

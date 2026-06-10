@@ -24,6 +24,12 @@ export function createStore(initial = {}) {
   const redoStack = [];
   const subscribers = new Set();
 
+  // onError surfaces a command failure non-fatally (§6.6): the throwing command
+  // is not recorded for undo and the event handler does not die mid-gesture.
+  // The app overrides this with a toast; console.error is the headless default.
+  const onError =
+    initial.onError ?? ((err) => console.error("command failed:", err));
+
   function notify() {
     for (const fn of subscribers) fn(state);
   }
@@ -53,7 +59,13 @@ export function createStore(initial = {}) {
     },
 
     dispatch(cmd) {
-      cmd.apply(state.design);
+      try {
+        cmd.apply(state.design);
+      } catch (err) {
+        onError(err, cmd);
+        notify(); // re-render in case the failed apply mutated transient state
+        return;
+      }
       undoStack.push(cmd);
       if (undoStack.length > UNDO_CAP) undoStack.shift();
       redoStack.length = 0;

@@ -2,7 +2,11 @@
 // store, the persistence model, the REST client, and the file dialog together.
 
 import { createDesign } from "../model/design.js";
-import { serializeDesign, deserializeDesign } from "../model/persist.js";
+import {
+  serializeDesign,
+  deserializeDesign,
+  FORMAT_VERSION,
+} from "../model/persist.js";
 import { saveDesign as apiSave, loadDesign as apiLoad } from "../api.js";
 import { openFileDialog } from "./dialogs.js";
 
@@ -43,12 +47,22 @@ export function makeFileOps({ store, dataDir, defaultName }) {
     }
   }
 
-  // open navigates to and loads a design (FR-052).
+  // open navigates to and loads a design (FR-052), warning about unsaved
+  // changes first (FR-049a).
   async function open() {
+    if (store.state.dirty && !window.confirm("Discard unsaved changes?")) return;
     const res = await openFileDialog({ mode: "open", startPath: dataDir });
     if (!res) return;
     try {
       const obj = await apiLoad(res.path);
+      // Warn when the file is newer than this client understands (§7.4) but
+      // load it anyway (forward-compat).
+      if ((obj.formatVersion ?? 1) > FORMAT_VERSION) {
+        toast(
+          `Design format v${obj.formatVersion} is newer than this editor ` +
+            `understands (v${FORMAT_VERSION}); loading anyway`,
+        );
+      }
       store.replaceDesign(deserializeDesign(obj), { savePath: res.path });
     } catch (e) {
       toast("Open failed: " + e.message);

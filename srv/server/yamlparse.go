@@ -104,6 +104,11 @@ func ParseComponent(path string) (ComponentType, error) {
 		if !validDirs[p.Dir] {
 			return ComponentType{}, fmt.Errorf("%s: pin %q: invalid dir %q (want in|out|bidir|tristate)", path, p.Name, p.Dir)
 		}
+		if pinNames[p.Name] {
+			// A duplicate pin name would make saved endpoint references like
+			// "U3.A0" ambiguous (§6.3).
+			return ComponentType{}, fmt.Errorf("%s: duplicate pin name %q", path, p.Name)
+		}
 		var pos int
 		if subunit {
 			// pos is dictated by the symbol and ignored; the unit assigns the pin
@@ -132,7 +137,12 @@ func ParseComponent(path string) (ComponentType, error) {
 	}
 
 	var groups []PinGroup
+	groupNames := make(map[string]bool, len(doc.Groups))
 	for _, g := range doc.Groups {
+		if groupNames[g.Name] {
+			return ComponentType{}, fmt.Errorf("%s: duplicate group name %q", path, g.Name)
+		}
+		groupNames[g.Name] = true
 		for _, member := range g.Pins {
 			if !pinNames[member] {
 				return ComponentType{}, fmt.Errorf("%s: group %q names unknown pin %q", path, g.Name, member)
@@ -162,6 +172,22 @@ func ParseComponent(path string) (ComponentType, error) {
 	width, height, err := resolveOutline(doc.Outline, pins)
 	if err != nil {
 		return ComponentType{}, fmt.Errorf("%s: %w", path, err)
+	}
+
+	// Every pin must lie within the resolved outline (§6.3); only an explicit
+	// outline: smaller than the author-placed pins can violate this — a derived
+	// outline is sized to fit.
+	for _, p := range pins {
+		switch p.Side {
+		case "left", "right":
+			if p.Position > height {
+				return ComponentType{}, fmt.Errorf("%s: pin %q: pos %d exceeds outline height %d", path, p.Name, p.Position, height)
+			}
+		case "top", "bottom":
+			if p.Position > width {
+				return ComponentType{}, fmt.Errorf("%s: pin %q: pos %d exceeds outline width %d", path, p.Name, p.Position, width)
+			}
+		}
 	}
 
 	return ComponentType{

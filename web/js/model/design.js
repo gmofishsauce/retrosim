@@ -217,9 +217,13 @@ function resolveEndpoint(design, spec) {
 
 // addWire creates a straight wire between two endpoints (FR-027). Its path is two
 // node points referencing the endpoint vertices (A2); bends are added later.
+// A degenerate wire whose endpoints resolve to the same vertex (e.g. a pin to
+// itself) is rejected: it would be invisible, un-hit-testable, and would inflate
+// that pin's net membership (§6.6).
 export function addWire(design, a, b) {
   const va = resolveEndpoint(design, a);
   const vb = resolveEndpoint(design, b);
+  if (va === vb) throw new Error("wire endpoints resolve to the same vertex");
   const wire = {
     id: "w" + design.nextWireId++,
     path: [
@@ -237,6 +241,7 @@ export function addWire(design, a, b) {
 export function addBus(design, a, b, width) {
   const va = resolveEndpoint(design, a);
   const vb = resolveEndpoint(design, b);
+  if (va === vb) throw new Error("bus endpoints resolve to the same vertex");
   const bus = {
     id: "b" + design.nextBusId++,
     path: [
@@ -464,12 +469,21 @@ function findSingleNodeRef(design, id) {
 //   - a junction referenced by exactly one conductor is demoted: to a free
 //     (dangling) vertex if it is that conductor's endpoint, or back to a plain
 //     bend if it is interior;
-//   - a conductor whose both endpoints are free is removed (FR-030);
+//   - a conductor whose both endpoints are free is removed (FR-030) — but a
+//     bus endpoint named by a groupConnections entry is connected (FR-041a/
+//     FR-042) even though its vertex kind stays "free", so it is never swept;
 //   - any vertex with no references is garbage-collected.
 // It iterates to a fixed point because each step can enable the next.
 export function cleanup(design) {
   for (let guard = 0; ; guard++) {
     let changed = false;
+
+    // Vertices that are bus endpoints snap-connected to a pin group: connected
+    // for FR-030 purposes despite kind === "free".
+    const snapped = new Set();
+    for (const b of design.buses) {
+      for (const gc of b.groupConnections ?? []) snapped.add(gc.vertex);
+    }
 
     for (const v of [...design.vertices]) {
       const rc = vertexRefCount(design, v.id);
@@ -494,7 +508,8 @@ export function cleanup(design) {
     for (const c of [...design.wires, ...design.buses]) {
       const a = getVertex(design, c.path[0].v);
       const b = getVertex(design, c.path[c.path.length - 1].v);
-      if (a && b && a.kind === "free" && b.kind === "free") {
+      const disconnected = (v) => v.kind === "free" && !snapped.has(v.id);
+      if (a && b && disconnected(a) && disconnected(b)) {
         removeConductor(design, c);
         changed = true;
       }

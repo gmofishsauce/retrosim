@@ -133,8 +133,9 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-030** — A wire/bus with no connected endpoints is auto-removed.
 
 **Wire Routing (Bend Points)**
-- **FR-031** — In select mode, click any point on a wire segment → insert a bend
-  point at the nearest grid intersection, splitting the segment in two.
+- **FR-031** — In select mode, a plain click on a wire segment selects the wire;
+  a press-and-drag beginning on a segment inserts a bend point at the nearest
+  grid intersection, splitting the segment in two, and drags it until release.
 - **FR-032** — Drag a bend point to any grid intersection (mouse held down); the
   two adjoining segments rubber-band continuously.
 - **FR-033** — Right-click a bend point → "Delete bend point"; the two adjoining
@@ -333,8 +334,9 @@ this document adopts. **None block implementation** except where noted in §12.
   deleted, each `junction` vertex it referenced has its reference count decremented.
   A junction vertex referenced by **exactly one** remaining wire is **demoted to a
   `free` vertex** (becoming dangling, per FR-029); one referenced by **zero**
-  remaining wires is **deleted**. The FR-030 sweep (a wire all of whose endpoint
-  vertices are `free` is removed) then runs. There is no coordinate copying or
+  remaining wires is **deleted**. The FR-030 sweep (a wire/bus all of whose
+  endpoints are `free` and not group-snap-connected — see §7.3 Delete — is
+  removed) then runs. There is no coordinate copying or
   target-id retargeting — demotion follows naturally from the shared vertex losing
   degree. Implied by FR-018a/FR-029/FR-030; made explicit here.
 
@@ -492,7 +494,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   then build and validate the `ComponentType`. The parser validates: `type`
   present (a non-empty string); every pin has a valid `side` ∈
   {left,right,top,bottom}, integer `pos ≥ 0`, `dir` ∈ {in,out,bidir,tristate};
-  every pin-group member names an existing pin. Power and ground pins
+  pin names are **unique** within the file (duplicates would make saved endpoint
+  references like `U3.A0` ambiguous); group names are unique; every pin-group
+  member names an existing pin; every pin `pos` fits within the resolved outline
+  (left/right pins: `pos ≤ height`; top/bottom pins: `pos ≤ width` — only an
+  explicit `outline:` can violate this). Power and ground pins
   are **not represented** — there is no `pwr`/`power` direction and such pins are
   simply omitted from the file (and thus from the symbol and the simulation).
 - **Outline resolution (FR-062b) — at parse time, in this order:**
@@ -592,7 +598,10 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     vertex's position is **derived** from this; when the instance moves or rotates
     its pin vertices are recomputed, so wires referencing them **stretch
     automatically** (FR-018) with no per-segment fix-up.
-  - `addVertex`/`removeVertex`, `addWire/addBus`, `insertBend`, `moveBend`,
+  - `addVertex`/`removeVertex`, `addWire/addBus` (both reject a degenerate
+    conductor whose two endpoints resolve to the **same vertex** — e.g. a wire
+    from a pin to itself; the interaction layer additionally ignores a
+    same-pin destination click rather than erroring), `insertBend`, `moveBend`,
     `deleteBend`, `branchWire` (creates or reuses a `junction` vertex; if the
     branch point lands on an interior `bend` path-point, that point flips to a
     `node` referencing the new vertex), `breakoutBit` (FR-043a: create a
@@ -623,12 +632,20 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
   # 3. bus↔bus full junction (no bit index): align lanes by index
   for each junction vertex V shared by buses B1,B2 with V.bit == null:
-      assert width(B1)==width(B2)               # guaranteed by FR-039a at edit time
-      for i in 0..w-1:                          union(lane(B1,i), lane(B2,i))
+      # FR-039a guarantees equal widths at edit time, but a loaded file may
+      # violate it (e.g. hand-edited): warn — never silently minimize — and
+      # union the overlapping lanes. (Supersedes the bare assert.)
+      if width(B1) != width(B2): warn(width mismatch at V)
+      for i in 0..min(w1,w2)-1:                 union(lane(B1,i), lane(B2,i))
 
   # 4. breakout (FR-043a): wire taps one bus bit via junction vertex with V.bit set
   for each junction vertex V with V.bit == b shared by bus B and wire W:
       union(lane(W), lane(B, b))
+
+  # 5. shared pins (FR-034b): a pin ties together every lane attached to it
+  #    (e.g. a wire ending on U1.A0 plus a bus bit group-snapped to A0)
+  for each pin P with attached lanes L1..Ln:
+      for i in 2..n:                            union(lane(L1), lane(Li))
 
   groups = connected components of uf
   nets = []
@@ -752,7 +769,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | SELECT | click component | select it | SELECT |
   | SELECT | drag component | `MoveComponent` (snap, stretch connected segs FR-018) | SELECT |
   | SELECT | press Delete on selection | `DeleteComponent`/`DeleteWire` (FR-018a/FR-033a) | SELECT |
-  | SELECT | click wire/bus segment | `InsertBend` at nearest grid pt (FR-031) | DRAGGING_BEND |
+  | SELECT | click wire/bus segment | select it (FR-031) | SELECT |
+  | SELECT | drag from wire/bus segment | `InsertBend` at nearest grid pt, the new bend dragging until release (FR-031) | DRAGGING_BEND |
   | SELECT | drag bend point | `MoveBend` (rubber-band FR-032) | DRAGGING_BEND |
   | SELECT | right-click bend | context menu → `DeleteBend` (FR-033) | SELECT |
   | SELECT | right-click bus | context menu → `SetBusWidth` (FR-038) | SELECT |
@@ -1072,8 +1090,8 @@ bus yields up to *w* nets:
 ### 7.3 Data lifecycle (CRUD)
 - **Create:** instances by placement (FR-008/009/011) — each pin a wire later
   binds to becomes a `pin` vertex on demand; wires/buses by the Wire/Bus tools
-  (FR-027/039), creating their endpoint vertices (`pin`/`free`); bends by clicking
-  segments (FR-031); junction vertices by branching (FR-034).
+  (FR-027/039), creating their endpoint vertices (`pin`/`free`); bends by
+  dragging from segments (FR-031); junction vertices by branching (FR-034).
 - **Read:** the renderer reads the live model each frame; Save serializes it.
 - **Update:** moves/rotations recompute affected `pin` vertices, so connected
   wires **stretch automatically** (FR-018); overrides/bend-drags/width changes,
@@ -1081,8 +1099,10 @@ bus yields up to *w* nets:
   wires meeting there follow (FR-032, no drift).
 - **Delete:** components (FR-018a — their `pin` vertices convert to `free`); wires/
   buses (FR-033a — junction-vertex ref counts decremented, demoting to `free` or
-  deleting per §3.3 G2); bends (FR-033). The FR-030 sweep (remove any wire whose
-  endpoint vertices are all `free`) runs after any deletion.
+  deleting per §3.3 G2); bends (FR-033). The FR-030 sweep (remove any wire/bus
+  whose endpoint vertices are all `free` **and not group-snap-connected** — a
+  bus endpoint named by a `groupConnections` entry is connected per
+  FR-041a/FR-042 even though its vertex kind is `free`) runs after any deletion.
 
 ### 7.4 Persistence & migration
 Files are JSON written atomically (§6.5). `formatVersion` enables future
@@ -1094,7 +1114,11 @@ earlier endpoint-union sketch is: old `pin` endpoint → a `pin` vertex; old `fr
 inserted as a `node` path-point in the target wire's `path`, with the branch
 wire's endpoint referencing it. Loading a file with an unknown `formatVersion` →
 server returns it as-is and the SPA warns if it is newer than it understands
-(forward-compat per NFR-004 spirit).
+(forward-compat per NFR-004 spirit). On load the SPA also runs a cheap
+structural sanity pass (every conductor path has ≥ 2 points; every `node` path
+point and every `pin` vertex references something that exists) and rejects the
+file with a legible error instead of failing later deep in render/hit-test —
+the server validates only that the payload is JSON.
 
 ### 7.5 In-memory client structures
 The live model mirrors §7.2 but additionally keeps `nextWireId` and

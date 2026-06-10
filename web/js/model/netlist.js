@@ -42,7 +42,10 @@ function pickName(provenance, pins) {
 // buildNets returns one Net per electrical signal that has at least one connected
 // pin: { pins:[ "U3.Y0", … ], members:[ wireId|busId, … ],
 //        provenance:[ { bus, bit, name? }, … ], name }.
-export function buildNets(design) {
+// onWarn surfaces inconsistencies a loaded file may carry (e.g. an unequal-width
+// bus join, which FR-039a prevents at edit time but nothing re-checks on load);
+// the warning is never silently swallowed (§6.6).
+export function buildNets(design, onWarn = (msg) => console.warn(msg)) {
   const uf = makeUF();
   const wireLane = (id) => `wire:${id}`;
   const busLane = (id, i) => `bus:${id}:${i}`;
@@ -104,6 +107,13 @@ export function buildNets(design) {
     const buses = busesByVertex.get(v.id) ?? [];
     if (v.bit == null) {
       for (let k = 1; k < buses.length; k++) {
+        if (buses[0].width !== buses[k].width) {
+          onWarn(
+            `buses ${buses[0].id} (width ${buses[0].width}) and ${buses[k].id} ` +
+              `(width ${buses[k].width}) are joined at ${v.id} with unequal ` +
+              `widths; joining the overlapping lanes only`,
+          );
+        }
         const w = Math.min(buses[0].width, buses[k].width);
         for (let i = 0; i < w; i++) {
           uf.union(busLane(buses[0].id, i), busLane(buses[k].id, i));
@@ -115,6 +125,15 @@ export function buildNets(design) {
         for (const wid of wids) uf.union(wireLane(wid), busLane(b.id, v.bit));
       }
     }
+  }
+
+  // 5. Shared pins (FR-034b): a pin ties together every lane attached to it —
+  //    e.g. a wire ending on U1.A0 plus a bus bit group-snapped to A0 are one
+  //    net, not two nets each listing U1.A0.
+  const lanesByPin = new Map();
+  for (const { lane, pin } of attachments) {
+    if (lanesByPin.has(pin)) uf.union(lanesByPin.get(pin), lane);
+    else lanesByPin.set(pin, lane);
   }
 
   // Regroup attachments and members by their root lane.

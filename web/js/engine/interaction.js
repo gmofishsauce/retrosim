@@ -90,7 +90,10 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   let spaceDown = false; // space held -> left-drag pans
 
   const findType = (name) => library.find((c) => c.name === name);
-  const findWire = (id) => store.design.wires.find((w) => w.id === id);
+  // Resolves a wire or bus id: bend drags apply to both (FR-039).
+  const findWire = (id) =>
+    store.design.wires.find((w) => w.id === id) ??
+    store.design.buses.find((b) => b.id === id);
 
   function setTool(tool, type = null) {
     placeType = type;
@@ -320,6 +323,17 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       }
       const target = wireTargetAt(e);
       if (!target) return; // ignore empty-space clicks (no partial wire)
+      // Ignore a destination identical to the source (same pin clicked twice):
+      // a zero-length self-wire is rejected by the model (§6.6); keep waiting
+      // for a real destination instead of erroring.
+      if (
+        wireSource.kind === "pin" &&
+        target.kind === "pin" &&
+        wireSource.refdes === target.refdes &&
+        wireSource.pin === target.pin
+      ) {
+        return;
+      }
       store.dispatch(addWireCmd(wireSource, target));
       setTool("select"); // one-shot (FR-028)
       return;
@@ -362,8 +376,17 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     }
     const bend = hitBend(store.design, world, 0.5);
     if (bend) {
-      select({ kind: "wire", id: bend.wire.id });
-      drag = { type: "bend", wireId: bend.wire.id, bendIndex: bend.bendIndex, moved: false };
+      // hitBend covers wires and buses (FR-039); the id prefix carries the kind.
+      select({ kind: bend.wire.id.startsWith("b") ? "bus" : "wire", id: bend.wire.id });
+      const p = bend.wire.path[bend.bendIndex];
+      drag = {
+        type: "bend",
+        wireId: bend.wire.id,
+        bendIndex: bend.bendIndex,
+        origX: p.x,
+        origY: p.y,
+        moved: false,
+      };
       return;
     }
     const seg = hitSegment(store.design, world, 0.4);
@@ -376,7 +399,8 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     const busSeg = hitBusSegment(store.design, world, 0.4);
     if (busSeg) {
       select({ kind: "bus", id: busSeg.bus.id });
-      drag = null; // bus bend editing is wired up with the context-menu slice
+      // Same as wires (FR-039): a plain click selects; a drag inserts a bend.
+      drag = { type: "segment", wireId: busSeg.bus.id, segIndex: busSeg.segIndex, tempIndex: -1, moved: false };
       return;
     }
     const comp = hitComponent(store.design, world);
@@ -544,7 +568,9 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       const p = w.path[drag.bendIndex];
       const fx = p.x;
       const fy = p.y;
-      // The live preview already moved it; the command captures old via a rewind.
+      // Rewind the live preview to the pre-drag position so the command
+      // captures the true old position for undo (FR-024/FR-032).
+      moveBend(w, drag.bendIndex, drag.origX, drag.origY);
       store.dispatch(moveBendCmd(drag.wireId, drag.bendIndex, fx, fy));
     } else if (drag.type === "segment" && drag.moved && drag.tempIndex >= 0) {
       const w = findWire(drag.wireId);

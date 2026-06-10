@@ -28,6 +28,16 @@ function findInstance(design, refdes) {
   return inst;
 }
 
+// findConductor resolves a wire or bus id (the prefix carries the kind): bend
+// editing applies to both under the same path model (FR-039).
+function findConductor(design, id) {
+  const c =
+    design.wires.find((w) => w.id === id) ??
+    design.buses.find((b) => b.id === id);
+  if (!c) throw new Error(`no such conductor ${id}`);
+  return c;
+}
+
 // --- snapshot-based commands for connectivity cascades (§6.10, §3.3) ---
 //
 // Commands that delete components/wires trigger G2 junction demotion and the
@@ -91,27 +101,33 @@ function resolveSpec(design, spec) {
   return spec;
 }
 
-// placeComponent adds a new instance (FR-008/009/011). The instance is created
-// on first apply and re-used on redo so its reference designator is stable.
+// placeComponent adds a new instance (FR-008/009/011). The instances are created
+// on first apply; their refdes and a value snapshot are captured so redo
+// re-creates them with stable designators. Commands hold ids and value
+// snapshots, never live object references: snapshot-based commands rebuild the
+// collections from clones, so a captured reference would go stale.
 export function placeComponent(type, x, y, rotation = 0) {
-  let created = null; // instances made on first apply, re-used on redo
+  let created = null; // plain-data clones of the instances, captured on first apply
+  let refdes = null; // their reference designators
   return {
     label: `Place ${type.name}`,
     apply(design) {
       if (created === null) {
         // A subunit package drops all of its units at once (FR-013a); a unit
         // component drops a single instance.
-        created =
+        const made =
           type.renderType === "subunit"
             ? addSubunitPackage(design, type, x, y)
             : [addInstance(design, type, x, y, rotation)];
+        refdes = made.map((inst) => inst.refdes);
+        created = structuredClone(made);
       } else {
-        for (const inst of created) design.components.push(inst);
+        for (const inst of created) design.components.push(structuredClone(inst));
       }
     },
     revert(design) {
-      for (const inst of created) {
-        const i = design.components.indexOf(inst);
+      for (const r of refdes) {
+        const i = design.components.findIndex((c) => c.refdes === r);
         if (i >= 0) design.components.splice(i, 1);
       }
     },
@@ -207,52 +223,55 @@ export function deleteWireCmd(wireId) {
   );
 }
 
-// insertBendCmd inserts a bend by splitting a segment (FR-031).
+// insertBendCmd inserts a bend by splitting a segment of a wire or bus (FR-031/
+// FR-039).
 export function insertBendCmd(wireId, segIndex, x, y) {
   let bendIndex = -1;
   return {
     label: "Insert bend",
     apply(design) {
-      const w = design.wires.find((wr) => wr.id === wireId);
+      const w = findConductor(design, wireId);
       bendIndex = insertBend(w, segIndex, x, y);
     },
     revert(design) {
-      const w = design.wires.find((wr) => wr.id === wireId);
+      const w = findConductor(design, wireId);
       w.path.splice(bendIndex, 1);
     },
   };
 }
 
-// moveBendCmd repositions a bend (FR-032), capturing the old position to undo.
+// moveBendCmd repositions a bend (FR-032/FR-039), capturing the old position to
+// undo.
 export function moveBendCmd(wireId, bendIndex, x, y) {
   let old = null;
   return {
     label: "Move bend",
     apply(design) {
-      const w = design.wires.find((wr) => wr.id === wireId);
+      const w = findConductor(design, wireId);
       if (old === null) old = { x: w.path[bendIndex].x, y: w.path[bendIndex].y };
       moveBend(w, bendIndex, x, y);
     },
     revert(design) {
-      const w = design.wires.find((wr) => wr.id === wireId);
+      const w = findConductor(design, wireId);
       moveBend(w, bendIndex, old.x, old.y);
     },
   };
 }
 
 // deleteBendCmd removes an interior bend, merging the two adjoining segments
-// (FR-033), capturing the removed point so undo re-inserts it at the same index.
+// (FR-033/FR-039), capturing the removed point so undo re-inserts it at the
+// same index.
 export function deleteBendCmd(wireId, bendIndex) {
   let removed = null;
   return {
     label: "Delete bend",
     apply(design) {
-      const w = design.wires.find((wr) => wr.id === wireId);
+      const w = findConductor(design, wireId);
       removed = { ...w.path[bendIndex] };
       deleteBend(w, bendIndex);
     },
     revert(design) {
-      const w = design.wires.find((wr) => wr.id === wireId);
+      const w = findConductor(design, wireId);
       w.path.splice(bendIndex, 0, removed);
     },
   };
