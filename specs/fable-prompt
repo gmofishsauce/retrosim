@@ -1,0 +1,6 @@
+please review the code in this repo
+  /Users/jeff/go/src/github.com/gmofishsauce/wut4/sim. You should definitely  read the requirements and design files in the specs/ directory. You may also  read the vision statement for the entire app there. Many other files in
+  that directory are simply transcripts of conversations between myself and
+  the opus model. These are not interesting. There is a Changelog file that  shows the many significant changes to the user interface that have been made
+  since the design was originally conceived. Since there have been so many  changes, please keep in mind opportunities for refactoring in addition to  places where the code does not follow the spec and ordinary bugs. Please 
+  work autonymously and write your review to sim/fable-review.md

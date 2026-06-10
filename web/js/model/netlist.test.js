@@ -194,6 +194,40 @@ test("a breakout wire taps exactly one bus bit (FR-043a)", () => {
   assert.deepEqual(nets[0].provenance, [{ bus: bus.id, bit: 2 }]);
 });
 
+// KNOWN BUG (fable-review.md C4): attachments bind pins to lanes but never
+// union lanes that share a pin, so a wire on U1.A0 plus a bus whose bit 0 is
+// snapped to A0 yields TWO nets, both listing U1.A0. FR-034b: everything
+// transitively connected through pins and junctions is ONE net. Fix by unioning
+// all lanes attached to the same pin key in buildNets. Remove the `todo`
+// option once fixed.
+test(
+  "a wire and a group-snapped bus sharing a pin form one net (FR-034b)",
+  { todo: "known bug — see fable-review.md C4" },
+  () => {
+    const d = createDesign("t");
+    addInstance(d, tyA(), 10, 20, 0); // U1
+    const bus = addBus(d, { kind: "free", x: 0, y: 0 }, { kind: "free", x: 4, y: 0 }, 3);
+    bus.groupConnections.push({
+      vertex: bus.path[1].v,
+      instance: "U1",
+      group: "A",
+      bitMap: ["A0", "A1", "A2"],
+    });
+    const w = addWire(
+      d,
+      { kind: "pin", refdes: "U1", pin: "A0" },
+      { kind: "free", x: -5, y: 22 },
+    );
+
+    const nets = buildNets(d);
+    const withA0 = nets.filter((n) => n.pins.includes("U1.A0"));
+    assert.equal(withA0.length, 1); // exactly one net carries U1.A0
+    assert.deepEqual(sorted(withA0[0].members), sorted([bus.id, w.id]));
+    assert.deepEqual(withA0[0].provenance, [{ bus: bus.id, bit: 0 }]);
+    assert.equal(nets.length, 3); // bits 1 and 2 remain separate nets
+  },
+);
+
 test("a bus↔bus full junction aligns lanes by index (FR-039a)", () => {
   const d = createDesign("t");
   addInstance(d, tyA(), 10, 20, 0);

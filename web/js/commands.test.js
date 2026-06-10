@@ -139,6 +139,31 @@ test("deleteComponent removes an instance; undo restores it at its index", () =>
   assert.equal(store.design.components[1].refdes, "U2");
 });
 
+// KNOWN BUG (fable-review.md C3): placeComponent.revert removes the created
+// instance by object identity (indexOf), but snapshot-based commands (e.g.
+// deleteComponent) restore design.components via structuredClone, replacing
+// every object with a clone. After place → delete → undo(delete) → undo(place),
+// the place revert finds nothing to remove and the component remains with an
+// empty undo stack. Fix by reverting by refdes, never by captured reference.
+// Remove the `todo` option once fixed.
+test(
+  "undo place after undoing a snapshot delete leaves an empty design (FR-024)",
+  { todo: "known bug — see fable-review.md C3" },
+  () => {
+    const store = newStore();
+    store.dispatch(placeComponent(ty(), 4, 5, 0)); // U1
+    store.dispatch(deleteComponent("U1")); // snapshot-based command
+    assert.equal(store.design.components.length, 0);
+
+    store.undo(); // undo delete → U1 restored (as a clone)
+    assert.equal(store.design.components.length, 1);
+
+    store.undo(); // undo place → design must be empty again
+    assert.equal(store.design.components.length, 0);
+    assert.equal(store.canUndo(), false);
+  },
+);
+
 test("setOverrideCmd sets and clears a per-instance delay override; undo restores", () => {
   const store = newStore();
   const t = ty();
