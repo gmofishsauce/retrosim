@@ -1,26 +1,55 @@
-# 74153 — dual 4-to-1 multiplexer
-# Rendered as a single unit (one rectangle): the select lines A,B are common to
-# both halves of the chip, so it cannot be split into independent mux subunits
-# (KiCAD renders it as one symbol for the same reason). The active-low
-# strobe/enable inputs are omitted from this rendering sample.
+# 74153 — dual 4-input multiplexer
+# Source: Nexperia, "74HC153; 74HCT153 Dual 4-input multiplexer", product
+# data sheet Rev. 11 — 11 March 2024.
+# https://assets.nexperia.com/documents/data-sheet/74HC_HCT153.pdf
+# Rendered as a single unit (one rectangle): the select lines S0/S1 are common
+# to both halves of the chip, so it cannot be split into independent mux
+# subunits (KiCAD renders it as one symbol for the same reason).
 type: "74153"
 outline: [6, 12]
 
-pins:
-  - { name: 1C0, side: left,  pos: 2,  dir: in }
-  - { name: 1C1, side: left,  pos: 3,  dir: in }
-  - { name: 1C2, side: left,  pos: 4,  dir: in }
-  - { name: 1C3, side: left,  pos: 5,  dir: in }
-  - { name: 2C0, side: left,  pos: 7,  dir: in }
-  - { name: 2C1, side: left,  pos: 8,  dir: in }
-  - { name: 2C2, side: left,  pos: 9,  dir: in }
-  - { name: 2C3, side: left,  pos: 10, dir: in }
-  - { name: A,   side: top,   pos: 2,  dir: in }
-  - { name: B,   side: top,   pos: 4,  dir: in }
-  - { name: 1Y,  side: right, pos: 3,  dir: out }
-  - { name: 2Y,  side: right, pos: 8,  dir: out }
+pins: # number: physical DIP16/SO16 pin (datasheet Table 2)
+  - { name: 1I0, side: left,  pos: 1,  dir: in,  number: 6 }
+  - { name: 1I1, side: left,  pos: 2,  dir: in,  number: 5 }
+  - { name: 1I2, side: left,  pos: 3,  dir: in,  number: 4 }
+  - { name: 1I3, side: left,  pos: 4,  dir: in,  number: 3 }
+  - { name: /1E, side: left,  pos: 5,  dir: in,  number: 1 }
+  - { name: 2I0, side: left,  pos: 7,  dir: in,  number: 10 }
+  - { name: 2I1, side: left,  pos: 8,  dir: in,  number: 11 }
+  - { name: 2I2, side: left,  pos: 9,  dir: in,  number: 12 }
+  - { name: 2I3, side: left,  pos: 10, dir: in,  number: 13 }
+  - { name: /2E, side: left,  pos: 11, dir: in,  number: 15 }
+  - { name: S0,  side: top,   pos: 2,  dir: in,  number: 14 }
+  - { name: S1,  side: top,   pos: 4,  dir: in,  number: 2 }
+  - { name: 1Y,  side: right, pos: 3,  dir: out, number: 7 }
+  - { name: 2Y,  side: right, pos: 9,  dir: out, number: 9 }
 
 groups:
-  - { name: 1C, pins: [1C0, 1C1, 1C2, 1C3] }
-  - { name: 2C, pins: [2C0, 2C1, 2C2, 2C3] }
-  - { name: S,  pins: [A, B] }
+  - { name: 1I, pins: [1I0, 1I1, 1I2, 1I3] }
+  - { name: 2I, pins: [2I0, 2I1, 2I2, 2I3] }
+  - { name: S,  pins: [S0, S1] }
+
+delays: # ns, 74HC153 typical at Vcc=4.5V, 25C (datasheet Table 7)
+  tpd_i: 17 # nIn -> nY
+  tpd_s: 18 # Sn -> nY
+  tpd_e: 12 # /nE -> nY
+
+behavior: |
+  ; 74153 — dual 4-input multiplexer with common select inputs.
+  ; Derived from the function table (datasheet Table 3): with /nE LOW
+  ; (enabled), output nY follows the data input selected by S1:S0
+  ; (S0 = LSB); with /nE HIGH (disabled), nY is LOW — which falls out of
+  ; the equations below, since every product term then goes false.
+  ;
+  ; Equations are physical-level GALasm (specs/galasmManual.txt): '/' is
+  ; the complement operator and signal names are this file's pin names
+  ; with any active-low '/' prefix dropped (pin /1E is GAL signal 1E, so
+  ; '/1E' below means "pin /1E is LOW").
+  1Y =   /1E * /S1 * /S0 * 1I0
+       + /1E * /S1 *  S0 * 1I1
+       + /1E *  S1 * /S0 * 1I2
+       + /1E *  S1 *  S0 * 1I3
+  2Y =   /2E * /S1 * /S0 * 2I0
+       + /2E * /S1 *  S0 * 2I1
+       + /2E *  S1 * /S0 * 2I2
+       + /2E *  S1 *  S0 * 2I3
