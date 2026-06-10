@@ -19,6 +19,14 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-10 — galasmManual.txt §5: language vs. physical-capacity rule
+What: Behavior blocks adopt the GALasm language but not the GAL22V10's
+physical capacity (pin count, OLMC count, per-pin product-term limits) —
+stated explicitly in §5, established with the 74245's sixteen tristate
+outputs. The bidirectional .T/.E idiom is recorded in the
+make-yaml-from-datasheet skill.
+Touches: specs/galasmManual.txt §5
+
 ## 2026-06-10 — §7.6 behavior example fixed: invalid GALasm parentheses
 What: The example behavior block used `/Y0 = /(/E1 * ...)` — parenthesized
 negation, which is not in the GALasm grammar (sum-of-products only, per the

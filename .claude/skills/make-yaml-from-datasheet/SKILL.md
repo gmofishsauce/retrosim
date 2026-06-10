@@ -77,6 +77,14 @@ This is the hard part. Conventions (established with the stakeholder on the
   row**, including the disabled/default rows (for active-low outputs these
   usually fall out of the same equations — say so in a comment rather than
   adding rows).
+- **Bidirectional (`dir: bidir`) pins** use the GAL tristate idiom
+  (galasmManual.txt §3.4, established on the 74245): each bidir pin gets a
+  `.T` output equation fed from its source plus a single-term `.E` enable,
+  and appears as a feedback input in the opposite direction's equations.
+  The `.E` terms for the two directions must be mutually exclusive.
+- **Physical GAL capacity is NOT a constraint**: behavior blocks use the
+  GALasm language, not the 22V10's pin count, OLMC count, or per-pin
+  product-term limits (galasmManual.txt §5).
 - Cite the datasheet table number in the block's comments.
 - **Sequential parts** (latches, flip-flops, counters): registered outputs
   are fully documented — `.R` outputs, AR/SP, and `.E` are galasmManual.txt

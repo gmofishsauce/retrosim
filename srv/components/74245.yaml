@@ -1,27 +1,84 @@
-# 74245 — octal bus transceiver with two 8-bit ports (A, B)
+# 74245 — octal bus transceiver with two 8-bit ports (A, B); 3-state
+# Source: Nexperia, "74HC245; 74HCT245 Octal bus transceiver; 3-state",
+# product data sheet Rev. 9 — 9 May 2025.
+# https://assets.nexperia.com/documents/data-sheet/74HC_HCT245.pdf
 type: "74245"
 outline: [8, 12]
 
-pins:
-  - { name: A0, side: left,  pos: 2, dir: bidir }
-  - { name: A1, side: left,  pos: 3, dir: bidir }
-  - { name: A2, side: left,  pos: 4, dir: bidir }
-  - { name: A3, side: left,  pos: 5, dir: bidir }
-  - { name: A4, side: left,  pos: 6, dir: bidir }
-  - { name: A5, side: left,  pos: 7, dir: bidir }
-  - { name: A6, side: left,  pos: 8, dir: bidir }
-  - { name: A7, side: left,  pos: 9, dir: bidir }
-  - { name: B0, side: right, pos: 2, dir: bidir }
-  - { name: B1, side: right, pos: 3, dir: bidir }
-  - { name: B2, side: right, pos: 4, dir: bidir }
-  - { name: B3, side: right, pos: 5, dir: bidir }
-  - { name: B4, side: right, pos: 6, dir: bidir }
-  - { name: B5, side: right, pos: 7, dir: bidir }
-  - { name: B6, side: right, pos: 8, dir: bidir }
-  - { name: B7, side: right, pos: 9, dir: bidir }
-  - { name: DIR, side: top,  pos: 2, dir: in }
-  - { name: /OE, side: top,  pos: 6, dir: in }
+pins: # number: physical DIP20/SO20 pin (datasheet Table 2)
+  - { name: A0,  side: left,  pos: 2, dir: bidir, number: 2 }
+  - { name: A1,  side: left,  pos: 3, dir: bidir, number: 3 }
+  - { name: A2,  side: left,  pos: 4, dir: bidir, number: 4 }
+  - { name: A3,  side: left,  pos: 5, dir: bidir, number: 5 }
+  - { name: A4,  side: left,  pos: 6, dir: bidir, number: 6 }
+  - { name: A5,  side: left,  pos: 7, dir: bidir, number: 7 }
+  - { name: A6,  side: left,  pos: 8, dir: bidir, number: 8 }
+  - { name: A7,  side: left,  pos: 9, dir: bidir, number: 9 }
+  - { name: B0,  side: right, pos: 2, dir: bidir, number: 18 }
+  - { name: B1,  side: right, pos: 3, dir: bidir, number: 17 }
+  - { name: B2,  side: right, pos: 4, dir: bidir, number: 16 }
+  - { name: B3,  side: right, pos: 5, dir: bidir, number: 15 }
+  - { name: B4,  side: right, pos: 6, dir: bidir, number: 14 }
+  - { name: B5,  side: right, pos: 7, dir: bidir, number: 13 }
+  - { name: B6,  side: right, pos: 8, dir: bidir, number: 12 }
+  - { name: B7,  side: right, pos: 9, dir: bidir, number: 11 }
+  - { name: DIR, side: top,   pos: 2, dir: in,    number: 1 }
+  - { name: /OE, side: top,   pos: 6, dir: in,    number: 19 }
 
 groups:
   - { name: A, pins: [A0, A1, A2, A3, A4, A5, A6, A7] }
   - { name: B, pins: [B0, B1, B2, B3, B4, B5, B6, B7] }
+
+delays: # ns, 74HC245 typical at Vcc=4.5V, 25C (datasheet Table 7)
+  tpd: 9   # An -> Bn / Bn -> An
+  ten: 11  # /OE -> output enabled
+  tdis: 15 # /OE -> output high-Z
+
+behavior: |
+  ; 74245 — octal bus transceiver, 3-state (datasheet Table 3):
+  ;   /OE=L, DIR=H : B port driven from A (A side is input)
+  ;   /OE=L, DIR=L : A port driven from B (B side is input)
+  ;   /OE=H        : both ports high-impedance
+  ;
+  ; Bidirectional pins use GALasm's tristate construct (galasmManual.txt
+  ; section 3.4): each data pin has a .T output equation fed from the
+  ; opposite port plus a .E enable term, and appears as a feedback input
+  ; in the opposite equation. The pin drives only while its .E term is
+  ; true, which makes each Bn.E/An.E pair mutually exclusive on DIR.
+  ;
+  ; Equations are physical-level GALasm: '/' is the complement operator
+  ; and signal names are this file's pin names with any active-low '/'
+  ; prefix dropped (pin /OE is GAL signal OE, so '/OE' below means
+  ; "pin /OE is LOW").
+  B0.T = A0
+  B0.E = /OE * DIR
+  B1.T = A1
+  B1.E = /OE * DIR
+  B2.T = A2
+  B2.E = /OE * DIR
+  B3.T = A3
+  B3.E = /OE * DIR
+  B4.T = A4
+  B4.E = /OE * DIR
+  B5.T = A5
+  B5.E = /OE * DIR
+  B6.T = A6
+  B6.E = /OE * DIR
+  B7.T = A7
+  B7.E = /OE * DIR
+  A0.T = B0
+  A0.E = /OE * /DIR
+  A1.T = B1
+  A1.E = /OE * /DIR
+  A2.T = B2
+  A2.E = /OE * /DIR
+  A3.T = B3
+  A3.E = /OE * /DIR
+  A4.T = B4
+  A4.E = /OE * /DIR
+  A5.T = B5
+  A5.E = /OE * /DIR
+  A6.T = B6
+  A6.E = /OE * /DIR
+  A7.T = B7
+  A7.E = /OE * /DIR

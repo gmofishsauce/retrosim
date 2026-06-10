@@ -282,6 +282,13 @@ use. See srv/components/74138.yaml for the model and
 The eventual simulator consumes these equations; conformance to this
 manual is what makes them simulatable.
 
+Behavior blocks adopt the GALasm LANGUAGE, not the physical capacity of
+a GAL22V10: the chip's pin count, its ten OLMCs, and the per-pin
+product-term limits of section 3.5 do not constrain a behavior block
+(e.g. the 74245 models sixteen tristate outputs). Language rules --
+sum-of-products form, the polarity XOR rule, suffix semantics, one
+product term for .E -- apply in full.
+
 
 6. Other GAL types (out of scope; for recognition only)
 -------------------------------------------------------
