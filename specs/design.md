@@ -1160,9 +1160,12 @@ delays:                  # optional map, ns (FR-064)
   tpd: 7
 
 behavior: |              # opaque GALasm, captured verbatim & ignored this phase (FR-066)
-  /Y0 = /(/E1 * /E2 * E3 * /A2 * /A1 * /A0)
-  /Y1 = /(/E1 * /E2 * E3 * /A2 * /A1 *  A0)
-  ; GALasm's own ';' starts a comment inside this block
+  ; GALasm's own ';' starts a comment inside this block. Equations are
+  ; sum-of-products only (GALasm has no parentheses); '/' complements the
+  ; signal named by the pin name with any active-low '/' prefix dropped
+  ; (specs/galasmManual.txt, srv/components/74138.yaml).
+  /Y0 = /E1 * /E2 * E3 * /A2 * /A1 * /A0
+  /Y1 = /E1 * /E2 * E3 * /A2 * /A1 *  A0
 ```
 
 A **subunit** package (FR-062c) omits `outline`/`pos` and instead names the symbol

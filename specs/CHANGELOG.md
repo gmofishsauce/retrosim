@@ -19,6 +19,26 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-10 — §7.6 behavior example fixed: invalid GALasm parentheses
+What: The example behavior block used `/Y0 = /(/E1 * ...)` — parenthesized
+negation, which is not in the GALasm grammar (sum-of-products only, per the
+parser-verified galasmManual.txt). Replaced with the valid physical-level
+form used by srv/components/74138.yaml, with a comment naming the convention.
+Touches: design §7.6
+
+## 2026-06-10 — galasmManual.txt rewritten as an authoritative GALasm reference
+What: Replaced the partial GALasm notes with a complete, 22V10-centric
+reference derived by reading the actual GALasm 2.1 parser (daveho/GALasm,
+src/galasm.c), cross-checked against the original GALer HTML docs and the
+shipped example .pld files. Covers file structure, lexical rules, the
+declaration/use polarity XOR rule, output kinds (.T/.R/.E), per-pin
+product-term capacity, AR/SP, VCC/GND constants, and an error-condition
+appendix. Project convention recorded: GAL type is always GAL22V10.
+Why: the behavior blocks in component YAMLs must be valid GALasm for the
+eventual simulator; the old notes were partial and non-authoritative.
+Touches: specs/galasmManual.txt (referenced by design §7.6 authoring and the
+make-yaml-from-datasheet skill)
+
 ## 2026-06-10 — FR-031 reworked: click selects, drag inserts a bend
 What: A plain click on a wire/bus segment now (per spec) selects it; a
 press-and-drag beginning on a segment inserts a bend at the nearest grid point

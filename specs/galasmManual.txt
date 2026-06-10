@@ -1,72 +1,326 @@
-GALasm
+GALasm Reference Manual (GAL22V10)
+==================================
 
-.pld is the GAL specification file. 
-galasm creates several files, all are text files:
-.chp - Generated ASCII art of the IC.
-.fus - The fuse map. It contains a map of fuses for each pin. Here it is
-       clear how much AND terms are allowed for each pin. The lines 
-       match the JED map in the manual. 
-.jed - This is the input file for the programmer. 
-.pin - A list of pins and how the assembler sees them.
+Authoritative reference for the GALasm .pld source language, derived by
+direct reading of the GALasm 2.1 parser source (daveho/GALasm,
+src/galasm.c) and cross-checked against the original GALer documentation
+(daveho/GALasm/galer/*.html) and the shipped examples
+(daveho/GALasm/examples/*.pld). Where this manual and any other
+description disagree, the parser source wins; this manual records what
+the parser actually accepts.
 
-; is the comment character. All that follows on the line is ignored by 
-the assembler.
-Empty lines (whitespace only) are also ignored.
+PROJECT CONVENTION: this project always targets the GAL22V10. This
+manual documents the 22V10 dialect fully; the other GAL types are
+summarized at the end only so their differences are recognizable.
 
-First line specifies the GAL; GAL22V10, GAL18V10, ...
-Second line specifies the name of the configuration, to be saved in the 
-GAL. Usually the same as the name of the pld file.
+The assembler is invoked as:
 
-The third and fourth line declare the pin names. It is convenient to 
-precede the third line and follow the fourth line with a comment line 
-specifying the pin numbers for orientation.
+    galasm [-scfpawv] file.pld
 
-The third line defines the side with pin 1, the fourth the upper half
-of the pins. The last pin on the lower side is usually GND, The highest
-pin is usually Vcc.
-
-Pin names are separated by one or more spaces.
-
-Example:
-
-;1     2    3      4      5     6    7     8     9     10    11     12
-M1   IORQ   WR     A0     A1    A2   A3    A4    A5    A6    A7     GND
-WP   WLOAD WMIAD  WHIAD  DATCS  COM  STA  RAMWR  WIClk  RD  DlyDCS  VCC
-;13  14    15     16     17     18    19    20    21    22  23      24
-
-Pin names can be proceeded by a '/' to indicate their active state. This 
-can simplify or complicate the output pin definitions. No '/' means high 
-is active, low is in-active. The '/' reverses this. As both sides of the 
-output pin definition also allows this reversal, the one in the 
-declaration is optional.
-
-The following lines define the output pins. The presence of a pin 
-definition here makes the pin output. All other pins are inputs. This 
-also have to match with the hardware capabilities of the pins.
-An output pin definition can be preceeded with a '/', indicating the pin 
-is active low.
-A output pin definition can contain one or more AND terms. All elements
-in the AND term are ANDed. If more than one AND term is used, they are
-separated by an OR. The maximum number of AND terms is limited and varies
-per pin and mode. Combinatorial mode contains just logic, registered mode
-allows latching with a pin defined as clock (usually a fixed pin). 
-
-Example (single AND term):
-/WLOAD =  A7 * /A6 * /A5 *  A4 * /A3 * /A2 * /A1 * /A0 * /M1 * IORQ * WR  ; 090h write
+and produces file.jed (JEDEC fuse file for the programmer) plus three
+documentation files: file.fus (fuse matrix), file.pin (pin/direction
+list), file.chp (ASCII chip diagram). Options: -s set security fuse,
+-c/-f/-p suppress .chp/.fus/.pin, -a checksum over fuse array only,
+-w force CRLF line endings in the .jed, -v verbose.
 
 
-The pin definitions can be followed by a line starting with 'DESCRIPTION'
-all following lines are ignored by the assembler.
+1. Overall file structure
+-------------------------
 
-This usually contains an ASCII art of the pinout. This is more intuitive 
-than the declaration where the second line is 'reversed'. But note it is
-just comment.
+A .pld file has exactly five parts, in this order:
 
-A output pin definition can contain both input pins and (other) output 
-pins. Just the pin name means active high and preceeded with a '/' means
-active low.
+  1. GAL type line
+  2. signature line
+  3. pin declaration (24 names)
+  4. Boolean equations
+  5. the keyword DESCRIPTION, followed by arbitrary ignored text
 
-As the active low specifier can be used in the declaration and in both 
-sides of the definition, it can be very confusing. 
-In the declaration it decouples the high level from 'active'. 
+All five parts are REQUIRED. In particular, a file with no equations is
+an error ("no equations found"), and a file that ends before the
+DESCRIPTION keyword is an error ("unexpected end of file").
 
+1.1 GAL type (line 1). The file must begin, at the very first byte,
+with the GAL type: GAL16V8, GAL20V8, GAL22V10, or GAL20RA10. The
+character immediately after the type must be a space, tab, or newline.
+The rest of line 1 is ignored (so a trailing comment is fine):
+
+    GAL22V10        ; always 22V10 in this project
+
+1.2 Signature (line 2). The first 8 characters of line 2 are stored
+verbatim in the GAL's electronic-signature fuses; the rest of the line
+is ignored. The signature is raw text: ';' is NOT a comment character
+within those first 8 characters. Customarily the signature repeats the
+file name. The line may be shorter than 8 characters (or empty).
+
+1.3 Pin declaration. Starting on line 3, exactly 24 whitespace-
+separated pin names, in pin order 1..24. Newlines between names are
+insignificant: the declaration may be written on one line, two lines
+(the convention: pins 1-12 on one line, 13-24 on the next), or many.
+Comment lines may be interleaved; a comment line giving pin numbers is
+customary for orientation:
+
+    ;1     2    3    4    5    6    7   8   9   10  11  12
+    Clock  A0   A1   A2   /E1  /E2  E3  NC  NC  NC  NC  GND
+    SyncP  AsyR NC   NC   NC   NC   NC  Y3  Y2  Y1  Y0  VCC
+    ;13    14   15   16   17   18   19  20  21  22  23  24
+
+1.4 Equations. See section 3.
+
+1.5 DESCRIPTION. The literal keyword DESCRIPTION (uppercase) ends the
+equations. Everything after it is ignored by the assembler -- this is
+where the human-readable description of the design belongs.
+
+
+2. Lexical rules
+----------------
+
+Comments: ';' starts a comment that runs to end of line. Comments are
+allowed everywhere tokens are (pin declaration, equations), with the
+two exceptions noted above (the GAL-type token itself and the first 8
+characters of the signature line).
+
+Whitespace: spaces, tabs, and newlines are interchangeable between
+tokens. An equation may span any number of lines (see the multi-line
+counter example below).
+
+Pin names: 1 to 8 characters, letters and digits only -- there is NO
+underscore and no other punctuation. Names are case-sensitive. A name
+may begin with a digit. A name may be preceded by '/' (or '!') in the
+declaration to mark it active-low; the '/' is allowed only as the
+first character and must be followed by a name.
+
+Reserved names (may not be declared as pin names on a 22V10):
+  AR, SP        the async-reset / sync-preset keywords (section 3.6)
+  GND, VCC      must appear exactly at pins 12 and 24 respectively,
+                and nowhere else
+  NC            marks an unused pin; unlike all other names it may be
+                declared on any number of pins, and an NC pin may NOT
+                be referenced in any equation
+
+Duplicate pin names are an error. The duplicate check ignores the
+leading '/', so declaring both X and /X is also an error.
+
+Operators (each has two equivalent spellings):
+  AND       *   or   &
+  OR        +   or   #
+  NOT       /   or   !     (prefix, binds to the single name after it)
+  define    =
+  suffix    .T  .R  .E     (attached to the left-hand-side name)
+
+There are NO parentheses in the language. Every right-hand side is a
+flat sum-of-products: AND-terms joined by OR.
+
+
+3. Equations
+------------
+
+The general form is
+
+    [/]NAME[.suffix] = [/]NAME [* [/]NAME ...] [+ [/]NAME [* ...] ...]
+
+3.1 Which pins may be outputs. On the 22V10 the left-hand side (LHS)
+must be one of pins 14..23 (the ten OLMC pins), or the keyword AR or
+SP. Any other pin on the LHS is an error ("this pin can't be used as
+output"). Each output pin may have at most ONE output equation (plain,
+.T, or .R) plus at most one .E equation. Pin roles on the 22V10:
+
+    pin 1        clock for all registered outputs AND ordinary input
+    pins 2-11    inputs
+    pin 12       GND
+    pin 13       input
+    pins 14-23   OLMC pins: outputs, or inputs if not equated
+    pin 24       VCC
+
+3.2 Which pins may be inputs. Any pin 1-23 except NC pins may appear
+on a right-hand side (RHS), including OLMC pins that are outputs of
+other equations (feedback) and the output's own pin. An OLMC pin that
+never appears on a LHS but is used on a RHS is configured as an input.
+Equation order does not matter for this: an output may be referenced
+before the equation that defines it. (Only the .E equation is order-
+sensitive: it must come AFTER its output's equation.)
+
+References to an output pin read that output's current signal value;
+the assembler compensates internally for the feedback polarity of
+registered cells.
+
+3.3 Polarity. Polarity is governed by one rule:
+
+    Every reference to a pin carries the exclusive-or of two
+    negation marks: the '/' in the pin's DECLARATION (if any) and
+    the '/' at the point of USE (if any).
+
+For a RHS literal: with an even number of slashes (zero or both) the
+literal is true when the pin is HIGH; with an odd number it is true
+when the pin is LOW. For example, after the declaration "/E1", writing
+E1 in an equation means "pin E1 is LOW" and writing /E1 means "pin E1
+is HIGH". These two fragments are exactly equivalent:
+
+    A  B  /C  D ... GND          A  B  C  D ... GND
+    K  L  M   N ... VCC          K  L  M  N ... VCC
+    N = C                        N = /C
+
+For the LHS the same XOR applies: with an even number of slashes the
+pin drives HIGH when the sum-of-products is true (active high); odd,
+it drives LOW when the sum is true (active low). Each 22V10 OLMC has
+one programmable polarity, so an output's polarity is fixed by its one
+output equation.
+
+3.4 Output kinds (suffix on the LHS name).
+
+  NAME = ...      plain combinational output, always driven. A plain
+                  output may NOT be given a .E equation.
+
+  NAME.T = ...    tristate combinational output. Driven whenever its
+                  .E condition is true; with no .E equation it is
+                  always driven.
+
+  NAME.R = ...    registered output. A D flip-flop loads the value of
+                  the sum-of-products at each RISING edge of the clock
+                  on pin 1; the pin presents the registered value with
+                  the LHS polarity. A .R output may also have a .E
+                  equation (this is a 22V10 feature; with no .E it is
+                  always driven).
+
+  NAME.E = term   output-enable for a previously defined .T or .R
+                  output of the same pin. Exactly ONE product term (no
+                  OR). The LHS of a .E equation may not be negated --
+                  and the declaration '/' counts in the XOR rule of
+                  3.3 here too, so for a pin DECLARED /Y the .E line
+                  must be written /Y.E (even slash count = not
+                  negated). When the term is false the pin is
+                  high-impedance.
+                  Constraints, each an error if violated: the output
+                  equation must already have appeared; only one .E per
+                  pin; the output must be explicitly .T or .R (a plain
+                  output cannot take .E).
+
+  The suffixes .CLK, .ARST, and .APRST exist only for the GAL20RA10
+  and are errors on the 22V10.
+
+  Parser quirk, recorded for completeness: only the first letter of a
+  suffix is examined for T/R/E (".TRI" parses as .T). Always write the
+  canonical .T / .R / .E. Suffix letters are uppercase.
+
+3.5 Product-term capacity. Each OR adds a product term; each 22V10
+OLMC has a fixed number of rows, one of which is reserved for the .E
+term. The maximum number of product terms for the OUTPUT equation is
+therefore pin-dependent:
+
+    pin    14  15  16  17  18  19  20  21  22  23
+    terms   8  10  12  14  16  16  14  12  10   8
+
+Exceeding the limit is an error ("too many product terms"). When a
+design needs many terms, place it on a middle pin (18 or 19).
+
+3.6 AR and SP (22V10 only). Two global, optional, pinless signals for
+the registered outputs, written as LHS keywords:
+
+    AR = term     asynchronous reset: while the term is true, all
+                  registers are reset, independent of the clock.
+    SP = term     synchronous preset: at a rising clock edge with the
+                  term true, all registers are set.
+
+Reset/set act on the internal registers; the level seen at each output
+pin then depends on that output's polarity. Each may be defined at most
+once, takes exactly one product term, takes no suffix, and may not be
+negated. AR and SP may NOT appear on the right-hand side of any
+equation, and (as noted) may not be used as pin names.
+
+3.7 VCC and GND in equations. A constant output is written:
+
+    X = VCC       output permanently asserted (per LHS polarity)
+    X = GND       output permanently deasserted
+
+VCC or GND must be the ENTIRE right-hand side: combining them with
+operators is an error, and /VCC and /GND are errors.
+
+
+4. Worked examples (from daveho/GALasm/examples)
+------------------------------------------------
+
+4.1 Registered + tristate + feedback (GAL22V10.pld):
+
+    GAL22V10
+    22V10
+
+    Clock   A       B  C  D  E       F       NC NC NC NC GND
+    SyncPre AsyncRe NC NC NC Enable2 Enable1 Y4 Y3 Y2 Y1 VCC
+
+    Y1.R  = A * B               ; registered output => .R
+    Y1.E  = Enable1
+    Y2.R  = C
+    Y2.E  = Enable2 * Y4        ; one term; Y4 is feedback
+    Y3    = Enable2 * Y4        ; plain output, feedback again
+    Y4    = D + E + F
+    AR    = F * AsyncRe         ; asynchronous reset
+    SP    = SyncPre             ; synchronous preset
+
+    DESCRIPTION
+    anything here is ignored
+
+4.2 Multi-line equations (Counter.pld, a 4-bit counter; shown for the
+layout -- the original targets a GAL16V8 but the equation syntax is
+identical):
+
+    Q0.R =   /Clear *  Set *  D0
+           + /Clear * /Set * /Q0
+
+    Q1.R =   /Clear *  Set *  D1
+           + /Clear * /Set * /Q1 *  Q0
+           + /Clear * /Set *  Q1 * /Q0
+
+
+5. Use within this project
+--------------------------
+
+Component YAML files (design.md section 7.6) embed only the EQUATIONS
+in their behavior blocks -- no GAL type line, no signature, no pin
+declaration, no DESCRIPTION. The pin names come from the YAML pin
+list; the block's header comment states the polarity convention in
+use. See srv/components/74138.yaml for the model and
+.claude/skills/make-yaml-from-datasheet for the authoring procedure.
+The eventual simulator consumes these equations; conformance to this
+manual is what makes them simulatable.
+
+
+6. Other GAL types (out of scope; for recognition only)
+-------------------------------------------------------
+
+GAL16V8 / GAL20V8: 20/24 pins; 8 OLMCs (pins 12-19 / 15-22); exactly 8
+product terms per output; one of three operating modes (simple,
+complex, registered) chosen automatically from the equations, with
+mode-dependent reserved pins (e.g. registered mode reserves pin 1 for
+the clock and pin 11/13 for /OE); .E on a registered output is not
+allowed; no AR/SP.
+
+GAL20RA10: 24 pins; 10 OLMCs (pins 14-23); 8 rows per OLMC of which
+four are control rows; per-output .CLK, .ARST, .APRST suffix equations
+(one term each); a registered output REQUIRES a .CLK equation; pins 1
+(/PL) and 13 (/OE) are reserved and may not appear in equations; no
+AR/SP.
+
+
+Appendix: assembler error conditions (22V10-relevant)
+-----------------------------------------------------
+
+From the parser's error table; each is a hard assembly failure.
+
+  - line 1 is not a known GAL type
+  - unexpected end of file (missing parts, or no DESCRIPTION)
+  - pin name longer than 8 characters, or illegal character in it
+  - '/' not at the start of a name, or '/' not followed by a name
+  - pin name defined twice
+  - GND/VCC missing from pin 12/24, or appearing elsewhere
+  - AR or SP used as a pin name
+  - unknown pin name in an equation
+  - NC pin referenced in an equation
+  - unknown suffix; .CLK/.ARST/.APRST on a 22V10
+  - '=' missing after the LHS
+  - LHS pin is not an OLMC pin (not 14..23)
+  - same pin given two output equations; AR or SP defined twice
+  - .E before its output's equation; .E on a plain (suffixless)
+    output; two .E equations for one pin; negated LHS on .E
+  - more than one product term for .E, AR, or SP
+  - too many product terms for the OLMC (see 3.5 capacity table)
+  - AR or SP used on a right-hand side; negation of AR or SP
+  - /VCC or /GND; VCC or GND combined with operators in a term
