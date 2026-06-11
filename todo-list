@@ -18,3 +18,5 @@ implement right-click centers.
 Get rid of pan and implement group select.
 Improve (expand) click area for wiring
 does change-name during initial save preserve the new name?
+disconnect and rconnect handling
+

@@ -19,6 +19,59 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-11 — "Refresh Types" action: re-copy library type data into instances
+What: A toolbar Refresh action re-copies type data from the loaded component
+library into placed instances (one undoable command), preserving refdes,
+position, rotation, wiring, and overrides (dropping override keys the new
+definition no longer declares). Structurally incompatible instances (changed
+rendertype, or a wired pin no longer present — for subunits, in the same unit)
+are skipped and reported via the message tray. Server restart + page reload
+are still needed first (FR-007).
+Why: Instances carry placement-time copies of type data (FR-057); while
+iterating YAML behavior blocks during simulator bring-up, stale copies made
+edited behaviors unreachable without delete-and-re-place ("no behavior" on a
+7404 whose YAML clearly had one).
+Touches: FR-088 (new, §3.20); design §6.6, §6.10, §6.11, §10, §11
+- web/js/model/design.js, commands.js, chrome/toolbar.js
+
+## 2026-06-11 — Wire cursor recentered: diagonal line + center dot
+What: The wire cursor is now a diagonal line centered on the pointer,
+interrupted by a small open dot at the midpoint; the hotspot is the image
+center. The toolbar Wire button shows the same icon (FR-025).
+Why: Stakeholder testing showed the tip-at-origin design (previous entry)
+reads as a 2-grid-square "jump" the moment a rubber band anchors: the whole
+glyph hangs below-right of the true active point. A symmetric glyph with a
+center hotspot keeps the visible aim point and the active point coincident,
+including under cursor scaling. Supersedes the previous entry's design.
+Touches: FR-025 (rework); design §6.9
+- web/js/engine/interaction.js (WIRE_CURSOR), chrome/toolbar.js (WIRE_ICON)
+
+## 2026-06-11 — Wire-cursor hotspot anchored at the image origin
+What: The wire cursor's line tip is now drawn at the SVG's (0,0) corner with
+hotspot `0 0` (was: tip at (5,5), hotspot `5 5`). The origin is invariant
+under cursor scaling (HiDPI / macOS pointer size) and is also the universal
+hotspot fallback, so the visible tip is now the click point in every case;
+previously the declared hotspot could drift from the drawn tip.
+Why: Stakeholder report — wiring "feel" was off; the hotspot did not sit where
+the cursor image appears to point.
+Touches: design §6.9 (wire-mode cursor)
+- web/js/engine/interaction.js (WIRE_CURSOR)
+
+## 2026-06-11 — Wires draw to the bubble center; larger pin hot region
+What: Wires/buses (and the rubber-band preview) are now *drawn* attaching at
+the pin's visual attachment point — the bubble center for bubbled pins, the
+on-grid connection point for subunit pins — instead of the bubble's body-edge
+tangent point. Rendering only: the grid point stays the electrical and
+persisted coordinate. The wire hot region (cursor change + click start/end)
+grows from a 0.5-grid-unit circle on the grid point to a 0.7-grid-unit circle
+on the visual attachment point, with nearest-pin-wins hit testing (required:
+adjacent pins are 1 unit apart, and hitPin was first-match).
+Why: Stakeholder UX request — the tangent-point attachment is unintuitive
+under the mouse; a larger target eases wiring.
+Touches: FR-013 (rework), FR-013d (new), FR-027b; design §6.8, §6.9
+- web/js/model/design.js (pinVisualPos), engine/hittest.js, canvas.js,
+  interaction.js
+
 ## 2026-06-11 — Slow (debug) simulator specified
 What: Specified the in-browser interpretive simulator (sim-vision.md): unit-delay
 timing (1 unit = 1 simulated ns, double-buffered), four-state values (0/1/U/Z,

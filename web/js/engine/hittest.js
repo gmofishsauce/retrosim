@@ -3,7 +3,7 @@
 // when both are hit (the caller decides ordering).
 
 import { rotateOffset } from "../geometry.js";
-import { pinWorldPos, getVertex, vertexWorld } from "../model/design.js";
+import { pinVisualPos, getVertex, vertexWorld } from "../model/design.js";
 
 // componentBBox returns the axis-aligned world bounding box of an instance's
 // outline. Since rotation is a multiple of 90 degrees the rotated rectangle is
@@ -42,22 +42,33 @@ export function hitComponent(design, pt) {
   return null;
 }
 
-// hitPin returns { refdes, pin } for the topmost pin within tol grid units of
-// the world point, or null.
-export function hitPin(design, pt, tol = 0.5) {
+// PIN_HIT_TOL is the pin hot-region radius in grid units (FR-013d), centered
+// on the pin's visual attachment point (pinVisualPos). Adjacent pins sit one
+// grid unit apart, so any tolerance > 0.5 overlaps a neighbor — hitPin
+// therefore returns the nearest pin, not the first found within tolerance.
+export const PIN_HIT_TOL = 0.7;
+
+// hitPin returns { refdes, pin } for the nearest pin whose hot region
+// (FR-013d) contains the world point, or null.
+export function hitPin(design, pt, tol = PIN_HIT_TOL) {
   const tol2 = tol * tol;
+  let best = null;
+  let bestD2 = Infinity;
   for (let i = design.components.length - 1; i >= 0; i--) {
     const inst = design.components[i];
     for (const pin of inst.typeData.pins) {
-      const w = pinWorldPos(inst, pin.name);
+      const w = pinVisualPos(inst, pin.name);
       const dx = w.x - pt.x;
       const dy = w.y - pt.y;
-      if (dx * dx + dy * dy <= tol2) {
-        return { refdes: inst.refdes, pin: pin.name };
+      const d2 = dx * dx + dy * dy;
+      // Strict < keeps the topmost (first-visited) pin on exact ties.
+      if (d2 <= tol2 && d2 < bestD2) {
+        best = { refdes: inst.refdes, pin: pin.name };
+        bestD2 = d2;
       }
     }
   }
-  return null;
+  return best;
 }
 
 // pathPointWorld returns the world coordinate of a wire/bus path point: a node's

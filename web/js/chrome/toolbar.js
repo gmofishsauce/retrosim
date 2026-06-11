@@ -2,13 +2,19 @@
 // via the interaction FSM; the active tool is highlighted by subscribing to the
 // store. File ops, zoom/pan land in later slices.
 
-// WIRE_ICON is the wire cursor's glyph (a short lower-right→upper-left diagonal
-// line, FR-025) reused as the Wire button's label.
-const WIRE_ICON =
-  '<svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true">' +
-  '<line x1="5" y1="5" x2="17" y2="17" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>';
+import { refreshTypesCmd } from "../commands.js";
+import { postMessage } from "./statusbar.js";
 
-export function initToolbar({ container, store, interaction, fileops, sim }) {
+// WIRE_ICON is the wire cursor's glyph (a centered diagonal line with an open
+// dot at the active point, FR-025) reused as the Wire button's label.
+const WIRE_ICON =
+  '<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true">' +
+  '<g stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none">' +
+  '<line x1="3" y1="3" x2="7.4" y2="7.4"/>' +
+  '<line x1="12.6" y1="12.6" x2="17" y2="17"/>' +
+  '<circle cx="10" cy="10" r="2.2" stroke-width="1.5"/></g></svg>';
+
+export function initToolbar({ container, store, interaction, fileops, sim, library }) {
   const tools = [
     { tool: "select", label: "Select" },
     { tool: "wire", icon: WIRE_ICON },
@@ -48,11 +54,19 @@ export function initToolbar({ container, store, interaction, fileops, sim }) {
   container.appendChild(el("span", "tool-sep"));
   const newBtn = button("New", "New design", () => fileops.newDesign());
   const openBtn = button("Open", "Open design", () => fileops.open());
+  // Refresh re-copies type data from the loaded library into placed instances
+  // (FR-088), e.g. after editing a YAML behavior and restarting the server.
+  const refreshBtn = button(
+    "Refresh",
+    "Re-copy type data from the loaded library into placed components",
+    () => store.dispatch(refreshTypesCmd(library, postMessage)),
+  );
   container.append(
     newBtn,
     openBtn,
     button("Save", "Save design", () => fileops.save()),
     button("Save As", "Save under a new name", () => fileops.save({ saveAs: true })),
+    refreshBtn,
   );
 
   // Run/Stop toggles the slow simulator (FR-076); the label tracks
@@ -90,6 +104,7 @@ export function initToolbar({ container, store, interaction, fileops, sim }) {
     redoBtn.disabled = simming || !store.canRedo();
     newBtn.disabled = simming;
     openBtn.disabled = simming;
+    refreshBtn.disabled = simming;
     runBtn.textContent = simming ? "Stop" : "Run";
     runBtn.title = simming ? "Stop the simulation" : "Run the simulation";
   }

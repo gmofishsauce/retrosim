@@ -594,6 +594,15 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     unit's pins (in list order) plus `renderAs`/`unit`, and `width`/`height` from
     the symbol footprint (§6.8a). The units are offset (stacked vertically by
     footprint height + 1) so they do not overlap on drop.
+  - `refreshInstance(design, inst, libType) → {ok} | {skip: reason}` (FR-088) —
+    replaces `inst.typeData` with a fresh copy of `libType` (for a subunit
+    sibling, the per-unit filtered copy, reusing `addSubunitPackage`'s
+    per-unit derivation), preserving refdes/position/rotation/wiring and
+    `overrides`, and dropping override keys that no longer name a delay or
+    declared property. Skips (returns the reason) when `renderType` differs or
+    any pin referenced by a `pin` vertex of this instance is absent from the
+    new definition (subunits: absent from the same unit) — the wire-endpoint
+    contract (§7.1a) must stay intact.
   - `pinWorldPos(instance, pinName) → {x,y}` — applies rotation (§6.7). For
     subunit instances the unrotated pin offset comes from the symbol module
     (§6.8a) keyed by `renderAs`, input count, pin role, and slot index (the pin's
@@ -714,6 +723,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   there. For subunit symbols the common path anchors each pin's
   upright name label to the body outline (`pinLabelEdge`, §6.8a) rather than the
   pin point, so stubs never bisect labels.
+- **Wire attachment drawing (FR-013d):** wire/bus *endpoint* segments and the
+  rubber-band preview draw to the pin's visual attachment point —
+  `pinVisualPos` (model/design.js): the bubble center (grid point + one bubble
+  radius outward, rotation-aware) for bubbled pins, the plain grid point for
+  subunit pins. Drawing only: path vertices keep the on-grid pin coordinate
+  (FR-021/FR-059), so saves, netlist, and hit-tested wire geometry are
+  unchanged.
 - **Grid (FR-021):** draw grid dots/lines only when `scale` is large enough that
   spacing ≥ a threshold (e.g., 6 px); otherwise draw a coarser grid to avoid
   moiré and cost.
@@ -796,14 +812,24 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | WIRE | click a bus segment | **breakout**: prompt/derive bit index, create `junction` vertex with `bit` set, begin 1-bit wire (FR-043a) | WIRE_AWAIT_DEST |
 
 - **Hit-testing (`hittest.js`):** in world space — components are rectangles
-  (their rotated bounding outline); pins are points (tolerance ≈ ½ grid);
+  (their rotated bounding outline); pins use the FR-013d hot region: a circle
+  of radius 0.7 grid units centered on the pin's visual attachment point
+  (`pinVisualPos`), with the **nearest** pin winning when nearby pins' regions
+  overlap (pins sit 1 grid unit apart, so any tolerance > 0.5 overlaps);
   wire/bus segments use point-to-segment distance (tolerance ≈ ⅓ grid scaled);
   bend points and `junction`/`free` vertices are points. Pins take priority over
   segments take priority over component bodies when overlapping.
-- **Wire-mode cursor (FR-025/FR-027b):** the wire cursor is a short diagonal line
-  (lower-right→upper-left), supplied as an inline SVG data-URI so no asset file or
-  server MIME mapping is needed. Its hotspot is the upper-left endpoint of the
-  line (the line's bounding-box upper-left corner), not the icon center. It is set while `WIRE` is active, and in `SELECT`
+- **Wire-mode cursor (FR-025/FR-027b):** the wire cursor is a short diagonal
+  line **centered on the pointer** with a small open dot at its midpoint
+  marking the active point; the hotspot is the image center. Supplied as an
+  inline SVG data-URI so no asset file or server MIME mapping is needed. A
+  symmetric glyph with a center hotspot keeps the visible aim point and the
+  true active point coincident — including under cursor scaling, which
+  preserves the center — so a rubber band anchors exactly where the glyph says
+  it will. (Reworked 2026-06-11; supersedes both the tip-at-origin design and
+  the original (5,5)-endpoint hotspot: any glyph whose visible mass sits off
+  to one side of its active point reads as a "jump" the moment a rubber band
+  exposes the true point.) It is set while `WIRE` is active, and in `SELECT`
   while the pointer is over a pin (a wire hotspot, FR-027b). `BUS` keeps a
   crosshair; `SELECT` off any pin uses the default pointer. **Select-mode wire
   start:** clicking a pin in `SELECT` (pins take hit priority over component
@@ -867,10 +893,15 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   ```
 - **Concrete commands:** `PlaceComponent`, `MoveComponent`, `RotateComponent`,
   `DeleteComponent`, `SetOverride`, `AddWire`, `AddBus`, `InsertBend`, `MoveBend`,
-  `DeleteBend`, `DeleteWire`, `SetBusWidth`, `BranchWire`. Each captures enough
+  `DeleteBend`, `DeleteWire`, `SetBusWidth`, `BranchWire`, `RefreshTypes`. Each
+  captures enough
   pre-state to `revert` exactly (e.g., `MoveComponent` stores the old position;
   `DeleteComponent` stores the removed instance plus any vertex conversions/
   demotions and pruned wires it caused, so undo restores connectivity exactly).
+  `RefreshTypes` (FR-088) runs `refreshInstance` over every instance against
+  the client's loaded library as **one** undoable command, capturing each
+  refreshed instance's prior `{typeData, overrides}` for exact revert; skipped
+  instances are reported once per type via the message tray (FR-074).
 - **Dirty/unsaved (FR-049a):** `dirty` set on every dispatch, cleared on
   successful save. New/Open guard on `dirty` (confirm dialog); a `beforeunload`
   handler warns on tab close. *(MVP-deferrable per requirements; implement the
@@ -887,8 +918,10 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `Wire tool` tooltip/aria-label. The active tool is highlighted; clicking a
   tool sets `store.tool`. The Run button calls the sim engine's `run()` and
   relabels to "Stop" (FR-076); while `simulating`, the design-modifying buttons
-  (Wire, Bus, Undo, Redo, New, Open) are disabled — Save, zoom, and Run/Stop
-  stay enabled (FR-087).
+  (Wire, Bus, Undo, Redo, New, Open, Refresh) are disabled — Save, zoom, and
+  Run/Stop stay enabled (FR-087). A **Refresh** button (FR-088, tooltip
+  "Re-copy type data from the loaded library into placed components")
+  dispatches `RefreshTypes` with the library the app loaded at startup.
 - **Palette (`palette.js`)** — Satisfies FR-003, FR-005, FR-006, FR-008, FR-009,
   FR-009a. Renders one fixed-size tile per `ComponentType` in a 3-column CSS grid,
   sorted ascending by the numeric abbreviated part number (`Number(name.slice(2))`).
@@ -1511,6 +1544,7 @@ No files are modified (greenfield).
 | FR-076, FR-087 | §6.9, §6.10, §6.11, §6.13 | `toolbar.js`, `store.js`, `interaction.js`, `sim.js`, `statusbar.js` |
 | FR-077, FR-081, FR-082, FR-083 | §6.8, §6.13 | `sim.js`, `canvas.js` |
 | FR-084, FR-085, FR-086 | §6.13 | `sim.js`, `builtins.js` |
+| FR-088 | §6.6, §6.10, §6.11 | `model/design.js`, `commands.js`, `toolbar.js` |
 | NFR-001 | §6.1 | `main.go` |
 | NFR-002 | §6.12 | `api.js` |
 | NFR-003 | all | server `*.go`, `web/js/*` |
@@ -1552,6 +1586,14 @@ snap FR-041–043) are fully designed so they are additive when implemented.
   index (FR-039a).
 - **JS `store`:** every command's `apply`∘`revert` restores prior state; undo
   stack honors `UNDO_CAP ≥ 50` (NFR-006); redo cleared on new dispatch.
+- **JS `refreshInstance`/`RefreshTypes` (FR-088):** refresh replaces `typeData`
+  (new behavior/delays/properties reach the instance) while preserving refdes,
+  position, rotation, and overrides; an override key absent from the new
+  definition is dropped; a connected pin missing from the new definition (or
+  moved to a different unit) skips the instance with a reason; renderType
+  change skips; subunit siblings get per-unit filtered copies; undo restores
+  every prior `{typeData, overrides}` exactly; unknown type names are left
+  untouched.
 - **JS `galasm` (FR-079):** physical-level polarity — for YAML pin `/E1` the
   literal `/E1` is true when the pin reads LOW and `E1` when it reads HIGH;
   `/Y0 = term` drives Y0 LOW when the term is true (the 74138 equations

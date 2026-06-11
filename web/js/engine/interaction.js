@@ -31,7 +31,7 @@ import {
   insertBend,
   moveBend,
   matchingGroups,
-  pinWorldPos,
+  pinVisualPos,
   packageSiblings,
 } from "../model/design.js";
 import {
@@ -44,17 +44,23 @@ import { openContextMenu } from "../chrome/contextmenu.js";
 
 const DEFAULT_BUS_WIDTH = 8;
 
-// WIRE_CURSOR is the wire-drawing cursor (FR-025): a short lower-right→upper-left
-// diagonal line, supplied inline as an SVG data-URI so no asset file or server
-// MIME mapping is required. Hotspot is the line's upper-left endpoint (5,5);
-// `crosshair` is the fallback.
+// WIRE_CURSOR is the wire-drawing cursor (FR-025): a diagonal line centered on
+// the pointer, interrupted by a small open dot marking the active point; the
+// hotspot is the image center (10,10). A symmetric glyph with a center hotspot
+// keeps the visible aim point and the true active point coincident, including
+// under cursor scaling, which preserves the center (§6.9). Supplied inline as
+// an SVG data-URI so no asset file or server MIME mapping is required;
+// `crosshair` is the fallback cursor.
 const WIRE_CURSOR =
   "url('data:image/svg+xml;utf8," +
   encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22">' +
-      '<line x1="5" y1="5" x2="17" y2="17" stroke="black" stroke-width="2.5" stroke-linecap="round"/></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">' +
+      '<g stroke="black" stroke-width="2" stroke-linecap="round" fill="none">' +
+      '<line x1="3" y1="3" x2="7.4" y2="7.4"/>' +
+      '<line x1="12.6" y1="12.6" x2="17" y2="17"/>' +
+      '<circle cx="10" cy="10" r="2.2" stroke-width="1.5"/></g></svg>',
   ) +
-  "') 5 5, crosshair";
+  "') 10 10, crosshair";
 
 // planBusEndpoint converts a bus endpoint target into an addBus endpoint spec, an
 // optional snap directive, and the list of width-matching pin groups. A component
@@ -111,7 +117,8 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   function previewAnchorWorld(src) {
     if (src.kind === "pin") {
       const inst = store.design.components.find((c) => c.refdes === src.refdes);
-      return inst ? pinWorldPos(inst, src.pin) : null;
+      // Anchor the rubber band at the visual attachment point (FR-013d).
+      return inst ? pinVisualPos(inst, src.pin) : null;
     }
     return { x: src.x, y: src.y };
   }
@@ -162,7 +169,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   // an existing segment, or null (empty space — ignored).
   function wireTargetAt(e) {
     const world = worldOf(e);
-    const ph = hitPin(store.design, world, 0.5);
+    const ph = hitPin(store.design, world);
     if (ph) return { kind: "pin", refdes: ph.refdes, pin: ph.pin };
     const sh = hitSegment(store.design, world, 0.4);
     if (sh) {
@@ -239,7 +246,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   // click: a component pin, or a free grid point (a dangling end is allowed,
   // FR-029). Branching onto another wire is not a breakout destination.
   function breakoutDestAt(e) {
-    const ph = hitPin(store.design, worldOf(e), 0.5);
+    const ph = hitPin(store.design, worldOf(e));
     if (ph) return { kind: "pin", refdes: ph.refdes, pin: ph.pin };
     const g = gridOf(e);
     return { kind: "free", x: g.x, y: g.y };
@@ -307,7 +314,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
         const world = worldOf(e);
         // Priority: pin > bus (breakout) > wire segment (branch). Empty space is
         // ignored (no partial wire).
-        const ph = hitPin(store.design, world, 0.5);
+        const ph = hitPin(store.design, world);
         if (ph) {
           wireSource = { kind: "pin", refdes: ph.refdes, pin: ph.pin };
           return;
@@ -385,7 +392,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     // A pin is a wire hotspot (FR-027b): clicking one arms WIRE from that pin
     // (pins take priority over the component body, so this doesn't select/drag
     // the component) and reuses the WIRE machinery for preview/completion.
-    const pinHit = hitPin(store.design, world, 0.5);
+    const pinHit = hitPin(store.design, world);
     if (pinHit) {
       setTool("wire"); // clears wireSource, sets wire cursor, highlights toolbar
       wireSource = { kind: "pin", refdes: pinHit.refdes, pin: pinHit.pin };
@@ -515,7 +522,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       // In select mode a pin is a wire hotspot (FR-027b): show the wire cursor
       // while hovering one, else the default pointer.
       if (store.state.tool === "select") {
-        const overPin = !!hitPin(store.design, world, 0.5);
+        const overPin = !!hitPin(store.design, world);
         canvas.style.cursor = overPin ? WIRE_CURSOR : "default";
       }
       return;

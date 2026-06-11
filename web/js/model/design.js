@@ -73,12 +73,8 @@ export function addSubunitPackage(design, type, x, y) {
   const created = [];
   let offsetY = 0;
   for (const letter of letters) {
-    const td = structuredClone(type);
-    td.pins = td.pins.filter((p) => p.unit === letter);
-    td.unit = letter;
-    const fp = symbolFootprint(type.renderAs, gateInputCount(td));
-    td.width = fp.width;
-    td.height = fp.height;
+    const td = subunitTypeData(type, letter);
+    const fp = { width: td.width, height: td.height };
     const inst = {
       refdes: "U" + num + letter,
       type: type.name,
@@ -93,6 +89,64 @@ export function addSubunitPackage(design, type, x, y) {
     offsetY += fp.height + 1;
   }
   return created;
+}
+
+// subunitTypeData builds one sibling's per-unit type data from a subunit
+// package type: only that unit's pins, plus the symbol footprint (§6.8a).
+// Shared by addSubunitPackage and refreshInstance (FR-088).
+function subunitTypeData(type, letter) {
+  const td = structuredClone(type);
+  td.pins = td.pins.filter((p) => p.unit === letter);
+  td.unit = letter;
+  const fp = symbolFootprint(type.renderAs, gateInputCount(td));
+  td.width = fp.width;
+  td.height = fp.height;
+  return td;
+}
+
+// refreshInstance re-copies type data from the library's current definition
+// into one placed instance (FR-088), preserving refdes/position/rotation/
+// wiring and overrides; override keys the new definition no longer declares
+// are dropped. Returns {ok: true}, or {skip: reason} without touching the
+// instance when the new definition is structurally incompatible: renderType
+// changed, or a pin currently referenced by a wire/bus vertex is absent (for
+// subunit siblings, absent from this instance's unit) — the wire-endpoint
+// contract (§7.1a) must stay intact.
+export function refreshInstance(design, inst, libType) {
+  const oldRender = inst.typeData.renderType ?? "unit";
+  const newRender = libType.renderType ?? "unit";
+  if (newRender !== oldRender) {
+    return { skip: `render type changed (${oldRender} → ${newRender})` };
+  }
+
+  const td =
+    newRender === "subunit"
+      ? subunitTypeData(libType, inst.typeData.unit)
+      : structuredClone(libType);
+
+  const pinNames = new Set(td.pins.map((p) => p.name));
+  for (const v of design.vertices) {
+    if (v.kind === "pin" && v.ref === inst.refdes && !pinNames.has(v.pin)) {
+      return { skip: `wired pin ${v.pin} is gone from the new definition` };
+    }
+  }
+
+  inst.typeData = td;
+  if (inst.overrides.delays) {
+    const declared = new Set(Object.keys(td.delays ?? {}));
+    for (const k of Object.keys(inst.overrides.delays)) {
+      if (!declared.has(k)) delete inst.overrides.delays[k];
+    }
+    if (Object.keys(inst.overrides.delays).length === 0) delete inst.overrides.delays;
+  }
+  if (inst.overrides.props) {
+    const declared = new Set((td.properties ?? []).map((p) => p.name));
+    for (const k of Object.keys(inst.overrides.props)) {
+      if (!declared.has(k)) delete inst.overrides.props[k];
+    }
+    if (Object.keys(inst.overrides.props).length === 0) delete inst.overrides.props;
+  }
+  return { ok: true };
 }
 
 // pinOffset returns a pin's unrotated offset (grid units) from the instance
@@ -128,6 +182,41 @@ export function pinWorldPos(instance, pinName) {
   const off = pinOffset(instance.typeData, pin);
   const r = rotateOffset(off.x, off.y, instance.rotation);
   return { x: instance.x + r.x, y: instance.y + r.y };
+}
+
+// PIN_RADIUS is the FR-013 connection-bubble radius in grid units, drawn
+// tangent to the body (center one radius outside the pin's grid point).
+export const PIN_RADIUS = 0.25;
+
+// sideOutward is the unit vector pointing away from the body for a pin's side,
+// before instance rotation.
+export function sideOutward(side) {
+  switch (side) {
+    case "left":
+      return { x: -1, y: 0 };
+    case "right":
+      return { x: 1, y: 0 };
+    case "top":
+      return { x: 0, y: -1 };
+    case "bottom":
+      return { x: 0, y: 1 };
+    default:
+      return { x: 0, y: 0 };
+  }
+}
+
+// pinVisualPos returns a pin's *visual attachment point* (FR-013d): the bubble
+// center for bubbled pins (one radius outward of the grid point, rotation-
+// aware), the plain grid point for subunit pins. Drawing and hot-region use
+// only — the grid point (pinWorldPos) remains the electrical and persisted
+// wire-connection coordinate (FR-021/FR-059).
+export function pinVisualPos(instance, pinName) {
+  const w = pinWorldPos(instance, pinName);
+  if (instance.typeData.renderType === "subunit") return w;
+  const pin = instance.typeData.pins.find((p) => p.name === pinName);
+  const out = sideOutward(pin.side);
+  const r = rotateOffset(out.x, out.y, instance.rotation);
+  return { x: w.x + r.x * PIN_RADIUS, y: w.y + r.y * PIN_RADIUS };
 }
 
 // setOverride sets or clears a per-instance override (FR-020a/FR-020b/FR-058).

@@ -8,15 +8,17 @@ import {
   scaleFor,
   rotateOffset,
 } from "../geometry.js";
-import { pinWorldPos, getVertex, vertexWorld } from "../model/design.js";
+import {
+  pinWorldPos,
+  pinVisualPos,
+  sideOutward,
+  getVertex,
+  vertexWorld,
+  PIN_RADIUS,
+} from "../model/design.js";
 import { drawSymbol, pinHasOwnBubble, pinLabelEdge } from "./symbols.js";
 import { V0, V1 } from "./galasm.js";
 
-// Pin bubble radius in grid units. The bubble is drawn tangent to the body edge
-// (center one radius outside the pin point), so its far edge is 2*PIN_RADIUS from
-// the pin point; keeping that <= the 0.5-unit pin hit tolerance makes the whole
-// bubble clickable while staying clear of adjacent pins 1 unit away (FR-013).
-const PIN_RADIUS = 0.25;
 // Bubble radius (grid units) for the state-indicator built-in, sized to sit
 // comfortably inside its 2x2 footprint (FR-068).
 const INDICATOR_RADIUS = 0.85;
@@ -132,13 +134,31 @@ function pathPointWorld(design, p) {
   return { x: p.x, y: p.y };
 }
 
+// endpointWorld is pathPointWorld for a path's first/last point, drawn to the
+// pin's visual attachment point when the endpoint is a pin (FR-013d). Drawing
+// only — the model keeps the on-grid coordinate.
+function endpointWorld(design, p) {
+  if (p.t === "node") {
+    const v = getVertex(design, p.v);
+    if (v?.kind === "pin") {
+      const inst = design.components.find((c) => c.refdes === v.ref);
+      if (inst) return pinVisualPos(inst, v.pin);
+    }
+    return vertexWorld(design, v);
+  }
+  return { x: p.x, y: p.y };
+}
+
 // drawWires draws wires as thin black polylines (FR-036), highlighting the
 // selected one; a conflicted conductor strokes red while the conflict
 // persists (FR-082).
 function drawWires(ctx, design, vp, selection, conflicts) {
   if (!design) return;
   for (const w of design.wires) {
-    const pts = w.path.map((p) => worldToScreen(pathPointWorld(design, p), vp));
+    const pts = w.path.map((p, i) => {
+      const end = i === 0 || i === w.path.length - 1;
+      return worldToScreen((end ? endpointWorld : pathPointWorld)(design, p), vp);
+    });
     if (pts.length < 2) continue;
     ctx.beginPath();
     ctx.moveTo(pts[0].x, pts[0].y);
@@ -157,7 +177,10 @@ function drawWires(ctx, design, vp, selection, conflicts) {
 function drawBuses(ctx, design, vp, selection, conflicts) {
   if (!design) return;
   for (const b of design.buses) {
-    const pts = b.path.map((p) => worldToScreen(pathPointWorld(design, p), vp));
+    const pts = b.path.map((p, i) => {
+      const end = i === 0 || i === b.path.length - 1;
+      return worldToScreen((end ? endpointWorld : pathPointWorld)(design, p), vp);
+    });
     if (pts.length < 2) continue;
     ctx.beginPath();
     ctx.moveTo(pts[0].x, pts[0].y);
@@ -293,10 +316,7 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
         ctx.stroke();
       }
     } else {
-      const bc = worldToScreen(
-        { x: pw.x + outR.x * PIN_RADIUS, y: pw.y + outR.y * PIN_RADIUS },
-        vp,
-      );
+      const bc = worldToScreen(pinVisualPos(inst, pin.name), vp);
       ctx.beginPath();
       ctx.arc(bc.x, bc.y, r, 0, Math.PI * 2);
       ctx.fillStyle = "#fff";
@@ -464,19 +484,4 @@ function drawClock(ctx, inst, vp, selected) {
   ctx.fillText("CLK", center.x, center.y);
 }
 
-// sideOutward is the unit vector pointing away from the body for a pin's side,
-// in the component's unrotated frame.
-function sideOutward(side) {
-  switch (side) {
-    case "left":
-      return { x: -1, y: 0 };
-    case "right":
-      return { x: 1, y: 0 };
-    case "top":
-      return { x: 0, y: -1 };
-    case "bottom":
-      return { x: 0, y: 1 };
-    default:
-      return { x: 0, y: 0 };
-  }
-}
+// (sideOutward now lives in model/design.js, shared with pinVisualPos.)

@@ -9,6 +9,7 @@ import {
   rotateComponent,
   deleteComponent,
   setOverrideCmd,
+  refreshTypesCmd,
 } from "./commands.js";
 
 function ty(name = "74138") {
@@ -203,4 +204,35 @@ test("setOverrideCmd handles the props group independently of delays (FR-020b)",
   store.dispatch(setOverrideCmd("U1", "props", "period", null));
   assert.equal(find(store.design, "U1").overrides.props, undefined);
   assert.equal(find(store.design, "U1").overrides.delays.tpd, 12);
+});
+
+test("refreshTypesCmd refreshes all instances, reports, and undoes exactly (FR-088)", () => {
+  const store = newStore();
+  const t = ty();
+  t.delays = { tpd: 7 };
+  store.dispatch(placeComponent(t, 0, 0, 0)); // U1
+  store.dispatch(placeComponent(t, 10, 0, 0)); // U2
+  store.dispatch(setOverrideCmd("U1", "delays", "tpd", 12));
+
+  // The "edited library": behavior added, the tpd delay renamed.
+  const edited = ty();
+  edited.behavior = "Y = VCC\n";
+  edited.delays = { tpd_a: 9 };
+
+  const reports = [];
+  store.dispatch(refreshTypesCmd([edited], (m) => reports.push(m)));
+
+  assert.equal(find(store.design, "U1").typeData.behavior, "Y = VCC\n");
+  assert.equal(find(store.design, "U2").typeData.behavior, "Y = VCC\n");
+  // U1's tpd override no longer matches a declared delay → dropped.
+  assert.equal(find(store.design, "U1").overrides.delays, undefined);
+  assert.equal(reports.some((m) => m.includes("refreshed 2")), true);
+
+  store.undo(); // exact restore: old typeData and the override are back
+  assert.equal(find(store.design, "U1").typeData.behavior, undefined);
+  assert.equal(find(store.design, "U1").overrides.delays.tpd, 12);
+
+  store.redo();
+  assert.equal(find(store.design, "U2").typeData.behavior, "Y = VCC\n");
+  assert.equal(find(store.design, "U1").overrides.delays, undefined);
 });

@@ -20,6 +20,7 @@ import {
   breakoutBit,
   setBusBitNames,
   setOverride,
+  refreshInstance,
 } from "./model/design.js";
 
 function findInstance(design, refdes) {
@@ -202,6 +203,58 @@ export function setOverrideCmd(refdes, group, key, value) {
     },
     revert(design) {
       setOverride(design, refdes, group, key, old);
+    },
+  };
+}
+
+// refreshTypesCmd re-copies type data from the loaded component library into
+// every placed instance (FR-088) as one undoable command. Instances whose type
+// is missing from the library are left untouched; structurally incompatible
+// instances are skipped and reported once per type via onReport, which also
+// receives a one-line summary. Pre-state ({typeData, overrides}) is captured
+// on first apply only, so redo neither re-captures nor re-reports.
+export function refreshTypesCmd(library, onReport = () => {}) {
+  let captured = false;
+  const prior = []; // { refdes, typeData, overrides } per refreshed instance
+  return {
+    label: "Refresh types",
+    apply(design) {
+      const first = !captured;
+      const skipped = new Map(); // type name → reason (reported once per type)
+      let refreshed = 0;
+      for (const inst of design.components) {
+        const libType = library.find((t) => t.name === inst.type);
+        if (!libType) continue;
+        const before = {
+          refdes: inst.refdes,
+          typeData: inst.typeData,
+          overrides: structuredClone(inst.overrides),
+        };
+        const r = refreshInstance(design, inst, libType);
+        if (r.ok) {
+          refreshed++;
+          if (first) prior.push(before);
+        } else if (!skipped.has(inst.type)) {
+          skipped.set(inst.type, r.skip);
+        }
+      }
+      if (first) {
+        captured = true;
+        for (const [type, reason] of skipped) {
+          onReport(`${type}: not refreshed — ${reason}`);
+        }
+        onReport(
+          `refreshed ${refreshed} instance(s)` +
+            (skipped.size ? `; skipped ${skipped.size} type(s)` : ""),
+        );
+      }
+    },
+    revert(design) {
+      for (const p of prior) {
+        const inst = findInstance(design, p.refdes);
+        inst.typeData = p.typeData;
+        inst.overrides = p.overrides;
+      }
     },
   };
 }

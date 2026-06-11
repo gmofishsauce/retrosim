@@ -130,13 +130,14 @@ async function main() {
       builtins: BUILTINS,
       store,
     });
+    // Built-ins are placeable too, so they must be findable by type name.
+    const library = [...components, ...BUILTINS];
     const interaction = initInteraction({
       canvas: document.getElementById("canvas"),
       palette,
       store,
       renderer,
-      // Built-ins are placeable too, so they must be findable by type name.
-      library: [...components, ...BUILTINS],
+      library,
     });
     const fileops = makeFileOps({
       store,
@@ -144,7 +145,14 @@ async function main() {
       defaultName: defaultDesignName,
     });
     const sim = createSim({ store, renderer }); // slow simulator (§6.13)
-    initToolbar({ container: document.getElementById("tools"), store, interaction, fileops, sim });
+    initToolbar({
+      container: document.getElementById("tools"),
+      store,
+      interaction,
+      fileops,
+      sim,
+      library, // for the Refresh Types action (FR-088)
+    });
     initProperties({ container: document.getElementById("properties"), store });
     overlay.classList.add("hidden");
   } catch (err) {

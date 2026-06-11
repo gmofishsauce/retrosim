@@ -12,6 +12,7 @@ import {
   setBusBitNames,
   breakoutBit,
   getVertex,
+  refreshInstance,
 } from "./design.js";
 
 // A representative component type (stub-shaped, see server stubComponents).
@@ -289,4 +290,110 @@ test("breakoutBit rejects an out-of-range bit", () => {
   assert.throws(() =>
     breakoutBit(d, bus.id, 0, 4, 0, 4, { kind: "free", x: 1, y: 1 }),
   );
+});
+
+// --- refreshInstance (FR-088) ---
+
+// refreshType returns an "edited" 74138: behavior added, a delay renamed, a
+// property list introduced.
+function refreshedType() {
+  const t = type74138();
+  t.behavior = "/Y0 = /A0\n";
+  t.delays = { tpd_a: 9 };
+  t.properties = [{ name: "period", unit: "ns", default: 100 }];
+  return t;
+}
+
+test("refreshInstance replaces typeData, preserving identity and wiring (FR-088)", () => {
+  const d = createDesign("t");
+  const old = type74138();
+  old.delays = { tpd: 7 };
+  const inst = addInstance(d, old, 10, 20, 90);
+  // Wire the output so the connected-pin check is exercised.
+  d.vertices.push({ id: "v1", kind: "pin", ref: inst.refdes, pin: "/Y0", x: 0, y: 0 });
+  inst.overrides = { delays: { tpd: 12 } };
+
+  const r = refreshInstance(d, inst, refreshedType());
+  assert.deepEqual(r, { ok: true });
+  assert.equal(inst.typeData.behavior, "/Y0 = /A0\n"); // new data arrived
+  assert.equal(inst.refdes, "U1");
+  assert.equal(inst.x, 10);
+  assert.equal(inst.rotation, 90);
+  // The tpd override no longer matches any declared delay → dropped.
+  assert.equal(inst.overrides.delays, undefined);
+});
+
+test("refreshInstance keeps overrides whose keys survive (FR-088)", () => {
+  const d = createDesign("t");
+  const inst = addInstance(d, refreshedType(), 0, 0, 0);
+  inst.overrides = { delays: { tpd_a: 11 }, props: { period: 200 } };
+  assert.deepEqual(refreshInstance(d, inst, refreshedType()), { ok: true });
+  assert.deepEqual(inst.overrides, { delays: { tpd_a: 11 }, props: { period: 200 } });
+});
+
+test("refreshInstance skips when a wired pin is gone; unwired pin changes are fine (FR-088)", () => {
+  const d = createDesign("t");
+  const inst = addInstance(d, type74138(), 0, 0, 0);
+  d.vertices.push({ id: "v1", kind: "pin", ref: inst.refdes, pin: "/Y0", x: 0, y: 0 });
+
+  const renamed = refreshedType();
+  renamed.pins = [
+    { name: "A0", side: "left", position: 2, direction: "in" },
+    { name: "/O0", side: "right", position: 2, direction: "out" }, // /Y0 renamed
+  ];
+  const before = inst.typeData;
+  const r = refreshInstance(d, inst, renamed);
+  assert.equal(r.skip.includes("/Y0"), true);
+  assert.equal(inst.typeData, before); // untouched
+
+  // Renaming the UNwired input is fine: only connected pins constrain.
+  const renamedInput = refreshedType();
+  renamedInput.pins = [
+    { name: "B0", side: "left", position: 2, direction: "in" }, // A0 renamed
+    { name: "/Y0", side: "right", position: 2, direction: "out" },
+  ];
+  assert.deepEqual(refreshInstance(d, inst, renamedInput), { ok: true });
+});
+
+test("refreshInstance skips on renderType change (FR-088)", () => {
+  const d = createDesign("t");
+  const inst = addInstance(d, type74138(), 0, 0, 0);
+  const sub = { ...refreshedType(), renderType: "subunit", renderAs: "nand" };
+  const r = refreshInstance(d, inst, sub);
+  assert.equal(r.skip.includes("render type"), true);
+});
+
+test("refreshInstance rebuilds a subunit sibling's per-unit typeData (FR-088)", () => {
+  const pkg = {
+    name: "7400",
+    renderType: "subunit",
+    numUnits: 2,
+    renderAs: "nand",
+    pins: [
+      { name: "1A", side: "left", unit: "A", direction: "in" },
+      { name: "1B", side: "left", unit: "A", direction: "in" },
+      { name: "1Y", side: "right", unit: "A", direction: "out" },
+      { name: "2A", side: "left", unit: "B", direction: "in" },
+      { name: "2B", side: "left", unit: "B", direction: "in" },
+      { name: "2Y", side: "right", unit: "B", direction: "out" },
+    ],
+  };
+  const d = createDesign("t");
+  const [a, b] = addSubunitPackage(d, pkg, 0, 0);
+  d.vertices.push({ id: "v1", kind: "pin", ref: b.refdes, pin: "2Y", x: 0, y: 0 });
+
+  const edited = structuredClone(pkg);
+  edited.behavior = "1Y = /1A + /1B\n2Y = /2A + /2B\n";
+  assert.deepEqual(refreshInstance(d, b, edited), { ok: true });
+  // Sibling B keeps only unit B's pins, and the behavior arrived.
+  assert.deepEqual(b.typeData.pins.map((p) => p.name), ["2A", "2B", "2Y"]);
+  assert.equal(b.typeData.unit, "B");
+  assert.ok(b.typeData.behavior.includes("2Y"));
+  assert.ok(b.typeData.width > 0 && b.typeData.height > 0); // footprint rebuilt
+
+  // A wired pin moved to a DIFFERENT unit is gone from this sibling → skip.
+  const moved = structuredClone(edited);
+  moved.pins.find((p) => p.name === "2Y").unit = "A";
+  assert.equal(refreshInstance(d, b, moved).skip.includes("2Y"), true);
+  void a;
 });

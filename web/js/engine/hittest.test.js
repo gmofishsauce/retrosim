@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { createDesign, addInstance } from "../model/design.js";
-import { hitComponent, hitPin } from "./hittest.js";
+import { createDesign, addInstance, pinVisualPos, PIN_RADIUS } from "../model/design.js";
+import { hitComponent, hitPin, PIN_HIT_TOL } from "./hittest.js";
 
 function ty() {
   return {
@@ -48,4 +48,71 @@ test("hitPin returns null when no pin is within tolerance", () => {
   addInstance(d, ty(), 10, 20, 0);
   assert.equal(hitPin(d, { x: 13, y: 25 }, 0.5), null);
   assert.equal(hitPin(d, { x: 10.6, y: 22 }, 0.5), null); // just outside tol
+});
+
+// ty2 has two adjacent left-side pins, one grid unit apart (FR-013).
+function ty2() {
+  return {
+    name: "T2",
+    width: 4,
+    height: 4,
+    pins: [
+      { name: "A", side: "left", position: 1, direction: "in" },
+      { name: "B", side: "left", position: 2, direction: "in" },
+    ],
+  };
+}
+
+test("pinVisualPos: one bubble radius outward of the grid point, rotation-aware (FR-013d)", () => {
+  const d = createDesign("t");
+  const inst = addInstance(d, ty2(), 0, 0, 0);
+  // Left-side pin at grid (0,1): outward is -x.
+  assert.deepEqual(pinVisualPos(inst, "A"), { x: -PIN_RADIUS, y: 1 });
+  inst.rotation = 90; // outward normal rotates with the pin
+  const w = pinVisualPos(inst, "A");
+  assert.equal(w.x, -1);
+  assert.equal(w.y, -PIN_RADIUS);
+});
+
+test("hot region: PIN_HIT_TOL circle about the visual attachment point (FR-013d)", () => {
+  const d = createDesign("t");
+  addInstance(d, ty2(), 0, 0, 0); // A: grid (0,1), bubble center (-0.25, 1)
+  // Just inside / just outside, measured from the bubble center.
+  const cx = -PIN_RADIUS;
+  assert.deepEqual(hitPin(d, { x: cx - PIN_HIT_TOL + 0.05, y: 1 }), { refdes: "U1", pin: "A" });
+  assert.equal(hitPin(d, { x: cx - PIN_HIT_TOL - 0.05, y: 1 }), null);
+  // The grid point itself stays well inside the region.
+  assert.deepEqual(hitPin(d, { x: 0, y: 1 }), { refdes: "U1", pin: "A" });
+});
+
+test("nearest pin wins where adjacent hot regions overlap (FR-013d)", () => {
+  const d = createDesign("t");
+  addInstance(d, ty2(), 0, 0, 0); // A at y=1, B at y=2 — regions overlap (tol > 0.5)
+  assert.deepEqual(hitPin(d, { x: -PIN_RADIUS, y: 1.4 }), { refdes: "U1", pin: "A" });
+  assert.deepEqual(hitPin(d, { x: -PIN_RADIUS, y: 1.6 }), { refdes: "U1", pin: "B" });
+});
+
+test("subunit pins keep the on-grid connection point as the visual point (FR-013d/FR-013c)", () => {
+  const inst = {
+    refdes: "U2A",
+    x: 0,
+    y: 0,
+    rotation: 0,
+    typeData: {
+      name: "G",
+      renderType: "subunit",
+      renderAs: "nand",
+      unit: "A",
+      pins: [
+        { name: "1A", side: "left", unit: "A", direction: "in" },
+        { name: "1B", side: "left", unit: "A", direction: "in" },
+        { name: "1Y", side: "right", unit: "A", direction: "out" },
+      ],
+    },
+    overrides: {},
+  };
+  const d = { components: [inst], wires: [], buses: [], vertices: [] };
+  const w = pinVisualPos(inst, "1A");
+  assert.ok(Number.isInteger(w.x) && Number.isInteger(w.y)); // no bubble offset
+  assert.deepEqual(hitPin(d, w), { refdes: "U2A", pin: "1A" });
 });
