@@ -1,3 +1,5 @@
+import { V0, V1 } from "./engine/galasm.js";
+
 // Client-side registry of built-in editor objects (FR-067–FR-071a). These are
 // synthetic ComponentTypes defined by the app rather than loaded from YAML; once
 // placed they flow through the normal instance machinery (§6.6). Each carries
@@ -94,11 +96,26 @@ export const BUILTINS = [
 // are code, not data: they live here — not on the ComponentType — because
 // typeData is deep-copied into instances and saved as JSON (FR-057, §7.1),
 // which would drop a function value. The simulator resolves a behavior by
-// `inst.type` at run time; the call interface is specified in the simulator
-// design pass, so these are stubs until then.
+// `inst.type` at run time and calls it each unit step with
+// `{props, simTime}` (effective property values per FR-020b; simulated ns);
+// it returns this step's driver contributions `[{pin, value, weak?}]` (§6.13).
 export const BEHAVIORS = {
-  indicator() {},
-  pullup() {},
-  pulldown() {},
-  clock() {},
+  // Display only: the indicator drives nothing (FR-068).
+  indicator() {
+    return [];
+  },
+  // Weak drivers (FR-083): effective only when no strong driver is enabled.
+  pullup() {
+    return [{ pin: "OUT", value: V1, weak: true }];
+  },
+  pulldown() {
+    return [{ pin: "OUT", value: V0, weak: true }];
+  },
+  // Square wave, 50% duty cycle: low for the first half of each period, so the
+  // first rising edge lands half a period in (FR-084).
+  clock({ props, simTime }) {
+    const period = Math.max(2, Math.floor(props.period));
+    const half = Math.floor(period / 2);
+    return [{ pin: "OUT", value: simTime % period < half ? V0 : V1 }];
+  },
 };

@@ -12,7 +12,8 @@ import { initInteraction } from "./engine/interaction.js";
 import { initToolbar } from "./chrome/toolbar.js";
 import { makeFileOps } from "./chrome/fileops.js";
 import { initProperties } from "./chrome/properties.js";
-import { initStatusBar } from "./chrome/statusbar.js";
+import { initStatusBar, postMessage } from "./chrome/statusbar.js";
+import { createSim } from "./engine/sim.js";
 
 // defaultDesignName builds "unnamed schematic <datetime>" from the local clock
 // (FR-004, FR-045).
@@ -93,6 +94,8 @@ async function main() {
     // A throwing command is contained by the store (§6.6/§6.10): surface it as
     // a non-fatal toast rather than killing the event handler mid-gesture.
     onError: (err) => toast("Operation failed: " + err.message),
+    // Mutations refused while simulating go to the message tray (FR-087).
+    onBlocked: (msg) => postMessage(msg),
   });
 
   // Keep the design-name label in sync, with an unsaved-changes marker (FR-049a).
@@ -140,7 +143,8 @@ async function main() {
       dataDir: defaults.dataDir,
       defaultName: defaultDesignName,
     });
-    initToolbar({ container: document.getElementById("tools"), store, interaction, fileops });
+    const sim = createSim({ store, renderer }); // slow simulator (§6.13)
+    initToolbar({ container: document.getElementById("tools"), store, interaction, fileops, sim });
     initProperties({ container: document.getElementById("properties"), store });
     overlay.classList.add("hidden");
   } catch (err) {

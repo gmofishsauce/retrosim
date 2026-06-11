@@ -480,7 +480,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
 ### 6.3 Go: YAML parser (`sim/server/yamlparse.go`)
 - **Purpose:** convert one YAML file's bytes (YAML — §7.6) into a `ComponentType`.
-- **Satisfies:** FR-061, FR-062, FR-062a, FR-062b, FR-062c, FR-063, FR-064, FR-066.
+- **Satisfies:** FR-061, FR-062, FR-062a, FR-062b, FR-062c, FR-062d, FR-063, FR-064, FR-066.
 - **Interface (the deferral boundary — now bound to the YAML format in §7.6):**
   - `ParseComponent(path string) (ComponentType, error)`
   - The returned `ComponentType` MUST be fully populated for the fields in §7.1.
@@ -498,9 +498,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   references like `U3.A0` ambiguous); group names are unique; every pin-group
   member names an existing pin; every pin `pos` fits within the resolved outline
   (left/right pins: `pos ≤ height`; top/bottom pins: `pos ≤ width` — only an
-  explicit `outline:` can violate this). Power and ground pins
-  are **not represented** — there is no `pwr`/`power` direction and such pins are
-  simply omitted from the file (and thus from the symbol and the simulation).
+  explicit `outline:` can violate this). An optional `clock: <pin name>`
+  (FR-062d) must name an existing pin with `dir: in`; whether the behavior block
+  actually *requires* a clock (uses `.R`) is checked client-side at Run time
+  (§6.13), since the server keeps the behavior opaque (FR-066). Power and ground
+  pins are **not represented** — there is no `pwr`/`power` direction and such
+  pins are simply omitted from the file (and thus from the symbol and the
+  simulation).
 - **Outline resolution (FR-062b) — at parse time, in this order:**
   1. if the file states an explicit `outline: [w, h]`, use it;
   2. else derive a default rectangle sized to fit the author-placed pins
@@ -689,7 +693,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 ### 6.8 JS: Canvas renderer (`web/js/engine/canvas.js`)
 - **Purpose:** draw the whole scene; own the render loop and viewport.
 - **Satisfies:** FR-012–FR-015, FR-020, FR-021, FR-022, FR-023, FR-036, FR-037,
-  NFR-005.
+  FR-068 (simulated indicator states), FR-082 (red conflict nets), NFR-005.
 - **Interface:** `init(canvasEl, store)`, `setViewport({pan, zoom})`,
   `requestRender()`. Renders on a `requestAnimationFrame` loop **only when dirty**
   (a render is requested), to meet NFR-005 without busy-spinning.
@@ -713,6 +717,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Grid (FR-021):** draw grid dots/lines only when `scale` is large enough that
   spacing ≥ a threshold (e.g., 6 px); otherwise draw a coarser grid to avoid
   moiré and cost.
+- **Simulation display (§6.13):** when the transient `state.sim` view is present,
+  the indicator render branch draws its glyph from `sim.valueOfPin(refdes, "IN")`
+  — `1` → white bubble/black "1", `0` → black bubble/white "0", U or Z → the gray
+  "?" (FR-068) — and any wire/bus whose conductor is in `sim.conflictedConductors`
+  strokes red instead of black/blue (FR-082). The view is retained after a run
+  terminates, so final values stay visible until the store clears `state.sim` on
+  the next design edit (FR-085).
 - **Error handling:** rendering is read-only over the model; a malformed instance
   (e.g., unknown type) is drawn as a red placeholder box with the type name, never
   throwing out of the loop.
@@ -818,6 +829,10 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   unequal width is rejected at drop time with a non-fatal toast; no command is
   dispatched. *Snap-connect, breakout, and bit-names may be deferred from the MVP
   per requirements; the model and save format support them regardless (A7).*
+- **Simulation lock (FR-087):** while `store.state.simulating` the FSM accepts
+  only pan, zoom, selection, and hover; gestures that would dispatch a command —
+  drags, deletes, wire/bus starts (including pin hotspots), placements — and
+  palette/tool arming are ignored, as is the context menu's mutating items.
 - **Error handling:** clicks on empty space in WIRE/BUS state are ignored (no
   partial wire). A gesture that would create a zero-endpoint wire is discarded
   (FR-030). Pressing `Esc` cancels an in-progress gesture, restoring SELECT.
@@ -827,11 +842,17 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Purpose:** single source of truth and the only mutation path; undo/redo;
   dirty tracking; pub/sub.
 - **Satisfies:** FR-024, FR-049a, NFR-006.
-- **State:** `{ design, tool, selection, hover, viewport, dirty, savePath, designName }`.
+- **State:** `{ design, tool, selection, hover, viewport, dirty, savePath, designName,
+  simulating, sim }`.
   `hover` is the refdes of the component currently under the cursor (or `null`),
   used only to show subunit connection ticks (FR-013c). It is transient UI state:
   set directly by the interaction layer with a plain renderer re-render, never
   through the command/undo path, and not persisted.
+  `simulating` (bool) and `sim` (the simulator's display view, §6.13) are likewise
+  transient and non-persisted: set via notifying setters by the sim engine. While
+  `simulating`, `dispatch`/`undo`/`redo` refuse with a message-tray report instead
+  of mutating (FR-087). `sim` is retained after a run ends (FR-085) and cleared by
+  the first design-modifying `dispatch` afterward.
 - **Command interface:** every mutating action is an object
   `{ apply(design), revert(design), label }`. The store:
   ```
@@ -858,12 +879,16 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
 ### 6.11 JS: chrome widgets (`web/js/chrome/*.js`)
 - **Toolbar (`toolbar.js`)** — Satisfies FR-026, FR-035, FR-022, FR-023, FR-024,
-  FR-044, FR-046, FR-049, FR-052. Buttons: Select, Wire, Bus, Zoom +/−, Pan
-  (or pan via left-drag on empty canvas, space-drag, or middle-drag — FR-023a),
-  Undo, Redo, New, Open, Save, Save As. The Wire button shows the wire-cursor
-  icon (the lower-right→upper-left diagonal line, inline SVG) instead of a text
-  label (FR-025), keeping a `Wire tool` tooltip/aria-label. The
-  active tool is highlighted; clicking a tool sets `store.tool`.
+  FR-044, FR-046, FR-049, FR-052, FR-076, FR-087. Buttons: Select, Wire, Bus,
+  Zoom +/−, Pan (or pan via left-drag on empty canvas, space-drag, or
+  middle-drag — FR-023a), Undo, Redo, New, Open, Save, Save As, **Run/Stop**.
+  The Wire button shows the wire-cursor icon (the lower-right→upper-left
+  diagonal line, inline SVG) instead of a text label (FR-025), keeping a
+  `Wire tool` tooltip/aria-label. The active tool is highlighted; clicking a
+  tool sets `store.tool`. The Run button calls the sim engine's `run()` and
+  relabels to "Stop" (FR-076); while `simulating`, the design-modifying buttons
+  (Wire, Bus, Undo, Redo, New, Open) are disabled — Save, zoom, and Run/Stop
+  stay enabled (FR-087).
 - **Palette (`palette.js`)** — Satisfies FR-003, FR-005, FR-006, FR-008, FR-009,
   FR-009a. Renders one fixed-size tile per `ComponentType` in a 3-column CSS grid,
   sorted ascending by the numeric abbreviated part number (`Number(name.slice(2))`).
@@ -961,6 +986,103 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Error handling:** if `getComponents()` fails, show a blocking error banner
   ("server unreachable — is wut4-editor running?") and keep the canvas disabled.
 
+### 6.13 JS: slow simulator (`web/js/engine/sim.js`, `web/js/engine/galasm.js`)
+- **Purpose:** the interpretive debug engine (requirements §3.19; sim-vision.md):
+  execute the design live on the canvas under a unit-delay, four-state model.
+- **Satisfies:** FR-075–FR-087, FR-067a, FR-062d (client side), FR-071a.
+
+**Four-state values (FR-077).** Every net carries `0`, `1`, `U`, or `Z`, encoded
+as small ints in two `Uint8Array`s (`curr`, `next`) indexed by net id. Reading Z
+yields U; any U operand makes a result U — strict pessimism, deliberately
+stricter than real logic (`U AND 0 = U`), per the stakeholder's rule (§8).
+
+**`galasm.js` — behavior compiler/evaluator (FR-079):**
+- `compileBehavior(typeData) → CompiledBehavior | null` parses the equations-only
+  dialect (galasmManual.txt §5). Tokens: `;` comments; names (letters+digits,
+  ≤8); `/`/`!` negation; `*`/`&`; `+`/`#`; `=`; LHS suffixes `.T`/`.R`/`.E`;
+  `AR`/`SP`; `VCC`/`GND`. Polarity follows the project's **physical-level
+  convention** (§7.6; established on the 74138 and stated in every behavior
+  header): a signal name is the YAML pin name with any leading `/` stripped,
+  every signal is implicitly *declared active-high*, and the YAML `/` prefix
+  contributes nothing — so the manual's §3.3 declaration/use XOR degenerates to
+  the use-negation alone: literal `/X` is true iff pin X reads LOW, and LHS
+  `/Y = term` drives pin Y LOW when the term is true.
+- Validates **language rules only** (no 22V10 physical capacity, manual §5):
+  unknown signal; LHS not an output-capable pin (`out`/`bidir`/`tristate`); two
+  output equations for one signal; `.E` not single-term / before its output /
+  on a plain output / with a negated LHS; `AR`/`SP` multi-term, on a
+  RHS, or defined twice; `VCC`/`GND` not the entire RHS. A type with no
+  `behavior:` block compiles to `null` (FR-080).
+- Compiled form: `{ outputs: [{signal, pin, kind: plain|T|R, lhsLow,
+  terms: [[{signal, low}]], enable: term|null}], ar, sp }`, cached **per type
+  name** — instances share it.
+- Compiled literals carry `low` = the use-negation (`{signal, low}`, true iff
+  the net reads `low ? 0 : 1`); outputs carry `lhsLow` = the LHS use-negation.
+- Evaluation (strict-U, FR-077): a literal is true iff its net reads `(low ? 0 :
+  1)`, U if the net is U/Z; a product is U if any literal is U, else AND; the sum
+  is U if any term is U, else OR. A plain/`.T` output drives `sum XOR lhsLow`; a
+  `.R` output drives `register XOR lhsLow` (the sum is the D input, latched by
+  `sim.js`); a `.T`/`.R` output with `enable` false contributes Z, with enable U
+  contributes U (pessimistic). `AR` true forces all the instance's registers to
+  the reset state each step (async); `AR` U forces them U; `SP` true at a clock
+  edge sets them (manual §3.6).
+
+**`sim.js` — engine:**
+- **Interface:** `createSim({store, renderer, library}) → {run(), stop(),
+  isRunning()}`. `run()`/`stop()` own the FR-076 transitions: toolbar relabel,
+  `setAppState("simulating"|"editing")` (§6.11 status bar), and the store's
+  transient `simulating` flag (§6.10).
+- **Compile at Run:** `buildNets(design)` (§6.6) gives the net partition; build a
+  `(refdes, pin) → net` map and per-net **driver lists**. Per instance: built-in
+  → its `BEHAVIORS` entry (below); 74-series → `compileBehavior` of its
+  `typeData` (so per-instance overrides ride along), cached per type name.
+  **Subunit packages:** siblings sharing a U-number (§6.6) form one evaluation
+  entity — each sibling's `typeData.pins` holds only its own unit's pins while
+  the behavior block names pins across all units, so the siblings' pin lists
+  are unioned for compilation and each signal's net is reached through the
+  sibling that owns its pin. Preflight failures post to
+  the message tray and refuse to start: a behavior parse error, or a behavior
+  using `.R` on a type without `clock:` (FR-062d). Behavior-less types are
+  reported once and their outputs drive U for the run (FR-080).
+- **Step (1 unit = 1 simulated ns, FR-078):** (1) per registered instance,
+  compare its clock net's `curr` value with the previous step's; on a 0→1
+  transition latch each `.R` output's sum-of-products (evaluated over `curr`)
+  into its register. (2) Evaluate every driver against `curr`. (3) Resolve every
+  net into `next` (below). (4) Swap buffers, `simTime++`. Double-buffering makes
+  the step order-independent: outputs respond exactly one unit after inputs.
+- **Net resolution (FR-081–FR-083):** gather the net's enabled (non-Z) strong
+  contributions. Both 0 and 1 present → **conflict**: value U, conductor flagged
+  for red rendering (§6.8), reported on onset via the message tray naming two
+  conflicting drivers, e.g. `bus conflict: U3.Q0 vs U7.B2` (FR-082); any U
+  present → U; all agree → that value; none enabled → the weak value if pull-ups
+  xor pull-downs are attached (1/0), a conflict if both kinds are, else Z
+  (FR-083).
+- **Built-in behaviors (FR-067a):** the `BEHAVIORS` registry entries (§6.11)
+  take the uniform signature `behave(ctx) → [{pin, value, weak?}]` with `ctx =
+  {props, simTime}`: **clock** returns its FR-084 waveform — low for the first
+  half of each `period`, high for the second, so the first rising edge lands
+  half a period in; **pull-up/pull-down** return their constant weak 1/0;
+  **indicator** returns nothing (display only). `props` carries effective
+  values: `overrides.props` else the declared default (FR-020b).
+- **Scheduler (FR-084–FR-086):** no clock instance placed → combinational: run
+  steps unpaced (batched, with periodic yields to keep the tab live) until
+  `next` equals `curr` (settled) or the 10,000-unit bound (report via message
+  tray), then auto-`stop()` (FR-085). Clock(s) present → sequential: target rate
+  = max over clocks of effective `period × speed` units per wall second; a
+  `requestAnimationFrame` loop advances `round(rate × dt)` steps per frame
+  (capped to keep frames responsive), requests a render when any net changed,
+  and runs until `stop()` (FR-086).
+- **Display view:** the engine publishes `state.sim = { valueOfPin(refdes,
+  pinName), conflictedConductors }` (transient, §6.10) consumed by the renderer
+  (§6.8) for indicator glyphs and red conflict strokes. `stop()` retains the
+  view so final values stay visible (FR-085); the store clears it on the next
+  design-modifying dispatch.
+- **Error handling:** a behavior evaluation throw (a compiler bug, not author
+  error — author errors are caught at preflight) stops the simulation with a
+  message rather than killing the rAF loop.
+- **Dependencies:** `model/netlist.js`, store, `builtins.js`, `chrome/statusbar.js`.
+  No server involvement: the slow simulator is entirely client-side (FR-075).
+
 ---
 
 ## 7. Data Model
@@ -977,8 +1099,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 | `height` | int | `unit` only: outline height in grid units (>0); resolved value. Unused for `subunit` |
 | `pins` | `Pin[]` | FR-062, FR-062a |
 | `pinGroups` | `PinGroup[]` | optional (FR-063) |
-| `delays` | `map[string]number` | optional propagation delays, ns (FR-064) |
-| `behavior` | string | opaque GALasm text, preserved & ignored (FR-066) |
+| `delays` | `map[string]number` | optional propagation delays, ns (FR-064); not used by the slow simulator (FR-078) |
+| `behavior` | string | GALasm equations, captured verbatim by the server (FR-066); compiled and evaluated client-side by the slow simulator (§6.13, FR-079) |
+| `clock` | string? | optional name of the input pin that clocks `.R` registered behavior outputs (FR-062d); parser-validated to exist with `dir: in`; required (checked at Run time) iff the behavior uses `.R` |
 | `properties` | `Property[]` | optional named numeric parameters (FR-020b): `{name, unit, default}`, e.g. the clock's `{name:"period", unit:"ns", default:100}` (FR-071a). Declared by built-ins in the client registry today; YAML types may declare them later. Serializable data only — per-instance values live in `overrides.props` (§7.2) |
 
 Built-in types additionally have a **behavior** (FR-067a): a client-JS function
@@ -1188,7 +1311,7 @@ groups:                  # optional, for bus snap-connect (FR-063)
 delays:                  # optional map, ns (FR-064)
   tpd: 7
 
-behavior: |              # opaque GALasm, captured verbatim & ignored this phase (FR-066)
+behavior: |              # GALasm, captured verbatim (FR-066); evaluated by the slow simulator (FR-079)
   ; GALasm's own ';' starts a comment inside this block. Equations are
   ; sum-of-products only (GALasm has no parentheses); '/' complements the
   ; signal named by the pin name with any active-low '/' prefix dropped
@@ -1235,7 +1358,8 @@ pins:                    # unit + dir; pos is not used (FR-014a)
 | `groups[].name` | — | `PinGroup.name` | optional section (FR-063) |
 | `groups[].pins` | — | `PinGroup.pins` | ordered member names (bit order) |
 | `delays` | no | `delays` | `map[string]number`, ns (FR-064) |
-| `behavior` | no | `behavior` | literal block scalar; verbatim & ignored (FR-066) |
+| `behavior` | no | `behavior` | literal block scalar; verbatim (FR-066); evaluated by the slow simulator (FR-079) |
+| `clock` | iff `.R` | `clock` | names the clock input pin for `.R` registered outputs (FR-062d); must exist with `dir: in`. E.g. `clock: CP` in 74574.yaml |
 
 **Why a YAML literal block for `behavior`.** Under `|` every line is literal text
 with newlines preserved and **no escaping**, so GALasm operators (`/ * + = ( )`)
@@ -1270,6 +1394,9 @@ errors (FR-066), so future sections (e.g., richer timing) are additive.
 | Rotation pivot | Rotate about component center | **Rotate pin offsets about the instance origin** | Guarantees rotated pins stay on integer grid intersections (FR-021) without half-grid artifacts |
 | File I/O location | Browser native file picker / downloads | **All FS access server-side via REST** | FR-053 requires server-assisted navigation; keeps a single trusted FS actor; localhost-only (NFR-001) |
 | Server framework | gin/echo/chi | **net/http standard library** | Tiny API surface; no dependency; matches the project's minimalist Go style |
+| Slow-simulator timing model | Zero-delay settle (fixpoint per edge); event-driven with the YAML ns delays | **Unit delay: 1 unit = 1 simulated ns, double-buffered synchronous update (FR-078)** | Stakeholder-chosen. Deterministic and evaluation-order-independent; settling ripples one component level per step (observable sequence); the clock `period` (ns) sets steps/cycle with no conversion factor; a design not settled by the next edge is a *visible* timing failure. Trade-off accepted: every component takes 1 ns regardless of internal depth |
+| Four-state combination rule | Selective pessimism (`U AND 0 = 0`, as real logic permits) | **Strict pessimism: any U operand → U; Z reads as U (FR-077)** | The vision statement's stated rule; simplest to implement and explain; surfaces uninitialized/floating paths aggressively, which is the point of a debug simulator |
+| Clock pin for `.R` outputs | Name convention (CP/CLK/CK); infer from equations | **Explicit `clock:` YAML key (FR-062d)** | Unambiguous and parser-validated; makes the 74574's named-clock convention machine-readable; additive per FR-066 |
 | API versioning | Unversioned routes | **`/api/v1/` prefix** | New endpoints (future transpiler) added without breaking clients (NFR-004) |
 
 ---
@@ -1301,6 +1428,8 @@ sim/
     js/engine/symbols.js    CREATE  schematic symbol geometry (§6.8a)
     js/engine/interaction.js CREATE tool FSM + event handling (§6.9)
     js/engine/hittest.js    CREATE  hit-testing (§6.9)
+    js/engine/galasm.js     CREATE  GALasm behavior compiler/evaluator (§6.13)
+    js/engine/sim.js        CREATE  slow simulator engine + scheduler (§6.13)
     js/chrome/toolbar.js    CREATE  toolbar (§6.11)
     js/chrome/palette.js    CREATE  palette tiles (§6.11)
     js/chrome/dialogs.js    CREATE  save/open dialogs (§6.11)
@@ -1377,6 +1506,11 @@ No files are modified (greenfield).
 | FR-065 | §6.4 | `api.go` |
 | FR-066 | §6.3, §7.1 | `yamlparse.go` |
 | FR-072, FR-073, FR-074 | §6.11 | `statusbar.js`, `index.html`, `style.css` |
+| FR-062d | §6.3, §6.13, §7.1, §7.6 | `yamlparse.go`, `types.go`, `sim.js` |
+| FR-075, FR-078, FR-079, FR-080 | §6.13 | `sim.js`, `galasm.js` |
+| FR-076, FR-087 | §6.9, §6.10, §6.11, §6.13 | `toolbar.js`, `store.js`, `interaction.js`, `sim.js`, `statusbar.js` |
+| FR-077, FR-081, FR-082, FR-083 | §6.8, §6.13 | `sim.js`, `canvas.js` |
+| FR-084, FR-085, FR-086 | §6.13 | `sim.js`, `builtins.js` |
 | NFR-001 | §6.1 | `main.go` |
 | NFR-002 | §6.12 | `api.js` |
 | NFR-003 | all | server `*.go`, `web/js/*` |
@@ -1418,6 +1552,25 @@ snap FR-041–043) are fully designed so they are additive when implemented.
   index (FR-039a).
 - **JS `store`:** every command's `apply`∘`revert` restores prior state; undo
   stack honors `UNDO_CAP ≥ 50` (NFR-006); redo cleared on new dispatch.
+- **JS `galasm` (FR-079):** physical-level polarity — for YAML pin `/E1` the
+  literal `/E1` is true when the pin reads LOW and `E1` when it reads HIGH;
+  `/Y0 = term` drives Y0 LOW when the term is true (the 74138 equations
+  reproduce the datasheet function table). Strict-U: `U AND 0 = U`, `U OR 1 = U`
+  (FR-077). `.T` with `.E` false → Z, `.E` of U → U. `.R` presents the register,
+  not the sum; `lhsLow` flips the presented value. `AR`/`SP` reset/set; `VCC`/
+  `GND` constants. Validation errors: two output equations for one signal; `.E`
+  before its output / multi-term / on a plain output; unknown signal; `.R`
+  without `clock:` is a `sim.js` preflight error.
+- **JS `sim` (FR-078, FR-081–FR-086):** net-resolution truth table — agreeing
+  strong drivers, 0-vs-1 conflict → U + flagged conductor, any-U → U, all-Z →
+  Z, weak pull-up/pull-down resolve Z and lose to strong, pull-up + pull-down
+  alone → conflict. Unit-delay ripple: an N-inverter chain settles in exactly N
+  steps (one level per step, FR-078). Registers latch only on 0→1 of the
+  declared clock net and the output changes one unit later. Combinational
+  design: settles then auto-terminates; a ring oscillator hits the 10,000-unit
+  bound and reports (FR-085). Clock waveform: low first half-period, rising
+  edge at period/2 (FR-084). Dispatch refused while `simulating` (FR-087);
+  `state.sim` retained at stop, cleared on next dispatch (FR-085).
 
 ### 11.2 Integration / end-to-end (Chrome + Firefox, manual or Playwright)
 - Startup blocks canvas until palette loads (FR-003); empty design named

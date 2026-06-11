@@ -18,6 +18,12 @@ export function createStore(initial = {}) {
     dirty: false,
     savePath: initial.savePath ?? null,
     designName: initial.designName ?? initial.design?.name ?? null,
+    // Transient simulation state (§6.10, §6.13), never persisted: while
+    // `simulating` the design is read-only (FR-087); `sim` is the engine's
+    // display view, retained after a run ends (FR-085) and cleared on the
+    // next design modification.
+    simulating: false,
+    sim: null,
   };
 
   const undoStack = [];
@@ -30,8 +36,26 @@ export function createStore(initial = {}) {
   const onError =
     initial.onError ?? ((err) => console.error("command failed:", err));
 
+  // onBlocked reports a mutation refused because a simulation is running
+  // (FR-087). The app routes this to the status-bar message tray.
+  const onBlocked =
+    initial.onBlocked ?? ((msg) => console.warn(msg));
+
   function notify() {
     for (const fn of subscribers) fn(state);
+  }
+
+  // blocked refuses design mutations while simulating (FR-087).
+  function blocked(what) {
+    if (!state.simulating) return false;
+    onBlocked(`${what} is disabled while simulating — press Stop first`);
+    return true;
+  }
+
+  // clearSimView drops a retained simulation display view on the first design
+  // modification after a run (FR-085, §6.13).
+  function clearSimView() {
+    state.sim = null;
   }
 
   return {
@@ -59,6 +83,8 @@ export function createStore(initial = {}) {
     },
 
     dispatch(cmd) {
+      if (blocked(cmd.label ?? "editing")) return;
+      clearSimView();
       try {
         cmd.apply(state.design);
       } catch (err) {
@@ -74,8 +100,10 @@ export function createStore(initial = {}) {
     },
 
     undo() {
+      if (blocked("undo")) return;
       const cmd = undoStack.pop();
       if (!cmd) return;
+      clearSimView();
       cmd.revert(state.design);
       redoStack.push(cmd);
       state.dirty = true;
@@ -83,8 +111,10 @@ export function createStore(initial = {}) {
     },
 
     redo() {
+      if (blocked("redo")) return;
       const cmd = redoStack.pop();
       if (!cmd) return;
+      clearSimView();
       cmd.apply(state.design);
       undoStack.push(cmd);
       state.dirty = true;
@@ -117,6 +147,20 @@ export function createStore(initial = {}) {
       state.dirty = false;
       undoStack.length = 0;
       redoStack.length = 0;
+      notify();
+    },
+
+    // setSimulating flips the read-only simulation mode (FR-087); the sim
+    // engine owns the transitions (§6.13). Notifies so chrome can react.
+    setSimulating(flag) {
+      state.simulating = flag;
+      notify();
+    },
+
+    // setSim publishes (or clears) the simulator's display view (§6.13); the
+    // view survives a stop (FR-085) until the next design modification.
+    setSim(view) {
+      state.sim = view;
       notify();
     },
 

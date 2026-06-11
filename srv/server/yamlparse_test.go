@@ -178,6 +178,8 @@ func TestParseComponentErrors(t *testing.T) {
 		{"subunit numunits mismatch", "type: T\nrendertype: subunit\nnumunits: 2\nrenderas: nand\npins:\n  - { name: A, side: left, unit: A, dir: in }\n  - { name: Y, side: right, unit: A, dir: out }\n", "distinct units"},
 		{"subunit two outputs", "type: T\nrendertype: subunit\nnumunits: 1\nrenderas: nand\npins:\n  - { name: A, side: left, unit: A, dir: in }\n  - { name: Y, side: right, unit: A, dir: out }\n  - { name: Z, side: right, unit: A, dir: out }\n", "exactly 1 output"},
 		{"mux wrong arity", "type: T\nrendertype: subunit\nnumunits: 1\nrenderas: mux2\npins:\n  - { name: I0, side: left, unit: A, dir: in }\n  - { name: S, side: top, unit: A, dir: in }\n  - { name: Y, side: right, unit: A, dir: out }\n", "data inputs"},
+		{"clock unknown pin", "type: T\nclock: CP\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "clock names unknown pin"},
+		{"clock non-input pin", "type: T\nclock: Q0\npins:\n  - { name: Q0, side: right, pos: 1, dir: out }\n", "must have dir in"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -189,6 +191,24 @@ func TestParseComponentErrors(t *testing.T) {
 				t.Fatalf("error = %q, want substring %q", err.Error(), tc.wantSub)
 			}
 		})
+	}
+}
+
+// A valid clock: key names an existing input pin and lands in Clock (FR-062d).
+func TestParseComponentClock(t *testing.T) {
+	got, err := ParseComponent(writeYAML(t, `
+type: "74574"
+clock: CP
+pins:
+  - { name: D0, side: left,  pos: 2, dir: in }
+  - { name: Q0, side: right, pos: 2, dir: tristate }
+  - { name: CP, side: top,   pos: 2, dir: in }
+`))
+	if err != nil {
+		t.Fatalf("ParseComponent: %v", err)
+	}
+	if got.Clock != "CP" {
+		t.Fatalf("Clock = %q, want %q", got.Clock, "CP")
 	}
 }
 

@@ -42,6 +42,9 @@ export function initProperties({ container, store }) {
       infoRow("Pins", String(td.pins.length)),
     );
 
+    // The panel is read-only while a simulation runs (FR-087).
+    const locked = store.state.simulating;
+
     // overrideRow builds one editable numeric field whose value shadows the
     // type default via inst.overrides[group][key] (FR-020a/FR-020b/FR-058).
     function overrideRow(group, key, label, def, unit) {
@@ -55,6 +58,7 @@ export function initProperties({ container, store }) {
       input.type = "number";
       input.value = String(overridden ? ov : def);
       input.title = `type default: ${def} ${unit}`;
+      input.disabled = locked;
       input.addEventListener("change", () => {
         const n = parseFloat(input.value);
         if (!Number.isFinite(n)) {
@@ -68,7 +72,7 @@ export function initProperties({ container, store }) {
 
       const reset = el("button", "prop-reset", "↺");
       reset.title = "Reset to type default";
-      reset.disabled = !overridden;
+      reset.disabled = !overridden || locked;
       reset.addEventListener("click", () =>
         store.dispatch(setOverrideCmd(inst.refdes, group, key, null)),
       );

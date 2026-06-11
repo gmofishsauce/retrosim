@@ -114,3 +114,33 @@ test("subscribe returns an unsubscribe function", () => {
   store.dispatch(addCmd(1));
   assert.equal(calls, 1);
 });
+
+test("dispatch/undo/redo are refused while simulating (FR-087)", () => {
+  const blocked = [];
+  const store = createStore({ design: { v: 0 }, onBlocked: (m) => blocked.push(m) });
+  store.dispatch(addCmd(5));
+
+  store.setSimulating(true);
+  store.dispatch(addCmd(1));
+  store.undo();
+  store.redo();
+  assert.equal(store.design.v, 5); // nothing mutated
+  assert.equal(blocked.length, 3); // each refusal reported
+
+  store.setSimulating(false);
+  store.undo();
+  assert.equal(store.design.v, 0); // editable again
+});
+
+test("sim view is retained at stop and cleared on the next modification (FR-085)", () => {
+  const store = newStore();
+  const view = { valueOfPin: () => 0 };
+
+  store.setSimulating(true);
+  store.setSim(view);
+  store.setSimulating(false); // stop: view deliberately retained
+  assert.equal(store.state.sim, view);
+
+  store.dispatch(addCmd(1)); // first design modification clears it
+  assert.equal(store.state.sim, null);
+});

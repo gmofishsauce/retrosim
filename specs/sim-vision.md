@@ -24,10 +24,16 @@ contain a Clock generator and implement sequential synchronous
 digital logic. In fact, a combinational-only simulation containing
 no clock generator can be considered a single clock cycle after
 which the simulation may update to display results and then terminate.
-Hey sequential simulation should run until stopped using the button
+Any sequential simulation should run until stopped using the button
 in the toolbar.
 
 This simulator must represent all four states: "1", "0", undefined
-(U), and high-impedence (signal node with no driver enabled, Z).
+(U), and high-impedence (3-state node with no driver enabled, Z).
 Anythign with a "Z" input generates an undefined output, and anything
 combined with an undefined value results in an undefined value.
+Note that the built-in indicator component has a visual state for
+undefined signals this would easily not be detectable in a real
+circuit but being able to display it is one of the virtues of
+simulation. And also note that all drivers of any three state
+node must always be a valuated in order to detect bus conflicts,
+which must be reported using some TBD visual mechanism.

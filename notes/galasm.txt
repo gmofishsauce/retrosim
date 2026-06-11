@@ -1,0 +1,40 @@
+  What's in galasm.js:
+  - compileBehavior(typeData) → {outputs, ar, sp} | null — tokenizer
+  (comment-stripping, the dual operator spellings */&, +/#, //!),
+  recursive-descent equation parser, compiled literals {signal, low} with low =
+  use-negation, outputs {signal, pin, kind, lhsLow, terms, enable}.
+  - X = VCC → terms: [[]] (empty product, always true); X = GND → terms: []
+  (empty sum, always false) — noted in the header so the chunk-3 evaluator
+  handles them naturally.
+  - All the language-rule validation from the manual's error appendix that
+  applies to the equations-only dialect, plus reserved-pin-name rejection.
+
+  Tests cover: physical-level polarity on a 74138-style equation, multi-line
+  sum-of-products, alternate operator spellings, the 74245 .T/.E idiom, the
+  74574 .R/.E idiom, AR/SP, VCC/GND, 22 error cases, and abbreviated versions of
+  the two real behavior blocks.
+
+
+Later:
+  The evaluator, appended to galasm.js:
+  - Exported value constants V0/V1/VU/VZ (shared with sim.js in chunk 4).
+  - evalTerm/evalSum — strict-U per FR-077: any U literal/term makes the result
+  U before AND/OR logic gets a say; empty product = true and empty sum = false
+  fall out naturally for VCC/GND.
+  - evalOutput(output, readNet, registers) — .E gating (false → Z, U → U
+  pessimistically, per the design), plain/.T drives sum⊕lhsLow, .R presents
+  register⊕lhsLow.
+  - updateRegisters(compiled, readNet, registers, clockRose) — on a rising edge
+  latches each .R sum (D input), then SP-set; AR is evaluated every call (async)
+  and overrides the edge; AR/SP of U force registers U. The contract that
+  sim.js calls this before evaluating outputs in a step is stated in the
+  comment.
+
+  One judgment call beyond the design's letter: SP = U at a clock edge forces
+  registers to U (the design specified AR=U → U; I applied the same pessimism to
+  SP). Flag if you'd rather SP=U leave the latched D value.
+
+  Tests: strict-U identities (U·0 = U, U+1 = U, Z reads as U), a 74138
+  enabled/disabled row check against the datasheet behavior, VCC/GND polarity,
+  .T gating, .R register presentation with an inverted /QB, and the full
+  edge/AR/SP latching sequence.

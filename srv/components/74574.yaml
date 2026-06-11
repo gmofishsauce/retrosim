@@ -4,6 +4,7 @@
 # https://assets.nexperia.com/documents/data-sheet/74HC_HCT574.pdf
 type: "74574"
 outline: [8, 12]
+clock: CP # clocks the .R registered outputs in the behavior block (FR-062d)
 
 pins: # number: physical DIP20/SO20 pin (datasheet Table 2)
   - { name: D0,  side: left,  pos: 2, dir: in,       number: 2 }

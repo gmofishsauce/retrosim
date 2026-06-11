@@ -247,6 +247,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
 
   // --- palette: click to arm PLACE, or drag a tile onto the canvas ---
   palette.addEventListener("click", (e) => {
+    if (store.state.simulating) return; // placement disabled (FR-087)
     const tile = e.target.closest(".palette-tile");
     if (!tile) return;
     const type = findType(tile.dataset.type);
@@ -259,6 +260,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   canvas.addEventListener("dragover", (e) => e.preventDefault());
   canvas.addEventListener("drop", (e) => {
     e.preventDefault();
+    if (store.state.simulating) return; // placement disabled (FR-087)
     const type = findType(e.dataTransfer.getData("text/plain"));
     if (!type) return;
     placeType = type;
@@ -279,6 +281,21 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     }
     if (e.button !== 0) return;
     const pt = canvasPoint(e);
+
+    // Simulation lock (FR-087): selection and pan only — no drags, no wire
+    // starts (pin hotspots included), no placement.
+    if (store.state.simulating) {
+      const world = worldOf(e);
+      const seg = hitSegment(store.design, world, 0.4);
+      if (seg) return select({ kind: "wire", id: seg.wire.id });
+      const busSeg = hitBusSegment(store.design, world, 0.4);
+      if (busSeg) return select({ kind: "bus", id: busSeg.bus.id });
+      const comp = hitComponent(store.design, world);
+      if (comp) return select({ kind: "component", refdes: comp.refdes });
+      select(null);
+      startPan(e);
+      return;
+    }
 
     if (store.state.tool === "place" && placeType) {
       placeAt(pt);
@@ -420,6 +437,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   // component. interaction.js builds the items; contextmenu.js renders them.
   canvas.addEventListener("contextmenu", (e) => {
     e.preventDefault();
+    if (store.state.simulating) return; // all menu actions mutate (FR-087)
     const world = worldOf(e);
     const items = [];
     const bend = hitBend(store.design, world, 0.5);
@@ -603,6 +621,10 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       else select(null);
       return;
     }
+
+    // Simulation lock (FR-087): Space (pan) and Escape stay; every shortcut
+    // below mutates the design or arms a mutating tool.
+    if (store.state.simulating) return;
 
     // Undo/redo: Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z or Ctrl/Cmd+Y (FR-024).
     const mod = e.metaKey || e.ctrlKey;

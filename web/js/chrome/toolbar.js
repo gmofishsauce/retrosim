@@ -8,7 +8,7 @@ const WIRE_ICON =
   '<svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true">' +
   '<line x1="5" y1="5" x2="17" y2="17" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>';
 
-export function initToolbar({ container, store, interaction, fileops }) {
+export function initToolbar({ container, store, interaction, fileops, sim }) {
   const tools = [
     { tool: "select", label: "Select" },
     { tool: "wire", icon: WIRE_ICON },
@@ -46,12 +46,23 @@ export function initToolbar({ container, store, interaction, fileops }) {
   container.append(undoBtn, redoBtn);
 
   container.appendChild(el("span", "tool-sep"));
+  const newBtn = button("New", "New design", () => fileops.newDesign());
+  const openBtn = button("Open", "Open design", () => fileops.open());
   container.append(
-    button("New", "New design", () => fileops.newDesign()),
-    button("Open", "Open design", () => fileops.open()),
+    newBtn,
+    openBtn,
     button("Save", "Save design", () => fileops.save()),
     button("Save As", "Save under a new name", () => fileops.save({ saveAs: true })),
   );
+
+  // Run/Stop toggles the slow simulator (FR-076); the label tracks
+  // store.state.simulating via refresh().
+  container.appendChild(el("span", "tool-sep"));
+  const runBtn = button("Run", "Run the simulation", () => {
+    if (sim.isRunning()) sim.stop();
+    else sim.run();
+  });
+  container.appendChild(runBtn);
 
   function el(tag, className) {
     const e = document.createElement(tag);
@@ -69,11 +80,18 @@ export function initToolbar({ container, store, interaction, fileops }) {
   }
 
   function refresh() {
+    const simming = store.state.simulating;
     for (const t of tools) {
       toolEls[t.tool].classList.toggle("active", store.state.tool === t.tool);
+      // Wire/Bus arm design mutations; Select stays usable (FR-087).
+      if (t.tool !== "select") toolEls[t.tool].disabled = simming;
     }
-    undoBtn.disabled = !store.canUndo();
-    redoBtn.disabled = !store.canRedo();
+    undoBtn.disabled = simming || !store.canUndo();
+    redoBtn.disabled = simming || !store.canRedo();
+    newBtn.disabled = simming;
+    openBtn.disabled = simming;
+    runBtn.textContent = simming ? "Stop" : "Run";
+    runBtn.title = simming ? "Stop the simulation" : "Run the simulation";
   }
 
   store.subscribe(refresh);

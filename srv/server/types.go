@@ -20,7 +20,8 @@ type ComponentType struct {
 	Pins       []Pin              `json:"pins"`                // FR-062, FR-062a
 	PinGroups  []PinGroup         `json:"pinGroups,omitempty"` // optional (FR-063)
 	Delays     map[string]float64 `json:"delays,omitempty"`    // optional propagation delays, ns (FR-064)
-	Behavior   string             `json:"behavior,omitempty"`  // opaque GALasm text, preserved & ignored (FR-066)
+	Behavior   string             `json:"behavior,omitempty"`  // GALasm text, captured verbatim (FR-066); evaluated client-side (FR-079)
+	Clock      string             `json:"clock,omitempty"`     // optional clock input pin for .R behavior outputs (FR-062d)
 }
 
 // Pin is one connection point on a component's outline (FR-062, FR-062a).

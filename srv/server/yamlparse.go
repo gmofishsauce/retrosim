@@ -49,6 +49,7 @@ type yamlComponent struct {
 	Groups     []yamlGroup        `yaml:"groups"`
 	Delays     map[string]float64 `yaml:"delays"`
 	Behavior   string             `yaml:"behavior"`
+	Clock      string             `yaml:"clock"`
 }
 
 type yamlPin struct {
@@ -136,6 +137,25 @@ func ParseComponent(path string) (ComponentType, error) {
 		})
 	}
 
+	// clock: must name an existing input pin (FR-062d). Whether the behavior
+	// actually requires a clock (uses .R) is checked client-side at Run time
+	// (§6.13) — the behavior block is opaque to the server (FR-066).
+	if doc.Clock != "" {
+		found := false
+		for _, p := range pins {
+			if p.Name == doc.Clock {
+				if p.Direction != "in" {
+					return ComponentType{}, fmt.Errorf("%s: clock pin %q must have dir in, got %q", path, doc.Clock, p.Direction)
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			return ComponentType{}, fmt.Errorf("%s: clock names unknown pin %q", path, doc.Clock)
+		}
+	}
+
 	var groups []PinGroup
 	groupNames := make(map[string]bool, len(doc.Groups))
 	for _, g := range doc.Groups {
@@ -166,6 +186,7 @@ func ParseComponent(path string) (ComponentType, error) {
 			PinGroups:  groups,
 			Delays:     doc.Delays,
 			Behavior:   doc.Behavior,
+			Clock:      doc.Clock,
 		}, nil
 	}
 
@@ -199,6 +220,7 @@ func ParseComponent(path string) (ComponentType, error) {
 		PinGroups:  groups,
 		Delays:     doc.Delays,
 		Behavior:   doc.Behavior,
+		Clock:      doc.Clock,
 	}, nil
 }
 

@@ -11,8 +11,10 @@ DONE    "LED"
 DONE    clock
    logic analyzer?
 DONE auto wire tool over bubbles
-status bar with message area and mode {select, wire, move, bus, others?}
+DONE status bar with message area and mode {select, wire, move, bus, others?}
 GALASM extension for memories
 module structure for sheets
 implement right-click centers.
 Get rid of pan and implement group select.
+Improve (expand) click area for wiring
+does change-name during initial save preserve the new name?

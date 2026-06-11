@@ -10,6 +10,7 @@ import {
 } from "../geometry.js";
 import { pinWorldPos, getVertex, vertexWorld } from "../model/design.js";
 import { drawSymbol, pinHasOwnBubble, pinLabelEdge } from "./symbols.js";
+import { V0, V1 } from "./galasm.js";
 
 // Pin bubble radius in grid units. The bubble is drawn tangent to the body edge
 // (center one radius outside the pin point), so its far edge is 2*PIN_RADIUS from
@@ -21,6 +22,8 @@ const PIN_RADIUS = 0.25;
 const INDICATOR_RADIUS = 0.85;
 const PIN_FONT = "10px system-ui, sans-serif";
 const LABEL_FONT = "bold 11px system-ui, sans-serif";
+// Conflicted nets stroke red while the conflict persists (FR-082).
+const CONFLICT_COLOR = "#b00020";
 
 // initCanvas attaches a renderer to a <canvas> bound to a store. Returns a small
 // controller (§6.8 interface).
@@ -52,14 +55,19 @@ export function initCanvas(canvasEl, store) {
     const h = canvasEl.clientHeight;
     const vp = store.state.viewport;
 
+    // Simulation display view (§6.13): present while running and retained
+    // after a run until the next design edit (FR-085).
+    const sim = store.state.sim;
+    const conflicts = sim ? sim.conflictedConductors() : null;
+
     ctx.save();
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, w, h);
     drawGrid(ctx, w, h, vp);
-    drawBuses(ctx, store.design, vp, store.state.selection);
-    drawWires(ctx, store.design, vp, store.state.selection);
+    drawBuses(ctx, store.design, vp, store.state.selection, conflicts);
+    drawWires(ctx, store.design, vp, store.state.selection, conflicts);
     drawVertices(ctx, store.design, vp);
-    drawComponents(ctx, store.design, vp, store.state.selection, store.state.hover);
+    drawComponents(ctx, store.design, vp, store.state.selection, store.state.hover, sim);
     if (preview) drawPreview(ctx, preview, vp);
     ctx.restore();
   }
@@ -107,13 +115,13 @@ function drawGrid(ctx, w, h, vp) {
   }
 }
 
-function drawComponents(ctx, design, vp, selection, hover) {
+function drawComponents(ctx, design, vp, selection, hover, sim) {
   if (!design) return;
   for (const inst of design.components) {
     const selected =
       selection?.kind === "component" && selection.refdes === inst.refdes;
     const hovered = hover === inst.refdes;
-    drawComponent(ctx, inst, vp, selected, hovered);
+    drawComponent(ctx, inst, vp, selected, hovered, sim);
   }
 }
 
@@ -125,8 +133,9 @@ function pathPointWorld(design, p) {
 }
 
 // drawWires draws wires as thin black polylines (FR-036), highlighting the
-// selected one.
-function drawWires(ctx, design, vp, selection) {
+// selected one; a conflicted conductor strokes red while the conflict
+// persists (FR-082).
+function drawWires(ctx, design, vp, selection, conflicts) {
   if (!design) return;
   for (const w of design.wires) {
     const pts = w.path.map((p) => worldToScreen(pathPointWorld(design, p), vp));
@@ -135,15 +144,17 @@ function drawWires(ctx, design, vp, selection) {
     ctx.moveTo(pts[0].x, pts[0].y);
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
     const selected = selection?.kind === "wire" && selection.id === w.id;
-    ctx.lineWidth = selected ? 2.5 : 1;
-    ctx.strokeStyle = selected ? "#4a90d9" : "#000";
+    const conflicted = conflicts?.has(w.id) && !selected;
+    ctx.lineWidth = selected ? 2.5 : conflicted ? 2 : 1;
+    ctx.strokeStyle = selected ? "#4a90d9" : conflicted ? CONFLICT_COLOR : "#000";
     ctx.stroke();
   }
 }
 
 // drawBuses draws buses as thick blue polylines with a "/n" width annotation
-// (FR-036/037), highlighting the selected one.
-function drawBuses(ctx, design, vp, selection) {
+// (FR-036/037), highlighting the selected one; a bus with a conflicted bit
+// strokes red while the conflict persists (FR-082).
+function drawBuses(ctx, design, vp, selection, conflicts) {
   if (!design) return;
   for (const b of design.buses) {
     const pts = b.path.map((p) => worldToScreen(pathPointWorld(design, p), vp));
@@ -152,8 +163,9 @@ function drawBuses(ctx, design, vp, selection) {
     ctx.moveTo(pts[0].x, pts[0].y);
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
     const selected = selection?.kind === "bus" && selection.id === b.id;
+    const conflicted = conflicts?.has(b.id) && !selected;
     ctx.lineWidth = selected ? 5 : 3;
-    ctx.strokeStyle = selected ? "#4a90d9" : "#1565c0";
+    ctx.strokeStyle = selected ? "#4a90d9" : conflicted ? CONFLICT_COLOR : "#1565c0";
     ctx.stroke();
 
     // Width annotation: a slash tick plus the bit count, at the first segment's
@@ -210,7 +222,7 @@ function drawVertices(ctx, design, vp) {
   }
 }
 
-function drawComponent(ctx, inst, vp, selected, hovered) {
+function drawComponent(ctx, inst, vp, selected, hovered, sim) {
   const td = inst.typeData;
   if (!td) return;
 
@@ -222,7 +234,7 @@ function drawComponent(ctx, inst, vp, selected, hovered) {
   if (td.renderType === "subunit") {
     drawSymbol(ctx, inst, vp);
   } else if (td.renderType === "indicator") {
-    drawIndicator(ctx, inst, vp, selected);
+    drawIndicator(ctx, inst, vp, selected, sim);
   } else if (td.renderType === "pullup") {
     drawPullup(ctx, inst, vp, selected);
   } else if (td.renderType === "pulldown") {
@@ -332,16 +344,16 @@ function drawComponent(ctx, inst, vp, selected, hovered) {
 }
 
 // drawIndicator renders the state-indicator bubble (FR-068). The indicator is
-// not stateful — it reflects the attached wire's state — and until the simulator
-// exists that is always "undriven": a medium-gray bubble with a black "?".
-// (Driven states: white bubble/black "1", black bubble/white "0".)
-function drawIndicator(ctx, inst, vp, selected) {
+// not stateful — it reflects the attached wire's simulated state when a sim
+// view is present (white bubble/black "1", black bubble/white "0"), and the
+// undriven gray "?" otherwise (U and Z both display as "?").
+function drawIndicator(ctx, inst, vp, selected, sim) {
   const td = inst.typeData;
   const cr = rotateOffset(td.width / 2, td.height / 2, inst.rotation);
   const center = worldToScreen({ x: inst.x + cr.x, y: inst.y + cr.y }, vp);
   const r = INDICATOR_RADIUS * scaleFor(vp);
 
-  const state = indicatorState(inst);
+  const state = indicatorState(inst, sim);
   ctx.beginPath();
   ctx.arc(center.x, center.y, r, 0, Math.PI * 2);
   ctx.fillStyle = state.bg;
@@ -357,9 +369,15 @@ function drawIndicator(ctx, inst, vp, selected) {
   ctx.fillText(state.glyph, center.x, center.y);
 }
 
-// indicatorState maps an indicator instance to its bubble colors and glyph. With
-// no simulator the wire state is always undriven (FR-068).
-function indicatorState(_inst) {
+// indicatorState maps an indicator instance to its bubble colors and glyph
+// (FR-068): the simulated value of its IN pin when a sim view is present,
+// else the undriven state. U and Z both render as the gray "?".
+function indicatorState(inst, sim) {
+  if (sim) {
+    const v = sim.valueOfPin(inst.refdes, "IN");
+    if (v === V1) return { bg: "#ffffff", fg: "#000", glyph: "1" };
+    if (v === V0) return { bg: "#000000", fg: "#fff", glyph: "0" };
+  }
   return { bg: "#9a9a9a", fg: "#000", glyph: "?" };
 }
 

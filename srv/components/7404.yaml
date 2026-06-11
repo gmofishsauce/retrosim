@@ -1,19 +1,31 @@
 # 7404 — hex inverter
+# hand edited by pdxjjb
 type: "7404"
 rendertype: subunit
 numunits: 6
 renderas: not
 
 pins:
-  - { name: 1A, side: left,  unit: A, dir: in }
-  - { name: 1Y, side: right, unit: A, dir: out }
-  - { name: 2A, side: left,  unit: B, dir: in }
-  - { name: 2Y, side: right, unit: B, dir: out }
-  - { name: 3A, side: left,  unit: C, dir: in }
-  - { name: 3Y, side: right, unit: C, dir: out }
-  - { name: 4A, side: left,  unit: D, dir: in }
-  - { name: 4Y, side: right, unit: D, dir: out }
-  - { name: 5A, side: left,  unit: E, dir: in }
-  - { name: 5Y, side: right, unit: E, dir: out }
-  - { name: 6A, side: left,  unit: F, dir: in }
-  - { name: 6Y, side: right, unit: F, dir: out }
+  - { name: 1A, side: left,  unit: A, dir: in, number:1 }
+  - { name: 1Y, side: right, unit: A, dir: out, number:2 }
+  - { name: 2A, side: left,  unit: B, dir: in, number 3 }
+  - { name: 2Y, side: right, unit: B, dir: out, number 4 }
+  - { name: 3A, side: left,  unit: C, dir: in, number 5 }
+  - { name: 3Y, side: right, unit: C, dir: out, number 6 }
+  - { name: 4A, side: left,  unit: D, dir: in, number 9 }
+  - { name: 4Y, side: right, unit: D, dir: out, number 8 }
+  - { name: 5A, side: left,  unit: E, dir: in, number 11 }
+  - { name: 5Y, side: right, unit: E, dir: out, number 10 }
+  - { name: 6A, side: left,  unit: F, dir: in, number 13 }
+  - { name: 6Y, side: right, unit: F, dir: out, number 12 }
+  #
+
+delays: # ns, 74HC04 typical at Vcc=4.5V, 25C
+  tpd: 9 # nA -> nY
+behavior: |
+  1Y = /1A
+  2Y = /2A
+  3Y = /3A
+  4Y = /4A
+  5Y = /5A
+  6Y = /6A

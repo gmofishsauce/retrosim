@@ -103,6 +103,13 @@ This is the hard part. Conventions (established with the stakeholder on the
   states this and names the clock pin and its active edge. Registered outputs
   are then `Qn.R = <data>` with an optional single-term `.E` enable for
   3-state outputs (see `srv/components/74574.yaml`).
+- **`clock:` keyword (REQUIRED for sequential parts, FR-062d)**: whenever the
+  behavior block uses `.R`, add a top-level `clock: <pin name>` key naming the
+  clock input pin (e.g. `clock: CP`) — it is how the simulator knows which pin
+  drives the registers. The named pin must exist in `pins:` with `dir: in`
+  (the parser validates this), and it is the same pin the behavior block's
+  header comment names under the named-clock convention above. Omit the key
+  entirely for purely combinational parts. Exemplar: `srv/components/74574.yaml`.
 
 ## 5. Validate
 

@@ -19,6 +19,24 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-11 — Slow (debug) simulator specified
+What: Specified the in-browser interpretive simulator (sim-vision.md): unit-delay
+timing (1 unit = 1 simulated ns, double-buffered), four-state values (0/1/U/Z,
+strict-U pessimism), client-side GALasm compilation/evaluation of YAML behavior
+blocks (.T/.R/.E, AR/SP, polarity XOR), all-drivers net resolution with weak
+pull-up/pull-down, bus conflicts shown as red nets + message-tray reports,
+Run/Stop toolbar button driving the "simulating" state tray, design read-only
+while running, combinational designs auto-terminate on settling (10,000-unit
+bound), sequential designs pace at period × speed simulated ns per real second.
+New YAML key `clock:` names the pin that clocks .R outputs (FR-062d). The fast
+C-generating engine remains out of scope.
+Why: First step of the simulation phase; design settled with the stakeholder
+(unit delay was the stakeholder's call over zero-delay/event-driven).
+Touches: FR-062d, FR-075–FR-087 (new, §3.19); FR-067a, FR-068 (rework);
+overview §1, constraints §7, glossary; design §6.3, §6.8, §6.9, §6.10, §6.11,
+§6.13 (new), §7.1, §7.6, §8, §9, §10, §11
+- new files (planned): web/js/engine/galasm.js, web/js/engine/sim.js
+
 ## 2026-06-11 — Built-in behaviors and settable properties (pre-simulator)
 What: Groundwork for the planned client-side interpretive simulator. Component
 types may declare named numeric properties (name/unit/default); per-instance
