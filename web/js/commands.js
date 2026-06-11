@@ -183,10 +183,10 @@ export function deleteComponent(refdes) {
   });
 }
 
-// setOverrideCmd sets or clears a per-instance propagation-delay override
-// (FR-020a/FR-058). It captures the prior value once so undo restores it (null
-// meaning "no override"). value === null clears the override.
-export function setOverrideCmd(refdes, key, value) {
+// setOverrideCmd sets or clears a per-instance override in `group` — "delays"
+// or "props" (FR-020a/FR-020b/FR-058). It captures the prior value once so undo
+// restores it (null meaning "no override"). value === null clears the override.
+export function setOverrideCmd(refdes, group, key, value) {
   let captured = false;
   let old = null;
   return {
@@ -194,14 +194,14 @@ export function setOverrideCmd(refdes, key, value) {
     apply(design) {
       const inst = findInstance(design, refdes);
       if (!captured) {
-        const cur = inst.overrides.delays?.[key];
+        const cur = inst.overrides[group]?.[key];
         old = cur === undefined ? null : cur;
         captured = true;
       }
-      setOverride(design, refdes, key, value);
+      setOverride(design, refdes, group, key, value);
     },
     revert(design) {
-      setOverride(design, refdes, key, old);
+      setOverride(design, refdes, group, key, old);
     },
   };
 }

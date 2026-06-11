@@ -1,7 +1,8 @@
-// Properties panel (§6.11, FR-020a): shows the selected component instance's
-// type data (read-only) and lets the user override its propagation delays for
-// that instance only (FR-058). Edits dispatch setOverrideCmd through the store;
-// the panel re-renders on every store notification.
+// Properties panel (§6.11, FR-020a, FR-020b): shows the selected component
+// instance's type data (read-only) and lets the user override its propagation
+// delays and declared properties for that instance only (FR-058). Edits
+// dispatch setOverrideCmd through the store; the panel re-renders on every
+// store notification.
 
 import { setOverrideCmd } from "../commands.js";
 
@@ -41,25 +42,19 @@ export function initProperties({ container, store }) {
       infoRow("Pins", String(td.pins.length)),
     );
 
-    container.appendChild(el("div", "prop-section", "Propagation delays (ns)"));
-    const delays = td.delays ?? {};
-    const keys = Object.keys(delays);
-    if (keys.length === 0) {
-      container.appendChild(el("div", "prop-empty", "none defined for this type"));
-      return;
-    }
-    for (const key of keys) {
-      const def = delays[key];
-      const ov = inst.overrides?.delays?.[key];
+    // overrideRow builds one editable numeric field whose value shadows the
+    // type default via inst.overrides[group][key] (FR-020a/FR-020b/FR-058).
+    function overrideRow(group, key, label, def, unit) {
+      const ov = inst.overrides?.[group]?.[key];
       const overridden = ov != null;
 
       const row = el("div", "prop-row" + (overridden ? " overridden" : ""));
-      row.appendChild(el("label", "prop-label", key));
+      row.appendChild(el("label", "prop-label", label));
 
       const input = el("input", "prop-input");
       input.type = "number";
       input.value = String(overridden ? ov : def);
-      input.title = `type default: ${def} ns`;
+      input.title = `type default: ${def} ${unit}`;
       input.addEventListener("change", () => {
         const n = parseFloat(input.value);
         if (!Number.isFinite(n)) {
@@ -67,7 +62,7 @@ export function initProperties({ container, store }) {
           return;
         }
         // Setting back to the type default clears the override.
-        store.dispatch(setOverrideCmd(inst.refdes, key, n === def ? null : n));
+        store.dispatch(setOverrideCmd(inst.refdes, group, key, n === def ? null : n));
       });
       row.appendChild(input);
 
@@ -75,11 +70,32 @@ export function initProperties({ container, store }) {
       reset.title = "Reset to type default";
       reset.disabled = !overridden;
       reset.addEventListener("click", () =>
-        store.dispatch(setOverrideCmd(inst.refdes, key, null)),
+        store.dispatch(setOverrideCmd(inst.refdes, group, key, null)),
       );
       row.appendChild(reset);
 
-      container.appendChild(row);
+      return row;
+    }
+
+    container.appendChild(el("div", "prop-section", "Propagation delays (ns)"));
+    const delays = td.delays ?? {};
+    const keys = Object.keys(delays);
+    if (keys.length === 0) {
+      container.appendChild(el("div", "prop-empty", "none defined for this type"));
+    }
+    for (const key of keys) {
+      container.appendChild(overrideRow("delays", key, key, delays[key], "ns"));
+    }
+
+    // Declared properties (FR-020b), e.g. the clock's period/speed (FR-071a).
+    const props = td.properties ?? [];
+    if (props.length > 0) {
+      container.appendChild(el("div", "prop-section", "Properties"));
+      for (const p of props) {
+        container.appendChild(
+          overrideRow("props", p.name, `${p.name} (${p.unit})`, p.default, p.unit),
+        );
+      }
     }
   }
 

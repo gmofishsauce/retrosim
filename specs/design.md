@@ -888,7 +888,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   2×2, one top-center pin, FR-070); **clock** (`"clock"`, 3×2, one right-center
   pin, FR-071). On placement these flow through the normal non-subunit
   `addInstance` path; `addInstance` assigns an `A-<n>` refdes (FR-011a) when
-  `type.builtin`. `drawComponent` has a render branch per built-in renderType: the
+  `type.builtin`. Each entry may declare `properties` (FR-020b): the clock
+  declares `period` (ns, default 100) and `speed` (Hz, default 1) per FR-071a;
+  the other built-ins declare none. The module also exports a `BEHAVIORS`
+  registry (FR-067a) mapping type name → behavior function — one stub per
+  built-in until the simulator design defines the call interface; functions stay
+  out of the type objects so `typeData` copies remain pure JSON (§7.1).
+  `drawComponent` has a render branch per built-in renderType: the
   indicator bubble (gray `?` until the simulator, then white `1`/black `0`), the
   pull-up two-headed arrow, the pull-down upside-down `T`, and the clock box. Pin
   name labels are suppressed for built-ins (the glyph owns the body); the refdes is
@@ -908,14 +914,29 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     promise the interaction FSM awaits before dispatching `snapBusGroup`. Does
     **not** filter by pin direction (electrical-rule checking is out of scope this
     phase — see §4.1, OQ-008/D2).
-- **Properties panel (`properties.js`)** — Satisfies FR-020a. A docked right-edge
-  panel showing the selected instance's copied type data (refdes, type, size, pin
-  count) read-only, plus one numeric field per `delays` entry for per-instance
-  propagation-delay overrides. Editing dispatches `setOverride` (model + command,
-  §6.9/§6.10); entering the type default or pressing the reset button clears the
-  override. Overrides live in `inst.overrides.delays` (§7.2) and persist via the
+- **Properties panel (`properties.js`)** — Satisfies FR-020a, FR-020b. A docked
+  right-edge panel showing the selected instance's copied type data (refdes,
+  type, size, pin count) read-only, plus one numeric field per `delays` entry
+  for per-instance propagation-delay overrides and — when the type declares
+  `properties` (FR-020b) — a "Properties" section with one numeric field per
+  declared property, labeled with its unit (e.g. `period (ns)`), prefilled with
+  the effective value (override or default). Both sections share the same
+  mechanics: editing dispatches `setOverride` (model + command, §6.9/§6.10),
+  generalized to take an override group (`delays` | `props`); entering the type
+  default or pressing the reset button clears the override. Overrides live in
+  `inst.overrides.delays` / `inst.overrides.props` (§7.2) and persist via the
   full-instance save (FR-058). The panel re-renders on every store notification,
   which is why selection now flows through `store.setSelection` (notifying).
+- **Status bar (`statusbar.js`)** — Satisfies FR-072, FR-073, FR-074. A flex row
+  docked at the bottom of the window (below the canvas, full width) holding two
+  trays styled with the palette tiles' raised drop-shadow look: a state tray at
+  the lower-left corner showing the program's operating state (text; always
+  `editing` until the simulator exists) and a message tray filling the remaining
+  width showing the most recent posted message (empty when none; long messages
+  truncate with an ellipsis). The module exports `setAppState(text)` and
+  `postMessage(text)` / `clearMessage()` for other modules to call; status text
+  is transient UI, not design state, so it does not flow through the store or
+  the undo stack.
 - **Context menu (`contextmenu.js`)** — Satisfies FR-033, FR-033b, FR-038, FR-037b,
   FR-033a, FR-018a. Right-click hit-tests the cursor (bend → wire → bus → component
   priority) and surfaces the matching actions: "Delete bend point" (on a bend);
@@ -958,6 +979,14 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 | `pinGroups` | `PinGroup[]` | optional (FR-063) |
 | `delays` | `map[string]number` | optional propagation delays, ns (FR-064) |
 | `behavior` | string | opaque GALasm text, preserved & ignored (FR-066) |
+| `properties` | `Property[]` | optional named numeric parameters (FR-020b): `{name, unit, default}`, e.g. the clock's `{name:"period", unit:"ns", default:100}` (FR-071a). Declared by built-ins in the client registry today; YAML types may declare them later. Serializable data only — per-instance values live in `overrides.props` (§7.2) |
+
+Built-in types additionally have a **behavior** (FR-067a): a client-JS function
+held in a registry in `builtins.js` keyed by type name — deliberately **not** a
+`ComponentType` field, because `typeData` is deep-copied into instances and
+saved as JSON (FR-057), which would drop or corrupt a function value. The
+simulator resolves a behavior from the registry by `inst.type` at run time; its
+signature is specified in the simulator design pass.
 
 Note: for `unit` components `width`/`height` are always **concrete in the parsed
 `ComponentType`** — resolution happens at parse time (§6.3) so the canvas, the
@@ -1039,7 +1068,7 @@ branch wire that meet at it share one position and cannot drift apart (A1).
 | `x`, `y` | int | grid coordinates of unrotated origin (FR-021) |
 | `rotation` | int | `0`\|`90`\|`180`\|`270` |
 | `typeData` | `ComponentType` | full copy at save time (FR-057) |
-| `overrides` | object | per-instance field overrides, e.g. `{"delays":{"tpd":12}}` (FR-058) |
+| `overrides` | object | per-instance field overrides, grouped by kind: `{"delays":{"tpd":12},"props":{"period":200}}` — `delays` shadows `typeData.delays` (FR-058), `props` shadows `typeData.properties` defaults (FR-020b) |
 
 **`PathPoint`** (FR-059, A1, A2) — a wire/bus `path` is an ordered list of these,
 length ≥ 2. The **first and last** path-points must be `node` points (the wire's
@@ -1277,6 +1306,7 @@ sim/
     js/chrome/dialogs.js    CREATE  save/open dialogs (§6.11)
     js/chrome/properties.js CREATE  per-instance overrides panel (§6.11)
     js/chrome/contextmenu.js CREATE right-click menu (§6.11)
+    js/chrome/statusbar.js  CREATE  bottom status bar trays (§6.11)
   components/
     74138.yaml              CREATE  (user-authored sample; §7.6)
     74xxx.yaml              CREATE  (additional user-authored samples)
@@ -1313,6 +1343,8 @@ No files are modified (greenfield).
 | FR-018b | §6.6, §6.11 | `model/design.js`, `dialogs.js`, `contextmenu.js` |
 | FR-019, FR-020 | §6.7, §6.9, §6.10 | `geometry.js`, `interaction.js`, `store.js` |
 | FR-020a | §6.11, §7.2 | `properties.js`, `store.js` |
+| FR-020b | §6.11, §7.1, §7.2 | `properties.js`, `builtins.js`, `model/design.js`, `commands.js` |
+| FR-067a, FR-071a | §6.11, §7.1 | `builtins.js` |
 | FR-021 | §6.7, §6.8 | `geometry.js`, `canvas.js` |
 | FR-022, FR-023 | §6.8, §6.11 | `canvas.js`, `toolbar.js` |
 | FR-024 | §6.10 | `store.js` |
@@ -1344,6 +1376,7 @@ No files are modified (greenfield).
 | FR-062c | §6.3, §6.8a, §7.1, §7.6 | `yamlparse.go`, `types.go`, `symbols.js` |
 | FR-065 | §6.4 | `api.go` |
 | FR-066 | §6.3, §7.1 | `yamlparse.go` |
+| FR-072, FR-073, FR-074 | §6.11 | `statusbar.js`, `index.html`, `style.css` |
 | NFR-001 | §6.1 | `main.go` |
 | NFR-002 | §6.12 | `api.js` |
 | NFR-003 | all | server `*.go`, `web/js/*` |

@@ -1,8 +1,11 @@
-// Client-side registry of built-in editor objects (FR-067–FR-071). These are
+// Client-side registry of built-in editor objects (FR-067–FR-071a). These are
 // synthetic ComponentTypes defined by the app rather than loaded from YAML; once
 // placed they flow through the normal instance machinery (§6.6). Each carries
 // `builtin: true` so addInstance assigns an A-<n> designator (FR-011a) and the
-// palette files it into the lower region (FR-006a).
+// palette files it into the lower region (FR-006a). A type may declare
+// `properties` (FR-020b) — named numeric parameters with per-instance override
+// values in `inst.overrides.props` — and every built-in has a behavior in the
+// BEHAVIORS registry below (FR-067a).
 
 // INDICATOR_ICON is the palette glyph for the state indicator: the same bubble it
 // shows on the canvas in its undriven state — medium gray with a black "?"
@@ -78,5 +81,24 @@ export const BUILTINS = [
     width: 3,
     height: 2,
     pins: [{ name: "OUT", side: "right", position: 1, direction: "out" }],
+    // FR-071a: the simulator advances period × speed simulated ns per real
+    // second (defaults: 100 simulated ns per real second).
+    properties: [
+      { name: "period", unit: "ns", default: 100 }, // simulated clock period
+      { name: "speed", unit: "Hz", default: 1 }, // human-perceived clock rate
+    ],
   },
 ];
+
+// BEHAVIORS maps built-in type name → behavior function (FR-067a). Behaviors
+// are code, not data: they live here — not on the ComponentType — because
+// typeData is deep-copied into instances and saved as JSON (FR-057, §7.1),
+// which would drop a function value. The simulator resolves a behavior by
+// `inst.type` at run time; the call interface is specified in the simulator
+// design pass, so these are stubs until then.
+export const BEHAVIORS = {
+  indicator() {},
+  pullup() {},
+  pulldown() {},
+  clock() {},
+};

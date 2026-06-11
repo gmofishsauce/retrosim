@@ -19,6 +19,28 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-11 — Built-in behaviors and settable properties (pre-simulator)
+What: Groundwork for the planned client-side interpretive simulator. Component
+types may declare named numeric properties (name/unit/default); per-instance
+values are edited in the existing properties panel and persisted as overrides
+under `overrides.props`. Each built-in registers a behavior — a client-JS
+function in a `BEHAVIORS` registry keyed by type name (never serialized; call
+interface deferred to the simulator design). The clock declares `period`
+(simulated ns, default 100) and `speed` (perceived Hz, default 1): the simulator
+will advance period × speed simulated ns per real second.
+Why: The simulator needs parameterizable built-ins (e.g. clock rate) before it
+can be designed and built.
+Touches: FR-020b/FR-067a/FR-071a (new); design §6.11, §7.1, §7.2, §10
+- changes web/js/builtins.js, properties.js, model/design.js, commands.js
+
+## 2026-06-11 — Status bar with state and message trays
+What: A full-width status bar docked at the bottom of the window, built from
+drop-shadowed trays: a state tray at the lower-left corner showing the program
+state ("editing" until the simulator exists) and a message tray filling the
+rest, showing the most recent posted message.
+Touches: FR-072/FR-073/FR-074 (new, §3.18); design §6.11, §9, §10
+- new file web/js/chrome/statusbar.js
+
 ## 2026-06-10 — galasmManual.txt §5: language vs. physical-capacity rule
 What: Behavior blocks adopt the GALasm language but not the GAL22V10's
 physical capacity (pin count, OLMC count, per-pin product-term limits) —

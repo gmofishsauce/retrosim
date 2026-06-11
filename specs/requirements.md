@@ -56,10 +56,12 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 ### 3.4a Built-in Objects
 
 - FR-067: The editor shall provide a set of built-in objects — entities with functionality built into the editor and eventual simulator, as distinct from 74-series parts loaded from YAML. Built-in objects are defined by the client application (not by YAML files), placed from the lower palette region (FR-006a), and once placed behave as component instances: selectable, movable, rotatable, deletable, persisted in the design, and wireable through their connection points. They are designated A-1, A-2, … (FR-011a).
+- FR-067a: Each built-in object shall be associated with a behavior: a simulation-semantics function implemented in client JavaScript and registered alongside the object's type definition (it is the built-in analogue of a 74-series part's GALasm equations, FR-066). The behavior's invocation interface and semantics shall be specified as part of the simulator design; this phase requires only that each built-in carries its behavior registration and any properties (FR-020b) that parameterize it. Behaviors are code, not data: they are resolved from the client registry by type name and are never serialized into saved designs.
 - FR-068: The first built-in object shall be a state indicator. It occupies a 2×2 grid-unit footprint and exposes a single input connection point on the bottom edge (centered) that may be wired to any wire or driven output. It is drawn as a round bubble sized to fit comfortably within the square. The indicator is not independently stateful: it always displays the state of the wire to which it is attached. It has three displayed states: undriven/undefined — a medium-gray bubble with a black "?"; logic 1 — a white bubble with a black "1"; logic 0 — a black bubble with a white "0". Until the simulator exists, the indicator always displays the undriven state. The same bubble image is used for the palette icon (FR-006a) and the placed object.
 - FR-069: A built-in logical pull-up object. It occupies a 2×2 grid-unit footprint and exposes a single connection point on the bottom edge (centered). It is drawn as a two-headed upward arrow: two upward-pointing chevrons (carats) stacked at the top of the symbol, with a vertical line bisecting the symbol that rises from the bottom connection point up to just below the chevrons without intersecting them. Its palette tooltip is "pull up". The same image is used for the palette icon and the placed object.
 - FR-070: A built-in logical pull-down object. It occupies a 2×2 grid-unit footprint and exposes a single connection point on the top edge (centered). It is drawn as an upside-down "T": a long vertical stem descending from the top connection point to a short horizontal bar near the bottom. Its palette tooltip is "pull down". The same image is used for the palette icon and the placed object.
 - FR-071: A built-in clock generator object. It is drawn as a box containing the letters "CLK" and exposes a single connection point on the right edge (centered). Its palette tooltip is "clock". The same image is used for the palette icon and the placed object.
+- FR-071a: The clock generator shall declare two properties (FR-020b): `period` — the simulated clock period in nanoseconds (default 100) — and `speed` — the human-perceived clock rate in hertz, i.e. cycles of the simulated clock per real second (default 1). The future simulator shall therefore advance period × speed nanoseconds of simulated time per real second: setting both to 1 simulates an unrealistically fast 1 ns per second; the defaults give 100 simulated ns per real second. The other built-ins (FR-068–FR-070) declare no properties.
 
 ### 3.5 Component Selection and Movement
 
@@ -77,6 +79,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 ### 3.6a Per-Instance Type Overrides
 
 - FR-020a: The user shall be able to view the type data of a selected component instance and override specific values (e.g., propagation delay) for that instance only. Overrides shall not affect other instances of the same type or the underlying YAML file, and shall be persisted per FR-058.
+- FR-020b: A component type may declare named numeric properties, each with a name, a unit, and a default value (e.g., the clock's period in ns, FR-071a). Per-instance property values shall be viewable and settable through the same per-instance override mechanism as other type data (FR-020a) and persisted per FR-058. Built-in objects (FR-067) declare their properties in the client-side registry; the YAML format may later declare properties for 74-series types without breaking the parser or the editor (consistent with FR-066).
 
 ### 3.7 The Canvas and Grid
 
@@ -176,6 +179,12 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 - FR-065: The server shall expose the parsed component library to the browser application via an API endpoint.
 - FR-066: The YAML file format shall accommodate later addition of behavioral logic equations (in GALasm form, per the vision statement) to a component definition without requiring changes to the editor or breaking the existing parser. The editor phase shall ignore any behavioral content present.
 
+### 3.18 Status Bar
+
+- FR-072: The application shall display a status bar docked along the bottom edge of the window, spanning its full width. The status bar is composed of trays: visually distinct regions, each rendered with a raised drop-shadow appearance (consistent with the palette tiles, FR-006), each reflecting some aspect of the program's state.
+- FR-073: A state tray at the lower-left corner of the status bar shall display the program's current operating state (e.g., "editing", "simulating"). Until the simulator exists, the only state is "editing".
+- FR-074: A message tray occupying the remaining width of the status bar (to the right of the state tray) shall display occasional messages posted by the application. The tray shows the most recent message; a message persists until replaced or cleared, and the tray is empty when no message is current.
+
 ---
 
 ## 4. Non-Functional Requirements
@@ -193,7 +202,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 
 | Entity | Key Attributes | Notes |
 |---|---|---|
-| ComponentType | name, outline dimensions (stated or derived from pins), pins (name, side, position, direction, optional pin number), pin groups, propagation delays, (future) behavioral equations | Loaded from YAML files at server startup |
+| ComponentType | name, outline dimensions (stated or derived from pins), pins (name, side, position, direction, optional pin number), pin groups, propagation delays, properties (name, unit, default — FR-020b), (future) behavioral equations | Loaded from YAML files at server startup; built-in types defined in the client (FR-067), with behaviors in a client registry (FR-067a) |
 | ComponentInstance | type name, U-number, canvas position (x, y), rotation (0/90/180/270), copied type data, per-instance overrides | One per placed component in a design |
 | Pin | name, side, position along side, direction (in/out/bidir/tristate), optional physical pin number | Defined in YAML file; carries exactly one bit; referenced by wires and buses |
 | PinGroup | name, ordered list of pins | Optional; declared in YAML file; enables bus snap-connect |

@@ -166,7 +166,7 @@ test("setOverrideCmd sets and clears a per-instance delay override; undo restore
   t.delays = { tpd: 7 };
   store.dispatch(placeComponent(t, 0, 0, 0)); // U1
 
-  store.dispatch(setOverrideCmd("U1", "tpd", 12));
+  store.dispatch(setOverrideCmd("U1", "delays", "tpd", 12));
   assert.equal(find(store.design, "U1").overrides.delays.tpd, 12);
 
   store.undo(); // back to no override
@@ -176,8 +176,31 @@ test("setOverrideCmd sets and clears a per-instance delay override; undo restore
   assert.equal(find(store.design, "U1").overrides.delays.tpd, 12);
 
   // Clearing the override removes the delays map again.
-  store.dispatch(setOverrideCmd("U1", "tpd", null));
+  store.dispatch(setOverrideCmd("U1", "delays", "tpd", null));
   assert.equal(find(store.design, "U1").overrides.delays, undefined);
   store.undo(); // undo clear -> override back
+  assert.equal(find(store.design, "U1").overrides.delays.tpd, 12);
+});
+
+test("setOverrideCmd handles the props group independently of delays (FR-020b)", () => {
+  const store = newStore();
+  const t = ty();
+  t.delays = { tpd: 7 };
+  t.properties = [{ name: "period", unit: "ns", default: 100 }];
+  store.dispatch(placeComponent(t, 0, 0, 0)); // U1
+
+  store.dispatch(setOverrideCmd("U1", "props", "period", 200));
+  assert.equal(find(store.design, "U1").overrides.props.period, 200);
+  assert.equal(find(store.design, "U1").overrides.delays, undefined);
+
+  store.undo();
+  assert.equal(find(store.design, "U1").overrides.props, undefined);
+  store.redo();
+  assert.equal(find(store.design, "U1").overrides.props.period, 200);
+
+  // Clearing props leaves a delays override untouched.
+  store.dispatch(setOverrideCmd("U1", "delays", "tpd", 12));
+  store.dispatch(setOverrideCmd("U1", "props", "period", null));
+  assert.equal(find(store.design, "U1").overrides.props, undefined);
   assert.equal(find(store.design, "U1").overrides.delays.tpd, 12);
 });

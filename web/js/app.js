@@ -12,6 +12,7 @@ import { initInteraction } from "./engine/interaction.js";
 import { initToolbar } from "./chrome/toolbar.js";
 import { makeFileOps } from "./chrome/fileops.js";
 import { initProperties } from "./chrome/properties.js";
+import { initStatusBar } from "./chrome/statusbar.js";
 
 // defaultDesignName builds "unnamed schematic <datetime>" from the local clock
 // (FR-004, FR-045).
@@ -106,6 +107,9 @@ async function main() {
   window.addEventListener("beforeunload", (e) => {
     if (store.state.dirty) e.preventDefault();
   });
+
+  // Status bar (FR-072..FR-074); the state tray opens as "editing" (FR-073).
+  initStatusBar(document.getElementById("statusbar"));
 
   const renderer = initCanvas(document.getElementById("canvas"), store);
 
