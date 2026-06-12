@@ -33,7 +33,7 @@ export function initCanvas(canvasEl, store) {
   const ctx = canvasEl.getContext("2d");
   let dirty = true;
   let frame = null;
-  let preview = null; // transient {from:{x,y}, to:{x,y}} in world coords
+  let preview = null; // transient {points: [{x,y}, …]} in world coords
 
   function requestRender() {
     dirty = true;
@@ -80,8 +80,8 @@ export function initCanvas(canvasEl, store) {
 
   return {
     requestRender,
-    setPreview(seg) {
-      preview = seg;
+    setPreview(p) {
+      preview = p;
       requestRender();
     },
     setViewport(viewport) {
@@ -209,18 +209,23 @@ function drawBuses(ctx, design, vp, selection, conflicts) {
   }
 }
 
-// drawPreview strokes the transient rubber-band line from the wire/bus source to
-// the cursor while a draw gesture is in progress (FR-027a).
-function drawPreview(ctx, seg, vp) {
-  const a = worldToScreen(seg.from, vp);
-  const b = worldToScreen(seg.to, vp);
+// drawPreview strokes the transient rubber-band polyline from the wire/bus
+// source toward the cursor while a draw gesture is in progress: the proposed
+// Manhattan route, or the straight fallback segment (FR-027a/FR-027c).
+function drawPreview(ctx, preview, vp) {
+  const pts = preview.points;
+  if (!pts || pts.length < 2) return;
   ctx.save();
   ctx.setLineDash([4, 4]);
   ctx.lineWidth = 1;
   ctx.strokeStyle = "#888";
   ctx.beginPath();
+  const a = worldToScreen(pts[0], vp);
   ctx.moveTo(a.x, a.y);
-  ctx.lineTo(b.x, b.y);
+  for (let i = 1; i < pts.length; i++) {
+    const p = worldToScreen(pts[i], vp);
+    ctx.lineTo(p.x, p.y);
+  }
   ctx.stroke();
   ctx.restore();
 }

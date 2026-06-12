@@ -260,12 +260,13 @@ export function refreshTypesCmd(library, onReport = () => {}) {
 }
 
 // addWireCmd adds a wire between two endpoint specs (FR-027/034). Branch specs
-// create a junction on a host wire first (FR-034b).
-export function addWireCmd(specA, specB) {
+// create a junction on a host wire first (FR-034b). bends carries the proposed
+// route's corners as initial bend points (FR-027c); empty for a straight wire.
+export function addWireCmd(specA, specB, bends = []) {
   return snapshotCommand("Add wire", (design) => {
     const a = resolveSpec(design, specA);
     const b = resolveSpec(design, specB);
-    addWire(design, a, b);
+    addWire(design, a, b, bends);
   });
 }
 
@@ -334,12 +335,13 @@ export function deleteBendCmd(wireId, bendIndex) {
 // snaps optionally group-snaps an endpoint to a component at creation time
 // (FR-041a/042): each entry is { end:"a"|"b", refdes, group }. Folding the snap
 // into this command keeps the whole drop gesture a single undo step; the snapshot
-// revert already covers the added groupConnection and adopted bit names.
-export function addBusCmd(specA, specB, width, snaps = []) {
+// revert already covers the added groupConnection and adopted bit names. bends
+// carries the proposed route's corners as initial bend points (FR-027c/FR-039).
+export function addBusCmd(specA, specB, width, snaps = [], bends = []) {
   return snapshotCommand("Add bus", (design) => {
     const a = resolveSpec(design, specA);
     const b = resolveSpec(design, specB);
-    const bus = addBus(design, a, b, width);
+    const bus = addBus(design, a, b, width, bends);
     for (const s of snaps) {
       const last = bus.path.length - 1;
       const vid = s.end === "a" ? bus.path[0].v : bus.path[last].v;

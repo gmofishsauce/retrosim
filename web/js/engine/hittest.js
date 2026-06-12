@@ -7,8 +7,9 @@ import { pinVisualPos, getVertex, vertexWorld } from "../model/design.js";
 
 // componentBBox returns the axis-aligned world bounding box of an instance's
 // outline. Since rotation is a multiple of 90 degrees the rotated rectangle is
-// still axis-aligned, so the bbox is exact.
-function componentBBox(inst) {
+// still axis-aligned, so the bbox is exact. Exported for the router (§6.9a),
+// which uses these same rectangles as its obstacles.
+export function componentBBox(inst) {
   const td = inst.typeData;
   const corners = [
     [0, 0],

@@ -126,8 +126,12 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 **Wire Drawing**
 - **FR-025** — A Wire tool; while active the cursor gives clear wire-mode feedback.
 - **FR-026** — Activate Wire tool via a toolbar button.
-- **FR-027** — Click source pin, then destination pin → a straight (rat's-nest)
-  line between them.
+- **FR-027** — Click source pin, then destination pin → a wire following the
+  proposed route (FR-027c) current at the destination click.
+- **FR-027c** — The proposed route is a Manhattan path avoiding component
+  bodies, escaping pins in their facing direction, preferring few corners;
+  best-effort, degrading to the straight rat's-nest line when no route is
+  found. On commit the route's corners become ordinary, editable bend points.
 - **FR-028** — After placing a wire, return to select mode.
 - **FR-029** — A wire/bus with exactly one connected endpoint is permitted.
 - **FR-030** — A wire/bus with no connected endpoints is auto-removed.
@@ -709,7 +713,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Draw order:** grid → buses (thick blue, width annotation `/n` at midpoint,
   FR-036/FR-037) → wires (thin black) → junction dots → components (outline, pin
   bubbles, pin labels) → upright text labels → selection highlight → tool preview
-  (rubber-band line, placement ghost).
+  (rubber-band polyline — the proposed route, §6.9a, a single segment in the
+  fallback case — and placement ghost).
 - **Component drawing dispatches on `renderType`:** a `unit` instance draws the
   rectangle path as today; a `subunit` instance draws its schematic symbol via the
   symbol module (§6.8a) — the gate/mux outline path plus an upright refdes (e.g.
@@ -783,7 +788,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 ### 6.9 JS: interaction / tool FSM (`web/js/engine/interaction.js`, `hittest.js`)
 - **Purpose:** translate pointer/keyboard events into Commands; hit-testing.
 - **Satisfies:** FR-008–FR-010, FR-016–FR-019, FR-025, FR-026–FR-034, FR-027b,
-  FR-038–FR-043a, FR-039a.
+  FR-027c (with §6.9a), FR-038–FR-043a, FR-039a.
 - **Tools / states:** `SELECT` (default, FR-004), `PLACE(type)` (transient, set by
   palette click), `WIRE`, `BUS`. The FSM also has transient sub-states for
   in-progress gestures (e.g., `WIRE_AWAIT_DEST`, `DRAGGING_BEND`,
@@ -805,7 +810,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | (palette) | drag tile→canvas drop | `PlaceComponent(t,@grid)` (FR-008) | SELECT |
   | WIRE | click pin | begin wire at pin | WIRE_AWAIT_DEST |
   | WIRE | click existing segment | begin **branch**: create/reuse a `junction` vertex at the nearest grid pt, splitting that point of the host path into a `node` (FR-034) | WIRE_AWAIT_DEST |
-  | WIRE_AWAIT_DEST | click pin/segment | `AddWire(a,b)` (FR-027, FR-034a/b) | SELECT (FR-028) |
+  | WIRE_AWAIT_DEST | click pin/segment | `AddWire(a,b,bends)` — `bends` = the current route proposal's corners (FR-027/FR-027c, FR-034a/b) | SELECT (FR-028) |
   | BUS | (same as WIRE) | `AddBus(...)` | SELECT (FR-040, A6) |
   | BUS | drag endpoint onto component | snap-connect (FR-041–043, §below) | SELECT |
   | BUS | drag endpoint onto another bus | join if equal width; else **reject** (FR-039a) | SELECT |
@@ -836,6 +841,18 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   bodies, so the click does not select/drag the component) arms `WIRE` from that
   pin — reusing the WIRE machinery (rubber-band preview, destination click,
   one-shot return to `SELECT` per FR-028) rather than duplicating it.
+- **Route preview (FR-027a/FR-027c):** while a wire/bus awaits its destination,
+  each mousemove calls the router (§6.9a) from the preview anchor
+  (`previewAnchorWorld`, the FR-013d visual attachment point) to the snapped
+  cursor and hands the resulting polyline to `renderer.setPreview`; a `null`
+  result falls back to the straight two-point segment, preserving the original
+  FR-027a behavior. The destination click passes the *current* proposal's
+  interior corners to `AddWire`/`AddBus` as initial bend points — thereafter
+  they are indistinguishable from manually inserted bends (FR-031–FR-033).
+  Breakout taps (FR-043a) are excluded: they keep the straight preview and the
+  two-point commit (`breakoutBitCmd` carries no bends), so their preview never
+  promises a route the commit won't produce. (Reworked 2026-06-12; supersedes
+  the straight-line-only preview and two-point commit.)
 - **Bus snap-connect (FR-041–FR-043a, A3/A7):** on dropping a bus endpoint over a
   component, compute the candidate pin groups whose **member pin count == bus
   width**, then branch on the candidate count:
@@ -863,6 +880,40 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   partial wire). A gesture that would create a zero-endpoint wire is discarded
   (FR-030). Pressing `Esc` cancels an in-progress gesture, restoring SELECT.
 - **Dependencies:** `geometry.js`, `hittest.js`, store, model.
+
+### 6.9a JS: Manhattan route proposal (`web/js/engine/router.js`)
+- **Purpose:** propose a Manhattan route for an in-progress wire/bus so the
+  rubber-band preview (and the committed path) loops around components instead
+  of rat's-nesting under them — notably when wiring a component's output back
+  to one of its own inputs.
+- **Satisfies:** FR-027c (and the routed forms of FR-027/FR-027a); NFR-005.
+- **Interface (pure function, no rendering or store state):**
+  - `proposeRoute(design, from, to) → [{x,y}, …] | null` — grid-unit world
+    coordinates from `from` to `to` inclusive; interior points are the proposed
+    corners. `from`/`to` carry an optional `escape` direction (a unit vector)
+    when the endpoint is a pin: the route's first/last step must leave the pin
+    in its facing direction, away from the component body (rotation-aware).
+    Returns `null` when no route is found — the caller falls back to the
+    straight line (FR-027c).
+- **Algorithm:** A* over grid cells restricted to the bounding box of
+  `from`/`to` plus a fixed padding (a few grid units, enough to loop around an
+  endpoint's own component). Obstacle cells are the rotated bounding outlines
+  of all component instances (the same rectangles hit-testing uses, §6.9), so
+  routes never pass under a body; the route's own endpoints are always
+  traversable so a pin on a body edge can escape. The cost function charges 1
+  per step plus a turn penalty (≈ 5 steps per corner) so the search prefers
+  few-bend routes over shortest-but-jagged ones; ties break toward the
+  destination. The search-space bound, not the design size, caps the work: a
+  few thousand cells per call, well under a millisecond — recomputing per
+  mousemove stays inside the rAF render budget (NFR-005).
+- **Post-processing:** collinear interior points are merged so the returned
+  polyline's interior points are exactly the corners that become bend points
+  on commit.
+- **Error handling:** never throws on unreachable targets or degenerate input
+  (zero-length, off-grid endpoints snapped by the caller); all failure modes
+  return `null`.
+- **Dependencies:** `geometry.js`, model (read-only). No store, no canvas —
+  fully unit-testable as pure geometry.
 
 ### 6.10 JS: store, commands, undo/redo (`web/js/store.js`)
 - **Purpose:** single source of truth and the only mutation path; undo/redo;
@@ -1461,6 +1512,7 @@ sim/
     js/engine/symbols.js    CREATE  schematic symbol geometry (§6.8a)
     js/engine/interaction.js CREATE tool FSM + event handling (§6.9)
     js/engine/hittest.js    CREATE  hit-testing (§6.9)
+    js/engine/router.js     CREATE  Manhattan route proposal (§6.9a)
     js/engine/galasm.js     CREATE  GALasm behavior compiler/evaluator (§6.13)
     js/engine/sim.js        CREATE  slow simulator engine + scheduler (§6.13)
     js/chrome/toolbar.js    CREATE  toolbar (§6.11)
@@ -1511,7 +1563,7 @@ No files are modified (greenfield).
 | FR-022, FR-023 | §6.8, §6.11 | `canvas.js`, `toolbar.js` |
 | FR-024 | §6.10 | `store.js` |
 | FR-025, FR-026 | §6.9, §6.11 | `interaction.js`, `toolbar.js` |
-| FR-027, FR-027b, FR-028 | §6.9, §6.10 | `interaction.js`, `store.js` |
+| FR-027, FR-027a, FR-027b, FR-027c, FR-028 | §6.9, §6.9a, §6.10 | `interaction.js`, `router.js`, `store.js` |
 | FR-029, FR-030 | §6.6 | `model/design.js` |
 | FR-031, FR-032, FR-033, FR-033a | §6.9, §6.10, §6.11 | `interaction.js`, `store.js`, `contextmenu.js` |
 | FR-034, FR-034a, FR-034b | §6.6, §6.9 | `model/netlist.js`, `interaction.js` |
@@ -1594,6 +1646,14 @@ snap FR-041–043) are fully designed so they are additive when implemented.
   change skips; subunit siblings get per-unit filtered copies; undo restores
   every prior `{typeData, overrides}` exactly; unknown type names are left
   untouched.
+- **JS `router.proposeRoute` (FR-027c):** open field → straight or single-L
+  route with ≤ 1 corner; obstacle between endpoints → route detours around it,
+  never crossing a component outline; output-to-input of the same component →
+  route loops around the body; pin escape — first/last step follows the
+  endpoint's `escape` direction for all four rotations; collinear interior
+  points merged (returned interior points are corners only); boxed-in endpoint
+  → `null` (fallback); turn penalty prefers a longer 2-corner route over a
+  shorter many-corner one.
 - **JS `galasm` (FR-079):** physical-level polarity — for YAML pin `/E1` the
   literal `/E1` is true when the pin reads LOW and `E1` when it reads HIGH;
   `/Y0 = term` drives Y0 LOW when the term is true (the 74138 equations

@@ -3,7 +3,7 @@
 // model directly except for transient drag previews; committed changes go
 // through the store as Commands.
 
-import { snapToGrid, screenToWorld, scaleFor, zoomAbout } from "../geometry.js";
+import { snapToGrid, screenToWorld, scaleFor, zoomAbout, rotateOffset } from "../geometry.js";
 import {
   hitComponent,
   hitPin,
@@ -11,6 +11,7 @@ import {
   hitBend,
   hitBusSegment,
 } from "./hittest.js";
+import { proposeRoute } from "./router.js";
 import {
   placeComponent,
   moveComponent,
@@ -32,6 +33,8 @@ import {
   moveBend,
   matchingGroups,
   pinVisualPos,
+  pinWorldPos,
+  sideOutward,
   packageSiblings,
 } from "../model/design.js";
 import {
@@ -121,6 +124,70 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       return inst ? pinVisualPos(inst, src.pin) : null;
     }
     return { x: src.x, y: src.y };
+  }
+
+  // pinEscapeWorld returns a pin's outward facing unit vector (FR-027c pin
+  // escape): the pin side's outward normal, instance-rotation aware. Null when
+  // the side has no outward direction.
+  function pinEscapeWorld(inst, pinName) {
+    const pin = inst.typeData.pins.find((p) => p.name === pinName);
+    const out = sideOutward(pin?.side);
+    if (!out.x && !out.y) return null;
+    return rotateOffset(out.x, out.y, inst.rotation);
+  }
+
+  // routerEndpoint turns a wire endpoint spec into a router endpoint (§6.9a):
+  // a pin's on-grid point plus its escape direction; anything else its plain
+  // world point.
+  function routerEndpoint(src) {
+    if (src.kind === "pin") {
+      const inst = store.design.components.find((c) => c.refdes === src.refdes);
+      if (!inst) return null;
+      const w = pinWorldPos(inst, src.pin);
+      const escape = pinEscapeWorld(inst, src.pin);
+      return escape ? { ...w, escape } : w;
+    }
+    return { x: src.x, y: src.y };
+  }
+
+  // previewRoute computes the proposed-route polyline for the in-progress
+  // wire/bus (FR-027a/FR-027c): from the source (with its pin escape) to the
+  // snapped cursor — or to the hovered destination pin, escape and all, so the
+  // preview matches what a click there would commit. Falls back to the
+  // straight rubber band when the router finds no route. Endpoint *drawing*
+  // positions use the FR-013d visual attachment points (the route itself runs
+  // on grid points).
+  function previewRoute(anchor, g, world) {
+    // Breakout taps (FR-043a) keep the straight preview: they also commit
+    // straight (breakoutBitCmd carries no bends), and the preview must not
+    // promise a route the commit won't produce (§6.9).
+    if (wireSource.kind === "breakout") return [anchor, { x: g.x, y: g.y }];
+    const from = routerEndpoint(wireSource);
+    let to = { x: g.x, y: g.y };
+    let toVisual = null;
+    const ph = hitPin(store.design, world);
+    if (ph) {
+      const inst = store.design.components.find((c) => c.refdes === ph.refdes);
+      if (inst) {
+        to = routerEndpoint({ kind: "pin", refdes: ph.refdes, pin: ph.pin });
+        toVisual = pinVisualPos(inst, ph.pin);
+      }
+    }
+    const route = from && to ? proposeRoute(store.design, from, to) : null;
+    if (!route) return [anchor, { x: g.x, y: g.y }];
+    route[0] = anchor;
+    if (toVisual) route[route.length - 1] = toVisual;
+    return route;
+  }
+
+  // routeBends returns the proposed route's interior corners for a committing
+  // wire/bus, which become its initial bend points (FR-027c) — or [] for the
+  // straight two-point fallback.
+  function routeBends(srcSpec, dstSpec) {
+    const from = routerEndpoint(srcSpec);
+    const to = routerEndpoint(dstSpec);
+    const route = from && to ? proposeRoute(store.design, from, to) : null;
+    return route ? route.slice(1, -1) : [];
   }
 
   function select(sel) {
@@ -222,7 +289,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       }
       if (snap) snaps.push({ end, ...snap });
     }
-    store.dispatch(addBusCmd(a.spec, b.spec, width, snaps));
+    store.dispatch(addBusCmd(a.spec, b.spec, width, snaps, routeBends(a.spec, b.spec)));
   }
 
   // startBreakout begins a single-bit tap off a bus (FR-043a): it picks the bit
@@ -358,7 +425,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       ) {
         return;
       }
-      store.dispatch(addWireCmd(wireSource, target));
+      store.dispatch(addWireCmd(wireSource, target, routeBends(wireSource, target)));
       setTool("select"); // one-shot (FR-028)
       return;
     }
@@ -511,8 +578,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     if (wireSource) {
       const anchor = previewAnchorWorld(wireSource);
       if (anchor) {
-        const g = gridOf(e);
-        renderer.setPreview({ from: anchor, to: { x: g.x, y: g.y } });
+        renderer.setPreview({ points: previewRoute(anchor, gridOf(e), worldOf(e)) });
       }
       return;
     }

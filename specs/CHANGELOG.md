@@ -19,6 +19,19 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-12 — Manhattan route proposal for wire/bus drawing
+What: While drawing a wire/bus, the rubber-band preview shows a proposed
+Manhattan route (A* around component outlines, pin-escape in the pin's facing
+direction, few-corner preference) instead of a straight line; the committed
+path follows the proposal, its corners becoming ordinary editable bend points.
+Best-effort: straight-line preview and two-point commit remain as the fallback
+when no route is found. Breakout taps (FR-043a) are excluded and keep the
+straight preview and commit.
+Why: A straight rat's-nest wire from a component's output back to its own
+input runs under the body, where it cannot be grabbed for manual rerouting.
+Touches: FR-027, FR-027a (reworked), FR-027c (new); design §2.1, §6.8, §6.9,
+§6.9a (new), §9, §10, §11.1
+
 ## 2026-06-11 — "Refresh Types" action: re-copy library type data into instances
 What: A toolbar Refresh action re-copies type data from the loaded component
 library into placed instances (one undoable command), preserving refdes,

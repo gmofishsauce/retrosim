@@ -308,12 +308,14 @@ function resolveEndpoint(design, spec) {
   }
 }
 
-// addWire creates a straight wire between two endpoints (FR-027). Its path is two
-// node points referencing the endpoint vertices (A2); bends are added later.
-// A degenerate wire whose endpoints resolve to the same vertex (e.g. a pin to
-// itself) is rejected: it would be invisible, un-hit-testable, and would inflate
-// that pin's net membership (§6.6).
-export function addWire(design, a, b) {
+// addWire creates a wire between two endpoints (FR-027). Its path is two node
+// points referencing the endpoint vertices (A2), with any initial interior
+// bends between them — the proposed route's corners (FR-027c), ordinary bend
+// points thereafter; more are added later by editing. A degenerate wire whose
+// endpoints resolve to the same vertex (e.g. a pin to itself) is rejected: it
+// would be invisible, un-hit-testable, and would inflate that pin's net
+// membership (§6.6).
+export function addWire(design, a, b, bends = []) {
   const va = resolveEndpoint(design, a);
   const vb = resolveEndpoint(design, b);
   if (va === vb) throw new Error("wire endpoints resolve to the same vertex");
@@ -321,6 +323,7 @@ export function addWire(design, a, b) {
     id: "w" + design.nextWireId++,
     path: [
       { t: "node", v: va.id },
+      ...bends.map((p) => ({ t: "bend", x: p.x, y: p.y })),
       { t: "node", v: vb.id },
     ],
   };
@@ -331,7 +334,7 @@ export function addWire(design, a, b) {
 // addBus creates a bus (a multi-bit conductor) between two endpoints (FR-035).
 // A bus carries its width and, later, snap-connection metadata and per-bit names
 // (FR-037/060). Path and endpoint handling mirror wires.
-export function addBus(design, a, b, width) {
+export function addBus(design, a, b, width, bends = []) {
   const va = resolveEndpoint(design, a);
   const vb = resolveEndpoint(design, b);
   if (va === vb) throw new Error("bus endpoints resolve to the same vertex");
@@ -339,6 +342,7 @@ export function addBus(design, a, b, width) {
     id: "b" + design.nextBusId++,
     path: [
       { t: "node", v: va.id },
+      ...bends.map((p) => ({ t: "bend", x: p.x, y: p.y })),
       { t: "node", v: vb.id },
     ],
     width,
