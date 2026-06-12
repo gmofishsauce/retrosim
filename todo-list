@@ -1,5 +1,5 @@
 DONE subunit rendering
-slow simulator
+DONE slow simulator
 logic families with per-family delay
 fast sim gen
 DONE split tool palette
@@ -12,11 +12,11 @@ DONE    clock
    logic analyzer?
 DONE auto wire tool over bubbles
 DONE status bar with message area and mode {select, wire, move, bus, others?}
-GALASM extension for memories
+Galasm extension for memories
 module structure for sheets
 implement right-click centers.
 Get rid of pan and implement group select.
-Improve (expand) click area for wiring
-does change-name during initial save preserve the new name?
-disconnect and rconnect handling
+DONE Improve (expand) click area for wiring
+DONE does change-name during initial save preserve the new name?
+DONE disconnect and rconnect handling
 
