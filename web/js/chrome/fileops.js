@@ -40,8 +40,12 @@ export function makeFileOps({ store, dataDir, defaultName }) {
       path = res.path;
     }
     try {
-      await apiSave(path, serializeDesign(store.design));
-      store.markSaved(path);
+      // The design adopts the chosen file's base name (FR-047a): override the
+      // serialized name so the file matches, and update the store only after
+      // the write succeeds.
+      const name = path.split(/[\\/]/).pop().replace(/\.json$/i, "");
+      await apiSave(path, { ...serializeDesign(store.design), name });
+      store.markSaved(path, name);
     } catch (e) {
       toast("Save failed: " + e.message);
     }

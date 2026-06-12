@@ -165,10 +165,15 @@ export function createStore(initial = {}) {
       notify();
     },
 
-    // markSaved clears the dirty flag after a successful save, recording the path
-    // if given (FR-046/048/049a).
-    markSaved(path) {
+    // markSaved clears the dirty flag after a successful save, recording the
+    // path and, when given, the design's new name — a save adopts the chosen
+    // file's base name (FR-047a) — then notifies (FR-046/048/049a).
+    markSaved(path, name) {
       if (path !== undefined) state.savePath = path;
+      if (name !== undefined) {
+        state.designName = name;
+        if (state.design) state.design.name = name;
+      }
       state.dirty = false;
       notify();
     },

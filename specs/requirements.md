@@ -147,6 +147,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 
 - FR-046: The user shall be able to save the current design via a Save action.
 - FR-047: The first time a design is saved, the system shall prompt the user to confirm or change the filename, pre-filling the default name.
+- FR-047a: A design saved under a file name differing from its current name shall adopt the file's base name (the file name without its `.json` extension) as the design name: the name written inside the saved file, the displayed design name, and the name pre-filled by future save prompts shall all reflect it. Applies to the first save (FR-047) and to Save As (FR-049); subsequent saves continue to the same file without prompting (FR-048).
 - FR-048: Subsequent saves of the same design shall overwrite the existing file without prompting.
 - FR-049: The user shall be able to invoke Save As at any time to save the design under a new name.
 - FR-049a: The application shall indicate when the current design has unsaved changes, and shall warn the user before discarding unsaved changes (e.g., on New or Open).

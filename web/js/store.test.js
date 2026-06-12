@@ -105,6 +105,20 @@ test("markSaved records the path and clears dirty", () => {
   assert.equal(store.state.dirty, false);
 });
 
+test("markSaved adopts the saved file's base name (FR-047a)", () => {
+  const store = createStore({ design: { v: 0, name: "old" }, designName: "old" });
+  store.dispatch(addCmd(1));
+  store.markSaved("/designs/alu.json", "alu");
+  assert.equal(store.state.savePath, "/designs/alu.json");
+  assert.equal(store.state.designName, "alu");
+  assert.equal(store.design.name, "alu");
+  assert.equal(store.state.dirty, false);
+  // Without a name, the existing name is untouched.
+  store.dispatch(addCmd(1));
+  store.markSaved("/designs/alu.json");
+  assert.equal(store.state.designName, "alu");
+});
+
 test("subscribe returns an unsubscribe function", () => {
   const store = newStore();
   let calls = 0;

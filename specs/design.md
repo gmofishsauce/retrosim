@@ -193,6 +193,9 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-046** — Save the current design.
 - **FR-047** — On first save, prompt to confirm/change the filename (prefilled
   with the default name).
+- **FR-047a** — A save under a different file name renames the design to the
+  file's base name: shown in the toolbar, written inside the file, and
+  pre-filled by future prompts.
 - **FR-048** — Subsequent saves overwrite without prompting.
 - **FR-049** — Save As at any time, to a new name.
 - **FR-049a** — Indicate unsaved changes; warn before discarding them (New/Open).
@@ -1026,6 +1029,10 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   - *Save* — on first save (no `savePath`) prompt with name prefilled to the
     design name (FR-047); the dialog uses `/api/v1/files` to navigate directories
     and choose a location (FR-051); subsequent saves skip the prompt (FR-048).
+    The design adopts the chosen file's base name (FR-047a): fileops overrides
+    `name` in the serialized payload (so the file matches) and
+    `store.markSaved(path, name)` updates `design.name` and the displayed
+    `designName` after the write succeeds.
   - *Open* — server-assisted directory navigation via `/api/v1/files` (FR-052/
     FR-053). **Fallback (FR-054):** if navigation is judged impractical, render a
     recent-files list persisted in `localStorage`. Keep the recent-files code
@@ -1648,7 +1655,7 @@ No files are modified (greenfield).
 | FR-042, FR-043 | §6.9, §7.2 | `interaction.js`, `model/design.js` |
 | FR-043a | §6.6, §6.9, §7.1a | `interaction.js`, `model/design.js`, `model/netlist.js` |
 | FR-044, FR-045 | §6.10, §6.12 | `store.js`, `app.js` |
-| FR-046, FR-047, FR-048, FR-049 | §6.5, §6.11 | `storage.go`, `dialogs.js` |
+| FR-046, FR-047, FR-047a, FR-048, FR-049 | §6.5, §6.10, §6.11 | `storage.go`, `dialogs.js`, `fileops.js`, `store.js` |
 | FR-049a | §6.10, §6.11 | `store.js`, `dialogs.js` |
 | FR-050, FR-051 | §6.5, §6.11 | `paths.go`, `storage.go`, `dialogs.js` |
 | FR-052, FR-053, FR-054 | §6.4, §6.5, §6.11 | `api.go`, `storage.go`, `dialogs.js` |
@@ -1712,7 +1719,9 @@ snap FR-041–043) are fully designed so they are additive when implemented.
   net (FR-043a); two equal-width buses joined at a no-`bit` junction align lanes by
   index (FR-039a).
 - **JS `store`:** every command's `apply`∘`revert` restores prior state; undo
-  stack honors `UNDO_CAP ≥ 50` (NFR-006); redo cleared on new dispatch.
+  stack honors `UNDO_CAP ≥ 50` (NFR-006); redo cleared on new dispatch;
+  `markSaved(path, name)` records the path, adopts the saved file's base name
+  into `design.name`/`designName` (FR-047a), and clears `dirty`.
 - **JS `refreshInstance`/`RefreshTypes` (FR-088):** refresh replaces `typeData`
   (new behavior/delays/properties reach the instance) while preserving refdes,
   position, rotation, and overrides; an override key absent from the new

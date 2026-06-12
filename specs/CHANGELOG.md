@@ -19,6 +19,15 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-12 — Saving under a new file name renames the design
+What: A save whose chosen file name differs from the design's name renames the
+design to the file's base name (sans .json): toolbar label, the name written
+inside the file, and future save prompts all follow; subsequent saves still go
+to the recorded path without prompting.
+Why: Changing the proposed name in the first-save dialog left the toolbar
+showing the stale default name and wrote that stale name inside the file.
+Touches: FR-047a (new); design §2.1, §6.10, §6.11, §10, §11.1
+
 ## 2026-06-12 — Default save location moves to the user's Documents folder
 What: Designs default to `wut4-editor` inside the user's documents directory
 (macOS/Linux ~/Documents/wut4-editor, Windows %USERPROFILE%\Documents\
