@@ -19,6 +19,14 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-12 — Default save location moves to the user's Documents folder
+What: Designs default to `wut4-editor` inside the user's documents directory
+(macOS/Linux ~/Documents/wut4-editor, Windows %USERPROFILE%\Documents\
+wut4-editor), created if absent; `AppDataDir` becomes `DesignsDir`.
+Why: Storing designs in hidden platform app-data folders was a stakeholder
+misunderstanding — designs are user documents. Resolves OQ-006.
+Touches: FR-050 (reworked), OQ-006 (resolved); design §2.1, §6.5, §11.1
+
 ## 2026-06-12 — Power-on reset built-in; selective pessimism replaces strict-U
 What: New "power-on reset" built-in (FR-071b): R/active-low /R outputs
 asserted for the first `cycles` clock cycles of a run (property, default 3;

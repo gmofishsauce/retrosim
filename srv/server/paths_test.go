@@ -2,7 +2,7 @@ package server
 
 import "testing"
 
-func TestAppDataDir(t *testing.T) {
+func TestDesignsDir(t *testing.T) {
 	env := func(m map[string]string) func(string) string {
 		return func(k string) string { return m[k] }
 	}
@@ -19,37 +19,22 @@ func TestAppDataDir(t *testing.T) {
 			name: "darwin",
 			goos: "darwin",
 			home: "/Users/jeff",
-			want: "/Users/jeff/Library/Application Support/wut4-editor",
+			want: "/Users/jeff/Documents/wut4-editor",
 		},
 		{
-			name:   "linux without XDG_DATA_HOME",
-			goos:   "linux",
-			getenv: env(nil),
-			home:   "/home/jeff",
-			want:   "/home/jeff/.local/share/wut4-editor",
+			name: "linux",
+			goos: "linux",
+			home: "/home/jeff",
+			want: "/home/jeff/Documents/wut4-editor",
 		},
 		{
-			name:   "linux with absolute XDG_DATA_HOME",
-			goos:   "linux",
-			getenv: env(map[string]string{"XDG_DATA_HOME": "/custom/data"}),
-			home:   "/home/jeff",
-			want:   "/custom/data/wut4-editor",
-		},
-		{
-			name:   "linux ignores relative XDG_DATA_HOME",
-			goos:   "linux",
-			getenv: env(map[string]string{"XDG_DATA_HOME": "relative/data"}),
-			home:   "/home/jeff",
-			want:   "/home/jeff/.local/share/wut4-editor",
-		},
-		{
-			name:   "windows with APPDATA",
+			name:   "windows with USERPROFILE",
 			goos:   "windows",
-			getenv: env(map[string]string{"APPDATA": `C:\Users\jeff\AppData\Roaming`}),
-			want:   `C:\Users\jeff\AppData\Roaming\wut4-editor`,
+			getenv: env(map[string]string{"USERPROFILE": `C:\Users\jeff`}),
+			want:   `C:\Users\jeff\Documents\wut4-editor`,
 		},
 		{
-			name:    "windows without APPDATA errors",
+			name:    "windows without USERPROFILE errors",
 			goos:    "windows",
 			getenv:  env(nil),
 			wantErr: true,
@@ -62,18 +47,18 @@ func TestAppDataDir(t *testing.T) {
 			if getenv == nil {
 				getenv = func(string) string { return "" }
 			}
-			got, err := appDataDir(tc.goos, getenv, tc.home)
+			got, err := designsDir(tc.goos, getenv, tc.home)
 			if tc.wantErr {
 				if err == nil {
-					t.Fatalf("appDataDir() error = nil, want error")
+					t.Fatalf("designsDir() error = nil, want error")
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("appDataDir() unexpected error: %v", err)
+				t.Fatalf("designsDir() unexpected error: %v", err)
 			}
 			if got != tc.want {
-				t.Fatalf("appDataDir() = %q, want %q", got, tc.want)
+				t.Fatalf("designsDir() = %q, want %q", got, tc.want)
 			}
 		})
 	}

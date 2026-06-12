@@ -25,7 +25,7 @@ func main() {
 	}
 
 	if *dataDir == "" {
-		d, err := server.AppDataDir()
+		d, err := server.DesignsDir()
 		if err != nil {
 			log.Fatalf("wut4-editor: resolving data dir: %v", err)
 		}

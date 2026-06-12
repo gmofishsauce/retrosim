@@ -196,8 +196,9 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-048** — Subsequent saves overwrite without prompting.
 - **FR-049** — Save As at any time, to a new name.
 - **FR-049a** — Indicate unsaved changes; warn before discarding them (New/Open).
-- **FR-050** — Server stores designs in the platform-standard application data
-  directory by default.
+- **FR-050** — Server stores designs in `wut4-editor` inside the user's
+  documents directory by default (created if absent). (Reworked 2026-06-12;
+  supersedes the platform-standard application data directory.)
 - **FR-051** — The file dialog lets the user choose a different save location.
 
 **File Operations — Open**
@@ -567,18 +568,21 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Dependencies:** `storage.go`, `components.go`, `paths.go`.
 
 ### 6.5 Go: storage & paths (`sim/server/storage.go`, `sim/server/paths.go`)
-- **Purpose:** filesystem I/O for designs; resolve the platform data dir.
-- **Satisfies:** FR-050, FR-051, FR-052, FR-053, FR-055, OQ-006.
+- **Purpose:** filesystem I/O for designs; resolve the default designs dir.
+- **Satisfies:** FR-050, FR-051, FR-052, FR-053, FR-055, OQ-006 (resolved).
 - **Interface:**
   - `ListDir(path string) (DirListing, error)` — entries + parent (FR-053).
   - `LoadDesign(path string) (Design, error)` — read+unmarshal (FR-052, FR-055).
   - `SaveDesign(path string, d Design) error` — marshal (indented) + atomic write
     (write temp file in same dir, `fsync`, `rename`) to avoid truncating an
     existing design on failure (FR-046–FR-049).
-  - `AppDataDir() (string, error)` — platform data dir, creating it if absent
-    (FR-050, OQ-006): macOS `~/Library/Application Support/wut4-editor`,
-    Linux `$XDG_DATA_HOME` or `~/.local/share/wut4-editor`, Windows `%APPDATA%\wut4-editor`.
-    Implemented over `os.UserConfigDir`/`os.UserHomeDir` with per-GOOS handling.
+  - `DesignsDir() (string, error)` — the default designs directory, creating it
+    if absent (FR-050): `wut4-editor` inside the user's documents folder —
+    macOS and Linux `~/Documents/wut4-editor`, Windows
+    `%USERPROFILE%\Documents\wut4-editor` (error if `USERPROFILE` is unset).
+    Implemented over `os.UserHomeDir` with per-GOOS handling. (Reworked
+    2026-06-12; supersedes `AppDataDir` and its per-OS app-data locations —
+    designs are user documents.)
 - **Error handling:** wrap OS errors with the attempted path; map to the HTTP
   statuses in §6.4. Refuse to save with an empty/relative `path` (400).
 - **Dependencies:** std `os`, `path/filepath`, `encoding/json`, `runtime`.
@@ -1644,7 +1648,9 @@ snap FR-041–043) are fully designed so they are additive when implemented.
 - **Go `storage`:** atomic save does not corrupt an existing file when the write
   fails midway; `ListDir` returns only `.json`+dirs with a correct `parent`;
   load of malformed JSON → 422 (FR-046–FR-053, FR-055).
-- **Go `paths`:** `AppDataDir` returns the correct path per `GOOS` (OQ-006).
+- **Go `paths`:** `DesignsDir` returns the documents-folder path per `GOOS`
+  (FR-050): darwin/linux `~/Documents/wut4-editor`, windows
+  `%USERPROFILE%\Documents\wut4-editor`, unset `USERPROFILE` → error.
 - **JS `geometry`:** rotation table maps integer offsets to integer offsets for
   all four angles; round-trip world↔screen; snap-to-grid (FR-021, FR-020).
 - **JS `netlist.buildNets`:** see edge cases below (FR-034b/FR-059a/FR-037a). A

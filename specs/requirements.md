@@ -150,7 +150,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 - FR-048: Subsequent saves of the same design shall overwrite the existing file without prompting.
 - FR-049: The user shall be able to invoke Save As at any time to save the design under a new name.
 - FR-049a: The application shall indicate when the current design has unsaved changes, and shall warn the user before discarding unsaved changes (e.g., on New or Open).
-- FR-050: The server shall store design files in the platform-standard application data directory by default.
+- FR-050: The server shall store design files by default in a `wut4-editor` folder inside the user's documents directory — macOS and Linux `~/Documents/wut4-editor`, Windows `%USERPROFILE%\Documents\wut4-editor` — creating it if absent. (Reworked 2026-06-12; supersedes the platform-standard application data directory: designs are user documents, and hiding them in app-data locations was a stakeholder misunderstanding.)
 - FR-051: The file dialog shall allow the user to choose a different save location.
 
 ### 3.15 File Operations — Open
@@ -286,7 +286,7 @@ The minimum set of requirements needed for a usable first release:
 - OQ-003: Server-assisted file navigation (FR-053) may be difficult to implement cleanly in the browser; the fallback to a recent-files list (FR-054) should be kept as a ready alternative.
 - OQ-004: The exact grid spacing (1 mm vs. 2 mm equivalent at default zoom) and the default zoom level are not yet specified.
 - OQ-005: Whether the Bus tool reverts to select-tool mode after placing one bus (consistent with the Wire tool) was not explicitly confirmed — assumed yes for consistency.
-- OQ-006: The platform-standard application data directory varies by OS (e.g., `~/Library/Application Support` on macOS, `~/.local/share` on Linux, `%APPDATA%` on Windows). The server should handle all three; the primary development platform is not yet confirmed.
+- OQ-006: The platform-standard application data directory varies by OS (e.g., `~/Library/Application Support` on macOS, `~/.local/share` on Linux, `%APPDATA%` on Windows). The server should handle all three; the primary development platform is not yet confirmed. (Resolved 2026-06-12: superseded by the FR-050 rework — designs live in the user's documents folder on every OS, not in app data.)
 - OQ-007: The exact representation of electrical nets and wire-to-wire junctions in the JSON save format (FR-034b, FR-059a) needs to be settled as part of the save-format and YAML-format design session, since it affects both. This now also covers per-bit bus net representation and provenance (FR-037a, FR-060a); the design phase has proposed a first-class-vertex graph with per-bit lanes as the chosen representation.
 - OQ-008: RESOLVED. The pin-direction set is exactly input/output/bidirectional/tristate (FR-062a). Power and ground are not represented anywhere, so no power/ground direction is required; the four directions map cleanly to the future four-level logic model.
 - OQ-009: The UI for viewing and editing per-instance overrides (FR-020a) is not yet specified (e.g., a properties panel vs. a dialog).
