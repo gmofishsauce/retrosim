@@ -14,6 +14,8 @@ import { makeFileOps } from "./chrome/fileops.js";
 import { initProperties } from "./chrome/properties.js";
 import { initStatusBar, postMessage } from "./chrome/statusbar.js";
 import { createSim } from "./engine/sim.js";
+import { startConnectionMonitor } from "./connection.js";
+import { startBackup, offerRecovery } from "./backup.js";
 
 // defaultDesignName builds "unnamed schematic <datetime>" from the local clock
 // (FR-004, FR-045).
@@ -144,6 +146,14 @@ async function main() {
       dataDir: defaults.dataDir,
       defaultName: defaultDesignName,
     });
+    // Heartbeat + reconnect (FR-089–FR-091, §6.12a): on recovery a dirty
+    // design saves through the same path the toolbar Save uses.
+    startConnectionMonitor({ store, save: fileops.save });
+    // Offer recovery of unsaved work from a previous session (FR-093) before
+    // the empty design is presented, then start the snapshot writer (FR-092)
+    // — in that order, so a clean startup can't wipe the snapshot first.
+    offerRecovery(store);
+    startBackup(store);
     const sim = createSim({ store, renderer }); // slow simulator (§6.13)
     initToolbar({
       container: document.getElementById("tools"),

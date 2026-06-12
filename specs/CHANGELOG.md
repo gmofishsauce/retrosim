@@ -27,6 +27,19 @@ Why: Storing designs in hidden platform app-data folders was a stakeholder
 misunderstanding — designs are user documents. Resolves OQ-006.
 Touches: FR-050 (reworked), OQ-006 (resolved); design §2.1, §6.5, §11.1
 
+## 2026-06-12 — Server connection resilience: heartbeat reconnect + local backup
+What: Client polls GET /api/v1/ping (~3 s); a status-bar connection tray shows
+connected/disconnected. On server loss, editing continues and the message tray
+warns: work is safe in the tab, do not reload, restart the server at the same
+address/port. On reconnect (the server is stateless; saves carry the whole
+design) a dirty design auto-saves to its known path, else the Save dialog
+opens. A debounced localStorage snapshot of unsaved work (cleared on save) is
+offered for recovery at next startup, covering reload/tab-close/browser-crash.
+Why: If the server dies mid-session the browser cannot write the local file
+system; without recovery the user's work is lost.
+Touches: FR-089–FR-093 (new, §3.21); design §6.4, §6.11, §6.12, §6.12a (new),
+§9, §10, §11.1
+
 ## 2026-06-12 — Power-on reset built-in; selective pessimism replaces strict-U
 What: New "power-on reset" built-in (FR-071b): R/active-low /R outputs
 asserted for the first `cycles` clock cycles of a run (property, default 3;

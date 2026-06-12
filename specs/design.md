@@ -540,7 +540,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
 ### 6.4 Go: HTTP API (`sim/server/api.go`)
 - **Purpose:** route and handle all REST endpoints; serve static SPA.
-- **Satisfies:** FR-001, FR-003, FR-046–FR-053, FR-065, NFR-004, IR-001.
+- **Satisfies:** FR-001, FR-003, FR-046–FR-053, FR-065, FR-089 (server side),
+  NFR-004, IR-001.
 - **Versioning (NFR-004):** all API routes are under `/api/v1/`. New capabilities
   (e.g., a future transpiler) get new paths or a new version prefix; existing
   routes never change shape.
@@ -553,6 +554,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | `GET /api/v1/files?path=<p>` | query `path` (abs; empty = data dir) | `{"path","parent","entries":[{"name","isDir"}]}` | 400 bad path, 404 missing, 403 not a dir |
   | `GET /api/v1/design/load?path=<p>` | query `path` | `{"design":Design}` | 400, 404, 422 malformed JSON |
   | `POST /api/v1/design/save` | `{"path":"<abs>","design":Design}` | `{"path":"<abs>"}` | 400 bad body, 409/500 write failure |
+  | `GET /api/v1/ping` | – | `{"ok":true}` | – (FR-089 heartbeat; no side effects) |
 
   Directory entries: only `.json` files and subdirectories are returned for
   navigation; the response includes `parent` so the dialog can offer "up".
@@ -1047,14 +1049,18 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `inst.overrides.delays` / `inst.overrides.props` (§7.2) and persist via the
   full-instance save (FR-058). The panel re-renders on every store notification,
   which is why selection now flows through `store.setSelection` (notifying).
-- **Status bar (`statusbar.js`)** — Satisfies FR-072, FR-073, FR-074. A flex row
-  docked at the bottom of the window (below the canvas, full width) holding two
+- **Status bar (`statusbar.js`)** — Satisfies FR-072, FR-073, FR-074, FR-089
+  (tray). A flex row
+  docked at the bottom of the window (below the canvas, full width) holding
   trays styled with the palette tiles' raised drop-shadow look: a state tray at
   the lower-left corner showing the program's operating state (text; always
-  `editing` until the simulator exists) and a message tray filling the remaining
+  `editing` until the simulator exists), a message tray filling the remaining
   width showing the most recent posted message (empty when none; long messages
-  truncate with an ellipsis). The module exports `setAppState(text)` and
-  `postMessage(text)` / `clearMessage()` for other modules to call; status text
+  truncate with an ellipsis), and a connection tray at the right end showing
+  the server connection state — `connected` or `disconnected` (FR-089), driven
+  by the connection monitor (§6.12a). The module exports `setAppState(text)`,
+  `postMessage(text)` / `clearMessage()`, and `setConnState(connected)` for
+  other modules to call; status text
   is transient UI, not design state, so it does not flow through the store or
   the undo stack.
 - **Context menu (`contextmenu.js`)** — Satisfies FR-033, FR-033b, FR-038, FR-037b,
@@ -1071,15 +1077,58 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Purpose:** typed-ish wrappers over `fetch`; app startup.
 - **Satisfies:** FR-003, FR-004, IR-001, NFR-002.
 - **`api.js`:** `getComponents()`, `getDefaults()`, `listDir(path)`,
-  `loadDesign(path)`, `saveDesign(path, design)`. All target same-origin
+  `loadDesign(path)`, `saveDesign(path, design)`, `ping()`. All target
+  same-origin
   `/api/v1/*` (localhost only — no external requests, NFR-002). Each rejects with
   the server error envelope on non-2xx.
 - **`app.js`:** create the store with an empty design named
   `unnamed schematic <localDateTime>` in SELECT mode (FR-004, FR-045); fetch
-  components + defaults (await both, FR-003); build palette, toolbar, canvas,
-  interaction; remove the loading overlay.
+  components + defaults (await both, FR-003); offer backup recovery (§6.12a,
+  FR-093) before presenting the empty design; build palette, toolbar, canvas,
+  interaction; start the connection monitor and backup writer (§6.12a); remove
+  the loading overlay.
 - **Error handling:** if `getComponents()` fails, show a blocking error banner
   ("server unreachable — is wut4-editor running?") and keep the canvas disabled.
+
+### 6.12a JS: connection monitor & local backup (`web/js/connection.js`, `web/js/backup.js`)
+- **Purpose:** survive server death and browser-side loss: detect/reconnect to
+  a restarted server instance, and keep a localStorage snapshot of unsaved
+  work.
+- **Satisfies:** FR-089–FR-093.
+- **Why this is enough:** the server is stateless and the design's single
+  source of truth is the browser store; every save transmits the complete
+  design (§6.4). So "reconnection" needs no session state or transfer
+  protocol — only detection, messaging, and a save. The new instance must bind
+  the same address:port (the SPA can only reach the origin that served it,
+  NFR-002).
+- **`connection.js` (FR-089–FR-091):** `startConnectionMonitor({store, save})`
+  polls `api.ping()` every `HEARTBEAT_MS` (~3000). On a connected→disconnected
+  transition: `setConnState(false)` and post via the message tray: work is
+  retained in this tab, do **not** reload, restart the server at the same
+  address/port. On disconnected→connected: `setConnState(true)`, post a
+  reconnection message, and if `store.state.dirty` invoke the injected `save`
+  action — the same fileops path used by the toolbar Save: writes to
+  `savePath` when known, else opens the Save dialog (FR-091). Polling is
+  skipped while a heartbeat is still in flight; the monitor never throws.
+- **`backup.js` (FR-092/FR-093):** `startBackup(store, {storage, debounceMs,
+  post})` subscribes to
+  the store and, debounced ~1 s, writes
+  `{design: serializeDesign(design), savePath, designName, time}` to
+  `storage` (default `window.localStorage`, injectable for tests) under one
+  fixed key while `dirty`; removes the key when a save lands (`dirty` false).
+  `offerRecovery(store, {storage, confirmFn, post})` runs at startup (before
+  FR-045's empty design is
+  shown): if the key exists, a confirm dialog offers the snapshot (named, with
+  its timestamp); accept → `deserializeDesign` into the store with the saved
+  name/path and `dirty = true` (`replaceDesign`'s `dirty` option, §6.10);
+  decline — or a corrupt snapshot — removes the key. Designs are small
+  JSON, far under localStorage quotas; one fixed key means a second concurrent
+  tab last-writer-wins, acceptable for a single-user localhost tool.
+- **Error handling:** heartbeat failures are the *signal*, never errors;
+  localStorage write failures (quota, privacy mode) post one message and
+  disable the backup writer rather than interrupting editing.
+- **Dependencies:** `api.js`, store, `chrome/statusbar.js`,
+  `chrome/fileops.js` (injected), `model/persist.js`.
 
 ### 6.13 JS: slow simulator (`web/js/engine/sim.js`, `web/js/engine/galasm.js`)
 - **Purpose:** the interpretive debug engine (requirements §3.19; sim-vision.md):
@@ -1525,6 +1574,8 @@ sim/
     js/api.js               CREATE  REST client (§6.12)
     js/store.js             CREATE  store + commands + undo/redo (§6.10)
     js/builtins.js          CREATE  client-side built-in object registry (§6.11, FR-067/FR-068)
+    js/connection.js        CREATE  server heartbeat + reconnect (§6.12a)
+    js/backup.js            CREATE  localStorage snapshot + recovery (§6.12a)
     js/geometry.js          CREATE  grid/viewport/rotation math (§6.7)
     js/model/design.js      CREATE  design ops (§6.6)
     js/model/netlist.js     CREATE  buildNets union-find (§6.6)
@@ -1611,6 +1662,8 @@ No files are modified (greenfield).
 | FR-065 | §6.4 | `api.go` |
 | FR-066 | §6.3, §7.1 | `yamlparse.go` |
 | FR-072, FR-073, FR-074 | §6.11 | `statusbar.js`, `index.html`, `style.css` |
+| FR-089, FR-090, FR-091 | §6.4, §6.11, §6.12a | `api.go`, `connection.js`, `statusbar.js`, `api.js` |
+| FR-092, FR-093 | §6.12, §6.12a | `backup.js`, `app.js`, `model/persist.js` |
 | FR-062d | §6.3, §6.13, §7.1, §7.6 | `yamlparse.go`, `types.go`, `sim.js` |
 | FR-075, FR-078, FR-079, FR-080 | §6.13 | `sim.js`, `galasm.js` |
 | FR-076, FR-087 | §6.9, §6.10, §6.11, §6.13 | `toolbar.js`, `store.js`, `interaction.js`, `sim.js`, `statusbar.js` |
@@ -1668,6 +1721,16 @@ snap FR-041–043) are fully designed so they are additive when implemented.
   change skips; subunit siblings get per-unit filtered copies; undo restores
   every prior `{typeData, overrides}` exactly; unknown type names are left
   untouched.
+- **JS `backup` (FR-092/FR-093):** with an injected fake storage — dirty
+  dispatch → debounced snapshot written with design/savePath/name/time; save
+  (dirty cleared) → key removed; `offerRecovery` round-trips
+  serialize/deserialize (components, wires, vertices, overrides intact);
+  decline discards the key; storage that throws disables the writer without
+  breaking dispatch.
+- **JS `connection` (FR-089–FR-091):** with a stubbed `ping` — flips
+  disconnected after a failed beat and posts the do-not-reload instructions
+  once; flips connected on recovery; invokes the injected `save` only when
+  dirty; overlapping heartbeats are not issued.
 - **JS `router.proposeRoute` (FR-027c):** open field → straight or single-L
   route with ≤ 1 corner; obstacle between endpoints → route detours around it,
   never crossing a component outline; output-to-input of the same component →

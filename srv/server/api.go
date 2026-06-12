@@ -24,6 +24,7 @@ func NewRouter(lib *Library, dataDir, webDir string) http.Handler {
 	api.HandleFunc("/api/v1/files", handleFiles(dataDir))
 	api.HandleFunc("/api/v1/design/load", handleDesignLoad())
 	api.HandleFunc("/api/v1/design/save", handleDesignSave())
+	api.HandleFunc("/api/v1/ping", handlePing())
 	// Any other /api/ path is an API miss: answer with a JSON envelope, never
 	// the static handler's HTML.
 	api.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +45,17 @@ func NewRouter(lib *Library, dataDir, webDir string) http.Handler {
 		static.ServeHTTP(w, r)
 	})
 	return mux
+}
+
+// handlePing answers the client's connection heartbeat (FR-089). No side
+// effects; reachability is the entire payload.
+func handlePing() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !requireMethod(w, r, http.MethodGet) {
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	}
 }
 
 // handleComponents serves the parsed component library (FR-065).

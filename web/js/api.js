@@ -44,6 +44,12 @@ export async function loadDesign(path) {
   return body.design;
 }
 
+// ping checks server reachability (FR-089 heartbeat); resolves on any healthy
+// response, rejects when the server is gone.
+export async function ping() {
+  return request("/ping");
+}
+
 // saveDesign writes a design object to path (FR-046).
 export async function saveDesign(path, design) {
   const body = await request("/design/save", {

@@ -49,6 +49,31 @@ func TestComponentsEndpoint(t *testing.T) {
 	}
 }
 
+// GET /api/v1/ping answers the connection heartbeat (FR-089).
+func TestPingEndpoint(t *testing.T) {
+	srv := httptest.NewServer(NewRouter(testLibrary(), t.TempDir(), t.TempDir()))
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/api/v1/ping")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var body struct {
+		OK bool `json:"ok"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if !body.OK {
+		t.Fatal("ok = false, want true")
+	}
+}
+
 // An unknown /api/ route returns a JSON error envelope, not HTML.
 func TestUnknownAPIRouteJSON404(t *testing.T) {
 	srv := httptest.NewServer(NewRouter(testLibrary(), t.TempDir(), t.TempDir()))

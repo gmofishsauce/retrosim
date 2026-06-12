@@ -137,14 +137,15 @@ export function createStore(initial = {}) {
       notify();
     },
 
-    // replaceDesign swaps in a new design (New/Open), resetting undo/redo,
-    // selection, and the dirty flag (FR-044/052).
-    replaceDesign(newDesign, { savePath = null } = {}) {
+    // replaceDesign swaps in a new design (New/Open), resetting undo/redo and
+    // selection. `dirty` is cleared by default (FR-044/052); backup recovery
+    // passes dirty: true because the recovered work is unsaved (FR-093).
+    replaceDesign(newDesign, { savePath = null, dirty = false } = {}) {
       state.design = newDesign;
       state.designName = newDesign.name ?? state.designName;
       state.savePath = savePath;
       state.selection = null;
-      state.dirty = false;
+      state.dirty = dirty;
       undoStack.length = 0;
       redoStack.length = 0;
       notify();

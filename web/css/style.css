@@ -180,6 +180,13 @@ body {
   min-height: 1.5em;
 }
 
+#status-conn { flex: 0 0 auto; }
+
+#status-conn.disconnected {
+  background: #b00020;
+  color: #fff;
+}
+
 #loading-overlay {
   position: fixed;
   inset: 0;
