@@ -1,0 +1,97 @@
+# 74163 — synchronous presettable 4-bit binary counter; synchronous clear
+# Source: Texas Instruments, "SN74F163A Synchronous 4-Bit Binary Counter",
+# SDFS088A — March 1987 — Revised August 2001.
+# https://www.ti.com/lit/ds/symlink/sn74f163a.pdf
+# (Stakeholder-specified datasheet: the F163A is the adjusted post-release
+# design. TI signal names are used to match the cited document.)
+type: "74163"
+outline: [6, 12]
+clock: CLK # clocks the .R registered outputs in the behavior block (FR-062d)
+
+pins: # number: physical DIP16/SO16 pin (package pinout, datasheet p.1)
+  - { name: A,     side: left,  pos: 2,  dir: in,  number: 3 }
+  - { name: B,     side: left,  pos: 3,  dir: in,  number: 4 }
+  - { name: C,     side: left,  pos: 4,  dir: in,  number: 5 }
+  - { name: D,     side: left,  pos: 5,  dir: in,  number: 6 }
+  - { name: /CLR,  side: left,  pos: 7,  dir: in,  number: 1 }
+  - { name: /LOAD, side: left,  pos: 8,  dir: in,  number: 9 }
+  - { name: ENP,   side: left,  pos: 10, dir: in,  number: 7 }
+  - { name: ENT,   side: left,  pos: 11, dir: in,  number: 10 }
+  - { name: QA,    side: right, pos: 2,  dir: out, number: 14 }
+  - { name: QB,    side: right, pos: 3,  dir: out, number: 13 }
+  - { name: QC,    side: right, pos: 4,  dir: out, number: 12 }
+  - { name: QD,    side: right, pos: 5,  dir: out, number: 11 }
+  - { name: RCO,   side: right, pos: 7,  dir: out, number: 15 }
+  - { name: CLK,   side: top,   pos: 2,  dir: in,  number: 2 }
+
+groups: # LSB first (A and QA are the low-order bits)
+  - { name: DATA, pins: [A, B, C, D] }
+  - { name: Q, pins: [QA, QB, QC, QD] }
+
+delays: # ns, 74F163A typical at Vcc=5V, CL=50pF, 25C (switching
+  # characteristics and timing requirements, datasheet p.7)
+  tpd_clk_q: 6    # CLK -> Qn (counting: tPLH 5.1 / tPHL 7.1; loading: 5.6 / 5.6)
+  tpd_clk_rco: 10 # CLK -> RCO (tPLH/tPHL 9.6)
+  tpd_ent_rco: 4  # ENT -> RCO (tPLH/tPHL 4.1)
+  tsu_d: 5        # A..D setup before CLK rise (minimum)
+  th_d: 2         # A..D hold after CLK rise (minimum)
+
+behavior: |
+  ; 74163 (SN74F163A) — synchronous presettable 4-bit binary counter with
+  ; synchronous clear. Derived from the description (datasheet p.1), the
+  ; logic diagram (p.3), and the state diagram (p.2); this datasheet has no
+  ; numbered function table. Priority at each rising clock edge:
+  ; clear (pin /CLR LOW) > load (pin /LOAD LOW) > count (ENP and ENT both
+  ; HIGH) > hold.
+  ;
+  ; SEQUENTIAL-PART CLOCK CONVENTION (74574.yaml): GALasm's .R registered
+  ; outputs are clocked by the GAL22V10's dedicated pin-1 clock
+  ; (galasmManual.txt section 3.4). That pin-1 clock role is played by the
+  ; part's named clock pin — here CLK, rising-edge triggered. CLK therefore
+  ; does NOT appear as a term in any equation below; the .R suffix implies it.
+  ;
+  ; Equations are physical-level GALasm: '/' is the complement operator and
+  ; signal names are this file's pin names with any active-low '/' prefix
+  ; dropped (pin /CLR is GAL signal CLR, so '/CLR' below means "pin /CLR is
+  ; LOW"). Each Qn has four kinds of product term, every one carrying CLR
+  ; (pin /CLR HIGH, i.e. not clearing):
+  ;   load:  /LOAD * <data>                     — synchronous preset
+  ;   count: LOAD * ENP * ENT * <toggle/carry>  — binary up-count
+  ;   hold:  LOAD * /ENP * Qn  and  LOAD * /ENT * Qn — count disabled
+  ; The synchronous clear needs no terms of its own: with pin /CLR LOW no
+  ; term is true, so every register loads 0 at the next rising edge,
+  ; regardless of /LOAD, ENP, and ENT (p.1: clear overrides load and count).
+  ;
+  ; QA (LSB) toggles whenever counting; each higher bit toggles when all
+  ; lower bits are 1 (the look-ahead carry), otherwise holds while counting.
+  QA.R =   CLR * /LOAD * A
+         + CLR *  LOAD * ENP * ENT * /QA
+         + CLR *  LOAD * /ENP * QA
+         + CLR *  LOAD * /ENT * QA
+
+  QB.R =   CLR * /LOAD * B
+         + CLR *  LOAD * ENP * ENT *  QA * /QB
+         + CLR *  LOAD * ENP * ENT * /QA *  QB
+         + CLR *  LOAD * /ENP * QB
+         + CLR *  LOAD * /ENT * QB
+
+  QC.R =   CLR * /LOAD * C
+         + CLR *  LOAD * ENP * ENT *  QA *  QB * /QC
+         + CLR *  LOAD * ENP * ENT * /QA *  QC
+         + CLR *  LOAD * ENP * ENT * /QB *  QC
+         + CLR *  LOAD * /ENP * QC
+         + CLR *  LOAD * /ENT * QC
+
+  QD.R =   CLR * /LOAD * D
+         + CLR *  LOAD * ENP * ENT *  QA *  QB *  QC * /QD
+         + CLR *  LOAD * ENP * ENT * /QA *  QD
+         + CLR *  LOAD * ENP * ENT * /QB *  QD
+         + CLR *  LOAD * ENP * ENT * /QC *  QD
+         + CLR *  LOAD * /ENP * QD
+         + CLR *  LOAD * /ENT * QD
+
+  ; Ripple-carry output (combinational): HIGH while the count is 15 and ENT
+  ; is HIGH — ENT is fed forward to enable RCO; ENP does not affect RCO
+  ; (p.1). Counting spikes can occur on RCO (p.1); this unit-delay model
+  ; does not reproduce them.
+  RCO = ENT * QA * QB * QC * QD
