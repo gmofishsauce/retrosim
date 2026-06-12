@@ -96,6 +96,9 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-070** — Pull-down: 2×2, one top-center pin; an upside-down `T` (long stem
   + short bottom bar). Tooltip "pull down".
 - **FR-071** — Clock: a box reading `CLK`, one right-center pin. Tooltip "clock".
+- **FR-071b** — Power-on reset: a box reading `RST`, two right-edge pins (R
+  active high, /R active low); drives reset for the first `cycles` clock
+  cycles of a run (property, default 3). Tooltip "power-on reset".
 
 **Component Selection and Movement**
 - **FR-016** — In select mode, click a component to select it.
@@ -988,24 +991,28 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   each scrolls independently. Lower-region tiles render an SVG icon (the object's
   glyph, e.g. the indicator bubble) with a descriptive `title`, and `dataset.type`
   set to the built-in type name; the armed-state subscription covers both regions.
-- **Built-in objects (`builtins.js`)** — Satisfies FR-067–FR-071. Exports a
+- **Built-in objects (`builtins.js`)** — Satisfies FR-067–FR-071b. Exports a
   client-side array of synthetic `ComponentType`s (no server/YAML). Each carries
   `builtin: true`, an `icon` (inline-SVG palette glyph), a `title` (tooltip), plus
   the usual `name`/`width`/`height`/`pins`/`renderType`. Entries: **indicator**
   (`renderType:"indicator"`, 2×2, one bottom-center `in` pin, FR-068); **pull-up**
   (`"pullup"`, 2×2, one bottom-center pin, FR-069); **pull-down** (`"pulldown"`,
   2×2, one top-center pin, FR-070); **clock** (`"clock"`, 3×2, one right-center
-  pin, FR-071). On placement these flow through the normal non-subunit
+  pin, FR-071); **power-on reset** (`"reset"`, 3×3, two right-edge `out` pins
+  `R` and `/R`, FR-071b). On placement these flow through the normal
+  non-subunit
   `addInstance` path; `addInstance` assigns an `A-<n>` refdes (FR-011a) when
   `type.builtin`. Each entry may declare `properties` (FR-020b): the clock
   declares `period` (ns, default 100) and `speed` (Hz, default 1) per FR-071a;
+  the reset declares `cycles` (clock cycles, default 3) per FR-071b;
   the other built-ins declare none. The module also exports a `BEHAVIORS`
   registry (FR-067a) mapping type name → behavior function — one stub per
   built-in until the simulator design defines the call interface; functions stay
   out of the type objects so `typeData` copies remain pure JSON (§7.1).
   `drawComponent` has a render branch per built-in renderType: the
   indicator bubble (gray `?` until the simulator, then white `1`/black `0`), the
-  pull-up two-headed arrow, the pull-down upside-down `T`, and the clock box. Pin
+  pull-up two-headed arrow, the pull-down upside-down `T`, and the clock and
+  reset boxes. Pin
   name labels are suppressed for built-ins (the glyph owns the body); the refdes is
   drawn above the symbol.
 - **Dialogs (`dialogs.js`)** — Satisfies FR-046–FR-049, FR-052–FR-054. Modal DOM
@@ -1073,12 +1080,16 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 ### 6.13 JS: slow simulator (`web/js/engine/sim.js`, `web/js/engine/galasm.js`)
 - **Purpose:** the interpretive debug engine (requirements §3.19; sim-vision.md):
   execute the design live on the canvas under a unit-delay, four-state model.
-- **Satisfies:** FR-075–FR-087, FR-067a, FR-062d (client side), FR-071a.
+- **Satisfies:** FR-075–FR-087, FR-067a, FR-062d (client side), FR-071a, FR-071b.
 
 **Four-state values (FR-077).** Every net carries `0`, `1`, `U`, or `Z`, encoded
 as small ints in two `Uint8Array`s (`curr`, `next`) indexed by net id. Reading Z
-yields U; any U operand makes a result U — strict pessimism, deliberately
-stricter than real logic (`U AND 0 = U`), per the stakeholder's rule (§8).
+yields U. Combination is **selectively pessimistic**, as real logic permits:
+`0 AND x = 0` and `1 OR x = 1` regardless of U operands; every other combination
+with a U operand yields U (§8). (Reworked 2026-06-12; supersedes strict
+pessimism — any U operand → U — under which registered feedback could never be
+initialized: `0 AND U = U` made even a held synchronous clear ineffective, so
+no sequential part could ever leave U.)
 
 **`galasm.js` — behavior compiler/evaluator (FR-079):**
 - `compileBehavior(typeData) → CompiledBehavior | null` parses the equations-only
@@ -1102,9 +1113,10 @@ stricter than real logic (`U AND 0 = U`), per the stakeholder's rule (§8).
   name** — instances share it.
 - Compiled literals carry `low` = the use-negation (`{signal, low}`, true iff
   the net reads `low ? 0 : 1`); outputs carry `lhsLow` = the LHS use-negation.
-- Evaluation (strict-U, FR-077): a literal is true iff its net reads `(low ? 0 :
-  1)`, U if the net is U/Z; a product is U if any literal is U, else AND; the sum
-  is U if any term is U, else OR. A plain/`.T` output drives `sum XOR lhsLow`; a
+- Evaluation (selective pessimism, FR-077): a literal is true iff its net reads
+  `(low ? 0 : 1)`, U if the net is U/Z; a product is **0 if any literal is
+  false**, else U if any literal is U, else 1; the sum is **1 if any term is
+  true**, else U if any term is U, else 0. A plain/`.T` output drives `sum XOR lhsLow`; a
   `.R` output drives `register XOR lhsLow` (the sum is the D input, latched by
   `sim.js`); a `.T`/`.R` output with `enable` false contributes Z, with enable U
   contributes U (pessimistic). `AR` true forces all the instance's registers to
@@ -1143,11 +1155,15 @@ stricter than real logic (`U AND 0 = U`), per the stakeholder's rule (§8).
   (FR-083).
 - **Built-in behaviors (FR-067a):** the `BEHAVIORS` registry entries (§6.11)
   take the uniform signature `behave(ctx) → [{pin, value, weak?}]` with `ctx =
-  {props, simTime}`: **clock** returns its FR-084 waveform — low for the first
-  half of each `period`, high for the second, so the first rising edge lands
-  half a period in; **pull-up/pull-down** return their constant weak 1/0;
-  **indicator** returns nothing (display only). `props` carries effective
-  values: `overrides.props` else the declared default (FR-020b).
+  {props, simTime, clockPeriod}`: **clock** returns its FR-084 waveform — low
+  for the first half of each `period`, high for the second, so the first rising
+  edge lands half a period in; **pull-up/pull-down** return their constant weak
+  1/0; **indicator** returns nothing (display only); **power-on reset**
+  (FR-071b) drives `R` 1 and `/R` 0 while `simTime < cycles × clockPeriod`,
+  the inverse afterward. `props` carries effective values: `overrides.props`
+  else the declared default (FR-020b). `clockPeriod` is resolved once at Run:
+  the effective `period` of the design's clock instance when exactly one is
+  placed, else the 100 ns FR-071a default (no clock, or several — FR-071b).
 - **Scheduler (FR-084–FR-086):** no clock instance placed → combinational: run
   steps unpaced (batched, with periodic yields to keep the tab live) until
   `next` equals `curr` (settled) or the 10,000-unit bound (report via message
@@ -1479,7 +1495,7 @@ errors (FR-066), so future sections (e.g., richer timing) are additive.
 | File I/O location | Browser native file picker / downloads | **All FS access server-side via REST** | FR-053 requires server-assisted navigation; keeps a single trusted FS actor; localhost-only (NFR-001) |
 | Server framework | gin/echo/chi | **net/http standard library** | Tiny API surface; no dependency; matches the project's minimalist Go style |
 | Slow-simulator timing model | Zero-delay settle (fixpoint per edge); event-driven with the YAML ns delays | **Unit delay: 1 unit = 1 simulated ns, double-buffered synchronous update (FR-078)** | Stakeholder-chosen. Deterministic and evaluation-order-independent; settling ripples one component level per step (observable sequence); the clock `period` (ns) sets steps/cycle with no conversion factor; a design not settled by the next edge is a *visible* timing failure. Trade-off accepted: every component takes 1 ns regardless of internal depth |
-| Four-state combination rule | Selective pessimism (`U AND 0 = 0`, as real logic permits) | **Strict pessimism: any U operand → U; Z reads as U (FR-077)** | The vision statement's stated rule; simplest to implement and explain; surfaces uninitialized/floating paths aggressively, which is the point of a debug simulator |
+| Four-state combination rule | Strict pessimism (any U operand → U; the vision statement's original rule, chosen first) | **Selective pessimism: `0 AND x = 0`, `1 OR x = 1`; other U combinations → U; Z reads as U (FR-077)** | Reworked 2026-06-12 (supersedes the strict-pessimism decision): under strict-U, registered feedback could never be initialized — `0 AND U = U` made even a held synchronous clear/load ineffective (discovered on the 74163), so no sequential part could leave U. Selective pessimism is what real logic permits; genuinely uninitialized paths still surface as U, preserving the debug intent |
 | Clock pin for `.R` outputs | Name convention (CP/CLK/CK); infer from equations | **Explicit `clock:` YAML key (FR-062d)** | Unambiguous and parser-validated; makes the 74574's named-clock convention machine-readable; additive per FR-066 |
 | API versioning | Unversioned routes | **`/api/v1/` prefix** | New endpoints (future transpiler) added without breaking clients (NFR-004) |
 
@@ -1558,7 +1574,7 @@ No files are modified (greenfield).
 | FR-019, FR-020 | §6.7, §6.9, §6.10 | `geometry.js`, `interaction.js`, `store.js` |
 | FR-020a | §6.11, §7.2 | `properties.js`, `store.js` |
 | FR-020b | §6.11, §7.1, §7.2 | `properties.js`, `builtins.js`, `model/design.js`, `commands.js` |
-| FR-067a, FR-071a | §6.11, §7.1 | `builtins.js` |
+| FR-067a, FR-071a, FR-071b | §6.11, §6.13, §7.1 | `builtins.js`, `sim.js`, `canvas.js` |
 | FR-021 | §6.7, §6.8 | `geometry.js`, `canvas.js` |
 | FR-022, FR-023 | §6.8, §6.11 | `canvas.js`, `toolbar.js` |
 | FR-024 | §6.10 | `store.js` |
@@ -1594,7 +1610,7 @@ No files are modified (greenfield).
 | FR-062d | §6.3, §6.13, §7.1, §7.6 | `yamlparse.go`, `types.go`, `sim.js` |
 | FR-075, FR-078, FR-079, FR-080 | §6.13 | `sim.js`, `galasm.js` |
 | FR-076, FR-087 | §6.9, §6.10, §6.11, §6.13 | `toolbar.js`, `store.js`, `interaction.js`, `sim.js`, `statusbar.js` |
-| FR-077, FR-081, FR-082, FR-083 | §6.8, §6.13 | `sim.js`, `canvas.js` |
+| FR-077, FR-081, FR-082, FR-083 | §6.8, §6.13 | `sim.js`, `galasm.js`, `canvas.js` |
 | FR-084, FR-085, FR-086 | §6.13 | `sim.js`, `builtins.js` |
 | FR-088 | §6.6, §6.10, §6.11 | `model/design.js`, `commands.js`, `toolbar.js` |
 | NFR-001 | §6.1 | `main.go` |
@@ -1657,8 +1673,11 @@ snap FR-041–043) are fully designed so they are additive when implemented.
 - **JS `galasm` (FR-079):** physical-level polarity — for YAML pin `/E1` the
   literal `/E1` is true when the pin reads LOW and `E1` when it reads HIGH;
   `/Y0 = term` drives Y0 LOW when the term is true (the 74138 equations
-  reproduce the datasheet function table). Strict-U: `U AND 0 = U`, `U OR 1 = U`
-  (FR-077). `.T` with `.E` false → Z, `.E` of U → U. `.R` presents the register,
+  reproduce the datasheet function table). Selective pessimism (FR-077):
+  `U AND 0 = 0`, `U OR 1 = 1`, `U AND 1 = U`, `U OR 0 = U` — and a registered
+  part with U feedback is rescued by a held clear/load (the 74163 clears to
+  0000 with /CLR low even from all-U registers). `.T` with `.E` false → Z,
+  `.E` of U → U. `.R` presents the register,
   not the sum; `lhsLow` flips the presented value. `AR`/`SP` reset/set; `VCC`/
   `GND` constants. Validation errors: two output equations for one signal; `.E`
   before its output / multi-term / on a plain output; unknown signal; `.R`
@@ -1671,7 +1690,11 @@ snap FR-041–043) are fully designed so they are additive when implemented.
   declared clock net and the output changes one unit later. Combinational
   design: settles then auto-terminates; a ring oscillator hits the 10,000-unit
   bound and reports (FR-085). Clock waveform: low first half-period, rising
-  edge at period/2 (FR-084). Dispatch refused while `simulating` (FR-087);
+  edge at period/2 (FR-084). Power-on reset (FR-071b): R=1//R=0 for
+  `cycles × clockPeriod` units then the inverse; `clockPeriod` = the single
+  clock instance's effective period, else 100 (no clock, or several); the
+  default 3 cycles spans the first three rising edges. Dispatch refused while
+  `simulating` (FR-087);
   `state.sim` retained at stop, cleared on next dispatch (FR-085).
 
 ### 11.2 Integration / end-to-end (Chrome + Firefox, manual or Playwright)

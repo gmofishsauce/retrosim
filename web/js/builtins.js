@@ -42,6 +42,14 @@ const CLOCK_ICON =
   ' font-family="system-ui,sans-serif" font-weight="bold" font-size="10" fill="#000">CLK</text>' +
   "</svg>";
 
+// RESET_ICON: a box reading "RST" (FR-071b).
+const RESET_ICON =
+  '<svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true">' +
+  '<rect x="3" y="11" width="30" height="14" fill="#fff" stroke="#333"/>' +
+  '<text x="18" y="18" text-anchor="middle" dominant-baseline="central"' +
+  ' font-family="system-ui,sans-serif" font-weight="bold" font-size="10" fill="#000">RST</text>' +
+  "</svg>";
+
 export const BUILTINS = [
   {
     name: "indicator",
@@ -90,6 +98,21 @@ export const BUILTINS = [
       { name: "speed", unit: "Hz", default: 1 }, // human-perceived clock rate
     ],
   },
+  {
+    name: "reset",
+    builtin: true,
+    title: "power-on reset", // FR-071b
+    icon: RESET_ICON,
+    renderType: "reset",
+    width: 3,
+    height: 3,
+    pins: [
+      { name: "R", side: "right", position: 1, direction: "out" }, // active high
+      { name: "/R", side: "right", position: 2, direction: "out" }, // active low
+    ],
+    // FR-071b: reset asserted for the first cycles × clockPeriod units of a run.
+    properties: [{ name: "cycles", unit: "cycles", default: 3 }],
+  },
 ];
 
 // BEHAVIORS maps built-in type name → behavior function (FR-067a). Behaviors
@@ -117,5 +140,17 @@ export const BEHAVIORS = {
     const period = Math.max(2, Math.floor(props.period));
     const half = Math.floor(period / 2);
     return [{ pin: "OUT", value: simTime % period < half ? V0 : V1 }];
+  },
+  // Power-on reset (FR-071b): R high and /R low for the first
+  // cycles × clockPeriod units of the run, the inverse afterward. With the
+  // FR-084 waveform (first rising edge half a period in) this spans the first
+  // `cycles` rising edges, releasing half a period after the last.
+  // clockPeriod is resolved once at Run by sim.js (§6.13).
+  reset({ props, simTime, clockPeriod }) {
+    const active = simTime < props.cycles * clockPeriod;
+    return [
+      { pin: "R", value: active ? V1 : V0 },
+      { pin: "/R", value: active ? V0 : V1 },
+    ];
   },
 };

@@ -218,7 +218,7 @@ export function buildSimulation(design, { onMessage = () => {} } = {}) {
     };
     for (const e of entities) {
       if (e.kind === "builtin") {
-        for (const c of e.behave({ props: e.props, simTime })) {
+        for (const c of e.behave({ props: e.props, simTime, clockPeriod })) {
           add(`${e.refdes}.${c.pin}`, c.value, !!c.weak, `${e.refdes}.${c.pin}`);
         }
       } else if (e.compiled) {
@@ -242,6 +242,10 @@ export function buildSimulation(design, { onMessage = () => {} } = {}) {
   }
 
   const clocks = entities.filter((e) => e.kind === "builtin" && e.type === "clock");
+  // clockPeriod (FR-071b): the effective period of the design's clock when
+  // exactly one is placed, else the 100 ns FR-071a default (no clock, or
+  // several). Resolved once; consumed by the reset built-in's behavior ctx.
+  const clockPeriod = clocks.length === 1 ? clocks[0].props.period : 100;
 
   return {
     step,

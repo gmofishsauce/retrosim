@@ -198,7 +198,7 @@ test("reserved pin names are rejected (manual §2)", () => {
 // nets(map) builds a readNet over a plain object of signal → value.
 const nets = (m) => (signal) => m[signal];
 
-test("strict-U pessimism: any U operand makes the result U (FR-077)", () => {
+test("selective pessimism: 0 AND x = 0, 1 OR x = 1, other U combinations U (FR-077)", () => {
   const c = compileBehavior(
     ty(
       [
@@ -210,15 +210,53 @@ test("strict-U pessimism: any U operand makes the result U (FR-077)", () => {
     ),
   );
   const [out] = c.outputs;
-  // U AND 0 = U (not 0), so the whole sum is U even though B=0 decides it.
-  assert.equal(evalTerm(out.terms[0], nets({ A: VU, B: V0 })), VU);
-  // U OR 1 = U: term2 (B=1) is true, but term1 is U.
-  assert.equal(evalSum(out.terms, nets({ A: VU, B: V1 })), VU);
-  // Z reads as U (FR-077).
-  assert.equal(evalOutput(out, nets({ A: VZ, B: V1 }), null), VU);
+  // 0 AND U = 0: B=0 decides the product despite A=U.
+  assert.equal(evalTerm(out.terms[0], nets({ A: VU, B: V0 })), V0);
+  // 1 OR U = 1: term2 (B=1) decides the sum despite term1 being U.
+  assert.equal(evalSum(out.terms, nets({ A: VU, B: V1 })), V1);
+  // 1 AND U = U; 0 OR U = U (A=0 forces term1 to 0, B=U leaves term2 U).
+  assert.equal(evalTerm(out.terms[0], nets({ A: VU, B: V1 })), VU);
+  assert.equal(evalSum(out.terms, nets({ A: V0, B: VU })), VU);
+  // Z reads as U (FR-077): B=Z makes both terms U, so the sum is U.
+  assert.equal(evalOutput(out, nets({ A: V1, B: VZ }), null), VU);
   // No U anywhere: ordinary logic.
   assert.equal(evalOutput(out, nets({ A: V1, B: V1 }), null), V1);
   assert.equal(evalOutput(out, nets({ A: V0, B: V0 }), null), V0);
+});
+
+test("74163 regression: a held clear/load rescues all-U registers (FR-077)", () => {
+  // The QA (LSB) equation from srv/components/74163.yaml: every product term
+  // carries CLR, and the count/hold terms carry registered feedback. Under
+  // strict pessimism 0 AND U = U kept the register U forever; selective
+  // pessimism lets the held clear (or load) decide.
+  const c = compileBehavior(
+    ty(
+      [
+        ["A", "in"],
+        ["/CLR", "in"],
+        ["/LOAD", "in"],
+        ["ENP", "in"],
+        ["ENT", "in"],
+        ["QA", "out"],
+      ],
+      "QA.R = CLR * /LOAD * A + CLR * LOAD * ENP * ENT * /QA" +
+        " + CLR * LOAD * /ENP * QA + CLR * LOAD * /ENT * QA\n",
+    ),
+  );
+  // Held synchronous clear (pin /CLR LOW): every term is 0 despite QA = U.
+  const registers = new Map([["QA", VU]]);
+  const clearing = nets({ CLR: V0, LOAD: V1, ENP: V1, ENT: V1, A: VU, QA: VU });
+  updateRegisters(c, clearing, registers, true);
+  assert.equal(registers.get("QA"), V0);
+  // Held synchronous load (pin /LOAD LOW) of a 1 from all-U likewise.
+  registers.set("QA", VU);
+  const loading = nets({ CLR: V1, LOAD: V0, ENP: VU, ENT: VU, A: V1, QA: VU });
+  updateRegisters(c, loading, registers, true);
+  assert.equal(registers.get("QA"), V1);
+  // Counting from a defined state still works: QA toggles 0 -> 1.
+  const counting = nets({ CLR: V1, LOAD: V1, ENP: V1, ENT: V1, A: V0, QA: V0 });
+  updateRegisters(c, counting, registers, true);
+  assert.equal(registers.get("QA"), V1);
 });
 
 test("74138 row check: physical-level output polarity (FR-079)", () => {

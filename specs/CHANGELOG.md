@@ -19,6 +19,20 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-12 — Power-on reset built-in; selective pessimism replaces strict-U
+What: New "power-on reset" built-in (FR-071b): R/active-low /R outputs
+asserted for the first `cycles` clock cycles of a run (property, default 3;
+cycle = the single clock instance's effective period, else 100 ns). FR-077
+reworked from strict pessimism to selective pessimism (0 AND x = 0,
+1 OR x = 1; other U combinations still U; Z still reads as U).
+Why: A placed 74163 never counted: registers power up U (FR-079) and strict-U
+made registered feedback un-initializable — 0 AND U = U, so even a held
+synchronous clear/load reloaded U forever. Selective pessimism lets a proper
+reset initialize sequential logic (uninitialized paths still show U); the
+reset built-in supplies that pulse without hand-wiring one.
+Touches: FR-071b (new), FR-077 (reworked), FR-067a; design §2.1, §6.11,
+§6.13, §8, §10, §11.1
+
 ## 2026-06-12 — Manhattan route proposal for wire/bus drawing
 What: While drawing a wire/bus, the rubber-band preview shows a proposed
 Manhattan route (A* around component outlines, pin-escape in the pin's facing

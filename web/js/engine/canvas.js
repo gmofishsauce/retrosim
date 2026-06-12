@@ -268,7 +268,9 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
   } else if (td.renderType === "pulldown") {
     drawPulldown(ctx, inst, vp, selected);
   } else if (td.renderType === "clock") {
-    drawClock(ctx, inst, vp, selected);
+    drawLabelBox(ctx, inst, vp, selected, "CLK");
+  } else if (td.renderType === "reset") {
+    drawLabelBox(ctx, inst, vp, selected, "RST");
   } else {
     const corners = [
       [0, 0],
@@ -457,9 +459,9 @@ function drawPulldown(ctx, inst, vp, selected) {
   );
 }
 
-// drawClock renders the clock box reading "CLK" (FR-071), with its pin on the
-// right-center edge.
-function drawClock(ctx, inst, vp, selected) {
+// drawLabelBox renders a built-in's outline box with a centered label: the
+// clock's "CLK" (FR-071) and the power-on reset's "RST" (FR-071b).
+function drawLabelBox(ctx, inst, vp, selected, label) {
   const td = inst.typeData;
   const corners = [
     [0, 0],
@@ -486,7 +488,7 @@ function drawClock(ctx, inst, vp, selected) {
   ctx.font = "bold " + Math.round(0.6 * scaleFor(vp)) + "px system-ui, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("CLK", center.x, center.y);
+  ctx.fillText(label, center.x, center.y);
 }
 
 // (sideOutward now lives in model/design.js, shared with pinVisualPos.)

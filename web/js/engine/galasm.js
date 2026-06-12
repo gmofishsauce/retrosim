@@ -227,12 +227,14 @@ export function compileBehavior(typeData) {
   return { outputs, ar, sp };
 }
 
-// --- Evaluation (§6.13, FR-077 strict pessimism) ---
+// --- Evaluation (§6.13, FR-077 selective pessimism) ---
 //
 // readNet(signal) → V0|V1|VU|VZ is supplied by sim.js (signal → pin → net →
-// current step's value). Z reads as U; any U operand makes a result U — even
-// where two-valued logic could decide (U AND 0 = U), per the stakeholder's
-// rule (FR-077, design §8).
+// current step's value). Z reads as U. Combination is selectively pessimistic,
+// as real logic permits: 0 AND x = 0 and 1 OR x = 1 regardless of U operands;
+// every other combination with a U operand yields U (FR-077, design §8 —
+// reworked 2026-06-12 from strict pessimism, under which registered feedback
+// could never be initialized: 0 AND U = U made a held clear/load ineffective).
 
 // litValue: a literal is true iff its net reads (low ? 0 : 1); U if U/Z.
 function litValue(lit, readNet) {
@@ -242,25 +244,28 @@ function litValue(lit, readNet) {
 }
 
 // evalTerm: AND of the term's literals; the empty product (VCC) is true.
+// Any false literal decides the product (0 AND U = 0); otherwise any U
+// literal makes it U.
 export function evalTerm(term, readNet) {
-  let result = V1;
+  let sawU = false;
   for (const lit of term) {
     const v = litValue(lit, readNet);
-    if (v === VU) return VU; // strict: U regardless of other literals
-    if (v === V0) result = V0;
+    if (v === V0) return V0; // 0 dominates, even over U operands
+    if (v === VU) sawU = true;
   }
-  return result;
+  return sawU ? VU : V1;
 }
 
-// evalSum: OR of the terms; the empty sum (GND) is false.
+// evalSum: OR of the terms; the empty sum (GND) is false. Any true term
+// decides the sum (1 OR U = 1); otherwise any U term makes it U.
 export function evalSum(terms, readNet) {
-  let result = V0;
+  let sawU = false;
   for (const term of terms) {
     const v = evalTerm(term, readNet);
-    if (v === VU) return VU; // strict: U regardless of other terms
-    if (v === V1) result = V1;
+    if (v === V1) return V1; // 1 dominates, even over U terms
+    if (v === VU) sawU = true;
   }
-  return result;
+  return sawU ? VU : V0;
 }
 
 // xorLow flips a 0/1 value when the LHS is negated; U passes through.

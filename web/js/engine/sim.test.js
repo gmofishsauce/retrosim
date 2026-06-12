@@ -187,6 +187,41 @@ test("clock waveform: low first half-period, rising edge at period/2 (FR-084)", 
   assert.equal(sim.unitsPerSecond(), 4 * 1); // period × speed (default speed 1)
 });
 
+test("power-on reset: asserted for cycles × clock period, then released (FR-071b)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("clock"), { props: { period: 4 } });
+  place(d, "A-2", builtin("reset"), { props: { cycles: 1 } });
+  place(d, "A-3", builtin("indicator"));
+  place(d, "A-4", builtin("indicator"));
+  connect(d, ["A-2", "R"], ["A-3", "IN"]);
+  connect(d, ["A-2", "/R"], ["A-4", "IN"]);
+
+  const sim = buildSimulation(d);
+  // clockPeriod = 4 (the single clock's effective period), so the reset spans
+  // simTime 0..3. Unit delay: the net at step t shows behave(t-1), so R
+  // reads 1 at steps 1..4 and 0 from step 5; /R is the inverse throughout.
+  const rst = [];
+  const rstL = [];
+  for (let i = 0; i < 6; i++) {
+    sim.step();
+    rst.push(sim.valueOfPin("A-3", "IN"));
+    rstL.push(sim.valueOfPin("A-4", "IN"));
+  }
+  assert.deepEqual(rst, [V1, V1, V1, V1, V0, V0]);
+  assert.deepEqual(rstL, [V0, V0, V0, V0, V1, V1]);
+});
+
+test("power-on reset: no clock placed → 100 ns default period (FR-071b)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("reset"), {}); // default cycles = 3 → 300 units
+  place(d, "A-2", builtin("indicator"));
+  connect(d, ["A-1", "R"], ["A-2", "IN"]);
+
+  const sim = buildSimulation(d);
+  for (let i = 0; i < 20; i++) sim.step();
+  assert.equal(sim.valueOfPin("A-2", "IN"), V1); // still held at step 20
+});
+
 test("registered output: latches D on the rising clock edge only (FR-079)", () => {
   const d = mkDesign();
   place(d, "A-1", builtin("clock"), { props: { period: 4 } });
@@ -304,12 +339,13 @@ test("subunit package: siblings evaluate as one entity (§6.13)", () => {
   assert.equal(sim.valueOfPin("U1B", "2Y"), V1); // NAND(0,0) = 1
 });
 
-test("feedback loop settles to U under strict pessimism (FR-077)", () => {
+test("feedback loop settles to U (FR-077)", () => {
   // A ring oscillator cannot oscillate from a cold start: every net begins
-  // Z/U, and U is an absorbing fixed point of strict-U evaluation — the loop
-  // settles with the net at U rather than toggling. (Real oscillation needs a
-  // definite initial value, which only a clock or a reset path can inject, so
-  // the FR-085 settling bound is defensive rather than load-bearing.)
+  // Z/U, and an inverter of U is U even under selective pessimism (no
+  // constant operand decides it) — the loop settles with the net at U rather
+  // than toggling. (Real oscillation needs a definite initial value, which
+  // only a clock or a reset path can inject, so the FR-085 settling bound is
+  // defensive rather than load-bearing.)
   const d = mkDesign();
   place(d, "U1", NOT);
   connect(d, ["U1", "Y"], ["U1", "A"]); // feedback: Y → A
