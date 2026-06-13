@@ -27,6 +27,8 @@ import {
   setBusBitNamesCmd,
   breakoutBitCmd,
   deleteBendCmd,
+  composite,
+  translateWiring,
 } from "../commands.js";
 import {
   insertBend,
@@ -36,6 +38,8 @@ import {
   pinWorldPos,
   sideOutward,
   packageSiblings,
+  rigidWiring,
+  getVertex,
 } from "../model/design.js";
 import {
   chooseGroupDialog,
@@ -190,8 +194,42 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     return route ? route.slice(1, -1) : [];
   }
 
-  function select(sel) {
-    store.setSelection(sel); // notifies → canvas re-renders + properties panel updates
+  // select replaces the selection with a single object (plain click), or —
+  // when additive (shift-click, FR-016a) — toggles that object's membership;
+  // select(null) clears the selection. Notifies → canvas re-renders + properties
+  // panel updates.
+  function select(ref, additive = false) {
+    if (!ref) store.setSelection([]);
+    else if (additive) store.toggleSelection(ref);
+    else store.setSelection([ref]);
+  }
+
+  // selectedComponentOrigins snapshots the pre-drag positions of every selected
+  // component, so a group drag-move can offset them all together (FR-016a).
+  function selectedComponentOrigins() {
+    return store.state.selection
+      .filter((r) => r.kind === "component")
+      .map((r) => {
+        const inst = store.design.components.find((c) => c.refdes === r.refdes);
+        return { refdes: r.refdes, origX: inst.x, origY: inst.y };
+      });
+  }
+
+  // rigidWiringSnapshot captures the interior wiring of a group move (FR-018c) —
+  // the bend points and junction/free vertices that should travel with the moving
+  // components — together with their pre-drag coordinates for live preview and
+  // exact-revert commit. `movingRefdes` is a Set of the moving components' refdes.
+  function rigidWiringSnapshot(movingRefdes) {
+    const refs = rigidWiring(store.design, movingRefdes);
+    const bends = refs.bends.map((b) => {
+      const p = findWire(b.wireId).path[b.index];
+      return { ...b, origX: p.x, origY: p.y };
+    });
+    const vertices = refs.vertices.map((id) => {
+      const v = getVertex(store.design, id);
+      return { id, origX: v.x, origY: v.y };
+    });
+    return { refs, bends, vertices };
   }
 
   // deleteComponentConfirmed deletes a component, warning first before removing a
@@ -203,6 +241,34 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       if (!window.confirm(`Delete all ${n} units of package ${refdes}?`)) return false;
     }
     store.dispatch(deleteComponent(refdes));
+    return true;
+  }
+
+  // deleteSelection deletes every selected object as one undoable composite
+  // (FR-016a/FR-018a): wires, buses, and components — each subunit package once,
+  // confirmed per FR-018b. A cancelled package confirmation aborts the whole
+  // delete. Returns true if a delete was dispatched.
+  function deleteSelection() {
+    const cmds = [];
+    const seenPkg = new Set();
+    for (const ref of store.state.selection) {
+      if (ref.kind === "wire") cmds.push(deleteWireCmd(ref.id));
+      else if (ref.kind === "bus") cmds.push(deleteBusCmd(ref.id));
+      else if (ref.kind === "component") {
+        const inst = store.design.components.find((c) => c.refdes === ref.refdes);
+        if (!inst) continue;
+        if (inst.typeData?.renderType === "subunit") {
+          const key = /^U\d+/.exec(ref.refdes)?.[0];
+          if (seenPkg.has(key)) continue; // one delete per package
+          seenPkg.add(key);
+          const n = packageSiblings(store.design, ref.refdes).length;
+          if (!window.confirm(`Delete all ${n} units of package ${ref.refdes}?`)) return false;
+        }
+        cmds.push(deleteComponent(ref.refdes));
+      }
+    }
+    if (cmds.length === 0) return false;
+    store.dispatch(cmds.length === 1 ? cmds[0] : composite(cmds, "Delete selection"));
     return true;
   }
 
@@ -361,12 +427,12 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     if (store.state.simulating) {
       const world = worldOf(e);
       const seg = hitSegment(store.design, world, 0.4);
-      if (seg) return select({ kind: "wire", id: seg.wire.id });
+      if (seg) return select({ kind: "wire", id: seg.wire.id }, e.shiftKey);
       const busSeg = hitBusSegment(store.design, world, 0.4);
-      if (busSeg) return select({ kind: "bus", id: busSeg.bus.id });
+      if (busSeg) return select({ kind: "bus", id: busSeg.bus.id }, e.shiftKey);
       const comp = hitComponent(store.design, world);
-      if (comp) return select({ kind: "component", refdes: comp.refdes });
-      select(null);
+      if (comp) return select({ kind: "component", refdes: comp.refdes }, e.shiftKey);
+      if (!e.shiftKey) select(null);
       startPan(e);
       return;
     }
@@ -482,27 +548,44 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     }
     const seg = hitSegment(store.design, world, 0.4);
     if (seg) {
-      select({ kind: "wire", id: seg.wire.id });
+      select({ kind: "wire", id: seg.wire.id }, e.shiftKey);
       // A plain click selects; a drag inserts a bend here (decided on move).
       drag = { type: "segment", wireId: seg.wire.id, segIndex: seg.segIndex, tempIndex: -1, moved: false };
       return;
     }
     const busSeg = hitBusSegment(store.design, world, 0.4);
     if (busSeg) {
-      select({ kind: "bus", id: busSeg.bus.id });
+      select({ kind: "bus", id: busSeg.bus.id }, e.shiftKey);
       // Same as wires (FR-039): a plain click selects; a drag inserts a bend.
       drag = { type: "segment", wireId: busSeg.bus.id, segIndex: busSeg.segIndex, tempIndex: -1, moved: false };
       return;
     }
     const comp = hitComponent(store.design, world);
     if (comp) {
-      select({ kind: "component", refdes: comp.refdes });
-      drag = { type: "component", refdes: comp.refdes, origX: comp.x, origY: comp.y, moved: false };
+      const ref = { kind: "component", refdes: comp.refdes };
+      const already = store.isSelected(ref);
+      // Shift toggles; a plain click on an unselected component selects it alone;
+      // a plain press on an already-selected member keeps the whole selection so
+      // the group can be dragged, collapsing to just this one only if the press
+      // turns out to be a click with no drag (FR-016a).
+      if (e.shiftKey) store.toggleSelection(ref);
+      else if (!already) store.setSelection([ref]);
+      const start = gridOf(e);
+      const members = selectedComponentOrigins();
+      drag = {
+        type: "component",
+        members,
+        wiring: rigidWiringSnapshot(new Set(members.map((m) => m.refdes))),
+        startX: start.x,
+        startY: start.y,
+        moved: false,
+        collapseTo: !e.shiftKey && already ? ref : null,
+      };
       return;
     }
-    // Empty canvas: deselect now; a drag pans, a plain click just deselects
-    // (FR-023a).
-    select(null);
+    // Empty canvas: a plain click deselects (FR-023a); shift preserves the
+    // selection. Either way a drag pans.
+    if (!e.shiftKey) select(null);
     startPan(e);
   });
 
@@ -596,10 +679,31 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     const g = gridOf(e);
 
     if (drag.type === "component") {
-      const inst = store.design.components.find((c) => c.refdes === drag.refdes);
-      if (inst && (inst.x !== g.x || inst.y !== g.y)) {
-        inst.x = g.x;
-        inst.y = g.y;
+      const offX = g.x - drag.startX;
+      const offY = g.y - drag.startY;
+      let changed = false;
+      for (const m of drag.members) {
+        const inst = store.design.components.find((c) => c.refdes === m.refdes);
+        const nx = m.origX + offX;
+        const ny = m.origY + offY;
+        if (inst && (inst.x !== nx || inst.y !== ny)) {
+          inst.x = nx;
+          inst.y = ny;
+          changed = true;
+        }
+      }
+      if (changed) {
+        // The interior wiring travels rigidly with the components (FR-018c).
+        for (const b of drag.wiring.bends) {
+          const p = findWire(b.wireId).path[b.index];
+          p.x = b.origX + offX;
+          p.y = b.origY + offY;
+        }
+        for (const v of drag.wiring.vertices) {
+          const vx = getVertex(store.design, v.id);
+          vx.x = v.origX + offX;
+          vx.y = v.origY + offY;
+        }
         drag.moved = true;
         renderer.requestRender();
       }
@@ -647,14 +751,45 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     }
     if (!drag) return;
 
-    if (drag.type === "component" && drag.moved) {
-      const inst = store.design.components.find((c) => c.refdes === drag.refdes);
-      const fx = inst.x;
-      const fy = inst.y;
-      inst.x = drag.origX;
-      inst.y = drag.origY;
-      store.dispatch(moveComponent(drag.refdes, fx, fy));
-    } else if (drag.type === "bend" && drag.moved) {
+    if (drag.type === "component") {
+      if (drag.moved) {
+        // The whole group moved by one offset; read it off any member before rewind.
+        const m0 = drag.members[0];
+        const inst0 = store.design.components.find((c) => c.refdes === m0.refdes);
+        const off = { x: inst0.x - m0.origX, y: inst0.y - m0.origY };
+        // Rewind each member to its pre-drag position so the commands capture the
+        // true old positions for undo, then dispatch as one step (FR-016a/FR-024).
+        const cmds = drag.members.map((m) => {
+          const inst = store.design.components.find((c) => c.refdes === m.refdes);
+          const fx = inst.x;
+          const fy = inst.y;
+          inst.x = m.origX;
+          inst.y = m.origY;
+          return moveComponent(m.refdes, fx, fy);
+        });
+        // Rewind the interior wiring and re-apply it through a command (FR-018c).
+        if (drag.wiring.refs.bends.length || drag.wiring.refs.vertices.length) {
+          for (const b of drag.wiring.bends) {
+            const p = findWire(b.wireId).path[b.index];
+            p.x = b.origX;
+            p.y = b.origY;
+          }
+          for (const v of drag.wiring.vertices) {
+            const vx = getVertex(store.design, v.id);
+            vx.x = v.origX;
+            vx.y = v.origY;
+          }
+          cmds.push(translateWiring(drag.wiring.refs, off.x, off.y));
+        }
+        store.dispatch(cmds.length === 1 ? cmds[0] : composite(cmds, "Move selection"));
+      } else if (drag.collapseTo) {
+        store.setSelection([drag.collapseTo]); // plain click on a member collapses
+      }
+      drag = null;
+      return;
+    }
+
+    if (drag.type === "bend" && drag.moved) {
       const w = findWire(drag.wireId);
       const p = w.path[drag.bendIndex];
       const fx = p.x;
@@ -723,26 +858,30 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     }
 
     const sel = store.state.selection;
-    if (!sel) return;
+    if (sel.length === 0) return;
 
     if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
-      if (sel.kind === "component") {
-        if (deleteComponentConfirmed(sel.refdes)) select(null);
-      } else {
-        if (sel.kind === "wire") store.dispatch(deleteWireCmd(sel.id));
-        else if (sel.kind === "bus") store.dispatch(deleteBusCmd(sel.id));
-        select(null);
-      }
-    } else if (e.key.toLowerCase() === "r" && sel.kind === "component") {
+      if (deleteSelection()) select(null);
+    } else if (e.key.toLowerCase() === "r") {
       e.preventDefault();
-      store.dispatch(rotateComponent(sel.refdes, e.shiftKey ? -90 : 90));
-    } else if (sel.kind === "bus" && (e.key === "+" || e.key === "=" || e.key === "-")) {
+      const delta = e.shiftKey ? -90 : 90;
+      const cmds = sel
+        .filter((r) => r.kind === "component")
+        .map((r) => rotateComponent(r.refdes, delta));
+      if (cmds.length > 0) {
+        store.dispatch(cmds.length === 1 ? cmds[0] : composite(cmds, "Rotate selection"));
+      }
+    } else if (
+      (e.key === "+" || e.key === "=" || e.key === "-") &&
+      sel.length === 1 &&
+      sel[0].kind === "bus"
+    ) {
       // Stopgap width control until the right-click context menu (FR-038, S20).
       e.preventDefault();
-      const bus = store.design.buses.find((b) => b.id === sel.id);
+      const bus = store.design.buses.find((b) => b.id === sel[0].id);
       const delta = e.key === "-" ? -1 : 1;
-      store.dispatch(setBusWidthCmd(sel.id, Math.max(1, bus.width + delta)));
+      store.dispatch(setBusWidthCmd(sel[0].id, Math.max(1, bus.width + delta)));
     }
   });
 

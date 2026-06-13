@@ -81,7 +81,7 @@ test("markSaved clears the dirty flag", () => {
 test("replaceDesign swaps the design and resets history/selection/dirty", () => {
   const store = newStore();
   store.dispatch(addCmd(1));
-  store.state.selection = { kind: "component", refdes: "U1" };
+  store.setSelection([{ kind: "component", refdes: "U1" }]);
   assert.equal(store.state.dirty, true);
   assert.equal(store.canUndo(), true);
 
@@ -91,10 +91,26 @@ test("replaceDesign swaps the design and resets history/selection/dirty", () => 
   assert.equal(store.design, fresh);
   assert.equal(store.state.designName, "loaded");
   assert.equal(store.state.savePath, "/tmp/x.json");
-  assert.equal(store.state.selection, null);
+  assert.deepEqual(store.state.selection, []);
   assert.equal(store.state.dirty, false);
   assert.equal(store.canUndo(), false);
   assert.equal(store.canRedo(), false);
+});
+
+test("toggleSelection adds, removes, and mixes kinds (FR-016a)", () => {
+  const store = newStore();
+  const u1 = { kind: "component", refdes: "U1" };
+  const w7 = { kind: "wire", id: 7 };
+
+  store.toggleSelection(u1);
+  assert.equal(store.isSelected(u1), true);
+
+  store.toggleSelection(w7);
+  assert.deepEqual(store.state.selection, [u1, w7]);
+
+  store.toggleSelection(u1);
+  assert.equal(store.isSelected(u1), false);
+  assert.deepEqual(store.state.selection, [w7]);
 });
 
 test("markSaved records the path and clears dirty", () => {

@@ -7,12 +7,22 @@
 // UNDO_CAP bounds the undo history; well above the NFR-006 minimum of 50.
 export const UNDO_CAP = 100;
 
+// sameRef compares two selection refs by kind and identity (refdes for
+// components, id for wires/buses) — FR-016a.
+export function sameRef(a, b) {
+  return a.kind === b.kind && a.refdes === b.refdes && a.id === b.id;
+}
+
+function sameRefIn(list, ref) {
+  return list.some((s) => sameRef(s, ref));
+}
+
 export function createStore(initial = {}) {
   const state = {
     design: initial.design ?? null,
     tool: initial.tool ?? "select",
     placeType: initial.placeType ?? null, // type name armed for click-to-place (FR-009a)
-    selection: initial.selection ?? null,
+    selection: initial.selection ?? [],
     hover: initial.hover ?? null, // refdes under the cursor; transient UI state (FR-013c)
     viewport: initial.viewport ?? { pan: { x: 0, y: 0 }, zoom: 1.6 },
     dirty: false,
@@ -130,11 +140,26 @@ export function createStore(initial = {}) {
       notify();
     },
 
-    // setSelection updates the current selection and notifies, so the canvas
-    // highlight and the properties panel (FR-020a) stay in sync.
+    // setSelection replaces the current selection (an array of refs) and
+    // notifies, so the canvas highlight and the properties panel (FR-020a) stay
+    // in sync (FR-016a).
     setSelection(sel) {
       state.selection = sel;
       notify();
+    },
+
+    // toggleSelection adds ref to the selection if absent, or removes it if
+    // present (shift-click, FR-016a), then notifies.
+    toggleSelection(ref) {
+      state.selection = sameRefIn(state.selection, ref)
+        ? state.selection.filter((s) => !sameRef(s, ref))
+        : [...state.selection, ref];
+      notify();
+    },
+
+    // isSelected reports whether ref is in the current selection (FR-016a).
+    isSelected(ref) {
+      return sameRefIn(state.selection, ref);
     },
 
     // replaceDesign swaps in a new design (New/Open), resetting undo/redo and
@@ -144,7 +169,7 @@ export function createStore(initial = {}) {
       state.design = newDesign;
       state.designName = newDesign.name ?? state.designName;
       state.savePath = savePath;
-      state.selection = null;
+      state.selection = [];
       state.dirty = dirty;
       undoStack.length = 0;
       redoStack.length = 0;

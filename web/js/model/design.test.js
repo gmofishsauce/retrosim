@@ -6,6 +6,7 @@ import {
   addInstance,
   addSubunitPackage,
   addBus,
+  addWire,
   pinWorldPos,
   matchingGroups,
   snapBusGroup,
@@ -13,6 +14,8 @@ import {
   breakoutBit,
   getVertex,
   refreshInstance,
+  rigidWiring,
+  shiftWiring,
 } from "./design.js";
 
 // A representative component type (stub-shaped, see server stubComponents).
@@ -27,6 +30,47 @@ function type74138() {
     ],
   };
 }
+
+test("rigidWiring returns interior bends only when all pins move (FR-018c)", () => {
+  const d = createDesign("t");
+  addInstance(d, type74138(), 0, 0, 0); // U1
+  addInstance(d, type74138(), 10, 0, 0); // U2
+  const w = addWire(
+    d,
+    { kind: "pin", refdes: "U1", pin: "/Y0" },
+    { kind: "pin", refdes: "U2", pin: "A0" },
+    [{ x: 5, y: 3 }],
+  );
+
+  // both endpoints' components move -> the bend is interior
+  const both = rigidWiring(d, new Set(["U1", "U2"]));
+  assert.deepEqual(both.bends, [{ wireId: w.id, index: 1 }]);
+  assert.deepEqual(both.vertices, []); // endpoints are pins, not carried
+
+  // one endpoint stationary -> boundary network, nothing carried (stretches)
+  assert.deepEqual(rigidWiring(d, new Set(["U1"])), { bends: [], vertices: [] });
+});
+
+test("rigidWiring carries a free (dangling) vertex; shiftWiring offsets it (FR-018c)", () => {
+  const d = createDesign("t");
+  addInstance(d, type74138(), 0, 0, 0); // U1
+  const w = addWire(
+    d,
+    { kind: "pin", refdes: "U1", pin: "/Y0" },
+    { kind: "free", x: 8, y: 4 },
+    [{ x: 6, y: 2 }],
+  );
+  const freeId = w.path[2].v;
+
+  const refs = rigidWiring(d, new Set(["U1"]));
+  assert.deepEqual(refs.bends, [{ wireId: w.id, index: 1 }]);
+  assert.deepEqual(refs.vertices, [freeId]);
+
+  shiftWiring(d, refs, 2, 3);
+  assert.deepEqual(w.path[1], { t: "bend", x: 8, y: 5 });
+  const free = getVertex(d, freeId);
+  assert.deepEqual({ x: free.x, y: free.y }, { x: 10, y: 7 });
+});
 
 test("createDesign produces an empty design with the given name", () => {
   const d = createDesign("unnamed schematic 2026-06-02 10:00");

@@ -18,6 +18,7 @@ import {
 } from "../model/design.js";
 import { drawSymbol, pinHasOwnBubble, pinLabelEdge } from "./symbols.js";
 import { V0, V1 } from "./galasm.js";
+import { sameRef } from "../store.js";
 
 // Bubble radius (grid units) for the state-indicator built-in, sized to sit
 // comfortably inside its 2x2 footprint (FR-068).
@@ -120,8 +121,9 @@ function drawGrid(ctx, w, h, vp) {
 function drawComponents(ctx, design, vp, selection, hover, sim) {
   if (!design) return;
   for (const inst of design.components) {
-    const selected =
-      selection?.kind === "component" && selection.refdes === inst.refdes;
+    const selected = selection.some((s) =>
+      sameRef(s, { kind: "component", refdes: inst.refdes }),
+    );
     const hovered = hover === inst.refdes;
     drawComponent(ctx, inst, vp, selected, hovered, sim);
   }
@@ -163,7 +165,7 @@ function drawWires(ctx, design, vp, selection, conflicts) {
     ctx.beginPath();
     ctx.moveTo(pts[0].x, pts[0].y);
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    const selected = selection?.kind === "wire" && selection.id === w.id;
+    const selected = selection.some((s) => sameRef(s, { kind: "wire", id: w.id }));
     const conflicted = conflicts?.has(w.id) && !selected;
     ctx.lineWidth = selected ? 2.5 : conflicted ? 2 : 1;
     ctx.strokeStyle = selected ? "#4a90d9" : conflicted ? CONFLICT_COLOR : "#000";
@@ -185,7 +187,7 @@ function drawBuses(ctx, design, vp, selection, conflicts) {
     ctx.beginPath();
     ctx.moveTo(pts[0].x, pts[0].y);
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-    const selected = selection?.kind === "bus" && selection.id === b.id;
+    const selected = selection.some((s) => sameRef(s, { kind: "bus", id: b.id }));
     const conflicted = conflicts?.has(b.id) && !selected;
     ctx.lineWidth = selected ? 5 : 3;
     ctx.strokeStyle = selected ? "#4a90d9" : conflicted ? CONFLICT_COLOR : "#1565c0";

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { createDesign } from "./model/design.js";
+import { createDesign, addInstance, addWire, getVertex } from "./model/design.js";
 import { createStore } from "./store.js";
 import {
   placeComponent,
@@ -10,6 +10,8 @@ import {
   deleteComponent,
   setOverrideCmd,
   refreshTypesCmd,
+  composite,
+  translateWiring,
 } from "./commands.js";
 
 function ty(name = "74138") {
@@ -100,6 +102,46 @@ test("moveComponent updates position and undo restores it", () => {
     { x: find(store.design, "U1").x, y: find(store.design, "U1").y },
     { x: 4, y: 5 },
   );
+});
+
+test("composite applies all in order and reverts as one undo step (FR-016a)", () => {
+  const store = newStore();
+  store.dispatch(placeComponent(ty("A"), 0, 0, 0)); // U1
+  store.dispatch(placeComponent(ty("B"), 1, 1, 0)); // U2
+
+  store.dispatch(composite([moveComponent("U1", 10, 10), moveComponent("U2", 20, 20)]));
+  assert.deepEqual({ x: find(store.design, "U1").x, y: find(store.design, "U1").y }, { x: 10, y: 10 });
+  assert.deepEqual({ x: find(store.design, "U2").x, y: find(store.design, "U2").y }, { x: 20, y: 20 });
+
+  store.undo(); // single step reverts both
+  assert.deepEqual({ x: find(store.design, "U1").x, y: find(store.design, "U1").y }, { x: 0, y: 0 });
+  assert.deepEqual({ x: find(store.design, "U2").x, y: find(store.design, "U2").y }, { x: 1, y: 1 });
+});
+
+test("translateWiring shifts bends/vertices and reverts on undo (FR-018c)", () => {
+  const store = createStore({ design: createDesign("t") });
+  const tp = {
+    name: "x", width: 6, height: 12,
+    pins: [{ name: "Y", side: "right", position: 2, direction: "out" }],
+  };
+  addInstance(store.design, tp, 0, 0, 0); // U1
+  const w = addWire(
+    store.design,
+    { kind: "pin", refdes: "U1", pin: "Y" },
+    { kind: "free", x: 8, y: 4 },
+    [{ x: 6, y: 2 }],
+  );
+  const freeId = w.path[2].v;
+  const refs = { bends: [{ wireId: w.id, index: 1 }], vertices: [freeId] };
+  const free = () => ({ x: getVertex(store.design, freeId).x, y: getVertex(store.design, freeId).y });
+
+  store.dispatch(translateWiring(refs, 3, 5));
+  assert.deepEqual(w.path[1], { t: "bend", x: 9, y: 7 });
+  assert.deepEqual(free(), { x: 11, y: 9 });
+
+  store.undo();
+  assert.deepEqual(w.path[1], { t: "bend", x: 6, y: 2 });
+  assert.deepEqual(free(), { x: 8, y: 4 });
 });
 
 test("rotateComponent applies a delta modulo 360 and undo restores", () => {

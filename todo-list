@@ -19,4 +19,5 @@ Get rid of pan and implement group select.
 DONE Improve (expand) click area for wiring
 DONE does change-name during initial save preserve the new name?
 DONE disconnect and rconnect handling
-
+Is there a problem with rotation? I've never seen the rotation operation in a context menu.
+Change the visualization of bus snap connections so that the bus snaps to a thing that looks like a curly brace. Change the implementation of groups so that the pins within the group must be continuous and on a single side.

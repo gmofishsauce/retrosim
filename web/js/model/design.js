@@ -562,6 +562,88 @@ function findSingleNodeRef(design, id) {
   return null;
 }
 
+// conductorById returns the wire or bus with the given id, or null.
+function conductorById(design, id) {
+  return (
+    design.wires.find((w) => w.id === id) ??
+    design.buses.find((b) => b.id === id) ??
+    null
+  );
+}
+
+// rigidWiring returns the wiring interior to a group move (FR-018c): the bend
+// points (`{wireId, index}`) and the junction/free vertex ids of every conductor
+// network all of whose pin endpoints connect to a component in `movingRefdes` (a
+// Set of refdes). Pin vertices are excluded — they follow their components. A
+// network with any pin on a non-moving component, or with no pins at all, is left
+// alone (its segments stretch per FR-018).
+export function rigidWiring(design, movingRefdes) {
+  const conductors = allConductors(design);
+
+  // Union-find over conductor indices, joined where they share a vertex.
+  const parent = conductors.map((_, i) => i);
+  const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  const byVertex = new Map();
+  conductors.forEach((c, i) => {
+    for (const p of c.path) {
+      if (p.t !== "node") continue;
+      if (!byVertex.has(p.v)) byVertex.set(p.v, []);
+      byVertex.get(p.v).push(i);
+    }
+  });
+  for (const list of byVertex.values())
+    for (let k = 1; k < list.length; k++) parent[find(list[k])] = find(list[0]);
+
+  // Group conductor indices into networks by their union-find root.
+  const nets = new Map();
+  conductors.forEach((_, i) => {
+    const r = find(i);
+    if (!nets.has(r)) nets.set(r, []);
+    nets.get(r).push(i);
+  });
+
+  const bends = [];
+  const vertices = new Set();
+  for (const idxs of nets.values()) {
+    let pins = 0;
+    let allMoving = true;
+    for (const i of idxs)
+      for (const p of conductors[i].path) {
+        if (p.t !== "node") continue;
+        const v = getVertex(design, p.v);
+        if (v.kind === "pin") {
+          pins++;
+          if (!movingRefdes.has(v.ref)) allMoving = false;
+        }
+      }
+    if (pins === 0 || !allMoving) continue; // boundary or free-floating: stretch
+    for (const i of idxs) {
+      const c = conductors[i];
+      c.path.forEach((p, idx) => {
+        if (p.t === "bend") bends.push({ wireId: c.id, index: idx });
+        else if (getVertex(design, p.v).kind !== "pin") vertices.add(p.v);
+      });
+    }
+  }
+  return { bends, vertices: [...vertices] };
+}
+
+// shiftWiring translates the bend points and vertices named by `refs` (as
+// returned by rigidWiring) by (dx,dy) — the interior-wiring move of FR-018c.
+// Reversible by negating the offset.
+export function shiftWiring(design, refs, dx, dy) {
+  for (const { wireId, index } of refs.bends) {
+    const p = conductorById(design, wireId).path[index];
+    p.x += dx;
+    p.y += dy;
+  }
+  for (const id of refs.vertices) {
+    const v = getVertex(design, id);
+    v.x += dx;
+    v.y += dy;
+  }
+}
+
 // cleanup restores connectivity invariants after a structural deletion (§3.3):
 //   - a junction referenced by exactly one conductor is demoted: to a free
 //     (dangling) vertex if it is that conductor's endpoint, or back to a plain

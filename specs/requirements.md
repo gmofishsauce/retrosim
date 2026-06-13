@@ -68,19 +68,21 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 ### 3.5 Component Selection and Movement
 
 - FR-016: In select-tool mode, the user shall be able to click a component to select it.
-- FR-017: The user shall be able to drag a selected component to a new position on the canvas; the component shall snap to the grid.
-- FR-018: When a component is moved, any wire or bus segments directly connected to its pins shall stretch to follow, maintaining connectivity. The stretched segments may cross other components; the user is responsible for re-routing them afterward.
-- FR-018a: In select-tool mode, the user shall be able to delete a selected component. Wires and buses connected to the deleted component shall remain in the design with their formerly-connected endpoints left dangling (see FR-029, FR-030).
+- FR-016a: In select-tool mode the selection may contain multiple objects of any mix of kinds. Shift-clicking a selectable object (component, wire, or bus) shall toggle its membership in the selection — adding it if absent, removing it if present. A plain (non-shift) click shall replace the selection with the single clicked object (FR-016); a left click on empty canvas shall clear the entire selection (FR-023a). Operations act on every selected object: Delete removes all selected objects (FR-018a); dragging any selected component moves all selected components by the same grid offset (FR-017), carrying the wiring interior to the selection with them (FR-018c); Rotate rotates every selected component about its own center (FR-019). Selected wires and buses are not themselves moved or rotated as standalone objects, but endpoints connected to a moved component follow their pins, and bends and junctions interior to the moving selection travel with it (FR-018/FR-018c).
+- FR-017: The user shall be able to drag a selected component to a new position on the canvas; the component shall snap to the grid. (Extended by FR-016a for multi-object selections.)
+- FR-018: When a component is moved, any wire or bus segments directly connected to its pins shall stretch to follow, maintaining connectivity. The stretched segments may cross other components; the user is responsible for re-routing them afterward. (See FR-018c: wiring interior to a multi-component move translates rigidly instead of stretching.)
+- FR-018c: When components are moved together (FR-016a/FR-017), the wiring interior to the moving selection shall translate rigidly with them: for any wire or bus conductor network all of whose pin endpoints connect to components in the moving set, the network's bend points and its junction and free (dangling) vertices shall shift by the same offset, preserving the sub-circuit's shape. A network with a pin endpoint on a component outside the moving set is not interior and stretches per FR-018. (For a single moved component the usual case — wires running to other, unselected components — still stretches per FR-018; only wiring entirely self-contained on the moved component, such as a dangling stub, travels with it.)
+- FR-018a: In select-tool mode, the user shall be able to delete a selected component. Wires and buses connected to the deleted component shall remain in the design with their formerly-connected endpoints left dangling (see FR-029, FR-030). (Extended by FR-016a for multi-object selections.)
 - FR-018b: Deleting any subunit of a subunit-rendered package (FR-013a) shall delete all subunits of that package as a single action; the system shall require explicit user confirmation (a warning dialog) before performing the deletion.
 
 ### 3.6 Component Rotation
 
-- FR-019: The user shall be able to rotate a selected component 90° clockwise or 90° counter-clockwise.
+- FR-019: The user shall be able to rotate a selected component 90° clockwise or 90° counter-clockwise. (Extended by FR-016a for multi-object selections.)
 - FR-020: Rotation shall reposition pin bubbles accordingly; all text labels (pin names, reference designator, type name) shall remain upright after rotation.
 
 ### 3.6a Per-Instance Type Overrides
 
-- FR-020a: The user shall be able to view the type data of a selected component instance and override specific values (e.g., propagation delay) for that instance only. Overrides shall not affect other instances of the same type or the underlying YAML file, and shall be persisted per FR-058.
+- FR-020a: The user shall be able to view the type data of a selected component instance and override specific values (e.g., propagation delay) for that instance only. Overrides shall not affect other instances of the same type or the underlying YAML file, and shall be persisted per FR-058. When the selection is empty or contains more than a single component, the properties panel is blank.
 - FR-020b: A component type may declare named numeric properties, each with a name, a unit, and a default value (e.g., the clock's period in ns, FR-071a). Per-instance property values shall be viewable and settable through the same per-instance override mechanism as other type data (FR-020a) and persisted per FR-058. Built-in objects (FR-067) declare their properties in the client-side registry; the YAML format may later declare properties for 74-series types without breaking the parser or the editor (consistent with FR-066).
 
 ### 3.7 The Canvas and Grid
@@ -259,7 +261,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 - The browser application must be implemented in JavaScript (no TypeScript, WebAssembly, or other compile-to-JS languages unless discussed).
 - The server must be implemented in Go.
 - The system is single-user and localhost-only; no authentication or TLS is required.
-- Multi-select and copy/paste of components are out of scope for this phase.
+- Copy/paste of components is out of scope for this phase.
 - The fast simulation engine (C-code transpiler) is out of scope; the slow debug simulator is in scope (§3.19).
 
 **Assumptions:**

@@ -372,7 +372,7 @@ as authoritative and raise it — do not silently diverge.
   (`net/http`, `encoding/json`, `os`, `path/filepath`). No web framework needed.
 - Server binds **only** to `127.0.0.1` (NFR-001). Single local user; **no**
   auth/TLS.
-- Out of scope: multi-select, copy/paste, the simulation engine, the transpiler,
+- Out of scope: copy/paste, the simulation engine, the transpiler,
   and **electrical-rule checking** (e.g., output-to-output conflicts, direction
   validation). Pin `direction` is captured (FR-062a) so ERC can be added later
   without a model change; the bus disambiguation dialog (FR-041b) does **not**
@@ -810,10 +810,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   |---|---|---|---|
   | SELECT | hover pin | show wire cursor (FR-027b) | SELECT |
   | SELECT | click pin | begin wire at pin, auto-arming WIRE from select (FR-027b) | WIRE_AWAIT_DEST |
-  | SELECT | click component | select it | SELECT |
-  | SELECT | drag component | `MoveComponent` (snap, stretch connected segs FR-018) | SELECT |
-  | SELECT | press Delete on selection | `DeleteComponent`/`DeleteWire` (FR-018a/FR-033a) | SELECT |
-  | SELECT | click wire/bus segment | select it (FR-031) | SELECT |
+  | SELECT | click component | select it, replacing the selection (FR-016) | SELECT |
+  | SELECT | shift-click object | toggle it in the selection (component/wire/bus, FR-016a) | SELECT |
+  | SELECT | drag selected component | `MoveComponent` for each selected component (snap, stretch connected segs FR-018) + `TranslateWiring` for the interior wiring of the moving set (FR-018c), as one `composite` | SELECT |
+  | SELECT | press Delete on selection | `DeleteComponent`/`DeleteWire`/`DeleteBus` for every selected object (FR-018a/FR-033a/FR-016a) | SELECT |
+  | SELECT | press `r` on selection | `RotateComponent` for each selected component (FR-019/FR-016a) | SELECT |
+  | SELECT | click wire/bus segment | select it, replacing the selection (FR-031) | SELECT |
   | SELECT | drag from wire/bus segment | `InsertBend` at nearest grid pt, the new bend dragging until release (FR-031) | DRAGGING_BEND |
   | SELECT | drag bend point | `MoveBend` (rubber-band FR-032) | DRAGGING_BEND |
   | SELECT | right-click bend | context menu → `DeleteBend` (FR-033) | SELECT |
@@ -937,6 +939,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   used only to show subunit connection ticks (FR-013c). It is transient UI state:
   set directly by the interaction layer with a plain renderer re-render, never
   through the command/undo path, and not persisted.
+  `selection` is an array of selection refs (`{kind:"component",refdes}`,
+  `{kind:"wire",id}`, or `{kind:"bus",id}`); an empty array means nothing is
+  selected. It may hold multiple objects of any mix of kinds (FR-016a). The store
+  exposes `setSelection(arr)`, `toggleSelection(ref)`, and `isSelected(ref)`; it is
+  transient UI state, set outside the command/undo path and not persisted.
   `simulating` (bool) and `sim` (the simulator's display view, §6.13) are likewise
   transient and non-persisted: set via notifying setters by the sim engine. While
   `simulating`, `dispatch`/`undo`/`redo` refuse with a message-tray report instead
@@ -956,7 +963,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   ```
 - **Concrete commands:** `PlaceComponent`, `MoveComponent`, `RotateComponent`,
   `DeleteComponent`, `SetOverride`, `AddWire`, `AddBus`, `InsertBend`, `MoveBend`,
-  `DeleteBend`, `DeleteWire`, `SetBusWidth`, `BranchWire`, `RefreshTypes`. Each
+  `DeleteBend`, `DeleteWire`, `SetBusWidth`, `BranchWire`, `RefreshTypes`,
+  `TranslateWiring` (shifts a set of bend points and junction/free vertices by an
+  offset — the interior wiring of a group move, FR-018c). A
+  `composite` command bundles several of these into one undoable step — `apply`
+  runs them in order, `revert` undoes them in reverse — so a group operation over
+  a multi-object selection (FR-016a) applies and reverts as a single Ctrl-Z. Each
   captures enough
   pre-state to `revert` exactly (e.g., `MoveComponent` stores the old position;
   `DeleteComponent` stores the removed instance plus any vertex conversions/

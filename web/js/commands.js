@@ -21,7 +21,38 @@ import {
   setBusBitNames,
   setOverride,
   refreshInstance,
+  shiftWiring,
 } from "./model/design.js";
+
+// composite bundles several commands into one undoable step (§6.10, FR-016a):
+// apply runs them in order; revert undoes them in reverse. Used for group
+// operations over a multi-object selection. Callers must not pass an empty list.
+export function composite(cmds, label = "group") {
+  return {
+    label,
+    apply(design) {
+      for (const c of cmds) c.apply(design);
+    },
+    revert(design) {
+      for (let i = cmds.length - 1; i >= 0; i--) cmds[i].revert(design);
+    },
+  };
+}
+
+// translateWiring shifts a set of bend points and junction/free vertices (as
+// returned by rigidWiring) by an offset — the interior wiring of a group move
+// (FR-018c). Reversible by negating the offset.
+export function translateWiring(refs, dx, dy) {
+  return {
+    label: "Move wiring",
+    apply(design) {
+      shiftWiring(design, refs, dx, dy);
+    },
+    revert(design) {
+      shiftWiring(design, refs, -dx, -dy);
+    },
+  };
+}
 
 function findInstance(design, refdes) {
   const inst = design.components.find((c) => c.refdes === refdes);

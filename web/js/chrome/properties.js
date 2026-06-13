@@ -24,10 +24,13 @@ function infoRow(label, value) {
 export function initProperties({ container, store }) {
   function render() {
     container.replaceChildren();
+    // The panel shows a single selected component; it is blank when the
+    // selection is empty or holds more than one object (FR-020a/FR-016a).
     const sel = store.state.selection;
+    const only = sel.length === 1 ? sel[0] : null;
     const inst =
-      sel && sel.kind === "component"
-        ? store.design.components.find((c) => c.refdes === sel.refdes)
+      only && only.kind === "component"
+        ? store.design.components.find((c) => c.refdes === only.refdes)
         : null;
     if (!inst) {
       container.appendChild(el("div", "prop-empty", "No component selected"));

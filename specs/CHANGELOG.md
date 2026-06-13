@@ -19,6 +19,29 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-13 — Group move carries interior wiring (FR-018c)
+What: When components are dragged together, wiring whose every pin endpoint is on
+a component in the moving set translates rigidly with them — bend points and
+junction/free vertices shift by the same offset — instead of stretching. Wires to
+unselected components still stretch (FR-018). Implemented with a new
+`TranslateWiring` command folded into the group-move composite (one undo).
+Why: Moving a wired sub-circuit left bends and black-dot junctions behind,
+distorting the wiring.
+Touches: FR-018c (new); FR-016a, FR-018; design §8 transition table, §6.10
+commands (`TranslateWiring`).
+
+## 2026-06-13 — Multiple selection via shift-click
+What: The selection becomes a set of objects. Shift-clicking a component, wire,
+or bus toggles its membership; a plain click still replaces the selection and a
+click on empty canvas clears it. Delete, drag-move, and rotate act on the whole
+selection (mixed kinds allowed; a group move moves only components — selected
+wires/buses are not moved, though endpoints on moved components follow their pins). Properties panel is blank unless exactly
+one component is selected. Reverses the prior "multi-select out of scope".
+Group operations apply/revert as a single Ctrl-Z via a new `composite` command.
+Why: Standard editor interaction; lets the user act on several objects at once.
+Touches: FR-016a (new); FR-016/017/018a/019/020a; requirements §3.x out-of-scope;
+design §6.10 state shape + composite command, §8 transition table, out-of-scope list.
+
 ## 2026-06-13 — Project renamed wut4-editor → retrosim
 What: Repo extracted from the wut4 monorepo and renamed "retrosim". Replaced
 "wut4-editor"/"wut4" everywhere: Go module path → github.com/gmofishsauce/retrosim/sim/srv,
