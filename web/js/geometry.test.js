@@ -12,7 +12,42 @@ import {
   snapToGrid,
   clampZoom,
   zoomAbout,
+  centerViewportOn,
+  rectFromPoints,
+  pointInRect,
+  segmentIntersectsRect,
 } from "./geometry.js";
+
+test("centerViewportOn places the world point at the view center (FR-023b)", () => {
+  const vp = { pan: { x: 3, y: 4 }, zoom: 2 };
+  const out = centerViewportOn(vp, { x: 10, y: 20 }, 800, 600);
+  assert.equal(out.zoom, 2); // zoom unchanged
+  const s = worldToScreen({ x: 10, y: 20 }, out);
+  assert.deepEqual({ x: Math.round(s.x), y: Math.round(s.y) }, { x: 400, y: 300 });
+});
+
+test("rectFromPoints normalizes corners regardless of order", () => {
+  assert.deepEqual(rectFromPoints({ x: 5, y: 8 }, { x: 1, y: 2 }), {
+    minX: 1, maxX: 5, minY: 2, maxY: 8,
+  });
+});
+
+test("pointInRect is inclusive of the boundary", () => {
+  const r = { minX: 0, maxX: 10, minY: 0, maxY: 10 };
+  assert.equal(pointInRect({ x: 5, y: 5 }, r), true);
+  assert.equal(pointInRect({ x: 0, y: 10 }, r), true); // corner
+  assert.equal(pointInRect({ x: 11, y: 5 }, r), false);
+});
+
+test("segmentIntersectsRect: inside, crossing, and outside", () => {
+  const r = { minX: 0, maxX: 10, minY: 0, maxY: 10 };
+  // endpoint inside
+  assert.equal(segmentIntersectsRect({ x: 5, y: 5 }, { x: 20, y: 5 }, r), true);
+  // passes through with both endpoints outside
+  assert.equal(segmentIntersectsRect({ x: -5, y: 5 }, { x: 15, y: 5 }, r), true);
+  // entirely outside, no crossing
+  assert.equal(segmentIntersectsRect({ x: -5, y: -5 }, { x: -1, y: 20 }, r), false);
+});
 
 test("constants (A5)", () => {
   assert.equal(PX_PER_UNIT_DEFAULT, 8);

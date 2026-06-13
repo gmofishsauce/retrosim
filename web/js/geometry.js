@@ -61,6 +61,75 @@ export function clampZoom(zoom) {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom));
 }
 
+// centerViewportOn returns a new viewport (zoom unchanged) panned so that
+// worldPt sits at the center of a viewWidth × viewHeight viewport — the
+// right-click-to-recenter gesture (FR-023b).
+export function centerViewportOn(viewport, worldPt, viewWidth, viewHeight) {
+  const scale = scaleFor(viewport);
+  return {
+    pan: {
+      x: worldPt.x - viewWidth / 2 / scale,
+      y: worldPt.y - viewHeight / 2 / scale,
+    },
+    zoom: viewport.zoom,
+  };
+}
+
+// rectFromPoints returns the axis-aligned rectangle (min/max) spanning two points.
+export function rectFromPoints(a, b) {
+  return {
+    minX: Math.min(a.x, b.x),
+    maxX: Math.max(a.x, b.x),
+    minY: Math.min(a.y, b.y),
+    maxY: Math.max(a.y, b.y),
+  };
+}
+
+// pointInRect reports whether a point lies within (inclusive) an axis-aligned rect.
+export function pointInRect(p, rect) {
+  return (
+    p.x >= rect.minX && p.x <= rect.maxX && p.y >= rect.minY && p.y <= rect.maxY
+  );
+}
+
+// segmentsIntersect reports whether segments p1-p2 and p3-p4 cross, using the
+// orientation test (with collinear-overlap handling).
+function segmentsIntersect(p1, p2, p3, p4) {
+  const o = (a, b, c) =>
+    Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+  const onSeg = (a, b, c) =>
+    Math.min(a.x, b.x) <= c.x &&
+    c.x <= Math.max(a.x, b.x) &&
+    Math.min(a.y, b.y) <= c.y &&
+    c.y <= Math.max(a.y, b.y);
+  const o1 = o(p1, p2, p3);
+  const o2 = o(p1, p2, p4);
+  const o3 = o(p3, p4, p1);
+  const o4 = o(p3, p4, p2);
+  if (o1 !== o2 && o3 !== o4) return true;
+  if (o1 === 0 && onSeg(p1, p2, p3)) return true;
+  if (o2 === 0 && onSeg(p1, p2, p4)) return true;
+  if (o3 === 0 && onSeg(p3, p4, p1)) return true;
+  if (o4 === 0 && onSeg(p3, p4, p2)) return true;
+  return false;
+}
+
+// segmentIntersectsRect reports whether segment a-b touches an axis-aligned rect:
+// either endpoint inside, or the segment crosses any of the rect's four edges.
+export function segmentIntersectsRect(a, b, rect) {
+  if (pointInRect(a, rect) || pointInRect(b, rect)) return true;
+  const tl = { x: rect.minX, y: rect.minY };
+  const tr = { x: rect.maxX, y: rect.minY };
+  const br = { x: rect.maxX, y: rect.maxY };
+  const bl = { x: rect.minX, y: rect.maxY };
+  return (
+    segmentsIntersect(a, b, tl, tr) ||
+    segmentsIntersect(a, b, tr, br) ||
+    segmentsIntersect(a, b, br, bl) ||
+    segmentsIntersect(a, b, bl, tl)
+  );
+}
+
 // zoomAbout returns a new viewport scaled by factor while keeping the world point
 // currently under `screen` fixed on screen (zoom-to-cursor). Zoom is clamped.
 export function zoomAbout(viewport, screen, factor) {

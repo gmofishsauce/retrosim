@@ -1,0 +1,40 @@
+next, I want to make a major user interaction change. I want to make          
+  positioning the canvas and multiple selection work like KiCad. This means     
+  clicking on the back canvas will no longer pan the display. To reposition the   display, the user *right* clicks on the canvas and the click point becomes      the new display center. Clicking and dragging on the bare canvas instead      
+  creates a selection rectangle. If the selection rectangle is drawn from upper 
+  left to lower right with the mouse, only components that are completely       
+  enclosed within the rectangle are selected. But If the selection rectangle is 
+  drawn from lower right to upper left, any object touched by the rectangle     
+  becomes part of the  multi select set. Please take your time and think this   
+  over and then ask me any questions that you think are unclear. Then we will     create a plan and you can proceed.                                            
+  
+⏺ This is a meaty interaction overhaul. Before I ask anything, let me ground
+  myself in the current model so my questions are precise.
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+⏺ Good — I now have the full picture. Current model (to be changed):
+  - FR-023a: left-drag on bare canvas pans; no-drag left-click on bare canvas
+  clears selection; middle-drag and Space+left-drag also pan.
+  - FR-033b: right-click opens a context menu (delete wire/bus/component, set
+  bus width, edit bit names, delete bend).
+  - Hit-test helpers exist: componentBBox, plus wire/bus/bend/segment hit tests
+  — so enclosure (all path points inside) and crossing (any segment intersects)
+  tests are feasible. 
+  
+  Your spec maps almost exactly to KiCad's window-vs-crossing selection. Four
+  things are genuinely ambiguous and shape the whole design, so let me settle
+  these before planning:
+
+⏺ User answered Claude's questions:
+  ⎿  · Right-click now recenters the view, but today it opens a context menu 
+     (delete wire/bus/component, set bus width, etc.). How should that conflict 
+     resolve? → Bare canvas recenters; object keeps menu
+     · In WINDOW mode (drag rightward, enclosed-only), which object types can be
+     selected? → All objects fully enclosed
+     · How should a marquee interact with the existing selection? → Replace; 
+     Shift adds
+     · What decides window-vs-crossing — purely the horizontal drag direction, 
+     or the diagonal corner? → Horizontal direction (true KiCad)
+   
+

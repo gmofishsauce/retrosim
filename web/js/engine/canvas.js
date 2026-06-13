@@ -35,6 +35,7 @@ export function initCanvas(canvasEl, store) {
   let dirty = true;
   let frame = null;
   let preview = null; // transient {points: [{x,y}, …]} in world coords
+  let marquee = null; // transient rubber-band {a, b (world), mode} (FR-016b)
 
   function requestRender() {
     dirty = true;
@@ -72,6 +73,7 @@ export function initCanvas(canvasEl, store) {
     drawVertices(ctx, store.design, vp);
     drawComponents(ctx, store.design, vp, store.state.selection, store.state.hover, sim);
     if (preview) drawPreview(ctx, preview, vp);
+    if (marquee) drawMarquee(ctx, marquee, vp);
     ctx.restore();
   }
 
@@ -83,6 +85,10 @@ export function initCanvas(canvasEl, store) {
     requestRender,
     setPreview(p) {
       preview = p;
+      requestRender();
+    },
+    setMarquee(m) {
+      marquee = m;
       requestRender();
     },
     setViewport(viewport) {
@@ -229,6 +235,33 @@ function drawPreview(ctx, preview, vp) {
     ctx.lineTo(p.x, p.y);
   }
   ctx.stroke();
+  ctx.restore();
+}
+
+// drawMarquee draws the rubber-band selection rectangle (FR-016b): window mode
+// (drag right, enclosed-only) is a solid blue outline; crossing mode (drag left,
+// touched) is a dashed green outline. Both get a faint translucent fill.
+function drawMarquee(ctx, m, vp) {
+  const a = worldToScreen(m.a, vp);
+  const b = worldToScreen(m.b, vp);
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  const w = Math.abs(a.x - b.x);
+  const h = Math.abs(a.y - b.y);
+  const win = m.mode === "window";
+  ctx.save();
+  ctx.lineWidth = 1;
+  if (win) {
+    ctx.strokeStyle = "#4a90d9";
+    ctx.fillStyle = "rgba(74,144,217,0.12)";
+    ctx.setLineDash([]);
+  } else {
+    ctx.strokeStyle = "#2e9e4f";
+    ctx.fillStyle = "rgba(46,158,79,0.12)";
+    ctx.setLineDash([4, 3]);
+  }
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeRect(x, y, w, h);
   ctx.restore();
 }
 

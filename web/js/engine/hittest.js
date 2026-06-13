@@ -2,7 +2,12 @@
 // zoom/pan, so it is testable without a canvas. Pins take priority over bodies
 // when both are hit (the caller decides ordering).
 
-import { rotateOffset } from "../geometry.js";
+import {
+  rotateOffset,
+  rectFromPoints,
+  pointInRect,
+  segmentIntersectsRect,
+} from "../geometry.js";
 import { pinVisualPos, getVertex, vertexWorld } from "../model/design.js";
 
 // componentBBox returns the axis-aligned world bounding box of an instance's
@@ -28,6 +33,51 @@ export function componentBBox(inst) {
     minY: Math.min(...ys),
     maxY: Math.max(...ys),
   };
+}
+
+// marqueeHits returns the selection refs for a rubber-band rectangle spanning
+// world0..world1 (FR-016b). `mode === "window"` keeps objects whose whole extent
+// lies inside the rectangle (a component's bbox; all of a wire/bus path's world
+// points); any other mode is "crossing" — objects the rectangle intersects or
+// encloses. Only top-level objects are returned (components, wires, buses).
+export function marqueeHits(design, world0, world1, mode) {
+  const rect = rectFromPoints(world0, world1);
+  const win = mode === "window";
+  const hits = [];
+
+  for (const inst of design.components) {
+    const b = componentBBox(inst);
+    const enclosed =
+      b.minX >= rect.minX &&
+      b.maxX <= rect.maxX &&
+      b.minY >= rect.minY &&
+      b.maxY <= rect.maxY;
+    const touched = !(
+      b.maxX < rect.minX ||
+      b.minX > rect.maxX ||
+      b.maxY < rect.minY ||
+      b.minY > rect.maxY
+    );
+    if (win ? enclosed : touched) hits.push({ kind: "component", refdes: inst.refdes });
+  }
+  for (const w of design.wires) {
+    if (conductorInMarquee(design, w, rect, win)) hits.push({ kind: "wire", id: w.id });
+  }
+  for (const bus of design.buses) {
+    if (conductorInMarquee(design, bus, rect, win)) hits.push({ kind: "bus", id: bus.id });
+  }
+  return hits;
+}
+
+// conductorInMarquee tests a wire/bus path against the rectangle: window mode
+// requires every path point inside; crossing mode needs any segment to touch it.
+function conductorInMarquee(design, cond, rect, win) {
+  const pts = cond.path.map((p) => pathPointWorld(design, p));
+  if (win) return pts.every((p) => pointInRect(p, rect));
+  for (let i = 0; i < pts.length - 1; i++) {
+    if (segmentIntersectsRect(pts[i], pts[i + 1], rect)) return true;
+  }
+  return pts.length === 1 && pointInRect(pts[0], rect);
 }
 
 // hitComponent returns the topmost (last-added) instance whose outline contains

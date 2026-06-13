@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { createDesign, addInstance, pinVisualPos, PIN_RADIUS } from "../model/design.js";
-import { hitComponent, hitPin, PIN_HIT_TOL } from "./hittest.js";
+import { createDesign, addInstance, addWire, pinVisualPos, PIN_RADIUS } from "../model/design.js";
+import { hitComponent, hitPin, marqueeHits, PIN_HIT_TOL } from "./hittest.js";
 
 function ty() {
   return {
@@ -12,6 +12,40 @@ function ty() {
     pins: [{ name: "A0", side: "left", position: 2, direction: "in" }],
   };
 }
+
+// marqueeFixture: U1 bbox [0,6]x[0,12], U2 bbox [20,26]x[0,12], and a wire whose
+// world path runs (5,5) -> (7,5) -> (9,9).
+function marqueeFixture() {
+  const d = createDesign("t");
+  addInstance(d, ty(), 0, 0, 0); // U1
+  addInstance(d, ty(), 20, 0, 0); // U2
+  const w = addWire(d, { kind: "free", x: 5, y: 5 }, { kind: "free", x: 9, y: 9 }, [
+    { x: 7, y: 5 },
+  ]);
+  return { d, wireId: w.id };
+}
+const refSet = (hits) => hits.map((h) => h.refdes ?? h.id).sort();
+
+test("marqueeHits window selects only fully-enclosed objects (FR-016b)", () => {
+  const { d, wireId } = marqueeFixture();
+  // rect encloses U1 and the whole wire, but not U2
+  const hits = marqueeHits(d, { x: -1, y: -1 }, { x: 10, y: 13 }, "window");
+  assert.deepEqual(refSet(hits), ["U1", wireId].sort());
+});
+
+test("marqueeHits window excludes a partially-covered wire (FR-016b)", () => {
+  const { d } = marqueeFixture();
+  // rect covers U1 exactly and only part of the wire ((9,9) is outside)
+  const hits = marqueeHits(d, { x: 0, y: 0 }, { x: 6, y: 12 }, "window");
+  assert.deepEqual(refSet(hits), ["U1"]);
+});
+
+test("marqueeHits crossing selects every touched object (FR-016b)", () => {
+  const { d, wireId } = marqueeFixture();
+  // rect overlaps U1, U2, and the first wire segment
+  const hits = marqueeHits(d, { x: 4, y: 4 }, { x: 30, y: 13 }, "crossing");
+  assert.deepEqual(refSet(hits), ["U1", "U2", wireId].sort());
+});
 
 test("hitComponent detects a point inside the (unrotated) outline", () => {
   const d = createDesign("t");

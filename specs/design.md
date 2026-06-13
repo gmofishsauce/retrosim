@@ -720,13 +720,15 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Satisfies:** FR-012–FR-015, FR-020, FR-021, FR-022, FR-023, FR-036, FR-037,
   FR-068 (simulated indicator states), FR-082 (red conflict nets), NFR-005.
 - **Interface:** `init(canvasEl, store)`, `setViewport({pan, zoom})`,
-  `requestRender()`. Renders on a `requestAnimationFrame` loop **only when dirty**
-  (a render is requested), to meet NFR-005 without busy-spinning.
+  `setMarquee(rect | null)` (the live rubber-band rectangle + window/crossing
+  mode, FR-016b), `requestRender()`. Renders on a `requestAnimationFrame` loop
+  **only when dirty** (a render is requested), to meet NFR-005 without busy-spinning.
 - **Draw order:** grid → buses (thick blue, width annotation `/n` at midpoint,
   FR-036/FR-037) → wires (thin black) → junction dots → components (outline, pin
   bubbles, pin labels) → upright text labels → selection highlight → tool preview
   (rubber-band polyline — the proposed route, §6.9a, a single segment in the
-  fallback case — and placement ghost).
+  fallback case — and placement ghost) → marquee rectangle (FR-016b: window mode
+  solid, crossing mode dashed, distinct stroke colors).
 - **Component drawing dispatches on `renderType`:** a `unit` instance draws the
   rectangle path as today; a `subunit` instance draws its schematic symbol via the
   symbol module (§6.8a) — the gate/mux outline path plus an upright refdes (e.g.
@@ -804,7 +806,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Tools / states:** `SELECT` (default, FR-004), `PLACE(type)` (transient, set by
   palette click), `WIRE`, `BUS`. The FSM also has transient sub-states for
   in-progress gestures (e.g., `WIRE_AWAIT_DEST`, `DRAGGING_BEND`,
-  `DRAGGING_COMPONENT`, `DRAGGING_BUS_ENDPOINT`).
+  `DRAGGING_COMPONENT`, `DRAGGING_BUS_ENDPOINT`, `MARQUEE`).
 
   | State | Event | Action → Command | Next state |
   |---|---|---|---|
@@ -820,6 +822,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | SELECT | drag bend point | `MoveBend` (rubber-band FR-032) | DRAGGING_BEND |
   | SELECT | right-click bend | context menu → `DeleteBend` (FR-033) | SELECT |
   | SELECT | right-click bus | context menu → `SetBusWidth` (FR-038) | SELECT |
+  | SELECT | right-click bare canvas | recenter view on the cursor's world point (FR-023b) | SELECT |
+  | SELECT | press bare canvas | begin rubber-band; snapshot pre-drag selection (FR-016b/FR-023a) | MARQUEE |
+  | SELECT | release bare canvas (no drag) | clear selection (Shift preserves) (FR-023a) | SELECT |
+  | MARQUEE | drag | window (drag right) or crossing (drag left) hits; live-update selection (replace, or Shift-add to the snapshot) (FR-016b) | MARQUEE |
+  | MARQUEE | release | commit the live selection (FR-016b) | SELECT |
+  | MARQUEE | Esc | cancel; restore the pre-drag selection (FR-016b) | SELECT |
   | PLACE(t) | click canvas | `PlaceComponent(t,@grid)` (FR-009) | SELECT (one-shot FR-010) |
   | (palette) | drag tile→canvas drop | `PlaceComponent(t,@grid)` (FR-008) | SELECT |
   | WIRE | click pin | begin wire at pin | WIRE_AWAIT_DEST |
@@ -838,6 +846,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   wire/bus segments use point-to-segment distance (tolerance ≈ ⅓ grid scaled);
   bend points and `junction`/`free` vertices are points. Pins take priority over
   segments take priority over component bodies when overlapping.
+  `marqueeHits(design, world0, world1, mode)` returns the selection refs for a
+  rubber-band (FR-016b): **window** mode (`mode === "window"`) keeps objects whose
+  whole extent is inside the rectangle — a component's bounding box, or all of a
+  wire/bus path's world points; **crossing** mode keeps any object the rectangle
+  intersects or encloses (bbox overlap; segment-vs-rectangle intersection).
 - **Wire-mode cursor (FR-025/FR-027b):** the wire cursor is a short diagonal
   line **centered on the pointer** with a small open dot at its midpoint
   marking the active point; the hotspot is the image center. Supplied as an
@@ -986,8 +999,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 ### 6.11 JS: chrome widgets (`web/js/chrome/*.js`)
 - **Toolbar (`toolbar.js`)** — Satisfies FR-026, FR-035, FR-022, FR-023, FR-024,
   FR-044, FR-046, FR-049, FR-052, FR-076, FR-087. Buttons: Select, Wire, Bus,
-  Zoom +/−, Pan (or pan via left-drag on empty canvas, space-drag, or
-  middle-drag — FR-023a), Undo, Redo, New, Open, Save, Save As, **Run/Stop**.
+  Zoom +/−, Pan (via space-drag or middle-drag, or right-click-to-recenter on
+  bare canvas — FR-023a/FR-023b; left-drag on bare canvas is rubber-band select,
+  FR-016b), Undo, Redo, New, Open, Save, Save As, **Run/Stop**.
   The Wire button shows the wire-cursor icon (the lower-right→upper-left
   diagonal line, inline SVG) instead of a text label (FR-025), keeping a
   `Wire tool` tooltip/aria-label. The active tool is highlighted; clicking a

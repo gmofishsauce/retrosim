@@ -3,14 +3,23 @@
 // model directly except for transient drag previews; committed changes go
 // through the store as Commands.
 
-import { snapToGrid, screenToWorld, scaleFor, zoomAbout, rotateOffset } from "../geometry.js";
+import {
+  snapToGrid,
+  screenToWorld,
+  scaleFor,
+  zoomAbout,
+  centerViewportOn,
+  rotateOffset,
+} from "../geometry.js";
 import {
   hitComponent,
   hitPin,
   hitSegment,
   hitBend,
   hitBusSegment,
+  marqueeHits,
 } from "./hittest.js";
+import { sameRef } from "../store.js";
 import { proposeRoute } from "./router.js";
 import {
   placeComponent,
@@ -202,6 +211,28 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     if (!ref) store.setSelection([]);
     else if (additive) store.toggleSelection(ref);
     else store.setSelection([ref]);
+  }
+
+  // beginMarquee starts a rubber-band selection on a bare-canvas press (FR-016b):
+  // it records the press world point and screen x (for window/crossing direction),
+  // the pre-drag selection (the base for Shift-add and Esc-restore), and whether
+  // Shift is held. The selection is updated live during the drag (mousemove).
+  function beginMarquee(e, world) {
+    const pt = canvasPoint(e);
+    drag = {
+      type: "marquee",
+      startWorld: world,
+      startScreen: pt,
+      base: [...store.state.selection],
+      additive: e.shiftKey,
+      moved: false,
+    };
+  }
+
+  // mergeSel unions the marquee hits into the base selection without duplicates
+  // (Shift-add, FR-016b).
+  function mergeSel(base, hits) {
+    return [...base, ...hits.filter((h) => !base.some((b) => sameRef(b, h)))];
   }
 
   // selectedComponentOrigins snapshots the pre-drag positions of every selected
@@ -432,8 +463,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       if (busSeg) return select({ kind: "bus", id: busSeg.bus.id }, e.shiftKey);
       const comp = hitComponent(store.design, world);
       if (comp) return select({ kind: "component", refdes: comp.refdes }, e.shiftKey);
-      if (!e.shiftKey) select(null);
-      startPan(e);
+      beginMarquee(e, world); // bare canvas: rubber-band selection (FR-016b)
       return;
     }
 
@@ -583,10 +613,10 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       };
       return;
     }
-    // Empty canvas: a plain click deselects (FR-023a); shift preserves the
-    // selection. Either way a drag pans.
-    if (!e.shiftKey) select(null);
-    startPan(e);
+    // Bare canvas: begin a rubber-band selection (FR-016b/FR-023a). A release
+    // without dragging clears (plain) or preserves (Shift) the selection;
+    // dragging selects window (drag right) or crossing (drag left).
+    beginMarquee(e, world);
   });
 
   // Right-click context menu (FR-033b): hit-test the cursor and offer the actions
@@ -594,13 +624,23 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   // component. interaction.js builds the items; contextmenu.js renders them.
   canvas.addEventListener("contextmenu", (e) => {
     e.preventDefault();
-    if (store.state.simulating) return; // all menu actions mutate (FR-087)
     const world = worldOf(e);
-    const items = [];
     const bend = hitBend(store.design, world, 0.5);
     const seg = bend ? null : hitSegment(store.design, world, 0.4);
     const busSeg = bend || seg ? null : hitBusSegment(store.design, world, 0.4);
     const comp = bend || seg || busSeg ? null : hitComponent(store.design, world);
+
+    if (!bend && !seg && !busSeg && !comp) {
+      // Bare canvas: recenter the view on the cursor (FR-023b); allowed even
+      // while simulating (a view change, not a design mutation).
+      const rect = canvas.getBoundingClientRect();
+      renderer.setViewport(
+        centerViewportOn(store.state.viewport, world, rect.width, rect.height),
+      );
+      return;
+    }
+    if (store.state.simulating) return; // menu actions mutate (FR-087)
+    const items = [];
 
     if (bend) {
       items.push({
@@ -676,6 +716,22 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       }
       return;
     }
+
+    if (drag.type === "marquee") {
+      const pt = canvasPoint(e);
+      // A few pixels of slop distinguishes a click from a rubber-band drag.
+      if (!drag.moved && Math.hypot(pt.x - drag.startScreen.x, pt.y - drag.startScreen.y) <= 3) {
+        return;
+      }
+      drag.moved = true;
+      const world = worldOf(e);
+      const mode = pt.x >= drag.startScreen.x ? "window" : "crossing";
+      const hits = marqueeHits(store.design, drag.startWorld, world, mode);
+      store.setSelection(drag.additive ? mergeSel(drag.base, hits) : hits);
+      renderer.setMarquee?.({ a: drag.startWorld, b: world, mode });
+      return;
+    }
+
     const g = gridOf(e);
 
     if (drag.type === "component") {
@@ -751,6 +807,17 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     }
     if (!drag) return;
 
+    if (drag.type === "marquee") {
+      if (!drag.moved && !drag.additive) {
+        // A plain click on bare canvas clears the selection (FR-023a); a Shift
+        // click preserves it. A dragged rubber-band already set the selection live.
+        store.setSelection([]);
+      }
+      renderer.setMarquee?.(null);
+      drag = null;
+      return;
+    }
+
     if (drag.type === "component") {
       if (drag.moved) {
         // The whole group moved by one offset; read it off any member before rewind.
@@ -825,6 +892,13 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     }
 
     if (e.key === "Escape") {
+      if (drag?.type === "marquee") {
+        // Cancel the rubber-band, restoring the pre-drag selection (FR-016b).
+        store.setSelection(drag.base);
+        renderer.setMarquee?.(null);
+        drag = null;
+        return;
+      }
       if (store.state.tool !== "select") setTool("select");
       else select(null);
       return;

@@ -19,6 +19,20 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-13 — KiCad-style canvas interaction: rubber-band select + right-click recenter
+What: Left-drag on bare canvas no longer pans; it draws a rubber-band selection
+rectangle (FR-016b). Horizontal drag direction sets the mode: drag right = window
+(only fully-enclosed objects); drag left = crossing (anything the rectangle
+touches). Plain rubber-band replaces the selection; Shift adds. Selection updates
+live during the drag; Esc cancels and restores the prior selection. Right-clicking
+bare canvas recenters the view on the cursor (FR-023b); right-click on an object
+still opens its context menu (FR-033b). Middle-drag and Space+left-drag panning
+remain.
+Why: Match KiCad's selection/positioning model.
+Touches: FR-016b (new), FR-023b (new); FR-016a, FR-023a (reworked), FR-033b
+(updated); design §8 states + transition table, §6.8 renderer (`setMarquee`),
+§6.x hit-testing (`marqueeHits`), toolbar note.
+
 ## 2026-06-13 — Group move carries interior wiring (FR-018c)
 What: When components are dragged together, wiring whose every pin endpoint is on
 a component in the moving set translates rigidly with them — bend points and
