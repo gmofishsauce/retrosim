@@ -199,7 +199,7 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-048** — Subsequent saves overwrite without prompting.
 - **FR-049** — Save As at any time, to a new name.
 - **FR-049a** — Indicate unsaved changes; warn before discarding them (New/Open).
-- **FR-050** — Server stores designs in `wut4-editor` inside the user's
+- **FR-050** — Server stores designs in `retrosim` inside the user's
   documents directory by default (created if absent). (Reworked 2026-06-12;
   supersedes the platform-standard application data directory.)
 - **FR-051** — The file dialog lets the user choose a different save location.
@@ -380,8 +380,8 @@ as authoritative and raise it — do not silently diverge.
 - Target browsers: modern desktop **Chrome/Firefox**. No mobile support.
 
 ### 4.2 Assumptions
-- The repository is already a Go module (`github.com/gmofishsauce/wut4`); the
-  server lives under `sim/` as new packages. (Greenfield: no existing sim code.)
+- The repository is already a Go module (`github.com/gmofishsauce/retrosim/sim/srv`); the
+  server lives under `sim/srv` as new packages. (Greenfield: no existing sim code.)
 - The user authors valid YAML files; the parser reports errors but need not repair
   them.
 - Design files fit in memory; no streaming I/O for save/load.
@@ -456,7 +456,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 >   `screen = (world − pan) × scale`, where `scale = PX_PER_UNIT_DEFAULT × zoom`.
 > - Snapping a screen point to the grid: `round(screen/scale + pan)`.
 
-### 6.1 Go: `main` (package `main`, `sim/cmd/wut4-editor/main.go`)
+### 6.1 Go: `main` (package `main`, `sim/cmd/retrosim/main.go`)
 - **Purpose:** entry point; parse flags, build dependencies, bind localhost.
 - **Satisfies:** FR-001, NFR-001, NFR-003.
 - **Interface (CLI flags):**
@@ -582,9 +582,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     (write temp file in same dir, `fsync`, `rename`) to avoid truncating an
     existing design on failure (FR-046–FR-049).
   - `DesignsDir() (string, error)` — the default designs directory, creating it
-    if absent (FR-050): `wut4-editor` inside the user's documents folder —
-    macOS and Linux `~/Documents/wut4-editor`, Windows
-    `%USERPROFILE%\Documents\wut4-editor` (error if `USERPROFILE` is unset).
+    if absent (FR-050): `retrosim` inside the user's documents folder —
+    macOS and Linux `~/Documents/retrosim`, Windows
+    `%USERPROFILE%\Documents\retrosim` (error if `USERPROFILE` is unset).
     Implemented over `os.UserHomeDir` with per-GOOS handling. (Reworked
     2026-06-12; supersedes `AppDataDir` and its per-OS app-data locations —
     designs are user documents.)
@@ -1095,7 +1095,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   interaction; start the connection monitor and backup writer (§6.12a); remove
   the loading overlay.
 - **Error handling:** if `getComponents()` fails, show a blocking error banner
-  ("server unreachable — is wut4-editor running?") and keep the canvas disabled.
+  ("server unreachable — is retrosim running?") and keep the canvas disabled.
 
 ### 6.12a JS: connection monitor & local backup (`web/js/connection.js`, `web/js/backup.js`)
 - **Purpose:** survive server death and browser-side loss: detect/reconnect to
@@ -1565,7 +1565,7 @@ errors (FR-066), so future sections (e.g., richer timing) are additive.
 
 ```
 sim/
-  cmd/wut4-editor/
+  cmd/retrosim/
     main.go                 CREATE  entry point: flags, bind 127.0.0.1, wire deps (§6.1)
   server/
     api.go                  CREATE  /api/v1 router + handlers + static (§6.4)
@@ -1709,8 +1709,8 @@ snap FR-041–043) are fully designed so they are additive when implemented.
   fails midway; `ListDir` returns only `.json`+dirs with a correct `parent`;
   load of malformed JSON → 422 (FR-046–FR-053, FR-055).
 - **Go `paths`:** `DesignsDir` returns the documents-folder path per `GOOS`
-  (FR-050): darwin/linux `~/Documents/wut4-editor`, windows
-  `%USERPROFILE%\Documents\wut4-editor`, unset `USERPROFILE` → error.
+  (FR-050): darwin/linux `~/Documents/retrosim`, windows
+  `%USERPROFILE%\Documents\retrosim`, unset `USERPROFILE` → error.
 - **JS `geometry`:** rotation table maps integer offsets to integer offsets for
   all four angles; round-trip world↔screen; snap-to-grid (FR-021, FR-020).
 - **JS `netlist.buildNets`:** see edge cases below (FR-034b/FR-059a/FR-037a). A

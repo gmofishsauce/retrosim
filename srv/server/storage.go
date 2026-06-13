@@ -93,7 +93,7 @@ func SaveDesign(path string, design json.RawMessage) error {
 	pretty.WriteByte('\n')
 
 	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".wut4-*.tmp")
+	tmp, err := os.CreateTemp(dir, ".retrosim-*.tmp")
 	if err != nil {
 		return err
 	}

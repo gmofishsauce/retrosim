@@ -7,7 +7,7 @@ import (
 )
 
 // appDirName is the editor's folder inside the user's documents directory.
-const appDirName = "wut4-editor"
+const appDirName = "retrosim"
 
 // DesignsDir returns the default designs directory — appDirName inside the
 // user's documents folder — creating it if absent (FR-050). It is a thin
@@ -30,9 +30,9 @@ func DesignsDir() (string, error) {
 // the filesystem, so every branch is deterministically testable. Paths are
 // built with the target OS's separator regardless of the host OS.
 //
-//   - darwin:  <home>/Documents/wut4-editor
-//   - windows: %USERPROFILE%\Documents\wut4-editor (error if USERPROFILE is unset)
-//   - other:   <home>/Documents/wut4-editor
+//   - darwin:  <home>/Documents/retrosim
+//   - windows: %USERPROFILE%\Documents\retrosim (error if USERPROFILE is unset)
+//   - other:   <home>/Documents/retrosim
 func designsDir(goos string, getenv func(string) string, home string) (string, error) {
 	switch goos {
 	case "windows":

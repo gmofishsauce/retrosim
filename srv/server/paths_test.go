@@ -19,19 +19,19 @@ func TestDesignsDir(t *testing.T) {
 			name: "darwin",
 			goos: "darwin",
 			home: "/Users/jeff",
-			want: "/Users/jeff/Documents/wut4-editor",
+			want: "/Users/jeff/Documents/retrosim",
 		},
 		{
 			name: "linux",
 			goos: "linux",
 			home: "/home/jeff",
-			want: "/home/jeff/Documents/wut4-editor",
+			want: "/home/jeff/Documents/retrosim",
 		},
 		{
 			name:   "windows with USERPROFILE",
 			goos:   "windows",
 			getenv: env(map[string]string{"USERPROFILE": `C:\Users\jeff`}),
-			want:   `C:\Users\jeff\Documents\wut4-editor`,
+			want:   `C:\Users\jeff\Documents\retrosim`,
 		},
 		{
 			name:    "windows without USERPROFILE errors",

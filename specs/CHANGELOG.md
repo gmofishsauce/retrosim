@@ -19,6 +19,15 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-13 — Project renamed wut4-editor → retrosim
+What: Repo extracted from the wut4 monorepo and renamed "retrosim". Replaced
+"wut4-editor"/"wut4" everywhere: Go module path → github.com/gmofishsauce/retrosim/sim/srv,
+cmd/wut4-editor → cmd/retrosim, default designs folder → ~/Documents/retrosim,
+localStorage backup key → retrosim.backup, temp prefix → .retrosim-*.tmp, plus
+window title, log prefixes, and the server-unreachable message.
+Why: Project rename after monorepo extraction.
+Touches: FR-050; design §4.2, §6.1, §6.x (paths/storage), §9, §10 (test plan)
+
 ## 2026-06-12 — Saving under a new file name renames the design
 What: A save whose chosen file name differs from the design's name renames the
 design to the file's base name (sans .json): toolbar label, the name written

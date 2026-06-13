@@ -1,4 +1,4 @@
-// Command wut4-editor is the localhost-only HTTP server for the TTL circuit
+// Command retrosim is the localhost-only HTTP server for the TTL circuit
 // design editor (design.md §6.1). This is the walking-skeleton entry point:
 // it parses flags, refuses any non-loopback bind address (NFR-001), and serves
 // an empty mux. Endpoints and the static SPA handler are added in later slices.
@@ -10,7 +10,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/gmofishsauce/wut4/sim/srv/server"
+	"github.com/gmofishsauce/retrosim/sim/srv/server"
 )
 
 func main() {
@@ -21,28 +21,28 @@ func main() {
 	flag.Parse()
 
 	if err := requireLoopback(*addr); err != nil {
-		log.Fatalf("wut4-editor: %v", err)
+		log.Fatalf("retrosim: %v", err)
 	}
 
 	if *dataDir == "" {
 		d, err := server.DesignsDir()
 		if err != nil {
-			log.Fatalf("wut4-editor: resolving data dir: %v", err)
+			log.Fatalf("retrosim: resolving data dir: %v", err)
 		}
 		*dataDir = d
 	}
-	log.Printf("wut4-editor: data dir %s", *dataDir)
+	log.Printf("retrosim: data dir %s", *dataDir)
 
 	lib, err := server.LoadLibrary(*componentsDir)
 	if err != nil {
-		log.Fatalf("wut4-editor: loading components: %v", err)
+		log.Fatalf("retrosim: loading components: %v", err)
 	}
 
 	srv := &http.Server{Addr: *addr, Handler: server.NewRouter(lib, *dataDir, *webDir)}
 
-	log.Printf("wut4-editor: listening on http://%s", *addr)
+	log.Printf("retrosim: listening on http://%s", *addr)
 	if err := srv.ListenAndServe(); err != nil {
-		log.Fatalf("wut4-editor: %v", err)
+		log.Fatalf("retrosim: %v", err)
 	}
 }
 

@@ -122,7 +122,7 @@ func TestComponentsMethodNotAllowed(t *testing.T) {
 func TestStaticServesIndex(t *testing.T) {
 	webDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(webDir, "index.html"),
-		[]byte("<!doctype html><title>wut4</title>"), 0o644); err != nil {
+		[]byte("<!doctype html><title>retrosim</title>"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

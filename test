@@ -1,11 +1,11 @@
 #!/bin/sh
 # Clean-rebuild and run the editor from the sim/ folder.
-# Usage: ./test [extra wut4-editor flags]
+# Usage: ./test [extra retrosim flags]
 set -e
 
 cd "$(dirname "$0")"
 
-rm -f ./wut4-editor
-(cd srv && go build -o ../wut4-editor ./cmd/wut4-editor)
+rm -f ./retrosim
+(cd srv && go build -o ../retrosim ./cmd/retrosim)
 
-exec ./wut4-editor --web-dir=./web --components-dir=./srv/components "$@"
+exec ./retrosim --web-dir=./web --components-dir=./srv/components "$@"

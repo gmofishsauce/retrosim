@@ -8,7 +8,7 @@
 import { serializeDesign, deserializeDesign } from "./model/persist.js";
 import { postMessage } from "./chrome/statusbar.js";
 
-export const BACKUP_KEY = "wut4-editor.backup";
+export const BACKUP_KEY = "retrosim.backup";
 export const DEBOUNCE_MS = 1000;
 
 // startBackup subscribes to the store and maintains the snapshot (FR-092):

@@ -45,7 +45,7 @@ func LoadLibrary(dir string) (*Library, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Printf("wut4-editor: component dir %q not found; serving empty palette", dir)
+			log.Printf("retrosim: component dir %q not found; serving empty palette", dir)
 			return lib, nil
 		}
 		return nil, err
@@ -56,7 +56,7 @@ func LoadLibrary(dir string) (*Library, error) {
 		}
 		t, err := ParseComponent(filepath.Join(dir, e.Name()))
 		if err != nil {
-			log.Printf("wut4-editor: skipping %s: %v", e.Name(), err)
+			log.Printf("retrosim: skipping %s: %v", e.Name(), err)
 			continue
 		}
 		lib.add(t)

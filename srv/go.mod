@@ -1,4 +1,4 @@
-module github.com/gmofishsauce/wut4/sim/srv
+module github.com/gmofishsauce/retrosim/sim/srv
 
 go 1.24
 

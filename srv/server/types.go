@@ -1,4 +1,4 @@
-// Package server holds the wut4-editor HTTP server: the component library, the
+// Package server holds the retrosim HTTP server: the component library, the
 // MD parser, design storage, and the REST API. This file defines the component
 // library data model (design.md §7.1), shared by the in-memory library, the
 // /api/v1/components response, and the full-copy embedded in saved designs

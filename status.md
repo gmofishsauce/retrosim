@@ -1,4 +1,4 @@
-# wut4-editor — Implementation Status
+# retrosim — Implementation Status
 
 _Last updated: 2026-06-03_
 
@@ -32,8 +32,8 @@ parser (`yamlparse.go`) is written and `LoadLibrary` now globs and parses
 
 ```
 sim/
-  srv/                 Go module: github.com/gmofishsauce/wut4/sim/srv
-    cmd/wut4-editor/   entry point (loopback-only bind, flags)
+  srv/                 Go module: github.com/gmofishsauce/retrosim/sim/srv
+    cmd/retrosim/      entry point (loopback-only bind, flags)
     server/            api, components, yamlparse, storage, paths, types
     components/        YAML component library (74138, 7400, 74245)
   web/                 SPA (plain ES modules, no build step)
@@ -133,8 +133,8 @@ sim/
 
 ```
 cd sim/srv
-go build -o /tmp/wut4-editor ./cmd/wut4-editor
-/tmp/wut4-editor --web-dir ../web        # binds 127.0.0.1:8137
+go build -o /tmp/retrosim ./cmd/retrosim
+/tmp/retrosim --web-dir ../web        # binds 127.0.0.1:8137
 # open http://127.0.0.1:8137
 ```
 

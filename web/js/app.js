@@ -168,7 +168,7 @@ async function main() {
   } catch (err) {
     overlay.classList.add("error");
     overlay.textContent =
-      `Cannot reach server — is wut4-editor running? (${err.message})`;
+      `Cannot reach server — is retrosim running? (${err.message})`;
   }
 }
 
