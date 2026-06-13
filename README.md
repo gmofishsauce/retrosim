@@ -34,3 +34,9 @@ any extra flags to the server:
 ```sh
 ./build-run
 ```
+
+## Documentation
+
+See the [user manual](docs/user.md) for how to use the editor: building and
+running, the canvas selection model, wiring and buses, files, the Refresh
+button, the built-in components, and simulation.
