@@ -1,6 +1,6 @@
 #!/bin/sh
-# Clean-rebuild and run the editor from the sim/ folder.
-# Usage: ./test [extra retrosim flags]
+# Clean-rebuild and run the editor from the repository root.
+# Usage: ./build-run [extra retrosim flags]
 set -e
 
 cd "$(dirname "$0")"
