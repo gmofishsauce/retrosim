@@ -5,21 +5,28 @@
 type: "74138"
 outline: [6, 12]
 
+description: "3-to-8 line decoder/demultiplexer, inverting"
+datasheet:
+  vendor: Nexperia
+  title: "74HC138; 74HCT138 3-to-8 line decoder/demultiplexer; inverting"
+  rev: "Rev. 10, 26 February 2024"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT138.pdf"
+
 pins: # number: physical DIP16/SO16 pin (datasheet Table 2)
-  - { name: A0,  side: left,  pos: 2, dir: in,  number: 1 }
-  - { name: A1,  side: left,  pos: 3, dir: in,  number: 2 }
-  - { name: A2,  side: left,  pos: 4, dir: in,  number: 3 }
-  - { name: /E1, side: left,  pos: 6, dir: in,  number: 4 }
-  - { name: /E2, side: left,  pos: 7, dir: in,  number: 5 }
-  - { name: E3,  side: left,  pos: 8, dir: in,  number: 6 }
-  - { name: /Y0, side: right, pos: 2, dir: out, number: 15 }
-  - { name: /Y1, side: right, pos: 3, dir: out, number: 14 }
-  - { name: /Y2, side: right, pos: 4, dir: out, number: 13 }
-  - { name: /Y3, side: right, pos: 5, dir: out, number: 12 }
-  - { name: /Y4, side: right, pos: 6, dir: out, number: 11 }
-  - { name: /Y5, side: right, pos: 7, dir: out, number: 10 }
-  - { name: /Y6, side: right, pos: 8, dir: out, number: 9 }
-  - { name: /Y7, side: right, pos: 9, dir: out, number: 7 }
+  - { name: A0,  side: left,  pos: 2, dir: in,  number: 1,  desc: "address input bit 0 (LSB)" }
+  - { name: A1,  side: left,  pos: 3, dir: in,  number: 2,  desc: "address input bit 1" }
+  - { name: A2,  side: left,  pos: 4, dir: in,  number: 3,  desc: "address input bit 2 (MSB)" }
+  - { name: /E1, side: left,  pos: 6, dir: in,  number: 4,  desc: "active-low enable 1" }
+  - { name: /E2, side: left,  pos: 7, dir: in,  number: 5,  desc: "active-low enable 2" }
+  - { name: E3,  side: left,  pos: 8, dir: in,  number: 6,  desc: "active-high enable 3" }
+  - { name: /Y0, side: right, pos: 2, dir: out, number: 15, desc: "active-low output 0" }
+  - { name: /Y1, side: right, pos: 3, dir: out, number: 14, desc: "active-low output 1" }
+  - { name: /Y2, side: right, pos: 4, dir: out, number: 13, desc: "active-low output 2" }
+  - { name: /Y3, side: right, pos: 5, dir: out, number: 12, desc: "active-low output 3" }
+  - { name: /Y4, side: right, pos: 6, dir: out, number: 11, desc: "active-low output 4" }
+  - { name: /Y5, side: right, pos: 7, dir: out, number: 10, desc: "active-low output 5" }
+  - { name: /Y6, side: right, pos: 8, dir: out, number: 9,  desc: "active-low output 6" }
+  - { name: /Y7, side: right, pos: 9, dir: out, number: 7,  desc: "active-low output 7" }
 
 groups:
   - { name: A, pins: [A0, A1, A2] }

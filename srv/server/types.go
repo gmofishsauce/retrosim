@@ -22,6 +22,19 @@ type ComponentType struct {
 	Delays     map[string]float64 `json:"delays,omitempty"`    // optional propagation delays, ns (FR-064)
 	Behavior   string             `json:"behavior,omitempty"`  // GALasm text, captured verbatim (FR-066); evaluated client-side (FR-079)
 	Clock      string             `json:"clock,omitempty"`     // optional clock input pin for .R behavior outputs (FR-062d)
+
+	// Documentation (FR-104): optional, presentation-only. Copied through to the
+	// properties panel (FR-105); never affects geometry, pins, or simulation.
+	Description string     `json:"description,omitempty"` // one-line function summary
+	Datasheet   *Datasheet `json:"datasheet,omitempty"`   // datasheet provenance + link
+}
+
+// Datasheet is the optional documentation provenance for a component (FR-104).
+type Datasheet struct {
+	Vendor string `json:"vendor,omitempty"` // manufacturer, e.g. "Nexperia"
+	Title  string `json:"title,omitempty"`  // document title
+	Rev    string `json:"rev,omitempty"`    // revision/date
+	URL    string `json:"url,omitempty"`    // link to the datasheet PDF
 }
 
 // Pin is one connection point on a component's outline (FR-062, FR-062a).
@@ -32,6 +45,7 @@ type Pin struct {
 	Unit      string `json:"unit,omitempty"`   // subunit only: unit letter this pin belongs to (FR-014a)
 	Direction string `json:"direction"`        // "in" | "out" | "bidir" | "tristate" (FR-062a)
 	Number    *int   `json:"number,omitempty"` // optional physical pin number (FR-062b)
+	Desc      string `json:"desc,omitempty"`   // optional pin role for documentation (FR-104)
 }
 
 // PinGroup is a named, ordered set of pins forming a bus interface for

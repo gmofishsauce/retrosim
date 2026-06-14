@@ -19,6 +19,50 @@ function infoRow(label, value) {
   return row;
 }
 
+// docSection builds the read-only Documentation block (FR-105) from a type's
+// documentation fields (FR-104), or returns null when the type carries none.
+// The one-line description and datasheet link sit at the top; the per-pin roles
+// live in a collapsed <details> so they never crowd the editable override fields.
+function docSection(td) {
+  const frag = document.createDocumentFragment();
+  let any = false;
+
+  if (td.description) {
+    frag.appendChild(el("div", "prop-doc-desc", td.description));
+    any = true;
+  }
+
+  const ds = td.datasheet;
+  if (ds && ds.url) {
+    const link = el("a", "prop-doc-link", ds.title || ds.vendor || "Datasheet");
+    link.href = ds.url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    if (ds.vendor && ds.title) link.title = `${ds.vendor}: ${ds.title}`;
+    const row = el("div", "prop-doc-row");
+    row.appendChild(link);
+    if (ds.rev) row.appendChild(el("span", "prop-doc-rev", ds.rev));
+    frag.appendChild(row);
+    any = true;
+  }
+
+  // Per-pin roles in a collapsed disclosure (the list can be long).
+  const roles = (td.pins ?? []).filter((p) => p.desc);
+  if (roles.length > 0) {
+    const details = el("details", "prop-doc-details");
+    details.appendChild(el("summary", null, "Pin roles"));
+    const list = el("dl", "prop-doc-pins");
+    for (const p of roles) {
+      list.append(el("dt", null, p.name), el("dd", null, p.desc));
+    }
+    details.appendChild(list);
+    frag.appendChild(details);
+    any = true;
+  }
+
+  return any ? frag : null;
+}
+
 // initProperties wires the panel to the store. Returns nothing; lives for the
 // app's lifetime.
 export function initProperties({ container, store }) {
@@ -44,6 +88,11 @@ export function initProperties({ container, store }) {
       infoRow("Size", `${td.width} × ${td.height}`),
       infoRow("Pins", String(td.pins.length)),
     );
+
+    // Read-only documentation (FR-104, FR-105): always shown, never locked while
+    // simulating since it edits nothing.
+    const doc = docSection(td);
+    if (doc) container.appendChild(doc);
 
     // The panel is read-only while a simulation runs (FR-087).
     const locked = store.state.simulating;

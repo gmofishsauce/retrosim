@@ -5,25 +5,32 @@
 type: "74245"
 outline: [8, 12]
 
+description: "Octal bus transceiver, 3-state"
+datasheet:
+  vendor: Nexperia
+  title: "74HC245; 74HCT245 Octal bus transceiver; 3-state"
+  rev: "Rev. 9, 9 May 2025"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT245.pdf"
+
 pins: # number: physical DIP20/SO20 pin (datasheet Table 2)
-  - { name: A0,  side: left,  pos: 2, dir: bidir, number: 2 }
-  - { name: A1,  side: left,  pos: 3, dir: bidir, number: 3 }
-  - { name: A2,  side: left,  pos: 4, dir: bidir, number: 4 }
-  - { name: A3,  side: left,  pos: 5, dir: bidir, number: 5 }
-  - { name: A4,  side: left,  pos: 6, dir: bidir, number: 6 }
-  - { name: A5,  side: left,  pos: 7, dir: bidir, number: 7 }
-  - { name: A6,  side: left,  pos: 8, dir: bidir, number: 8 }
-  - { name: A7,  side: left,  pos: 9, dir: bidir, number: 9 }
-  - { name: B0,  side: right, pos: 2, dir: bidir, number: 18 }
-  - { name: B1,  side: right, pos: 3, dir: bidir, number: 17 }
-  - { name: B2,  side: right, pos: 4, dir: bidir, number: 16 }
-  - { name: B3,  side: right, pos: 5, dir: bidir, number: 15 }
-  - { name: B4,  side: right, pos: 6, dir: bidir, number: 14 }
-  - { name: B5,  side: right, pos: 7, dir: bidir, number: 13 }
-  - { name: B6,  side: right, pos: 8, dir: bidir, number: 12 }
-  - { name: B7,  side: right, pos: 9, dir: bidir, number: 11 }
-  - { name: DIR, side: top,   pos: 2, dir: in,    number: 1 }
-  - { name: /OE, side: top,   pos: 6, dir: in,    number: 19 }
+  - { name: A0,  side: left,  pos: 2, dir: bidir, number: 2,  desc: "port A data bit 0" }
+  - { name: A1,  side: left,  pos: 3, dir: bidir, number: 3,  desc: "port A data bit 1" }
+  - { name: A2,  side: left,  pos: 4, dir: bidir, number: 4,  desc: "port A data bit 2" }
+  - { name: A3,  side: left,  pos: 5, dir: bidir, number: 5,  desc: "port A data bit 3" }
+  - { name: A4,  side: left,  pos: 6, dir: bidir, number: 6,  desc: "port A data bit 4" }
+  - { name: A5,  side: left,  pos: 7, dir: bidir, number: 7,  desc: "port A data bit 5" }
+  - { name: A6,  side: left,  pos: 8, dir: bidir, number: 8,  desc: "port A data bit 6" }
+  - { name: A7,  side: left,  pos: 9, dir: bidir, number: 9,  desc: "port A data bit 7" }
+  - { name: B0,  side: right, pos: 2, dir: bidir, number: 18, desc: "port B data bit 0" }
+  - { name: B1,  side: right, pos: 3, dir: bidir, number: 17, desc: "port B data bit 1" }
+  - { name: B2,  side: right, pos: 4, dir: bidir, number: 16, desc: "port B data bit 2" }
+  - { name: B3,  side: right, pos: 5, dir: bidir, number: 15, desc: "port B data bit 3" }
+  - { name: B4,  side: right, pos: 6, dir: bidir, number: 14, desc: "port B data bit 4" }
+  - { name: B5,  side: right, pos: 7, dir: bidir, number: 13, desc: "port B data bit 5" }
+  - { name: B6,  side: right, pos: 8, dir: bidir, number: 12, desc: "port B data bit 6" }
+  - { name: B7,  side: right, pos: 9, dir: bidir, number: 11, desc: "port B data bit 7" }
+  - { name: DIR, side: top,   pos: 2, dir: in,    number: 1,  desc: "direction: H = A to B, L = B to A" }
+  - { name: /OE, side: top,   pos: 6, dir: in,    number: 19, desc: "active-low output enable" }
 
 groups:
   - { name: A, pins: [A0, A1, A2, A3, A4, A5, A6, A7] }

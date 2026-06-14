@@ -29,6 +29,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 ### 3.2 Component Palette
 
 - FR-005: The palette shall display one fixed-size tile per loaded component type. Each tile shall show the component type name with its leading two characters (the "74" family prefix) removed, leaving a 2- or 3-digit label (e.g., "138" for "74138", "00" for "7400"); the full unabbreviated type name shall be available as the tile's tooltip.
+- FR-005a: When a component type declares a one-line description (FR-104), the tile's tooltip shall also present it, so hovering a palette tile shows both the full type name and what the part does (e.g. "74138: 3-to-8 line decoder/demultiplexer, inverting"). A type with no description keeps the plain type-name tooltip of FR-005.
 - FR-006: The palette shall arrange tiles in a fixed-width grid of equal-size tiles (3 per row), packed left-to-right then top-to-bottom in ascending order of the numeric abbreviated part number. (Supersedes the prior flat, unordered list.)
 - FR-006a: The palette shall be divided into two equal-height regions by a horizontal divider at its vertical midpoint. The upper region shall hold the 74-series component tiles (FR-005, FR-006). The lower region shall hold built-in editor objects (FR-067). Each region shall scroll independently when its contents overflow. The lower-region tiles follow the same grid and click/drag-to-place behavior as the upper region (FR-006, FR-008, FR-009, FR-009a) but are labeled by a distinct icon and tooltip per object rather than an abbreviated part number.
 - FR-007: The component library shall be loaded once at server startup; the server is not required to detect or reload YAML files added while running.
@@ -87,6 +88,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 - FR-020a: The user shall be able to view the type data of a selected component instance and override specific values (e.g., propagation delay) for that instance only. Overrides shall not affect other instances of the same type or the underlying YAML file, and shall be persisted per FR-058. When the selection is empty or contains more than a single component, the properties panel is blank.
 - FR-020b: A component type may declare named numeric properties, each with a name, a unit, and a default value (e.g., the clock's period in ns, FR-071a). Per-instance property values shall be viewable and settable through the same per-instance override mechanism as other type data (FR-020a) and persisted per FR-058. Built-in objects (FR-067) declare their properties in the client-side registry; the YAML format may later declare properties for 74-series types without breaking the parser or the editor (consistent with FR-066).
 - FR-020c: When the single selected component is an input switch built-in (FR-071c), the properties panel (FR-020a) shall present a control for its position offering the three values 1, 0, and ? (U). Setting it changes the switch's persisted position state, is an undoable action (FR-024), and is disabled while a simulation runs (FR-087); during a run the position is instead changed by clicking the dial (FR-087a). The switch's position is per-instance interactive state rather than a numeric property (FR-020b), so it is not an `overrides` entry.
+- FR-105: When a component instance is selected, the properties panel shall present a read-only Documentation section sourced from the instance's type data (FR-104): the one-line description, a clickable link to the datasheet, and the per-pin roles. Each is shown only when present, and nothing is rendered for a type that carries no documentation.
 
 ### 3.7 The Canvas and Grid
 
@@ -190,6 +192,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 - FR-064: The YAML file shall optionally specify propagation delay values for the component.
 - FR-065: The server shall expose the parsed component library to the browser application via an API endpoint.
 - FR-066: The YAML file format shall accommodate later addition of behavioral logic equations (in GALasm form, per the vision statement) to a component definition without requiring changes to the editor or breaking the existing parser. The editor phase shall ignore any behavioral content present.
+- FR-104: The YAML file may optionally carry human-readable documentation, all fields optional: a one-line `description` (the part's function), a `datasheet` block (manufacturer/`vendor`, document `title`, `rev`, and `url`), and a per-pin `desc` (the pin's role). Documentation is presentation-only; it never affects outline, pins, geometry, or simulation. Absent documentation is normal (FR-066).
 
 ### 3.18 Status Bar
 

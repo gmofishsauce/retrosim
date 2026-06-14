@@ -147,6 +147,17 @@ body {
 }
 .prop-reset:disabled { opacity: 0.35; cursor: default; }
 
+/* Documentation section (FR-104, FR-105): read-only datasheet-derived details. */
+.prop-doc-desc { margin: 0.4rem 0 0.2rem; color: #222; }
+.prop-doc-row { padding: 0.1rem 0; }
+.prop-doc-link { color: #1565c0; text-decoration: underline; word-break: break-word; }
+.prop-doc-rev { display: block; color: #888; font-size: 0.78rem; }
+.prop-doc-details { margin: 0.3rem 0 0.2rem; }
+.prop-doc-details > summary { cursor: pointer; color: #555; font-weight: 600; }
+.prop-doc-pins { margin: 0.3rem 0 0; }
+.prop-doc-pins dt { font-weight: 600; color: #111; }
+.prop-doc-pins dd { margin: 0 0 0.25rem 0.6rem; color: #333; }
+
 #canvas { display: block; width: 100%; height: 100%; }
 
 /* Status bar (FR-072..FR-074): bottom-docked flex row of raised trays. */

@@ -56,6 +56,18 @@ match its structure, comment style, and conventions exactly.
   family at Vcc=4.5 V / 25 °C unless told otherwise. One key per distinct
   timing path, named `tpd_<path>` (e.g. `tpd_a`, `tpd_e`), with a comment
   naming the datasheet table and conditions.
+- **Documentation fields (FR-104)**: emit these alongside the structural fields;
+  they are optional and presentation-only (shown in the properties panel, FR-105,
+  and never affecting geometry or simulation). Source them from the same
+  datasheet you already have open:
+  - `description:` — one line naming the part's function (the same text you put
+    in the provenance header's first line).
+  - `datasheet:` — a mapping `{vendor, title, rev, url}` carrying the provenance
+    you already record in the header comments.
+  - per-pin `desc:` — add to each pin a short role (e.g. `desc: "active-low
+    enable 1"`) drawn from the datasheet's pin-description table. Skip it for the
+    repetitive identical units of a plain gate package, where the symbol already
+    says everything. See `srv/components/74138.yaml` for the established style.
 
 ## 4. Write the GALasm behavior block
 

@@ -212,6 +212,46 @@ pins:
 	}
 }
 
+// The optional documentation fields (FR-104) round-trip onto ComponentType:
+// description, datasheet, and per-pin desc.
+func TestParseComponentDocumentation(t *testing.T) {
+	got, err := ParseComponent(writeYAML(t, `
+type: T
+description: "3-to-8 decoder"
+datasheet:
+  vendor: Nexperia
+  title: "74HC138"
+  rev: "Rev. 10"
+  url: "https://example.com/138.pdf"
+pins:
+  - { name: A0, side: left, pos: 1, dir: in, desc: "address bit 0" }
+`))
+	if err != nil {
+		t.Fatalf("ParseComponent: %v", err)
+	}
+	if got.Description != "3-to-8 decoder" {
+		t.Errorf("Description = %q", got.Description)
+	}
+	if !reflect.DeepEqual(got.Datasheet, &Datasheet{Vendor: "Nexperia", Title: "74HC138", Rev: "Rev. 10", URL: "https://example.com/138.pdf"}) {
+		t.Errorf("Datasheet = %+v", got.Datasheet)
+	}
+	if got.Pins[0].Desc != "address bit 0" {
+		t.Errorf("Pin desc = %q", got.Pins[0].Desc)
+	}
+}
+
+// Documentation is entirely optional: a file with none of it leaves the fields
+// zero/nil (FR-104), not an error.
+func TestParseComponentNoDocumentation(t *testing.T) {
+	got, err := ParseComponent(writeYAML(t, "type: T\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n"))
+	if err != nil {
+		t.Fatalf("ParseComponent: %v", err)
+	}
+	if got.Description != "" || got.Datasheet != nil {
+		t.Errorf("expected empty documentation, got desc=%q ds=%v", got.Description, got.Datasheet)
+	}
+}
+
 // yaml.v3 coerces a bare-digit type: scalar into the string name (the §7.6
 // "quote it" guidance is a safety recommendation, not enforced by the parser).
 func TestParseComponentBareIntTypeCoerced(t *testing.T) {

@@ -7,6 +7,13 @@ rendertype: subunit
 numunits: 4
 renderas: nor
 
+description: "Quad 2-input NOR gate"
+datasheet:
+  vendor: Nexperia
+  title: "74HC02; 74HCT02 Quad 2-input NOR gate"
+  rev: "Rev. 9, 15 February 2024"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT02.pdf"
+
 pins: # number: physical DIP14/SO14 pin (datasheet Table 2)
   - { name: 1A, side: left,  unit: A, dir: in,  number: 2 }
   - { name: 1B, side: left,  unit: A, dir: in,  number: 3 }
