@@ -103,7 +103,7 @@ To place a part, either:
 After a single placement the tool returns to Select. 74-series parts are numbered
 `U1`, `U2`, …; built-in objects are numbered `A-1`, `A-2`, ….
 
-Some 74-series parts (e.g. `7400`, `7402`, `7404`, `7432`) are **multi-unit
+Some 74-series parts (e.g. `7400`, `7402`, `7404`, `7432`, `7486`) are **multi-unit
 packages**: they are drawn as separate gate symbols, one per unit, and all units
 are dropped at once, slightly offset. Each unit is independently selectable,
 movable, and rotatable, but deleting any one unit deletes the whole package (after
