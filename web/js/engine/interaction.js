@@ -56,6 +56,7 @@ import {
   promptWidthDialog,
   promptBitNamesDialog,
 } from "../chrome/dialogs.js";
+import { INTERACTIONS } from "../builtins.js";
 import { openContextMenu } from "../chrome/contextmenu.js";
 
 const DEFAULT_BUS_WIDTH = 8;
@@ -211,6 +212,15 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     if (!ref) store.setSelection([]);
     else if (additive) store.toggleSelection(ref);
     else store.setSelection([ref]);
+  }
+
+  // interactDuringSim applies an interactive built-in's input action on a
+  // sim-time click (FR-087b): a non-undoable live mutation (store.applyLive)
+  // that wakes the simulator to re-evaluate (§6.10/§6.13). The handler — e.g.
+  // the switch's dial cycle (FR-087a) — comes from the INTERACTIONS registry,
+  // so the FSM stays generic with no per-type special case.
+  function interactDuringSim(inst, interact) {
+    store.applyLive(() => interact(inst));
   }
 
   // beginMarquee starts a rubber-band selection on a bare-canvas press (FR-016b):
@@ -454,7 +464,8 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     const pt = canvasPoint(e);
 
     // Simulation lock (FR-087): selection and pan only — no drags, no wire
-    // starts (pin hotspots included), no placement.
+    // starts (pin hotspots included), no placement. The lone exception is a
+    // click on an interactive built-in (FR-087b), which applies its input action.
     if (store.state.simulating) {
       const world = worldOf(e);
       const seg = hitSegment(store.design, world, 0.4);
@@ -462,7 +473,12 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       const busSeg = hitBusSegment(store.design, world, 0.4);
       if (busSeg) return select({ kind: "bus", id: busSeg.bus.id }, e.shiftKey);
       const comp = hitComponent(store.design, world);
-      if (comp) return select({ kind: "component", refdes: comp.refdes }, e.shiftKey);
+      if (comp) {
+        const inst = store.design.components.find((c) => c.refdes === comp.refdes);
+        const interact = inst && INTERACTIONS[inst.type];
+        if (interact) return interactDuringSim(inst, interact);
+        return select({ kind: "component", refdes: comp.refdes }, e.shiftKey);
+      }
       beginMarquee(e, world); // bare canvas: rubber-band selection (FR-016b)
       return;
     }

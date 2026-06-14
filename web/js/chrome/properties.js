@@ -4,7 +4,7 @@
 // dispatch setOverrideCmd through the store; the panel re-renders on every
 // store notification.
 
-import { setOverrideCmd } from "../commands.js";
+import { setOverrideCmd, setSwitchStateCmd } from "../commands.js";
 
 function el(tag, className, text) {
   const e = document.createElement(tag);
@@ -47,6 +47,30 @@ export function initProperties({ container, store }) {
 
     // The panel is read-only while a simulation runs (FR-087).
     const locked = store.state.simulating;
+
+    // Input switch position (FR-020c): a 1 / 0 / ? selector for the switch's
+    // per-instance dial position (inst.switchState), not an override. While
+    // simulating the position is changed by clicking the dial instead (FR-087a),
+    // so the control is disabled (locked).
+    if (td.renderType === "switch") {
+      container.appendChild(el("div", "prop-section", "Position"));
+      const row = el("div", "prop-row");
+      row.appendChild(el("label", "prop-label", "state"));
+      const select = el("select", "prop-input");
+      for (const [val, text] of [["1", "1"], ["0", "0"], ["U", "?"]]) {
+        const opt = el("option", null, text);
+        opt.value = val;
+        select.appendChild(opt);
+      }
+      const cur = inst.switchState === "1" || inst.switchState === "0" ? inst.switchState : "U";
+      select.value = cur;
+      select.disabled = locked;
+      select.addEventListener("change", () => {
+        store.dispatch(setSwitchStateCmd(inst.refdes, select.value));
+      });
+      row.appendChild(select);
+      container.appendChild(row);
+    }
 
     // overrideRow builds one editable numeric field whose value shadows the
     // type default via inst.overrides[group][key] (FR-020a/FR-020b/FR-058).

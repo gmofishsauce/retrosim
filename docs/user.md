@@ -282,9 +282,17 @@ YAML.
 | **Pull-down** | one output (`OUT`, top) | A **weak** driver of logic **0**, symmetric to the pull-up. A pull-up and pull-down on the same net with no strong driver is a conflict. |
 | **Clock** | one output (`OUT`, right) | A square wave, 50% duty cycle: low from t = 0 with the first rising edge half a period in. Properties: `period` (ns, default 100) and `speed` (Hz, default 1). A design with a clock is *sequential* and runs continuously; see [Simulation](#12-simulation). |
 | **Power-on reset** | two outputs (`R` active-high, `/R` active-low, right) | Asserts reset (`R`=1, `/R`=0) for the first `cycles` clock periods of a run, then releases (inverse afterward). Property: `cycles` (default 3). |
+| **Input switch** | one output (`OUT`, right) | A user-set logic source, drawn as a rotary dial with three positions **1 / 0 / ?** (the `?` position drives **U**). A **strong** driver — it overrides pull-ups/pull-downs on its net. Set its position in the properties panel while editing, or **click the dial during a simulation** to cycle it `? → 1 → 0 → ?`. The position is saved with the design (a new switch starts at `?`). |
 
 You can override a built-in's properties per instance via the properties panel
-(e.g. give one clock a different `period`).
+(e.g. give one clock a different `period`). The input switch is set the same way:
+select it and choose its position (`1` / `0` / `?`) in the properties panel.
+
+**Interactive inputs.** The input switch is an *interactive input* — a built-in
+you can change by hand **while a simulation is running**: click its body and the
+simulation immediately re-evaluates from the new value (see
+[Simulation](#12-simulation)). This is the one kind of design change allowed
+during a run.
 
 ---
 
@@ -294,8 +302,7 @@ retrosim ships with a **slow ("debug") simulator** that runs in the browser
 directly on the editing canvas.
 
 - **Run / Stop:** click **Run** to start; the button becomes **Stop** and the state
-  tray reads "simulating". Click **Stop** to end (some runs stop on their own — see
-  below).
+  tray reads "simulating". A run continues until you click **Stop**.
 - **Values:** every net carries one of four values — **0**, **1**, **U**
   (undefined), **Z** (high-impedance / no enabled driver). A component reading Z
   treats it as U. Logic is selectively pessimistic (e.g. `0 AND U = 0`,
@@ -305,9 +312,12 @@ directly on the editing canvas.
   update together — outputs respond exactly one unit after their inputs. (The slow
   simulator does not use the YAML propagation delays.)
 - **Combinational designs** (no clock) run unpaced until the nets stop changing,
-  display the result, and terminate automatically; if they don't settle within
-  10,000 units that is reported in the message tray. Final indicator values stay on
-  screen until you next edit the design.
+  display the result, and then **idle** — the run stays active but uses no CPU
+  until you change an interactive input (e.g. click an [input switch](#11-built-in-components)),
+  which makes the circuit re-settle. They no longer stop on their own. If a
+  settling pass doesn't reach a stable state within 10,000 units (a likely
+  oscillation) that is reported in the message tray and evaluation pauses; press
+  Stop to end. Final indicator values stay on screen until you next edit the design.
 - **Sequential designs** (at least one clock) run continuously, paced at
   `period × speed` simulated nanoseconds per real second, until you press Stop.
 - **Conflicts:** when enabled drivers of a net disagree 0-vs-1, the net goes to U,
@@ -318,7 +328,9 @@ directly on the editing canvas.
 
 While simulating, the design is **read-only**: placing, wiring, moving, rotating,
 deleting, overrides, undo/redo, New, and Open are disabled. Pan, zoom, selection,
-right-click recenter, and Save remain available.
+right-click recenter, and Save remain available. The one exception is clicking an
+**interactive input** (the input switch), which changes its value live and
+re-evaluates the simulation.
 
 ---
 
@@ -349,6 +361,7 @@ clear message until then, without losing your work.
 | Mouse wheel | Zoom to cursor |
 | Right-click empty | Recenter view on the cursor |
 | Right-click object | Context menu |
+| Left-click input switch (while simulating) | Cycle its position `? → 1 → 0 → ?` |
 
 **Keyboard**
 

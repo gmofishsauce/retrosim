@@ -19,6 +19,35 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-13 — Combinational sims run continuously; general interactive-input mechanism
+What: Combinational designs (no clock) no longer auto-terminate after settling.
+They run live until Stop (FR-076): step to quiescence, then idle (no CPU) until
+an interactive input perturbs them, then re-settle. The 10,000-unit bound is now
+a per-settling-episode oscillation guard (report once + idle, not terminate).
+Introduced a general interactive-input mechanism (FR-087b): a built-in may
+register an `INTERACTIONS` handler; a sim-time click on it applies the handler
+live (`store.applyLive`, non-undoable) and wakes the simulator via the store's
+live-input channel (`subscribeLive`). The switch's click-to-cycle (FR-087a) is
+now the first instance of this mechanism rather than a special case.
+Why: The old single-cycle/auto-terminate model gave interactive inputs no window
+to act in a combinational circuit, making the switch useless there. The
+mechanism is generalized so future manual-input components need no scheduler or
+FSM changes.
+Touches: FR-085 (rework), FR-087a (rework), FR-087b (new); design §6.9, §6.10,
+§6.11, §6.13, traceability.
+
+## 2026-06-13 — Input switch built-in (interactive logic source)
+What: New built-in object — a rotary input switch with a right-edge output and
+three positions 1 / 0 / ? (U), drawn as a dial. It strong-drives its output to
+its position's value. Position is persisted per-instance state (`switchState`,
+default U), set in the properties panel while editing and by clicking the dial
+while a simulation runs (cyclic ? → 1 → 0 → ?).
+Why: Provide a user-controllable logic input source. Editing-time setting (via
+the property sheet) keeps it usable for combinational designs, which auto-settle
+and so offer no live-click window; the dial click serves live sequential runs.
+Touches: FR-071c (new), FR-087a (new), FR-020c (new), FR-067a, FR-057/§5 table;
+design §6.8, §6.9, §6.11, §6.12, §6.13, §7.2, traceability.
+
 ## 2026-06-13 — KiCad-style canvas interaction: rubber-band select + right-click recenter
 What: Left-drag on bare canvas no longer pans; it draws a rubber-band selection
 rectangle (FR-016b). Horizontal drag direction sets the mode: drag right = window

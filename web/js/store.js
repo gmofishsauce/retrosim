@@ -39,6 +39,10 @@ export function createStore(initial = {}) {
   const undoStack = [];
   const redoStack = [];
   const subscribers = new Set();
+  // Live-input listeners (FR-087b): notified after an applyLive mutation so the
+  // running simulator can wake() and re-evaluate (§6.10, §6.13). Separate from
+  // `subscribers` because this is an input-event signal, not a re-render.
+  const liveListeners = new Set();
 
   // onError surfaces a command failure non-fatally (§6.6): the throwing command
   // is not recorded for undo and the event handler does not die mid-gesture.
@@ -129,6 +133,28 @@ export function createStore(initial = {}) {
       undoStack.push(cmd);
       state.dirty = true;
       notify();
+    },
+
+    // applyLive runs a non-undoable mutation that is permitted during a run —
+    // an interactive input such as the switch dial click (FR-087a/FR-087b).
+    // Unlike dispatch it bypasses both the simulation lock and the undo/redo
+    // stacks, but still marks the design dirty and notifies so the backup
+    // snapshot (FR-092) and the properties panel observe the change. The live
+    // sim view is intentionally not cleared. After notifying it fires the
+    // live-input channel so the running simulator re-evaluates (§6.13).
+    applyLive(mutate) {
+      mutate(state.design);
+      state.dirty = true;
+      notify();
+      for (const fn of liveListeners) fn();
+    },
+
+    // subscribeLive registers a live-input listener (FR-087b) and returns an
+    // unsubscribe function. The sim engine subscribes for the duration of a run
+    // so any applyLive wakes it; non-sim consumers ignore the channel.
+    subscribeLive(fn) {
+      liveListeners.add(fn);
+      return () => liveListeners.delete(fn);
     },
 
     // setTool changes the active tool and notifies (so chrome can reflect it).

@@ -145,6 +145,9 @@ export function buildSimulation(design, { onMessage = () => {} } = {}) {
         type: inst.type,
         behave,
         props: effectiveProps(inst),
+        // Retain the live instance so behaviors can read mutable interactive
+        // state each step (the switch's dial position, FR-087a/§6.13).
+        inst,
       });
     } else if (inst.typeData.renderType === "subunit") {
       const m = SUBUNIT_PKG_RE.exec(inst.refdes);
@@ -218,7 +221,8 @@ export function buildSimulation(design, { onMessage = () => {} } = {}) {
     };
     for (const e of entities) {
       if (e.kind === "builtin") {
-        for (const c of e.behave({ props: e.props, simTime, clockPeriod })) {
+        const ctx = { props: e.props, simTime, clockPeriod, state: e.inst.switchState };
+        for (const c of e.behave(ctx)) {
           add(`${e.refdes}.${c.pin}`, c.value, !!c.weak, `${e.refdes}.${c.pin}`);
         }
       } else if (e.compiled) {
@@ -281,13 +285,16 @@ const COMBINATIONAL_BATCH = 1000;
 // createSim wires the engine to the application (§6.13): run()/stop() own the
 // FR-076 transitions (state tray via setAppState, the store's transient
 // simulating flag and display view, the toolbar relabel via the store
-// notification). Combinational designs run unpaced until settled, then
-// auto-stop (FR-085); designs with a clock run paced at period × speed units
-// per wall second until stopped (FR-084, FR-086).
+// notification). Both kinds run until stop(); neither auto-terminates.
+// Combinational designs run a settling episode (unpaced) to quiescence then
+// idle, re-settling on an interactive input (FR-085/FR-087b); designs with a
+// clock run paced at period × speed units per wall second (FR-084, FR-086).
 export function createSim({ store, renderer }) {
   let sim = null; // the running buildSimulation, or null
   let rafId = null;
   let timeoutId = null;
+  let unsubLive = null; // live-input channel subscription during a run (FR-087b)
+  let settling = false; // a combinational settling episode is in flight
 
   function run() {
     if (sim) return;
@@ -303,8 +310,10 @@ export function createSim({ store, renderer }) {
       conflictedConductors: sim.conflictedConductors,
     });
     store.setSimulating(true); // design read-only (FR-087); notifies chrome
+    // Re-evaluate after any live interactive input during the run (FR-087b).
+    unsubLive = store.subscribeLive(wake);
     if (sim.hasClocks()) startPaced();
-    else startCombinational();
+    else settle();
   }
 
   function stop() {
@@ -313,6 +322,11 @@ export function createSim({ store, renderer }) {
     if (rafId !== null) cancelAnimationFrame(rafId);
     if (timeoutId !== null) clearTimeout(timeoutId);
     rafId = timeoutId = null;
+    settling = false;
+    if (unsubLive) {
+      unsubLive();
+      unsubLive = null;
+    }
     // state.sim is deliberately retained: final values stay displayed until
     // the next design modification (FR-085).
     setAppState("editing");
@@ -320,22 +334,31 @@ export function createSim({ store, renderer }) {
     renderer.requestRender();
   }
 
-  // Combinational (no clock generator): a single implicit cycle — step until
-  // settled or the bound, then terminate automatically (FR-085).
-  function startCombinational() {
+  // Combinational (no clock generator): run one settling episode — unpaced
+  // steps until the circuit reaches quiescence or the per-episode bound — then
+  // idle (no timer, no CPU) without stopping the run (FR-085). The bound is per
+  // episode (a local counter), not cumulative simTime, so it resets each wake.
+  function settle() {
+    if (!sim || settling) return; // an in-flight episode already absorbs new state
+    settling = true;
+    let episodeSteps = 0;
     const loop = () => {
       if (!sim) return; // stopped mid-batch
       for (let i = 0; i < COMBINATIONAL_BATCH; i++) {
         sim.step();
+        episodeSteps++;
         if (!sim.lastStepChanged()) {
+          // Quiescent: display and idle until the next interactive input wakes us.
           renderer.requestRender();
-          stop();
+          settling = false;
           return;
         }
-        if (sim.simTime() >= SETTLE_BOUND) {
-          postMessage(`design did not settle within ${SETTLE_BOUND} ns; stopping`);
+        if (episodeSteps >= SETTLE_BOUND) {
+          postMessage(
+            `design did not settle within ${SETTLE_BOUND} ns; pausing evaluation (possible oscillation)`,
+          );
           renderer.requestRender();
-          stop();
+          settling = false;
           return;
         }
       }
@@ -343,6 +366,14 @@ export function createSim({ store, renderer }) {
       timeoutId = setTimeout(loop, 0); // yield to keep the tab live
     };
     loop();
+  }
+
+  // wake re-evaluates after a live input change (FR-087b). Combinational: start
+  // a fresh settling episode if idle. Paced: a no-op — the rAF loop already
+  // re-reads instance state each step.
+  function wake() {
+    if (!sim || sim.hasClocks()) return;
+    settle();
   }
 
   // Sequential: advance period × speed units per wall second (FR-084).

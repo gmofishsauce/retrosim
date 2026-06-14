@@ -1,4 +1,4 @@
-import { V0, V1 } from "./engine/galasm.js";
+import { V0, V1, VU } from "./engine/galasm.js";
 
 // Client-side registry of built-in editor objects (FR-067–FR-071a). These are
 // synthetic ComponentTypes defined by the app rather than loaded from YAML; once
@@ -49,6 +49,22 @@ const RESET_ICON =
   '<text x="18" y="18" text-anchor="middle" dominant-baseline="central"' +
   ' font-family="system-ui,sans-serif" font-weight="bold" font-size="10" fill="#000">RST</text>' +
   "</svg>";
+
+// SWITCH_ICON: a rotary dial — a circle with 1 / 0 / ? position marks and a
+// pointer (FR-071c). The placed object draws the pointer at its current
+// switchState; the palette glyph shows a representative position.
+const SWITCH_ICON =
+  '<svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true">' +
+  '<circle cx="18" cy="18" r="15" fill="#fff" stroke="#333"/>' +
+  '<text x="18" y="7" text-anchor="middle" dominant-baseline="central"' +
+  ' font-family="system-ui,sans-serif" font-size="7" fill="#000">1</text>' +
+  '<text x="29" y="25" text-anchor="middle" dominant-baseline="central"' +
+  ' font-family="system-ui,sans-serif" font-size="7" fill="#000">0</text>' +
+  '<text x="7" y="25" text-anchor="middle" dominant-baseline="central"' +
+  ' font-family="system-ui,sans-serif" font-size="7" fill="#000">?</text>' +
+  '<line x1="18" y1="18" x2="18" y2="8" stroke="#000" stroke-width="2"' +
+  ' stroke-linecap="round"/>' +
+  '<circle cx="18" cy="18" r="2.5" fill="#333"/></svg>';
 
 export const BUILTINS = [
   {
@@ -113,6 +129,19 @@ export const BUILTINS = [
     // FR-071b: reset asserted for the first cycles × clockPeriod units of a run.
     properties: [{ name: "cycles", unit: "cycles", default: 3 }],
   },
+  {
+    name: "switch",
+    builtin: true,
+    title: "input switch", // FR-071c
+    icon: SWITCH_ICON,
+    renderType: "switch",
+    width: 2,
+    height: 2,
+    pins: [{ name: "OUT", side: "right", position: 1, direction: "out" }],
+    // Position is per-instance interactive state (inst.switchState, default
+    // "U"), not a numeric property (FR-071c); set via the properties panel
+    // (FR-020c) or a dial click while simulating (FR-087a).
+  },
 ];
 
 // BEHAVIORS maps built-in type name → behavior function (FR-067a). Behaviors
@@ -152,5 +181,27 @@ export const BEHAVIORS = {
       { pin: "R", value: active ? V1 : V0 },
       { pin: "/R", value: active ? V0 : V1 },
     ];
+  },
+  // Strong driver of its current dial position (FR-087a): "1"→V1, "0"→V0,
+  // "U" (or unset)→VU. `state` is the live inst.switchState (§6.13).
+  switch({ state }) {
+    const value = state === "1" ? V1 : state === "0" ? V0 : VU;
+    return [{ pin: "OUT", value }];
+  },
+};
+
+// INTERACTIONS maps built-in type name → an interaction handler (inst) => void
+// that mutates the instance's interactive state in place (FR-087b). It is the
+// input-side analogue of BEHAVIORS (output side): a type with an entry here is
+// interactive and accepts a sim-time click, routed through store.applyLive by
+// the interaction FSM (§6.9), which wakes the simulator to re-evaluate (§6.13).
+// A new interactive input is added by registering a handler here plus a render
+// branch — no scheduler or FSM change.
+const SWITCH_NEXT = { U: "1", "1": "0", "0": "U" }; // dial cycle ? → 1 → 0 → ?
+export const INTERACTIONS = {
+  // Advance the switch one dial position (FR-087a).
+  switch(inst) {
+    const cur = inst.switchState === "1" || inst.switchState === "0" ? inst.switchState : "U";
+    inst.switchState = SWITCH_NEXT[cur];
   },
 };

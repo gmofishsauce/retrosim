@@ -99,6 +99,12 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-071b** — Power-on reset: a box reading `RST`, two right-edge pins (R
   active high, /R active low); drives reset for the first `cycles` clock
   cycles of a run (property, default 3). Tooltip "power-on reset".
+- **FR-071c** — Input switch: 2×2, one right-center `out` pin; a rotary dial
+  showing positions 1 / 0 / ? (U) with a pointer at the current one. A strong
+  driver of its position's value (FR-087a). Position is persisted per-instance
+  state (`switchState`, default `U`), set via the properties panel while editing
+  (FR-020c) or by clicking the dial while simulating (FR-087a). Tooltip "input
+  switch".
 
 **Component Selection and Movement**
 - **FR-016** — In select mode, click a component to select it.
@@ -902,7 +908,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Simulation lock (FR-087):** while `store.state.simulating` the FSM accepts
   only pan, zoom, selection, and hover; gestures that would dispatch a command —
   drags, deletes, wire/bus starts (including pin hotspots), placements — and
-  palette/tool arming are ignored, as is the context menu's mutating items.
+  palette/tool arming are ignored, as is the context menu's mutating items. The
+  sole exception is a click on an **interactive built-in** (FR-087b): if the hit
+  component's type has an `INTERACTIONS` handler (§6.11), the FSM applies it via
+  `store.applyLive(() => INTERACTIONS[type](inst))` — a non-undoable live change
+  that marks the design modified and wakes the simulator (§6.10) — instead of
+  selecting. The switch's handler cycles `switchState` ? → 1 → 0 → ? (FR-087a).
+  Clicks on non-interactive components still select (FR-087).
 - **Error handling:** clicks on empty space in WIRE/BUS state are ignored (no
   partial wire). A gesture that would create a zero-endpoint wire is discarded
   (FR-030). Pressing `Esc` cancels an in-progress gesture, restoring SELECT.
@@ -962,6 +974,17 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `simulating`, `dispatch`/`undo`/`redo` refuse with a message-tray report instead
   of mutating (FR-087). `sim` is retained after a run ends (FR-085) and cleared by
   the first design-modifying `dispatch` afterward.
+- **Live inputs during a run (FR-087b):** `applyLive(mutate)` is a second
+  mutation path used only while simulating — the interactive-input change behind
+  a switch click (FR-087a). Unlike `dispatch` it bypasses the sim lock and the
+  undo/redo stacks (the change is transient interaction, not an editing action),
+  but still sets `dirty` and `notify()`s (so the backup snapshot, FR-092, and the
+  properties panel reflect it) and, deliberately, does **not** clear the live
+  `sim` view. After mutating it fires the store's **live-input channel**:
+  `subscribeLive(fn) → unsubscribe`, which the sim engine subscribes to for the
+  duration of a run so it can `wake()` and re-evaluate (§6.13). The channel is the
+  general re-evaluation trigger — any `applyLive` wakes the sim, regardless of
+  which interactive built-in caused it.
 - **Command interface:** every mutating action is an object
   `{ apply(design), revert(design), label }`. The store:
   ```
@@ -1026,7 +1049,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   each scrolls independently. Lower-region tiles render an SVG icon (the object's
   glyph, e.g. the indicator bubble) with a descriptive `title`, and `dataset.type`
   set to the built-in type name; the armed-state subscription covers both regions.
-- **Built-in objects (`builtins.js`)** — Satisfies FR-067–FR-071b. Exports a
+- **Built-in objects (`builtins.js`)** — Satisfies FR-067–FR-071c. Exports a
   client-side array of synthetic `ComponentType`s (no server/YAML). Each carries
   `builtin: true`, an `icon` (inline-SVG palette glyph), a `title` (tooltip), plus
   the usual `name`/`width`/`height`/`pins`/`renderType`. Entries: **indicator**
@@ -1034,7 +1057,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   (`"pullup"`, 2×2, one bottom-center pin, FR-069); **pull-down** (`"pulldown"`,
   2×2, one top-center pin, FR-070); **clock** (`"clock"`, 3×2, one right-center
   pin, FR-071); **power-on reset** (`"reset"`, 3×3, two right-edge `out` pins
-  `R` and `/R`, FR-071b). On placement these flow through the normal
+  `R` and `/R`, FR-071b); **input switch** (`"switch"`, 2×2, one right-center
+  `out` pin, FR-071c). On placement these flow through the normal
   non-subunit
   `addInstance` path; `addInstance` assigns an `A-<n>` refdes (FR-011a) when
   `type.builtin`. Each entry may declare `properties` (FR-020b): the clock
@@ -1046,10 +1070,30 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   out of the type objects so `typeData` copies remain pure JSON (§7.1).
   `drawComponent` has a render branch per built-in renderType: the
   indicator bubble (gray `?` until the simulator, then white `1`/black `0`), the
-  pull-up two-headed arrow, the pull-down upside-down `T`, and the clock and
-  reset boxes. Pin
+  pull-up two-headed arrow, the pull-down upside-down `T`, the clock and
+  reset boxes, and the switch dial (a circle with 1 / 0 / ? marks and a pointer
+  at `inst.switchState`, FR-071c). Pin
   name labels are suppressed for built-ins (the glyph owns the body); the refdes is
   drawn above the symbol.
+- **Switch interactive state (FR-071c)** — the input switch carries one
+  per-instance field, `inst.switchState` (`"0"` | `"1"` | `"U"`, default `"U"`),
+  set on the instance directly rather than through `overrides`. It round-trips
+  through save/load for free (the whole instance is serialized, §7.2). It is
+  changed while editing by the properties panel control (§6.12, FR-020c) and
+  while simulating by a dial click routed through the interaction FSM (§6.9,
+  FR-087a). `drawComponent` reads it to draw the pointer; the switch behavior
+  (§6.13) reads it to drive its output.
+- **Interactive-input registry (`INTERACTIONS`, FR-087b)** — a second registry
+  exported beside `BEHAVIORS`, mapping built-in type name → an interaction
+  handler `(inst) => void` that mutates the instance's interactive state in
+  place. It is the input-side analogue of `BEHAVIORS` (output side): a type with
+  an entry is *interactive* and accepts a sim-time click. The **switch** entry
+  cycles `inst.switchState` ? → 1 → 0 → ? (FR-087a). The interaction FSM (§6.9)
+  routes a simulating-mode click on any interactive built-in through
+  `store.applyLive(() => INTERACTIONS[type](inst))` — no per-type special case —
+  and `applyLive` wakes the simulator (§6.10, §6.13). Adding a new interactive
+  input is therefore: an `INTERACTIONS` handler + a render branch, nothing in the
+  scheduler or the FSM.
 - **Dialogs (`dialogs.js`)** — Satisfies FR-046–FR-049, FR-052–FR-054. Modal DOM
   dialogs:
   - *Save* — on first save (no `savePath`) prompt with name prefilled to the
@@ -1241,23 +1285,40 @@ no sequential part could ever leave U.)
   (FR-083).
 - **Built-in behaviors (FR-067a):** the `BEHAVIORS` registry entries (§6.11)
   take the uniform signature `behave(ctx) → [{pin, value, weak?}]` with `ctx =
-  {props, simTime, clockPeriod}`: **clock** returns its FR-084 waveform — low
-  for the first half of each `period`, high for the second, so the first rising
-  edge lands half a period in; **pull-up/pull-down** return their constant weak
-  1/0; **indicator** returns nothing (display only); **power-on reset**
+  {props, simTime, clockPeriod, state}`: **clock** returns its FR-084 waveform —
+  low for the first half of each `period`, high for the second, so the first
+  rising edge lands half a period in; **pull-up/pull-down** return their constant
+  weak 1/0; **indicator** returns nothing (display only); **power-on reset**
   (FR-071b) drives `R` 1 and `/R` 0 while `simTime < cycles × clockPeriod`,
-  the inverse afterward. `props` carries effective values: `overrides.props`
-  else the declared default (FR-020b). `clockPeriod` is resolved once at Run:
+  the inverse afterward; **input switch** (FR-087a) strong-drives `OUT` to the
+  logic value of `state` (`"1"`→V1, `"0"`→V0, `"U"`→VU). `props` carries
+  effective values: `overrides.props` else the declared default (FR-020b).
+  `state` is the live `inst.switchState` (§6.11), supplied so a dial click during
+  a run takes effect the next step; the simulator entity therefore retains its
+  source `inst` reference for built-ins. `clockPeriod` is resolved once at Run:
   the effective `period` of the design's clock instance when exactly one is
   placed, else the 100 ns FR-071a default (no clock, or several — FR-071b).
-- **Scheduler (FR-084–FR-086):** no clock instance placed → combinational: run
-  steps unpaced (batched, with periodic yields to keep the tab live) until
-  `next` equals `curr` (settled) or the 10,000-unit bound (report via message
-  tray), then auto-`stop()` (FR-085). Clock(s) present → sequential: target rate
-  = max over clocks of effective `period × speed` units per wall second; a
-  `requestAnimationFrame` loop advances `round(rate × dt)` steps per frame
-  (capped to keep frames responsive), requests a render when any net changed,
-  and runs until `stop()` (FR-086).
+- **Scheduler (FR-084–FR-086):** both kinds run until `stop()`; neither
+  auto-terminates. No clock instance placed → combinational: a *settling
+  episode* runs steps unpaced (batched, with periodic yields to keep the tab
+  live) until `next` equals `curr` (quiescent) or the 10,000-unit per-episode
+  bound (report once via message tray — likely oscillation), then **idles** —
+  no timer scheduled, no CPU — leaving the run active (FR-085). `wake()`
+  (below) starts a fresh episode when an interactive input perturbs the design;
+  the episode step counter is local so the bound is per-episode, not cumulative.
+  Clock(s) present → sequential: target rate = max over clocks of effective
+  `period × speed` units per wall second; a `requestAnimationFrame` loop advances
+  `round(rate × dt)` steps per frame (capped to keep frames responsive), requests
+  a render when any net changed, and runs until `stop()` (FR-086).
+- **Interactive inputs (FR-087b):** the engine subscribes to the store's
+  live-input channel (§6.10) for the duration of a run. `applyLive` (the
+  non-undoable sim-time mutation behind a switch click, FR-087a) fires that
+  channel; the engine's listener calls `wake()`. For a combinational run `wake()`
+  re-runs a settling episode if idle (no-op if an episode is already in flight);
+  for a paced run it is a no-op (the rAF loop already re-reads instance state
+  each step). This is the general re-evaluation path — not switch-specific — so a
+  new interactive built-in (an `INTERACTIONS` handler, §6.11) needs no scheduler
+  change.
 - **Display view:** the engine publishes `state.sim = { valueOfPin(refdes,
   pinName), conflictedConductors }` (transient, §6.10) consumed by the renderer
   (§6.8) for indicator glyphs and red conflict strokes. `stop()` retains the
@@ -1378,6 +1439,7 @@ branch wire that meet at it share one position and cannot drift apart (A1).
 | `rotation` | int | `0`\|`90`\|`180`\|`270` |
 | `typeData` | `ComponentType` | full copy at save time (FR-057) |
 | `overrides` | object | per-instance field overrides, grouped by kind: `{"delays":{"tpd":12},"props":{"period":200}}` — `delays` shadows `typeData.delays` (FR-058), `props` shadows `typeData.properties` defaults (FR-020b) |
+| `switchState` | string? | input-switch built-in only (FR-071c): current dial position, `"0"` \| `"1"` \| `"U"` (default `"U"`). Per-instance interactive state, not an `overrides` entry; set via the properties panel (FR-020c) or a dial click during a run (FR-087a) |
 
 **`PathPoint`** (FR-059, A1, A2) — a wire/bus `path` is an ordered list of these,
 length ≥ 2. The **first and last** path-points must be `node` points (the wire's
@@ -1663,6 +1725,8 @@ No files are modified (greenfield).
 | FR-020a | §6.11, §7.2 | `properties.js`, `store.js` |
 | FR-020b | §6.11, §7.1, §7.2 | `properties.js`, `builtins.js`, `model/design.js`, `commands.js` |
 | FR-067a, FR-071a, FR-071b | §6.11, §6.13, §7.1 | `builtins.js`, `sim.js`, `canvas.js` |
+| FR-071c, FR-087a | §6.8, §6.9, §6.11, §6.13, §7.2 | `builtins.js`, `canvas.js`, `interaction.js`, `sim.js`, `model/design.js` |
+| FR-020c | §6.12, §7.2 | `properties.js`, `model/design.js`, `commands.js` |
 | FR-021 | §6.7, §6.8 | `geometry.js`, `canvas.js` |
 | FR-022, FR-023 | §6.8, §6.11 | `canvas.js`, `toolbar.js` |
 | FR-024 | §6.10 | `store.js` |
@@ -1702,6 +1766,7 @@ No files are modified (greenfield).
 | FR-076, FR-087 | §6.9, §6.10, §6.11, §6.13 | `toolbar.js`, `store.js`, `interaction.js`, `sim.js`, `statusbar.js` |
 | FR-077, FR-081, FR-082, FR-083 | §6.8, §6.13 | `sim.js`, `galasm.js`, `canvas.js` |
 | FR-084, FR-085, FR-086 | §6.13 | `sim.js`, `builtins.js` |
+| FR-087b | §6.9, §6.10, §6.11, §6.13 | `interaction.js`, `store.js`, `builtins.js`, `sim.js` |
 | FR-088 | §6.6, §6.10, §6.11 | `model/design.js`, `commands.js`, `toolbar.js` |
 | NFR-001 | §6.1 | `main.go` |
 | NFR-002 | §6.12 | `api.js` |
@@ -1792,8 +1857,9 @@ snap FR-041–043) are fully designed so they are additive when implemented.
   alone → conflict. Unit-delay ripple: an N-inverter chain settles in exactly N
   steps (one level per step, FR-078). Registers latch only on 0→1 of the
   declared clock net and the output changes one unit later. Combinational
-  design: settles then auto-terminates; a ring oscillator hits the 10,000-unit
-  bound and reports (FR-085). Clock waveform: low first half-period, rising
+  design: settles then idles (no auto-terminate) and re-settles on an
+  interactive input (`applyLive` → `wake()`, FR-085/FR-087b); a ring oscillator
+  hits the 10,000-unit per-episode bound, reports once, and idles (FR-085). Clock waveform: low first half-period, rising
   edge at period/2 (FR-084). Power-on reset (FR-071b): R=1//R=0 for
   `cycles × clockPeriod` units then the inverse; `clockPeriod` = the single
   clock instance's effective period, else 100 (no clock, or several); the

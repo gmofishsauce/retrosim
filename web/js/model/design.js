@@ -55,6 +55,9 @@ export function addInstance(design, type, x, y, rotation) {
     typeData: structuredClone(type),
     overrides: {},
   };
+  // The input switch carries per-instance dial position state (FR-071c),
+  // defaulting to the ? / U position on placement.
+  if (type.renderType === "switch") inst.switchState = "U";
   design.components.push(inst);
   return inst;
 }

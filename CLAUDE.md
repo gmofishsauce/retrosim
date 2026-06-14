@@ -23,6 +23,14 @@ For every change request, in order:
 
 If the specs and code disagree, the specs win — stop and flag the discrepancy.
 
+## User manual
+
+`docs/user.md` is the end-user manual. Whenever a change adds or alters a
+**user-visible** feature, update `docs/user.md` to match — but only **after the
+user has manually verified** the feature works. Do not document a feature there
+before that verification (the specs, not the manual, are the pre-verification
+record). When in doubt whether something is user-visible, ask.
+
 ## Temp files
 
 Always use `/Users/jeff/tmp` for temporary files (set `CLAUDE_CODE_TMPDIR` and

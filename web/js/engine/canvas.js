@@ -306,6 +306,8 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
     drawLabelBox(ctx, inst, vp, selected, "CLK");
   } else if (td.renderType === "reset") {
     drawLabelBox(ctx, inst, vp, selected, "RST");
+  } else if (td.renderType === "switch") {
+    drawSwitch(ctx, inst, vp, selected);
   } else {
     const corners = [
       [0, 0],
@@ -524,6 +526,62 @@ function drawLabelBox(ctx, inst, vp, selected, label) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(label, center.x, center.y);
+}
+
+// SWITCH_POSITIONS maps each dial position to a unit direction on the upright
+// dial face (FR-071c): 1 at top, 0 lower-right, ? lower-left (screen space,
+// x right / y down). Keyed by switchState value ("U" is the "?" position).
+const SWITCH_POSITIONS = {
+  "1": { x: 0, y: -1 },
+  "0": { x: 0.866, y: 0.5 },
+  U: { x: -0.866, y: 0.5 },
+};
+
+// drawSwitch renders the input-switch rotary dial (FR-071c): a circle with
+// 1 / 0 / ? position marks and a pointer at the current position
+// (inst.switchState, default "U" → "?"). The face is drawn upright so its
+// labels stay legible (FR-015); only the OUT pin follows the instance rotation,
+// via the shared pin path.
+function drawSwitch(ctx, inst, vp, selected) {
+  const td = inst.typeData;
+  const cr = rotateOffset(td.width / 2, td.height / 2, inst.rotation);
+  const center = worldToScreen({ x: inst.x + cr.x, y: inst.y + cr.y }, vp);
+  const r = INDICATOR_RADIUS * scaleFor(vp);
+  const stroke = selected ? "#4a90d9" : "#333";
+
+  // Dial face.
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, r, 0, Math.PI * 2);
+  ctx.fillStyle = "#fff";
+  ctx.fill();
+  ctx.lineWidth = selected ? 2 : 1;
+  ctx.strokeStyle = stroke;
+  ctx.stroke();
+
+  // Position marks near the rim.
+  ctx.fillStyle = "#000";
+  ctx.font = "bold " + Math.round(0.42 * scaleFor(vp)) + "px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const [key, glyph] of [["1", "1"], ["0", "0"], ["U", "?"]]) {
+    const d = SWITCH_POSITIONS[key];
+    ctx.fillText(glyph, center.x + d.x * r * 0.74, center.y + d.y * r * 0.74);
+  }
+
+  // Pointer to the current position, plus a center hub.
+  const state = inst.switchState === "1" || inst.switchState === "0" ? inst.switchState : "U";
+  const d = SWITCH_POSITIONS[state];
+  ctx.beginPath();
+  ctx.moveTo(center.x, center.y);
+  ctx.lineTo(center.x + d.x * r * 0.55, center.y + d.y * r * 0.55);
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, Math.max(2, r * 0.14), 0, Math.PI * 2);
+  ctx.fillStyle = "#333";
+  ctx.fill();
 }
 
 // (sideOutward now lives in model/design.js, shared with pinVisualPos.)
