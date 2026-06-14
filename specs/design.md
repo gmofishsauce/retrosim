@@ -849,8 +849,15 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   of radius 0.7 grid units centered on the pin's visual attachment point
   (`pinVisualPos`), with the **nearest** pin winning when nearby pins' regions
   overlap (pins sit 1 grid unit apart, so any tolerance > 0.5 overlaps);
-  wire/bus segments use point-to-segment distance (tolerance ≈ ⅓ grid scaled);
-  bend points and `junction`/`free` vertices are points. Pins take priority over
+  wire/bus segments use point-to-segment distance, and bend points are points.
+  Their pick tolerance is a constant in **screen pixels** (≈6 px for segments,
+  ≈8 px for bends so a bend keeps priority over the segment it sits on),
+  converted to world units at the current zoom (`tol = px / scaleFor(viewport)`,
+  in `interaction.js`), so the catch band stays a comfortable, zoom-independent
+  size; a world-unit tolerance instead shrinks to a sub-pixel target when zoomed
+  out. (The pin hot region, FR-013d, stays a world-unit 0.7-radius circle: its
+  size is tied to the 1-grid-unit pin pitch, not the cursor.) `junction`/`free`
+  vertices are points. Pins take priority over
   segments take priority over component bodies when overlapping.
   `marqueeHits(design, world0, world1, mode)` returns the selection refs for a
   rubber-band (FR-016b): **window** mode (`mode === "window"`) keeps objects whose

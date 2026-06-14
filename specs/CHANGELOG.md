@@ -19,6 +19,17 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-14 — Zoom-independent pick tolerance for wires/buses/bends
+What: Wire/bus segment and bend pick tolerances are now constants in screen
+pixels (≈6 px segments, ≈8 px bends), converted to world units at the current
+zoom in `interaction.js`, replacing the fixed ~0.4/0.5 grid-unit tolerances.
+Why: A world-unit tolerance made the catch band a ~3 px target at default zoom
+and a sub-pixel target when zoomed out, so selecting wires and starting a
+bend-drag were finicky and inconsistent depending on zoom. A pixel-constant band
+stays a comfortable, predictable size at every zoom. The pin hot region
+(FR-013d) is unchanged — its size is tied to the grid pin pitch, not the cursor.
+Touches: design §6.9 (hit-testing tolerance).
+
 ## 2026-06-13 — Combinational sims run continuously; general interactive-input mechanism
 What: Combinational designs (no clock) no longer auto-terminate after settling.
 They run live until Stop (FR-076): step to quiescence, then idle (no CPU) until

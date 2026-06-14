@@ -320,6 +320,17 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   const worldOf = (e) => screenToWorld(canvasPoint(e), store.state.viewport);
   const gridOf = (e) => snapToGrid(canvasPoint(e), store.state.viewport);
 
+  // Pick tolerances for thin conductors are constant in *screen pixels* and
+  // converted to world units at the current zoom (§6.9), so the catch band
+  // around a wire/bus segment or bend stays a comfortable, fixed size whatever
+  // the zoom — a world-unit tolerance shrinks to a sub-pixel target when zoomed
+  // out. Bends get a slightly larger band so they keep priority over the
+  // segment they sit on.
+  const SEG_PICK_PX = 6;
+  const BEND_PICK_PX = 8;
+  const segTol = () => SEG_PICK_PX / scaleFor(store.state.viewport);
+  const bendTol = () => BEND_PICK_PX / scaleFor(store.state.viewport);
+
   // setHover records the refdes under the cursor (transient UI state) so the
   // renderer can show subunit connection ticks (FR-013c); re-renders only on
   // change, outside the command/undo path.
@@ -345,7 +356,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     const world = worldOf(e);
     const ph = hitPin(store.design, world);
     if (ph) return { kind: "pin", refdes: ph.refdes, pin: ph.pin };
-    const sh = hitSegment(store.design, world, 0.4);
+    const sh = hitSegment(store.design, world, segTol());
     if (sh) {
       const g = gridOf(e);
       return { kind: "branch", wireId: sh.wire.id, segIndex: sh.segIndex, x: g.x, y: g.y };
@@ -358,7 +369,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   // priority over component bodies (§6.9).
   function busTargetAt(e) {
     const world = worldOf(e);
-    const bh = hitBusSegment(store.design, world, 0.4);
+    const bh = hitBusSegment(store.design, world, segTol());
     const g = gridOf(e);
     if (bh) {
       return {
@@ -468,9 +479,9 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     // click on an interactive built-in (FR-087b), which applies its input action.
     if (store.state.simulating) {
       const world = worldOf(e);
-      const seg = hitSegment(store.design, world, 0.4);
+      const seg = hitSegment(store.design, world, segTol());
       if (seg) return select({ kind: "wire", id: seg.wire.id }, e.shiftKey);
-      const busSeg = hitBusSegment(store.design, world, 0.4);
+      const busSeg = hitBusSegment(store.design, world, segTol());
       if (busSeg) return select({ kind: "bus", id: busSeg.bus.id }, e.shiftKey);
       const comp = hitComponent(store.design, world);
       if (comp) {
@@ -498,12 +509,12 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
           wireSource = { kind: "pin", refdes: ph.refdes, pin: ph.pin };
           return;
         }
-        const bh = hitBusSegment(store.design, world, 0.4);
+        const bh = hitBusSegment(store.design, world, segTol());
         if (bh) {
           startBreakout(bh, e); // async: pick bit, then await the destination click
           return;
         }
-        const sh = hitSegment(store.design, world, 0.4);
+        const sh = hitSegment(store.design, world, segTol());
         if (sh) {
           const g = gridOf(e);
           wireSource = { kind: "branch", wireId: sh.wire.id, segIndex: sh.segIndex, x: g.x, y: g.y };
@@ -577,7 +588,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       wireSource = { kind: "pin", refdes: pinHit.refdes, pin: pinHit.pin };
       return;
     }
-    const bend = hitBend(store.design, world, 0.5);
+    const bend = hitBend(store.design, world, bendTol());
     if (bend) {
       // hitBend covers wires and buses (FR-039); the id prefix carries the kind.
       select({ kind: bend.wire.id.startsWith("b") ? "bus" : "wire", id: bend.wire.id });
@@ -592,14 +603,14 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
       };
       return;
     }
-    const seg = hitSegment(store.design, world, 0.4);
+    const seg = hitSegment(store.design, world, segTol());
     if (seg) {
       select({ kind: "wire", id: seg.wire.id }, e.shiftKey);
       // A plain click selects; a drag inserts a bend here (decided on move).
       drag = { type: "segment", wireId: seg.wire.id, segIndex: seg.segIndex, tempIndex: -1, moved: false };
       return;
     }
-    const busSeg = hitBusSegment(store.design, world, 0.4);
+    const busSeg = hitBusSegment(store.design, world, segTol());
     if (busSeg) {
       select({ kind: "bus", id: busSeg.bus.id }, e.shiftKey);
       // Same as wires (FR-039): a plain click selects; a drag inserts a bend.
@@ -641,9 +652,9 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   canvas.addEventListener("contextmenu", (e) => {
     e.preventDefault();
     const world = worldOf(e);
-    const bend = hitBend(store.design, world, 0.5);
-    const seg = bend ? null : hitSegment(store.design, world, 0.4);
-    const busSeg = bend || seg ? null : hitBusSegment(store.design, world, 0.4);
+    const bend = hitBend(store.design, world, bendTol());
+    const seg = bend ? null : hitSegment(store.design, world, segTol());
+    const busSeg = bend || seg ? null : hitBusSegment(store.design, world, segTol());
     const comp = bend || seg || busSeg ? null : hitComponent(store.design, world);
 
     if (!bend && !seg && !busSeg && !comp) {
