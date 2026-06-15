@@ -73,8 +73,11 @@ function renderPalette({ partsEl, builtinsEl, components, builtins, store }) {
     (a, b) => Number(paletteLabel(a.name)) - Number(paletteLabel(b.name)),
   );
   for (const type of sorted) {
+    // Tooltip is the full name, plus the one-line description when present so a
+    // hover previews what the part does (FR-005, FR-005a, FR-104).
+    const tip = type.description ? `${type.name}: ${type.description}` : type.name;
     partsEl.appendChild(
-      makeTile(type, { text: paletteLabel(type.name) }, type.name, tiles),
+      makeTile(type, { text: paletteLabel(type.name) }, tip, tiles),
     );
   }
 

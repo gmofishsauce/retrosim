@@ -7,6 +7,13 @@ rendertype: subunit
 numunits: 4
 renderas: nand
 
+description: "Quad 2-input NAND gate"
+datasheet:
+  vendor: Nexperia
+  title: "74HC00; 74HCT00 Quad 2-input NAND gate"
+  rev: "Rev. 11, 29 April 2025"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT00.pdf"
+
 pins: # number: physical DIP14/SO14 pin (datasheet Table 2)
   - { name: 1A, side: left,  unit: A, dir: in,  number: 1 }
   - { name: 1B, side: left,  unit: A, dir: in,  number: 2 }

@@ -36,6 +36,26 @@ Touches: FR-094–FR-103 (new §3.22), FR-060b (new), FR-057 (supersession note)
 §5 data table, OQ-010 (new), glossary; design §6.14 (new), §7.1a, §7.2, §6.6,
 §8, §9, §10.
 
+## 2026-06-14 — Palette tile tooltip shows the description
+What: A palette tile's tooltip now includes the component's one-line description
+(FR-104) alongside the full type name, as "<name>: <description>", so hovering a
+tile previews what the part does before placing it. Parts with no description
+keep the plain full-name tooltip.
+Touches: FR-005a (new); design §2.1, §10, §11.2.
+
+## 2026-06-13 — Component documentation fields and panel section
+What: Component YAML may carry optional documentation (one-line description,
+datasheet vendor/title/rev/url, and per-pin role text). The server parses and
+copies these onto the type; the properties panel shows them in a read-only
+Documentation section when a component is selected (description and datasheet
+link, plus a collapsible pin-role list). Documentation is presentation-only and
+never affects geometry or simulation.
+Why: A part's human-readable identity (what it does, its datasheet, what each
+pin means) lived only in YAML header comments that nothing parsed or displayed.
+Touches: FR-104 (new), FR-105 (new); design §6.3, §6.11, §7.1, §7.6, §10, §11.1,
+§11.2. Also updates the make-yaml-from-datasheet skill and backfills the nine
+existing component YAMLs.
+
 ## 2026-06-14 — Zoom-independent pick tolerance for wires/buses/bends
 What: Wire/bus segment and bend pick tolerances are now constants in screen
 pixels (≈6 px segments, ≈8 px bends), converted to world units at the current

@@ -8,21 +8,28 @@ type: "74163"
 outline: [6, 12]
 clock: CLK # clocks the .R registered outputs in the behavior block (FR-062d)
 
+description: "Synchronous 4-bit binary counter, synchronous clear"
+datasheet:
+  vendor: Texas Instruments
+  title: "SN74F163A Synchronous 4-Bit Binary Counter (SDFS088A)"
+  rev: "March 1987, revised August 2001"
+  url: "https://www.ti.com/lit/ds/symlink/sn74f163a.pdf"
+
 pins: # number: physical DIP16/SO16 pin (package pinout, datasheet p.1)
-  - { name: A,     side: left,  pos: 2,  dir: in,  number: 3 }
-  - { name: B,     side: left,  pos: 3,  dir: in,  number: 4 }
-  - { name: C,     side: left,  pos: 4,  dir: in,  number: 5 }
-  - { name: D,     side: left,  pos: 5,  dir: in,  number: 6 }
-  - { name: /CLR,  side: left,  pos: 7,  dir: in,  number: 1 }
-  - { name: /LOAD, side: left,  pos: 8,  dir: in,  number: 9 }
-  - { name: ENP,   side: left,  pos: 10, dir: in,  number: 7 }
-  - { name: ENT,   side: left,  pos: 11, dir: in,  number: 10 }
-  - { name: QA,    side: right, pos: 2,  dir: out, number: 14 }
-  - { name: QB,    side: right, pos: 3,  dir: out, number: 13 }
-  - { name: QC,    side: right, pos: 4,  dir: out, number: 12 }
-  - { name: QD,    side: right, pos: 5,  dir: out, number: 11 }
-  - { name: RCO,   side: right, pos: 7,  dir: out, number: 15 }
-  - { name: CLK,   side: top,   pos: 2,  dir: in,  number: 2 }
+  - { name: A,     side: left,  pos: 2,  dir: in,  number: 3,  desc: "parallel load input bit 0 (LSB)" }
+  - { name: B,     side: left,  pos: 3,  dir: in,  number: 4,  desc: "parallel load input bit 1" }
+  - { name: C,     side: left,  pos: 4,  dir: in,  number: 5,  desc: "parallel load input bit 2" }
+  - { name: D,     side: left,  pos: 5,  dir: in,  number: 6,  desc: "parallel load input bit 3 (MSB)" }
+  - { name: /CLR,  side: left,  pos: 7,  dir: in,  number: 1,  desc: "active-low synchronous clear" }
+  - { name: /LOAD, side: left,  pos: 8,  dir: in,  number: 9,  desc: "active-low synchronous parallel load" }
+  - { name: ENP,   side: left,  pos: 10, dir: in,  number: 7,  desc: "count enable P" }
+  - { name: ENT,   side: left,  pos: 11, dir: in,  number: 10, desc: "count enable T (also gates RCO)" }
+  - { name: QA,    side: right, pos: 2,  dir: out, number: 14, desc: "count output bit 0 (LSB)" }
+  - { name: QB,    side: right, pos: 3,  dir: out, number: 13, desc: "count output bit 1" }
+  - { name: QC,    side: right, pos: 4,  dir: out, number: 12, desc: "count output bit 2" }
+  - { name: QD,    side: right, pos: 5,  dir: out, number: 11, desc: "count output bit 3 (MSB)" }
+  - { name: RCO,   side: right, pos: 7,  dir: out, number: 15, desc: "ripple-carry out (count=15 and ENT high)" }
+  - { name: CLK,   side: top,   pos: 2,  dir: in,  number: 2,  desc: "clock input, rising-edge triggered" }
 
 groups: # LSB first (A and QA are the low-order bits)
   - { name: DATA, pins: [A, B, C, D] }

@@ -50,6 +50,10 @@ type yamlComponent struct {
 	Delays     map[string]float64 `yaml:"delays"`
 	Behavior   string             `yaml:"behavior"`
 	Clock      string             `yaml:"clock"`
+
+	// Documentation (FR-104), all optional.
+	Description string         `yaml:"description"`
+	Datasheet   *yamlDatasheet `yaml:"datasheet"`
 }
 
 type yamlPin struct {
@@ -59,6 +63,14 @@ type yamlPin struct {
 	Unit   string `yaml:"unit"`
 	Dir    string `yaml:"dir"`
 	Number *int   `yaml:"number"`
+	Desc   string `yaml:"desc"`
+}
+
+type yamlDatasheet struct {
+	Vendor string `yaml:"vendor"`
+	Title  string `yaml:"title"`
+	Rev    string `yaml:"rev"`
+	URL    string `yaml:"url"`
 }
 
 type yamlGroup struct {
@@ -134,6 +146,7 @@ func ParseComponent(path string) (ComponentType, error) {
 			Unit:      p.Unit,
 			Direction: p.Dir,
 			Number:    p.Number,
+			Desc:      p.Desc,
 		})
 	}
 
@@ -171,6 +184,12 @@ func ParseComponent(path string) (ComponentType, error) {
 		groups = append(groups, PinGroup{Name: g.Name, Pins: g.Pins})
 	}
 
+	// Documentation (FR-104): presentation-only, copied through verbatim.
+	var datasheet *Datasheet
+	if d := doc.Datasheet; d != nil {
+		datasheet = &Datasheet{Vendor: d.Vendor, Title: d.Title, Rev: d.Rev, URL: d.URL}
+	}
+
 	if subunit {
 		if err := validateSubunit(path, doc.RenderAs, doc.NumUnits, pins); err != nil {
 			return ComponentType{}, err
@@ -178,15 +197,17 @@ func ParseComponent(path string) (ComponentType, error) {
 		// Outline/width/height are unused for subunits; the client symbol module
 		// (§6.8a) owns each unit's footprint and pin positions.
 		return ComponentType{
-			Name:       doc.Type,
-			RenderType: "subunit",
-			NumUnits:   doc.NumUnits,
-			RenderAs:   doc.RenderAs,
-			Pins:       pins,
-			PinGroups:  groups,
-			Delays:     doc.Delays,
-			Behavior:   doc.Behavior,
-			Clock:      doc.Clock,
+			Name:        doc.Type,
+			RenderType:  "subunit",
+			NumUnits:    doc.NumUnits,
+			RenderAs:    doc.RenderAs,
+			Pins:        pins,
+			PinGroups:   groups,
+			Delays:      doc.Delays,
+			Behavior:    doc.Behavior,
+			Clock:       doc.Clock,
+			Description: doc.Description,
+			Datasheet:   datasheet,
 		}, nil
 	}
 
@@ -212,15 +233,17 @@ func ParseComponent(path string) (ComponentType, error) {
 	}
 
 	return ComponentType{
-		Name:       doc.Type,
-		RenderType: "unit",
-		Width:      width,
-		Height:     height,
-		Pins:       pins,
-		PinGroups:  groups,
-		Delays:     doc.Delays,
-		Behavior:   doc.Behavior,
-		Clock:      doc.Clock,
+		Name:        doc.Type,
+		RenderType:  "unit",
+		Width:       width,
+		Height:      height,
+		Pins:        pins,
+		PinGroups:   groups,
+		Delays:      doc.Delays,
+		Behavior:    doc.Behavior,
+		Clock:       doc.Clock,
+		Description: doc.Description,
+		Datasheet:   datasheet,
 	}, nil
 }
 

@@ -50,6 +50,9 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 **Component Palette**
 - **FR-005** — One fixed-size palette tile per loaded component type, labeled with
   the type name minus its leading `74` (e.g., `138`, `00`); full name in tooltip.
+- **FR-005a**: the tile tooltip also carries the type's one-line `description`
+  (FR-104) when present, as `"<name>: <description>"`; a type with no description
+  keeps the plain full-name tooltip.
 - **FR-006** — Palette is a fixed-width grid of equal tiles (3/row), packed
   left→right, top→bottom in ascending part-number order (supersedes flat list).
 - **FR-006a** — Palette split 50/50 by a midpoint divider: upper region = 74-series
@@ -497,7 +500,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
 ### 6.3 Go: YAML parser (`sim/server/yamlparse.go`)
 - **Purpose:** convert one YAML file's bytes (YAML — §7.6) into a `ComponentType`.
-- **Satisfies:** FR-061, FR-062, FR-062a, FR-062b, FR-062c, FR-062d, FR-063, FR-064, FR-066.
+- **Satisfies:** FR-061, FR-062, FR-062a, FR-062b, FR-062c, FR-062d, FR-063, FR-064, FR-066, FR-104.
 - **Interface (the deferral boundary — now bound to the YAML format in §7.6):**
   - `ParseComponent(path string) (ComponentType, error)`
   - The returned `ComponentType` MUST be fully populated for the fields in §7.1.
@@ -542,6 +545,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   pins; `not`=1 input; other gates ≥ 1 input). Outline resolution is **skipped**
   for subunits (`width`/`height` left 0 — the symbol module §6.8a owns geometry on
   the client).
+- **Documentation fields (FR-104):** the optional `description`, `datasheet`
+  (vendor/title/rev/url), and per-pin `desc` keys are decoded and copied verbatim
+  into the `ComponentType` (§7.1). They are presentation-only: the parser never
+  lets them influence outline, pins, or any validated structure, and applies no
+  validation of its own. Absent documentation is normal (FR-066).
 - **Error handling:** return an `error` with file + human-readable reason (and
   YAML line where `yaml.v3` supplies one) on any decode or validation failure; the
   loader logs and skips (§6.2). Never panic.
@@ -1126,7 +1134,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     promise the interaction FSM awaits before dispatching `snapBusGroup`. Does
     **not** filter by pin direction (electrical-rule checking is out of scope this
     phase — see §4.1, OQ-008/D2).
-- **Properties panel (`properties.js`)** — Satisfies FR-020a, FR-020b. A docked
+- **Properties panel (`properties.js`)** — Satisfies FR-020a, FR-020b, FR-105. A docked
   right-edge panel showing the selected instance's copied type data (refdes,
   type, size, pin count) read-only, plus one numeric field per `delays` entry
   for per-instance propagation-delay overrides and — when the type declares
@@ -1139,6 +1147,17 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `inst.overrides.delays` / `inst.overrides.props` (§7.2) and persist via the
   full-instance save (FR-058). The panel re-renders on every store notification,
   which is why selection now flows through `store.setSelection` (notifying).
+  - *Documentation section (FR-105)*: a read-only block rendered from the
+    instance's type data (FR-104), placed after the read-only `Type/Size/Pins`
+    rows and before the editable delay/property sections. The one-line
+    `description` and the `datasheet` link (an `<a target="_blank"
+    rel="noopener">` to `url`, labeled with vendor/title, rev shown muted) sit at
+    the top. The per-pin roles (`name` then `desc`) go inside a collapsed
+    `<details>` ("Pin roles") so they never crowd the override controls. Each
+    piece appears only when its field is present, and a type with no
+    documentation renders nothing extra. The section is purely informational, so
+    it is never disabled while a simulation runs (FR-087 governs only the
+    editable override fields).
 - **Status bar (`statusbar.js`)** — Satisfies FR-072, FR-073, FR-074, FR-089
   (tray). A flex row
   docked at the bottom of the window (below the canvas, full width) holding
@@ -1389,6 +1408,8 @@ no sequential part could ever leave U.)
 | `behavior` | string | GALasm equations, captured verbatim by the server (FR-066); compiled and evaluated client-side by the slow simulator (§6.13, FR-079) |
 | `clock` | string? | optional name of the input pin that clocks `.R` registered behavior outputs (FR-062d); parser-validated to exist with `dir: in`; required (checked at Run time) iff the behavior uses `.R` |
 | `properties` | `Property[]` | optional named numeric parameters (FR-020b): `{name, unit, default}`, e.g. the clock's `{name:"period", unit:"ns", default:100}` (FR-071a). Declared by built-ins in the client registry today; YAML types may declare them later. Serializable data only — per-instance values live in `overrides.props` (§7.2) |
+| `description` | string? | optional one-line function summary (FR-104), e.g. `"3-to-8 line decoder/demultiplexer"`; presentation-only |
+| `datasheet` | `Datasheet?` | optional provenance (FR-104): `{vendor, title, rev, url}`, all strings; the panel renders `url` as a link |
 
 Built-in types additionally have a **behavior** (FR-067a): a client-JS function
 held in a registry in `builtins.js` keyed by type name — deliberately **not** a
@@ -1415,9 +1436,19 @@ removed in favor of an explicit `outline:` or a pin-derived default (see §8).
 | `unit` | string? | `subunit` only: the functional unit this pin belongs to (a letter, `A`, `B`, …); replaces `position` (FR-014a). List order within a unit sets slot order |
 | `direction` | enum | `in` \| `out` \| `bidir` \| `tristate` (FR-062a) |
 | `number` | int? | optional physical pin number (e.g., DIP pin 7); author-stated (FR-062b); footprint/BOM metadata only, used by neither drawing nor simulation |
+| `desc` | string? | optional pin role for documentation (FR-104), e.g. `"active-low chip enable"`; presentation-only |
 
 Every pin carries exactly one bit; a parallel bus is modeled as a `PinGroup` of
 single-bit pins (FR-063), not as a multi-bit pin.
+
+**`Datasheet`** (optional, FR-104)
+
+| Field | Type | Notes |
+|---|---|---|
+| `vendor` | string | manufacturer, e.g. `"Nexperia"` |
+| `title` | string | document title |
+| `rev` | string | revision/date, e.g. `"Rev. 10, 26 Feb 2024"` |
+| `url` | string | link to the datasheet PDF |
 
 **`PinGroup`**
 
@@ -1656,6 +1687,27 @@ pins:                    # unit + dir; pos is not used (FR-014a)
 | `delays` | no | `delays` | `map[string]number`, ns (FR-064) |
 | `behavior` | no | `behavior` | literal block scalar; verbatim (FR-066); evaluated by the slow simulator (FR-079) |
 | `clock` | iff `.R` | `clock` | names the clock input pin for `.R` registered outputs (FR-062d); must exist with `dir: in`. E.g. `clock: CP` in 74574.yaml |
+| `description` | no | `description` | optional one-line function summary (FR-104); presentation-only |
+| `datasheet` | no | `datasheet` | optional mapping `{vendor, title, rev, url}` (FR-104) |
+| `pins[].desc` | no | `Pin.desc` | optional pin role text (FR-104) |
+
+Documentation keys (`description`, `datasheet`, `pins[].desc`) are all optional
+and presentation-only: the server copies them onto the `ComponentType` for the
+properties panel (FR-105) and never lets them affect geometry or simulation. A
+documented part looks like:
+
+```yaml
+type: "74138"
+description: "3-to-8 line decoder/demultiplexer, inverting"
+datasheet:
+  vendor: Nexperia
+  title: "74HC138; 74HCT138 3-to-8 line decoder/demultiplexer"
+  rev: "Rev. 10, 26 Feb 2024"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT138.pdf"
+pins:
+  - { name: /E1, side: left, pos: 6, dir: in, number: 4, desc: "active-low enable 1" }
+  # … other pins
+```
 
 **Why a YAML literal block for `behavior`.** Under `|` every line is literal text
 with newlines preserved and **no escaping**, so GALasm operators (`/ * + = ( )`)
@@ -1756,7 +1808,7 @@ No files are modified (greenfield).
 | FR-002 | §6.2 | `components.go`, `yamlparse.go` |
 | FR-003 | §6.4, §6.11, §6.12 | `api.go`, `palette.js`, `app.js` |
 | FR-004 | §6.12 | `app.js`, `store.js` |
-| FR-005, FR-006 | §6.2, §6.11 | `components.go`, `palette.js` |
+| FR-005, FR-005a, FR-006 | §6.2, §6.11 | `components.go`, `app.js` |
 | FR-006a | §6.11 | `app.js`, `style.css`, `builtins.js` |
 | FR-007 | §6.2 | `components.go` |
 | FR-008, FR-009, FR-010 | §6.9, §6.11 | `interaction.js`, `palette.js`, `store.js` |
@@ -1826,6 +1878,8 @@ No files are modified (greenfield).
 | FR-101, FR-101a | §6.6, §6.14 | `subdesign.js`, `model/netlist.js` |
 | FR-102, FR-102a, FR-103 | §6.13, §6.14 | `sim.js`, `subdesign.js` |
 | FR-060b | §6.14, §7.1a, §7.2 | `types.go`, `model/design.js` |
+| FR-104 | §6.3, §7.1, §7.6 | `yamlparse.go`, `types.go`, `srv/components/*.yaml` |
+| FR-105 | §6.11, §7.1 | `properties.js`, `style.css` |
 | NFR-001 | §6.1 | `main.go` |
 | NFR-002 | §6.12 | `api.js` |
 | NFR-003 | all | server `*.go`, `web/js/*` |
@@ -1854,6 +1908,10 @@ snap FR-041–043) are fully designed so they are additive when implemented.
   `height` = 6/12; omitted `outline` → outline derived from pin positions (> 0);
   optional `number:` is preserved but never affects geometry. (No package
   mechanism exists; there is nothing to resolve or disambiguate.)
+- **Go `yamlparse` documentation (FR-104):** `description`, `datasheet`
+  (vendor/title/rev/url), and `pins[].desc` round-trip onto the `ComponentType`;
+  a file with none of them parses fine with the documentation fields left
+  zero/nil.
 - **Go `storage`:** atomic save does not corrupt an existing file when the write
   fails midway; `ListDir` returns only `.json`+dirs with a correct `parent`;
   load of malformed JSON → 422 (FR-046–FR-053, FR-055).
@@ -1928,6 +1986,9 @@ snap FR-041–043) are fully designed so they are additive when implemented.
 ### 11.2 Integration / end-to-end (Chrome + Firefox, manual or Playwright)
 - Startup blocks canvas until palette loads (FR-003); empty design named
   `unnamed schematic <datetime>` in select mode (FR-004).
+- Hover a palette tile for a documented part (74138): tooltip reads
+  `"74138: 3-to-8 line decoder/demultiplexer, inverting"` (FR-005a); a part with
+  no description falls back to the plain full-name tooltip (FR-005).
 - Place via drag and via click-then-click; both return to select (FR-008–FR-010);
   refdes increments past gaps after deletions (FR-011).
 - Rotate; verify all labels stay upright and pins stay on grid (FR-012/020).
@@ -1945,6 +2006,11 @@ snap FR-041–043) are fully designed so they are additive when implemented.
 - Save (first-time prompt, prefilled name) → overwrite silently → Save As → Open
   via navigation; round-trip equality of the model, including `bitNames`,
   breakout taps, and `nets` provenance (FR-044–FR-060a).
+- Select a documented part (74138): properties panel shows the description, a
+  datasheet link that opens the PDF in a new tab, and a "Pin roles" disclosure
+  listing each pin's role; select a built-in with no docs → no documentation
+  block appears (FR-104, FR-105). Docs survive save/open and a "Refresh Types"
+  (FR-057, FR-088).
 
 ### 11.3 Edge / boundary cases
 - Delete a component → connected wires keep one dangling end (FR-029); wires with

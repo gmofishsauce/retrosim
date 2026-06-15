@@ -8,21 +8,28 @@
 type: "74153"
 outline: [6, 12]
 
+description: "Dual 4-input multiplexer with common select"
+datasheet:
+  vendor: Nexperia
+  title: "74HC153; 74HCT153 Dual 4-input multiplexer"
+  rev: "Rev. 11, 11 March 2024"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT153.pdf"
+
 pins: # number: physical DIP16/SO16 pin (datasheet Table 2)
-  - { name: 1I0, side: left,  pos: 1,  dir: in,  number: 6 }
-  - { name: 1I1, side: left,  pos: 2,  dir: in,  number: 5 }
-  - { name: 1I2, side: left,  pos: 3,  dir: in,  number: 4 }
-  - { name: 1I3, side: left,  pos: 4,  dir: in,  number: 3 }
-  - { name: /1E, side: left,  pos: 5,  dir: in,  number: 1 }
-  - { name: 2I0, side: left,  pos: 7,  dir: in,  number: 10 }
-  - { name: 2I1, side: left,  pos: 8,  dir: in,  number: 11 }
-  - { name: 2I2, side: left,  pos: 9,  dir: in,  number: 12 }
-  - { name: 2I3, side: left,  pos: 10, dir: in,  number: 13 }
-  - { name: /2E, side: left,  pos: 11, dir: in,  number: 15 }
-  - { name: S0,  side: top,   pos: 2,  dir: in,  number: 14 }
-  - { name: S1,  side: top,   pos: 4,  dir: in,  number: 2 }
-  - { name: 1Y,  side: right, pos: 3,  dir: out, number: 7 }
-  - { name: 2Y,  side: right, pos: 9,  dir: out, number: 9 }
+  - { name: 1I0, side: left,  pos: 1,  dir: in,  number: 6,  desc: "mux 1 data input 0" }
+  - { name: 1I1, side: left,  pos: 2,  dir: in,  number: 5,  desc: "mux 1 data input 1" }
+  - { name: 1I2, side: left,  pos: 3,  dir: in,  number: 4,  desc: "mux 1 data input 2" }
+  - { name: 1I3, side: left,  pos: 4,  dir: in,  number: 3,  desc: "mux 1 data input 3" }
+  - { name: /1E, side: left,  pos: 5,  dir: in,  number: 1,  desc: "mux 1 active-low enable" }
+  - { name: 2I0, side: left,  pos: 7,  dir: in,  number: 10, desc: "mux 2 data input 0" }
+  - { name: 2I1, side: left,  pos: 8,  dir: in,  number: 11, desc: "mux 2 data input 1" }
+  - { name: 2I2, side: left,  pos: 9,  dir: in,  number: 12, desc: "mux 2 data input 2" }
+  - { name: 2I3, side: left,  pos: 10, dir: in,  number: 13, desc: "mux 2 data input 3" }
+  - { name: /2E, side: left,  pos: 11, dir: in,  number: 15, desc: "mux 2 active-low enable" }
+  - { name: S0,  side: top,   pos: 2,  dir: in,  number: 14, desc: "shared select bit 0 (LSB)" }
+  - { name: S1,  side: top,   pos: 4,  dir: in,  number: 2,  desc: "shared select bit 1 (MSB)" }
+  - { name: 1Y,  side: right, pos: 3,  dir: out, number: 7,  desc: "mux 1 output" }
+  - { name: 2Y,  side: right, pos: 9,  dir: out, number: 9,  desc: "mux 2 output" }
 
 groups:
   - { name: 1I, pins: [1I0, 1I1, 1I2, 1I3] }

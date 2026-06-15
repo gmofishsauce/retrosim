@@ -5,6 +5,12 @@ rendertype: subunit
 numunits: 6
 renderas: not
 
+description: "Hex inverter"
+datasheet:
+  vendor: Nexperia
+  title: "74HC04; 74HCT04 Hex inverter"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT04.pdf"
+
 pins:
   - { name: 1A, side: left,  unit: A, dir: in, number: 1 }
   - { name: 1Y, side: right, unit: A, dir: out, number: 2 }
