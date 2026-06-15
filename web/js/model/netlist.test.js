@@ -9,6 +9,9 @@ import {
   branchWire,
 } from "./design.js";
 import { buildNets } from "./netlist.js";
+import { BUILTINS } from "../builtins.js";
+
+const PORT = BUILTINS.find((b) => b.name === "port");
 
 // A type with a 3-bit pin group "A", used by the bus tests below.
 function tyA() {
@@ -250,4 +253,56 @@ test("a bus↔bus full junction aligns lanes by index (FR-039a)", () => {
   const byBit0 = nets.find((n) => n.pins.includes("U1.A0"));
   assert.deepEqual(sorted(byBit0.pins), ["U1.A0", "U2.A0"]);
   assert.deepEqual(sorted(byBit0.members), sorted([b1.id, b2.id]));
+});
+
+test("same-label ports join their nets across the sheet (FR-094a)", () => {
+  const d = createDesign("t");
+  addInstance(d, ty(), 10, 20, 0); // U1
+  addInstance(d, ty(), 40, 20, 0); // U2
+  const p1 = addInstance(d, PORT, 0, 0, 0); // A-1
+  const p2 = addInstance(d, PORT, 0, 10, 0); // A-2
+  p1.label = "CLK";
+  p2.label = "CLK";
+  const w1 = addWire(
+    d,
+    { kind: "pin", refdes: "U1", pin: "/Y0" },
+    { kind: "pin", refdes: p1.refdes, pin: "P" },
+  );
+  const w2 = addWire(
+    d,
+    { kind: "pin", refdes: "U2", pin: "A0" },
+    { kind: "pin", refdes: p2.refdes, pin: "P" },
+  );
+
+  // The port connection points are connector vertices, not pin vertices.
+  assert.equal(d.vertices.filter((v) => v.kind === "connector").length, 2);
+
+  const nets = buildNets(d);
+  assert.equal(nets.length, 1);
+  assert.deepEqual(sorted(nets[0].pins), ["U1./Y0", "U2.A0"]);
+  assert.deepEqual(sorted(nets[0].members), sorted([w1.id, w2.id]));
+  assert.equal(nets[0].name, "CLK"); // the label names the net
+});
+
+test("differently-labeled ports stay separate nets", () => {
+  const d = createDesign("t");
+  addInstance(d, ty(), 10, 20, 0); // U1
+  addInstance(d, ty(), 40, 20, 0); // U2
+  const p1 = addInstance(d, PORT, 0, 0, 0);
+  const p2 = addInstance(d, PORT, 0, 10, 0);
+  p1.label = "CLK";
+  p2.label = "RST";
+  addWire(
+    d,
+    { kind: "pin", refdes: "U1", pin: "/Y0" },
+    { kind: "pin", refdes: p1.refdes, pin: "P" },
+  );
+  addWire(
+    d,
+    { kind: "pin", refdes: "U2", pin: "A0" },
+    { kind: "pin", refdes: p2.refdes, pin: "P" },
+  );
+
+  const nets = buildNets(d);
+  assert.equal(nets.length, 2);
 });

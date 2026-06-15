@@ -57,6 +57,7 @@ export function buildNets(design, onWarn = (msg) => console.warn(msg)) {
   }
 
   const vById = new Map(design.vertices.map((v) => [v.id, v]));
+  const instById = new Map(design.components.map((c) => [c.refdes, c]));
   const attachments = []; // { lane, pin } applied after all unions
 
   // Index conductors by the vertex ids their node-points reference.
@@ -136,6 +137,24 @@ export function buildNets(design, onWarn = (msg) => console.warn(msg)) {
     else lanesByPin.set(pin, lane);
   }
 
+  // 6. Connector ports (FR-094a, §6.14): within this design, connector vertices
+  //    whose port carries the same label are one net. Union the wire-lanes their
+  //    wires belong to, and remember the label so it names the resulting net.
+  //    (Cross-file off-sheet continuation, FR-101a, is composed at Run, not here.)
+  const lanesByLabel = new Map();
+  for (const v of design.vertices) {
+    if (v.kind !== "connector") continue;
+    const label = instById.get(v.ref)?.label;
+    if (label == null) continue;
+    const wids = wiresByVertex.get(v.id) ?? [];
+    if (!wids.length) continue;
+    if (!lanesByLabel.has(label)) lanesByLabel.set(label, []);
+    lanesByLabel.get(label).push(wireLane(wids[0]));
+  }
+  for (const lanes of lanesByLabel.values()) {
+    for (let i = 1; i < lanes.length; i++) uf.union(lanes[0], lanes[i]);
+  }
+
   // Regroup attachments and members by their root lane.
   const pinsByRoot = new Map();
   for (const { lane, pin } of attachments) {
@@ -161,13 +180,18 @@ export function buildNets(design, onWarn = (msg) => console.warn(msg)) {
     }
   }
 
+  // A connector label, when present, names its net (FR-094a) ahead of pickName.
+  const labelByRoot = new Map();
+  for (const [label, lanes] of lanesByLabel) labelByRoot.set(uf.find(lanes[0]), label);
+
   // A net needs at least one connected pin.
   const nets = [];
   for (const [root, pinSet] of pinsByRoot) {
     const pins = [...pinSet];
     const members = [...(membersByRoot.get(root) ?? [])];
     const provenance = provByRoot.get(root) ?? [];
-    nets.push({ pins, members, provenance, name: pickName(provenance, pins) });
+    const name = labelByRoot.get(root) ?? pickName(provenance, pins);
+    nets.push({ pins, members, provenance, name });
   }
   return nets;
 }

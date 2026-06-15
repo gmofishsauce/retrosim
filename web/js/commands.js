@@ -23,6 +23,7 @@ import {
   refreshInstance,
   shiftWiring,
 } from "./model/design.js";
+import { addSubDesignInstance } from "./model/subdesign.js";
 
 // composite bundles several commands into one undoable step (§6.10, FR-016a):
 // apply runs them in order; revert undoes them in reverse. Used for group
@@ -162,6 +163,31 @@ export function placeComponent(type, x, y, rotation = 0) {
         const i = design.components.findIndex((c) => c.refdes === r);
         if (i >= 0) design.components.splice(i, 1);
       }
+    },
+  };
+}
+
+// placeSubDesign embeds a child design as a sub-design instance (FR-098, §6.14).
+// `opts` is { childPath, render, iface, childName } (the resolved interface comes
+// from the ADD dialog). Mirrors placeComponent: the created instance is cloned on
+// first apply and re-pushed on redo, removed by refdes on revert.
+export function placeSubDesign(opts, x, y) {
+  let created = null;
+  let refdes = null;
+  return {
+    label: `Place ${opts.childName}`,
+    apply(design) {
+      if (created === null) {
+        const inst = addSubDesignInstance(design, opts, x, y);
+        refdes = inst.refdes;
+        created = structuredClone(inst);
+      } else {
+        design.components.push(structuredClone(created));
+      }
+    },
+    revert(design) {
+      const i = design.components.findIndex((c) => c.refdes === refdes);
+      if (i >= 0) design.components.splice(i, 1);
     },
   };
 }

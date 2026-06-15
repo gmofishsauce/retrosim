@@ -66,6 +66,16 @@ const SWITCH_ICON =
   ' stroke-linecap="round"/>' +
   '<circle cx="18" cy="18" r="2.5" fill="#333"/></svg>';
 
+// PORT_ICON: a flag/tag pointing at its connection point (FR-094). The port is
+// the shared primitive behind both hierarchical interfaces and off-sheet
+// connectors (§6.14); the placed object shows the instance's label.
+const PORT_ICON =
+  '<svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true">' +
+  '<path d="M5 11 H22 L31 18 L22 25 H5 Z" fill="#fff" stroke="#333"/>' +
+  '<text x="14" y="18" text-anchor="middle" dominant-baseline="central"' +
+  ' font-family="system-ui,sans-serif" font-weight="bold" font-size="9" fill="#000">P</text>' +
+  "</svg>";
+
 export const BUILTINS = [
   {
     name: "indicator",
@@ -142,6 +152,22 @@ export const BUILTINS = [
     // "U"), not a numeric property (FR-071c); set via the properties panel
     // (FR-020c) or a dial click while simulating (FR-087a).
   },
+  {
+    name: "port",
+    builtin: true,
+    title: "port / off-sheet connector", // FR-094
+    icon: PORT_ICON,
+    renderType: "port",
+    width: 2,
+    height: 2,
+    // One connection point on the right edge; the flag body and label sit to its
+    // left. The pin carries the bit the interface net attaches to (FR-094).
+    pins: [{ name: "P", side: "right", position: 1, direction: "bidir" }],
+    // Per-instance fields beyond the usual ones (the switchState precedent),
+    // set on placement by addInstance and edited in the properties panel:
+    //   label (signal name), portDir (in|out|bidir), width (bits, default 1),
+    //   and an optional off-sheet target {file, label} (FR-101). (§6.14, §7.2)
+  },
 ];
 
 // BEHAVIORS maps built-in type name → behavior function (FR-067a). Behaviors
@@ -187,6 +213,12 @@ export const BEHAVIORS = {
   switch({ state }) {
     const value = state === "1" ? V1 : state === "0" ? V0 : VU;
     return [{ pin: "OUT", value }];
+  },
+  // A port drives nothing on its own: within a sheet, same-label ports share a
+  // net (FR-094a, netlist step 6); cross-file continuation is composed at Run by
+  // flatten (FR-101a, §6.14). It is a net-label node, not a source.
+  port() {
+    return [];
   },
 };
 

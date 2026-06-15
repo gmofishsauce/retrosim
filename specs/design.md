@@ -682,6 +682,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   for each pin P with attached lanes L1..Ln:
       for i in 2..n:                            union(lane(L1), lane(Li))
 
+  # 6. connector ports (FR-094a, §6.14): within this design, connector vertices
+  #    whose port carries the same label are one net (per bit for width>1)
+  for each label L among connector vertices:
+      union all lanes attached to connectors labelled L   # per bit when width>1
+
   groups = connected components of uf
   nets = []
   for each group with ≥1 attached pin:
@@ -692,8 +697,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   ```
   `pickName` prefers an explicit bus `bitNames[bit]` (FR-037b), else a connected
   pin name, else null. This uses **ids and bit indices only** — never pixel
-  coordinates — satisfying FR-059a/FR-060a. (Future connector rule: union lanes of
-  `connector` vertices sharing a label.)
+  coordinates — satisfying FR-059a/FR-060a. (Connector ports are unioned by label
+  in step 6; cross-file off-sheet continuation, FR-101a, is composed at simulation
+  time, not here — §6.14.)
 - **Error handling:** operations validate references (e.g., moving a bend index
   that exists); invalid ops throw and are caught by the Store, which leaves state
   unchanged and surfaces a non-fatal toast.
@@ -1337,6 +1343,32 @@ no sequential part could ever leave U.)
 - **Dependencies:** `model/netlist.js`, store, `builtins.js`, `chrome/statusbar.js`.
   No server involvement: the slow simulator is entirely client-side (FR-075).
 
+### 6.14 JS: sub-designs, ports & off-sheet connectors (`web/js/model/subdesign.js` + builtins/dialogs/interaction/canvas/sim)
+- **Purpose:** hierarchical embedding (a child design placed as a single component) and flat multi-sheet wiring (peer sheets joined by labelled off-sheet connectors). Implements requirements §3.22.
+- **Satisfies:** FR-094–FR-103, FR-060b.
+- A new pure module `model/subdesign.js` holds the interface/flatten helpers; rendering lives in `canvas.js` (§6.8), the dialog in `dialogs.js` (§6.11), placement/navigation in `interaction.js` (§6.9), flattening is consumed by `sim.js` (§6.13). New commands (`PlaceSubDesign`, `SetPortProps`, `SetDefaultRender`) follow the §6.10 pattern.
+
+**The port built-in (FR-094/FR-094a).** A port is an ordinary built-in instance (`builtins.js`, §6.11): a synthetic `ComponentType` `name:"port"`, `builtin:true`, one connection pin. It carries per-instance fields beyond the usual ones (the `switchState` precedent, §6.11): `label`, `portDir` (`in`|`out`|`bidir`), `width` (int, default 1), and optional `target` (`{file,label}`, FR-101); these round-trip with the instance (§7.2) and are edited in the properties panel (§6.11). The port's connection point is a `connector` **vertex** (§7.1a): like a `pin` vertex its position derives from the instance (so wires to it stretch for free), but its kind marks it for the netlist's label rules. `drawComponent` gains a `port` branch — a tag glyph showing the label, a `/n` when `width>1`, and a distinct mark when it carries a `target`. Ports get `A-<n>` refdes via `addInstance` (FR-011a).
+
+**Interface resolution (FR-095).** `designInterface(childDesign) → InterfacePin[]` returns one `{label,dir,width}` per distinct port label in the child, ordered by label. `synthTypeForInterface(iface, render) → ComponentType` builds an **in-memory, never-saved** synthetic `ComponentType` whose pins are those interface pins, laid out per render style. This is the key reuse: a sub-design instance carries this synthetic `typeData` in memory, so `pinWorldPos`, vertices, wire endpoints, bus snap, hit-testing, and the rectangle renderer all work **unchanged** (§6.6–§6.9). A child with no ports has an empty interface and cannot be embedded (FR-097a).
+
+**The ADD flow (FR-097/097a/097b).** `builtins.js` exposes a single non-placeable lower-palette entry **ADD**. Arming it and clicking (or dropping it on) the canvas opens the **Add sub-component dialog** (`dialogs.js`) at the grid point instead of creating an object. The dialog: (1) navigates/loads a child via `/api/v1/files`+`/design/load` (§6.4); (2) shows the child's `defaultRender` (§7.2) and resolved interface; (3) offers an `ic`/`connector` choice defaulting to `defaultRender`. OK → dispatch `PlaceSubDesign(childPath, render, @grid)`; Cancel → nothing; both return to SELECT (one-shot, FR-010). `childPath` is stored **relative to the parent's save dir**, so an unsaved parent first routes through Save (FR-047/FR-097b) and declining cancels. The dialog rejects an interface-less file, and a self/cyclic embed (`wouldCycle`), with a message.
+
+**Sub-design instance (FR-098/098a/099).** An entry in `design.components` with `kind:"subdesign"`, `childPath`, `render`, `x`, `y`, `rotation`, and an `X-<n>` refdes — a third series beside U and A (`addInstance` scans X-suffixes, FR-098a); a child may be embedded repeatedly as independent X-instances. It stores **no** `typeData` (supersedes FR-057 for it); its in-memory `typeData` is the synthetic interface type, recomputed on load and whenever the child changes (FR-099b). Rendering (`canvas.js`, §6.8 dispatch on `kind`): `ic` — the existing rectangle over the synthetic type (inputs left, outputs right, pins labelled by port label, `X1` + child base name upright); `connector` — a tall narrow rectangle with all interface pins ranked along **one** long edge in label order (OQ-010). Both are purely cosmetic (same interface, same connectivity, FR-099); a `width>1` interface pin is a single bus-capable pin (bus snap, FR-041/FR-039a). A child that fails to load renders as a **broken-link placeholder** (a red box naming the missing relative path), reported once via the message tray (FR-099a), reusing §6.8's unknown-type placeholder.
+
+**Navigation & back-stack (FR-100/100a).** Descending into a sub-design instance (double-click, or context-menu "Open sub-design") and following an off-sheet connector (clicking a port whose `target` is set) both resolve the target path (relative→absolute against the current design's save dir) and perform a **navigation** = the existing Open flow with the FR-049a unsaved-changes guard (save or discard before the canvas is replaced). `app.js` keeps a transient `navStack` of absolute paths recording the descended chain; a breadcrumb in the chrome offers **back**, popping and re-opening the parent (itself save-or-lose). The stack is session state — not persisted, not on the undo stack.
+
+**Connectivity (FR-094a/FR-101a).** Within one open design `buildNets` (§6.6, step 6) unions lanes of `connector` vertices whose port shares a `label` (per bit for `width>1`), so same-label ports are one net with no drawn wire. Cross-file continuation is **not** applied in single-design `buildNets` (the editor edits one sheet at a time); it is composed only when the simulator assembles the sheet graph (below), and only across the **explicit** `target` links — never by coincidental label equality between unrelated files.
+
+**Flattening for the simulator (FR-102/102a/103).** Before evaluation `sim.js` builds a flattened design via `subdesign.js`:
+  - `flatten(rootDesign, loadDesign) → FlatDesign` walks sub-design instances depth-first; each instance is replaced by a fresh copy of its child's components/wires/buses with every refdes **prefixed** by the instance path (`X1/`, `X1/X2/`, …) for uniqueness (FR-102), and the child's interface ports **bound** to the parent nets wired to the matching instance pins (synthetic interface pin ↔ the child's same-label ports become one net).
+  - Off-sheet connectors (FR-101/103): the loader follows each `target` to peer sheets, loads them (de-duplicating already-loaded files), prefixes each distinct sheet's refdes with a per-sheet tag, and unions nets across files by the declared `target` label links (FR-101a).
+  - A visited-set along the current path detects a repeat of an already-open file in **both** graphs; on a cycle `flatten` throws and `sim.run()` (and the ADD dialog) refuses with a message-tray report rather than recursing (FR-102a).
+  - The flattened design feeds the existing `buildNets`+evaluation pipeline (§6.13) unchanged; bus-conflict/indicator messages use the hierarchical names.
+- **Loading (FR-098/099a):** on opening a design, `app.js`/`fileops` resolve its sub-design `childPath`s (relative to its save dir) and load each child far enough to resolve the interface for rendering; failures yield broken-link placeholders, never aborting the open. Deep child contents load lazily — only `flatten` (at Run) needs them.
+- **Persistence:** no Go change is needed — the server already stores designs as an opaque `json.RawMessage` (§6.5), so the new instance fields (`kind`/`childPath`/`render`/`label`/`portDir`/`width`/`target`), the design-level `defaultRender`, and the `connector` vertex kind round-trip untouched. Only the client model (`model/design.js`, `model/persist.js`) is typed; `persist.js`'s structural sanity pass (§7.4) validates a `connector` vertex's `ref`/`pin` exactly as it does a `pin` vertex. Child files are read through the existing `/api/v1/design/load` with client-resolved absolute paths — relative→absolute resolution is client-side (parent `savePath` dir + stored relative path).
+- **Dependencies:** `model/design.js`, `model/netlist.js`, `api.js`, store, `chrome/dialogs.js`, `engine/canvas.js`, `engine/sim.js`.
+
 ---
 
 ## 7. Data Model
@@ -1408,8 +1440,8 @@ connect **iff** they reference the same vertex id.
 |---|---|---|
 | `id` | string | e.g. `"v17"`; stable; referenced by wire/bus `path` node-points |
 | `x`, `y` | int | grid coords of the node |
-| `kind` | enum | `pin` \| `junction` \| `free` (future: `connector`) |
-| `ref` | string? | `kind=pin` only: instance refdes, e.g. `"U3"` |
+| `kind` | enum | `pin` \| `junction` \| `free` \| `connector` (FR-094, §6.14) |
+| `ref` | string? | `kind=pin`/`connector` only: instance refdes, e.g. `"U3"` (for `connector`, the port instance, §6.14) |
 | `pin` | string? | `kind=pin` only: pin name, e.g. `"Y0"` |
 | `bit` | int? | `kind=junction` on a **bus** only: the bit-lane this junction taps (FR-043a breakout). Absent/`null` = full join of all lanes (bus↔bus, FR-039a) |
 
@@ -1418,6 +1450,7 @@ connect **iff** they reference the same vertex id.
   recomputed when the instance moves/rotates. This is why connected wires stretch
   for free (FR-018) — they reference the pin vertex, which follows the instance.
 - `kind=junction` / `kind=free` → `x,y` is **authoritative** (user-placed/dragged).
+- `kind=connector` → `x,y` is **derived** from the host port instance (like `pin`), so wires to a port stretch for free; the port's `label`/`portDir`/`width`/`target` live on the instance (§7.2), not the vertex (§6.14).
 
 A junction vertex's grid position lives **only** here, so the host wire and every
 branch wire that meet at it share one position and cannot drift apart (A1).
@@ -1428,7 +1461,8 @@ branch wire that meet at it share one position and cannot drift apart (A1).
 {
   "formatVersion": 1,                  // migration anchor (NFR-004-style)
   "name": "unnamed schematic 2026-06-01 14:03",
-  "components": [ ComponentInstance, … ],   // (a) FR-056
+  "defaultRender": "ic",               // FR-096: render style when THIS design is embedded (ic|connector)
+  "components": [ ComponentInstance, … ],   // (a) FR-056 (includes built-in ports and sub-design instances)
   "wires":      [ Wire, … ],                // (b) FR-056
   "buses":      [ Bus,  … ],                // (c) FR-056
   "vertices":   [ Vertex, … ],              // electrical nodes referenced by wires/buses (§7.1a)
@@ -1447,6 +1481,13 @@ branch wire that meet at it share one position and cannot drift apart (A1).
 | `typeData` | `ComponentType` | full copy at save time (FR-057) |
 | `overrides` | object | per-instance field overrides, grouped by kind: `{"delays":{"tpd":12},"props":{"period":200}}` — `delays` shadows `typeData.delays` (FR-058), `props` shadows `typeData.properties` defaults (FR-020b) |
 | `switchState` | string? | input-switch built-in only (FR-071c): current dial position, `"0"` \| `"1"` \| `"U"` (default `"U"`). Per-instance interactive state, not an `overrides` entry; set via the properties panel (FR-020c) or a dial click during a run (FR-087a) |
+| `kind` | string? | `"subdesign"` for a sub-design instance (FR-098); absent/`"component"` for an ordinary, subunit, or built-in instance (§6.14) |
+| `childPath` | string? | sub-design only: child design file path **relative to the parent's save dir** (FR-098), resolved on load to derive the interface; no `typeData` is stored (supersedes FR-057 for sub-designs) |
+| `render` | string? | sub-design only: chosen embed rendering `"ic"` \| `"connector"` (FR-099) |
+| `label` | string? | port built-in only (FR-094): interface signal name; same-label ports share a net (FR-094a) |
+| `portDir` | string? | port built-in only: `"in"` \| `"out"` \| `"bidir"` (FR-094) |
+| `width` | int? | port built-in only: interface width in bits, default 1 (FR-094) |
+| `target` | object? | off-sheet connector only (FR-101): `{ "file": <relative path>, "label": <port label in that file> }`; its presence makes the port navigable (FR-100) and cross-file-joined (FR-101a) |
 
 **`PathPoint`** (FR-059, A1, A2) — a wire/bus `path` is an ordered list of these,
 length ≥ 2. The **first and last** path-points must be `node` points (the wire's
@@ -1653,6 +1694,7 @@ errors (FR-066), so future sections (e.g., richer timing) are additive.
 | Four-state combination rule | Strict pessimism (any U operand → U; the vision statement's original rule, chosen first) | **Selective pessimism: `0 AND x = 0`, `1 OR x = 1`; other U combinations → U; Z reads as U (FR-077)** | Reworked 2026-06-12 (supersedes the strict-pessimism decision): under strict-U, registered feedback could never be initialized — `0 AND U = U` made even a held synchronous clear/load ineffective (discovered on the 74163), so no sequential part could leave U. Selective pessimism is what real logic permits; genuinely uninitialized paths still surface as U, preserving the debug intent |
 | Clock pin for `.R` outputs | Name convention (CP/CLK/CK); infer from equations | **Explicit `clock:` YAML key (FR-062d)** | Unambiguous and parser-validated; makes the 74574's named-clock convention machine-readable; additive per FR-066 |
 | API versioning | Unversioned routes | **`/api/v1/` prefix** | New endpoints (future transpiler) added without breaking clients (NFR-004) |
+| Sub-design embedding & off-sheet connectors (FR-094–FR-103) | (a) embed a copy of the child like FR-057; (b) two separate primitives (a port object and a distinct connector object); (c) compute multi-sheet/hierarchical nets in the editor at edit time | **One `port` built-in (a new `connector` vertex kind) serving both roles; a sub-design instance is a live relative-path reference whose interface is resolved to a synthetic in-memory `ComponentType`; flatten + cross-file label-union composed only at Run** | The synthetic type lets the whole pin/vertex/wire/netlist/render pipeline serve hierarchy unchanged — only render style, navigation, and flatten are new; a live reference keeps one source of truth (no stale copy, supersedes FR-057 here); the junction-identity decision already reserved a single `connector` vertex kind for this; composing cross-file nets only at Run keeps single-sheet editing fast and local (NFR-005); render style is deliberately cosmetic so simulation semantics never depend on a symbol toggle (stakeholder-confirmed) |
 
 ---
 
@@ -1681,6 +1723,7 @@ sim/
     js/geometry.js          CREATE  grid/viewport/rotation math (§6.7)
     js/model/design.js      CREATE  design ops (§6.6)
     js/model/netlist.js     CREATE  buildNets union-find (§6.6)
+    js/model/subdesign.js   CREATE  interface resolution, synthetic type, flatten/cycle (§6.14)
     js/engine/canvas.js     CREATE  renderer + render loop (§6.8)
     js/engine/symbols.js    CREATE  schematic symbol geometry (§6.8a)
     js/engine/interaction.js CREATE tool FSM + event handling (§6.9)
@@ -1775,6 +1818,14 @@ No files are modified (greenfield).
 | FR-084, FR-085, FR-086 | §6.13 | `sim.js`, `builtins.js` |
 | FR-087b | §6.9, §6.10, §6.11, §6.13 | `interaction.js`, `store.js`, `builtins.js`, `sim.js` |
 | FR-088 | §6.6, §6.10, §6.11 | `model/design.js`, `commands.js`, `toolbar.js` |
+| FR-094, FR-094a, FR-095 | §6.14, §7.1a, §7.2 | `subdesign.js`, `builtins.js`, `model/design.js`, `model/netlist.js` |
+| FR-096 | §6.14, §7.2 | `model/design.js`, `dialogs.js` |
+| FR-097, FR-097a, FR-097b | §6.9, §6.11, §6.14 | `interaction.js`, `dialogs.js`, `subdesign.js` |
+| FR-098, FR-098a, FR-099, FR-099a, FR-099b | §6.6, §6.8, §6.14, §7.2 | `subdesign.js`, `model/design.js`, `canvas.js` |
+| FR-100, FR-100a | §6.9, §6.11, §6.12, §6.14 | `interaction.js`, `app.js`, `dialogs.js` |
+| FR-101, FR-101a | §6.6, §6.14 | `subdesign.js`, `model/netlist.js` |
+| FR-102, FR-102a, FR-103 | §6.13, §6.14 | `sim.js`, `subdesign.js` |
+| FR-060b | §6.14, §7.1a, §7.2 | `types.go`, `model/design.js` |
 | NFR-001 | §6.1 | `main.go` |
 | NFR-002 | §6.12 | `api.js` |
 | NFR-003 | all | server `*.go`, `web/js/*` |

@@ -1,0 +1,286 @@
+I want to clarify the desired editing flow for adding a sub component to a    
+  higher level design. I think there should be a single button labelled "ADD"     in the built-in componentss part of the palette. When placed in the editing   
+  canvas, this pseudo component has the effect of opening a dialogue box to     
+  choose a sub component file. The subcomponent file should contain its own     
+  default rendering, integrated circuit box or connector, but this default      
+  rendering can be changed in this "add sub somponent" dialogue box we are      
+  designing. After the user confirms the desired rendering of the sub           
+  component, and okays the dialogue box, the component is drawn either as an IC 
+  rectangle or aport/connector, which appearsa tall skinny rectangle with pins  
+  along the more outside edge. Please think about this and confirm if you       
+  think it makes sense or ask me questions about it                             
+  
+⏺ Mostly it makes sense, and the ADD-button flow is a nice simplification. Let
+  me restate what I understand, confirm the parts I'm confident about, and
+  surface two things that need pinning down before it's coherent.
+
+  What I'm taking as settled (confirm if right)
+
+  - A single ADD tile lives in the lower (built-ins) palette region.
+  - Placing it is a two-step gesture: drop it on the canvas → it opens an "Add 
+  sub-component" dialog rather than immediately becoming an object.
+  - The dialog lets you choose a sub-component file, shows that file's stored 
+  default rendering (IC box or connector), and lets you override the rendering
+  for this placement.
+  - On OK, an instance is drawn in the chosen style; on Cancel, nothing is
+  placed.
+  - IC-box style = centered rectangle, pins on left/right (as we discussed).
+  Connector style = a tall, skinny rectangle with the pins ranked along its
+  outward-facing edge.
+
+  All of that is consistent with what we agreed and I'm happy with it.
+
+  Two things to resolve
+  
+  1. "Connector" is now overloaded — and it spans two layers. We have two
+  different things both wanting the word "connector," and they live at different
+  layers:
+  
+  - Child-side (interface declaration): the connector primitive you place inside
+  a design to mark a net as external. We agreed these become the embedded
+  symbol's pins ("reuse off-page connectors as ports"). The ADD dialog reads
+  these to know what pins the IC-box / connector-style symbol should have. So a
+  child with no connectors has no pins and can't be meaningfully embedded — the
+  dialog should warn.
+  - Parent-side (this message): the connector-style rendering of an embedded
+  sub-component.
+
+  These are complementary, not alternatives: you still place connector
+  primitives in the child to define its interface, and ADD embeds that child in 
+  the parent drawn as either a box or a connector strip. I want to confirm you
+  agree with that two-layer picture, and I'll give the two things distinct names
+  in the spec (e.g. child-side port vs parent-side connector-style symbol) so
+  the docs don't trip over "connector."
+
+  2. The pivotal question — is the connector rendering cosmetic, or does it 
+  change behavior? This is the one I most need your call on:
+
+  - Cosmetic (my recommendation): both renderings are the same hierarchical
+  block — encapsulated, click-to-descend, flattened for simulation,
+  multi-instance. The connector strip is just the symbol you pick when the
+  sub-design represents I/O / an edge connector. The flat off-page connector
+  (net continues by label across peer sheets) stays a separate feature, not
+  produced by ADD. This keeps the "two separate features" cleanly separate.
+  - Semantic: the render choice in the ADD dialog actually selects the feature —
+  IC box = encapsulated block (flatten); connector = flat off-page (net
+  continues by label, not encapsulated). Then ADD is the single entry point for
+  both features and the off-page connector isn't placed any other way.
+  
+  I lean strongly toward cosmetic, because bundling "encapsulate vs. don't" into
+  a symbol-picker is surprising and makes simulation semantics depend on a
+  visual toggle. But you described both render outcomes coming out of the one
+  ADD dialog, so I want to be sure.
+
+  Minor clarifications
+
+  - "Pins along the more outside edge" — for the connector strip, do all pins
+  sit on the single outward-facing long edge, or both long edges? And is
+  "outward" relative to the sheet boundary, or just a fixed side you rotate as
+  needed?
+  - The child's stored default rendering is new per-design metadata — set while
+  editing that child (e.g. a design-level property). For a child that never set
+  one, what's the fallback default — IC box?
+
+  Answer #2 and I can fold all of this into the spec draft. Which way: cosmetic
+  or semantic?
+
+✻ Worked for 2m 25s
+※ recap: We're designing a hierarchical sub-design feature (embed a saved design
+  as an IC box or connector via an "ADD" palette button), still in the
+  spec-discussion phase. I'm waiting on your call: is the connector rendering
+  purely cosmetic or does it change behavior? (disable recaps in /config)
+
+❯ 1. I agree with your two level picture. 2. I agree with your "cosmetic"
+  recommendation. You can go ahead with the spec draft.
+
+ It drafted these requirements:
+  229 +### 3.22 Sub-Designs, Ports, and Off-Sheet Connectors
+ 230 +
+ 231 +This group adds hierarchical design: a separately-saved design may be embe
+     +dded in a higher-level design as a single component (a **sub-design**), an
+     +d a circuit may be split across peer sheets joined by **off-sheet connecto
+     +rs**. It builds on the first-class vertex connectivity model (design.md §7
+     +.1a), which reserved a `connector` vertex kind for this purpose. The two m
+     +echanisms are distinct features sharing one primitive — the **port** (FR-0
+     +94): embedding *encapsulates* a child as a component (FR-098); off-sheet c
+     +onnectors join peer sheets *flatly* (FR-101).
+ 232 +
+ 233 +**Ports (the interface primitive)**
+ 234 +- FR-094: The editor shall provide a built-in **port** object (FR-067), pl
+     +aced from the lower palette region (FR-006a). A port has a signal **label*
+     +*, a **direction** (in/out/bidir, from the pin-direction set of FR-062a),
+     +and a **width** in bits (default 1; >1 = a bus interface). It exposes a si
+     +ngle connection point and marks the net attached there as part of the desi
+     +gn's external interface (FR-095). Ports are assigned A-series designators
+     +(FR-011a) and are otherwise ordinary instances (select/move/rotate/delete/
+     +persist/wire). A port's connection point is a `connector` vertex (design.m
+     +d §7.1a).
+ 235 +- FR-094a: Within one design, all ports sharing the same label denote the
+     +same net (connectivity by label, applied per bit for width>1), so an inter
+     +face net may appear at several points on the sheet without a drawn wire be
+     +tween them. Label match is exact; for width>1 ports bit position determine
+     +s per-bit identity (consistent with FR-037a).
+ 236 +
+ 237 +**Interface and default rendering**
+ 238 +- FR-095: A design's **external interface** is the set of its ports (FR-09
+     +4): one interface pin per distinct port label, carrying that label's direc
+     +tion and width. A design with no ports has no interface and cannot be embe
+     +dded (FR-097a).
+ 239 +- FR-096: A design may carry a design-level **default embed rendering** —
+     +`ic` (integrated-circuit rectangle) or `connector` (connector strip) — set
+     +table while editing that design and persisted in its file. A design that h
+     +as never set one defaults to `ic`.
+ 240 +
+ 241 +**Embedding (the ADD flow)**
+ 242 +- FR-097: The lower palette region (FR-006a) shall include a single **ADD*
+     +* entry. Placing it on the canvas (drag or click-to-place, FR-008/FR-009)
+     +opens an "Add sub-component" dialog instead of immediately creating an obj
+     +ect; placement remains one-shot (FR-010), returning to select-tool mode wh
+     +ether the dialog is confirmed or cancelled.
+ 243 +- FR-097a: The dialog shall let the user (a) choose a sub-design file via
+     +the file-navigation mechanism (FR-052/FR-053), (b) view the chosen file's
+     +default rendering (FR-096) and its derived interface (FR-095), and (c) ove
+     +rride the rendering (`ic` vs `connector`) for this placement. Confirming c
+     +reates a sub-design instance (FR-098) at the placement point; cancelling p
+     +laces nothing. A file with no ports (no interface, FR-095) shall be report
+     +ed and shall not create an instance; a file that would embed itself or for
+     +m an embedding cycle (FR-102a) shall be rejected with a message.
+ 244 +- FR-097b: Because a sub-design instance stores its child reference relati
+     +ve to the parent's save directory (FR-098), embedding requires the parent
+     +to have a save location. If the parent is unsaved, the system shall prompt
+     + to save it (FR-047) before completing the embed; declining cancels the em
+     +bed.
+ 245 +
+ 246 +**Sub-design instances**
+ 247 +- FR-098: A **sub-design instance** references its child design file by a
+     +path **relative to the parent's save directory**, resolved when the parent
+     + is opened. The instance is a live reference: it stores no copy of the chi
+     +ld's contents or interface. (This **supersedes FR-057** for sub-design ins
+     +tances, which carry a relative child path and a chosen render style in pla
+     +ce of copied `typeData`.) The child's interface (FR-095) is re-derived fro
+     +m the child file on load.
+ 248 +- FR-098a: Sub-design instances are assigned reference designators from a
+     +separate **X-series** (X1, X2, …), incremented from the highest existing X
+     +-number in the parent (cf. FR-011/FR-011a; they consume neither U- nor A-n
+     +umbers). The same child file may be embedded multiple times in one parent;
+     + each placement is an independent instance.
+ 249 +- FR-099: A sub-design instance is rendered in its chosen style (FR-097a).
+     + `ic`: a rectangle with interface pins on the left (inputs) and right (out
+     +puts), labeled by port label. `connector`: a tall, narrow rectangle with a
+     +ll interface pins ranked along one long edge, labeled by port label, order
+     +ed by label. In both styles the pins are the child's interface (FR-095); p
+     +in and designator labels render upright (FR-012/FR-015); the child's inter
+     +nals are not drawn (encapsulated). The render style is **purely cosmetic**
+     + and does not change electrical or simulation semantics. A width>1 interfa
+     +ce pin is a single bus pin to which a matching-width bus snap-connects (FR
+     +-039a/FR-041).
+ 250 +- FR-099a: If a sub-design instance's child file cannot be resolved or loa
+     +ded when the parent opens, the instance shall render as a distinctly-marke
+     +d **broken-link placeholder** naming the missing relative path, and the co
+     +ndition shall be reported once via the message tray (FR-074); it shall not
+     + abort loading or crash the editor (consistent with the renderer's unknown
+     +-type placeholder, design.md §6.8).
+ 251 +- FR-099b: Because the reference is live (FR-098), a child interface chang
+     +e reaches existing instances on the next load of the parent. A parent conn
+     +ection to an interface pin whose port label no longer exists in the child
+     +shall be left dangling (FR-029/FR-030) and reported via the message tray (
+     +FR-074).
+ 252 +
+ 253 +**Navigation between sheets**
+ 254 +- FR-100: The user shall be able to descend into a sub-design instance (do
+     +uble-click, or a context-menu "Open sub-design", FR-033b) and to follow an
+     + off-sheet connector (FR-101); either replaces the editing canvas with the
+     + target design file. Such a navigation is treated as closing the current d
+     +esign: the unsaved-changes warning (FR-049a) applies, so the user must sav
+     +e or knowingly discard before the canvas changes.
+ 255 +- FR-100a: The editor shall maintain a navigation **back-stack** (breadcru
+     +mb) recording the chain of sheets descended through, so the user can retur
+     +n to the parent and up the chain. Returning re-opens the recorded file and
+     + is itself a save-or-lose navigation (FR-100).
+ 256 +
+ 257 +**Off-sheet connectors (peer sheets)**
+ 258 +- FR-101: A port (FR-094) may additionally carry an **off-sheet target**:
+     +a sibling design file (relative path, per FR-098) and a port label within
+     +it. A port with a target is an **off-sheet connector**; clicking/opening i
+     +t navigates to the target file (FR-100). Off-sheet connectors join peer sh
+     +eets of one circuit (a flat relationship), distinct from the encapsulating
+     + embedding of sub-design instances (FR-098).
+ 259 +- FR-101a: An off-sheet connector continues its net to the named port in t
+     +he named target file (matched by the named label, applied per bit for widt
+     +h>1). This cross-file continuation is established **only** by an explicit
+     +target (FR-101) — coincidentally equal labels in unrelated files do not jo
+     +in. The two joined ports denote one net across the two files.
+ 260 +
+ 261 +**Simulation of multi-sheet / hierarchical designs**
+ 262 +- FR-102: The slow simulator (§3.19) shall **flatten** hierarchical sub-de
+     +sign instances when evaluating: each instance is replaced by its child's c
+     +ontents, binding the child's interface ports (FR-095) to the nets wired to
+     + the corresponding instance pins. Flattening recurses through nested sub-d
+     +esigns. Reference designators are made unique by prefixing each level with
+     + its instance path (e.g., `X1/U3`, `X1/X2/U5`); the hierarchical names are
+     + used in bus-conflict and indicator messages (FR-082).
+ 263 +- FR-102a: The simulator (and the embed dialog, FR-097a) shall detect cycl
+     +es in the sub-design embedding graph and in the off-sheet connector graph
+     +(FR-101); on a cycle it shall refuse to run/embed with a clear message via
+     + the message tray (FR-074) rather than recursing without bound.
+ 264 +- FR-103: When a design uses off-sheet connectors (FR-101), the simulator
+     +shall load the connected peer sheets (following targets transitively, subj
+     +ect to FR-102a) and union nets across files by their declared connector li
+     +nks (FR-101a), so a circuit spread across peer sheets simulates as one. Re
+     +ference designators across distinct peer sheets are made unique by prefixi
+     +ng with a per-sheet identifier.
+ 265 +
+
+ LATER:
+
+ All 206 pass (6 new).
+
+  Phase 2a done — model/subdesign.js with three pure, tested helpers:
+  - designInterface(child) → distinct ports as {label, dir, width}, sorted,
+  deduped, ignoring unlabeled/non-ports.
+  - synthTypeForInterface(iface, render) → an in-memory ComponentType. Both
+  styles are plain rectangles (renderType: "unit"): ic = inputs left / outputs
+  right; connector = all pins on the right edge. This is the reuse linchpin.
+  - addSubDesignInstance(...) → an X-series instance (kind:"subdesign", live
+  childPath, render, synthetic typeData). Tested that two embeds of the same
+  child get independent X1/X2, and that pinWorldPos works on the result (so
+  wiring needs no special code).
+
+  Phase 2b (rendering) — no code needed. Because the synthetic type is a
+  standard unit type with side/position pins, the existing rectangle renderer,
+  pin-bubble loop, hit-testing, move/rotate/delete, and the refdes + type center
+  label all handle a sub-design instance as-is (it shows e.g. X1 / counter).
+  Both ic and connector are rectangles, distinguished only by the synthetic pin
+  layout. I confirmed RefreshTypes skips it (type not in library) and
+  deletion/vertex handling work via the normal pin-vertex path.
+
+  That leaves 2c — the integration glue, which is DOM/server-heavy and the
+  riskiest part. I'd like to checkpoint here because 2c can't be unit-tested the
+  way 2a was (it needs the browser/server) and it has a real design wrinkle
+  worth flagging:
+
+  The persistence wrinkle. A sub-design stores no typeData (live reference). So:
+  - Save: persist.serializeDesign must strip typeData (and overrides) from
+  kind:"subdesign" instances.
+  - Load: deserializeDesign is synchronous and pure, but re-deriving a
+  sub-design's interface requires loading the child file from the server
+  (async). So re-derivation can't happen inside deserializeDesign; it has to be
+  an async pass in app.js/fileops after load (the FR-098/FR-099a loading flow),
+  which also produces the broken-link placeholder when a child is missing.
+
+  So 2c breaks into:
+  1. PlaceSubDesign command (commands.js) — pure, testable.
+  2. serializeDesign strip + an async resolveSubDesigns(design, loadFn) pass
+  that fills/refreshes synthetic typeData (or marks broken-link) — the load-time
+  half; resolveSubDesigns is testable with a fake loadFn.
+  3. The ADD palette entry + "Add sub-component" dialog (dialogs.js) +
+  interaction wiring — DOM/server glue, verified by running the app rather than
+  unit tests.
+
+  Shall I proceed through 2c in that order (1 → 2 → 3)? Items 1 and 2 I can
+  still cover with tests; item 3 I'll implement to the existing dialog/fileops
+  patterns and we'll want to verify it live.
+
+✻ Cogitated for 3m 39s
+
+❯ proceed through 2c in that order

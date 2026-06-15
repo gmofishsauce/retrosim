@@ -170,12 +170,13 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 
 - FR-055: Designs shall be saved as JSON files.
 - FR-056: The JSON file shall contain at minimum three distinct collections: (a) component instances, (b) wire routes, and (c) bus routes.
-- FR-057: Each component instance record shall include: component type name, reference designator, canvas position, rotation, and a full copy of the type's data from the YAML file at the time of save.
+- FR-057: Each component instance record shall include: component type name, reference designator, canvas position, rotation, and a full copy of the type's data from the YAML file at the time of save. (Sub-design instances are an exception per FR-098: they store a relative child-file path and a chosen render style in place of any copied type data.)
 - FR-058: Per-instance overrides of type data (e.g., a custom propagation delay for a specific instance) shall be stored alongside the copied type data in the instance record.
 - FR-059: Each wire route record shall include: the two endpoint references and an ordered list of bend-point grid coordinates. An endpoint reference shall be one of: (a) a component pin (U-number and pin name), (b) a junction on another wire or bus (FR-034b), or (c) a free canvas grid coordinate if the endpoint is dangling.
 - FR-059a: The saved design shall represent electrical connectivity (the set of nets per FR-034b) in a form derivable without reference to pixel geometry, so that a later tool can determine which pins are electrically connected.
 - FR-060: Each bus route record shall include: the same endpoint and bend-point data as a wire, plus the bus width in bits and any pin-group connection data for snap-connected endpoints.
 - FR-060a: For buses, the saved design shall additionally include any per-bit signal names (FR-037b) and any single-bit breakout connections (FR-043a), such that the net membership of each individual bus bit — including which bus and bit each net originates from — is derivable without reference to pixel geometry (consistent with FR-059a).
+- FR-060b: The save format shall additionally represent: (a) port objects — label, direction, width, and optional off-sheet target `{file, label}` (FR-094/FR-101) — as instances whose connection points are `connector` vertices (design.md §7.1a); (b) sub-design instances — X-series refdes, relative child path, chosen render style, position, rotation, and the wiring to their interface pins (FR-098/FR-099) — with **no** copied child type data (superseding FR-057 for them); and (c) the design-level default embed rendering (FR-096). Connectivity (FR-059a) shall remain derivable without pixel geometry, with connector vertices contributing to nets by label (FR-094a) and explicit cross-file links (FR-101a).
 
 ### 3.17 Component Definition (YAML File)
 
@@ -226,6 +227,43 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 - FR-092: The application shall maintain a local backup snapshot of the working design in browser localStorage: updated (debounced) after each design-modifying action while unsaved changes exist, recording the serialized design (FR-055 shape), its save path, design name, and a timestamp; removed on successful save. This protects against the loss modes reconnection cannot cover: page reload, tab close, and browser crash.
 - FR-093: At startup, if a backup snapshot exists (a previous session ended with unsaved changes), the application shall offer recovery before presenting the default empty design (FR-045): accepting restores the snapshot's design, name, and save path with unsaved-changes status set; declining discards the snapshot.
 
+### 3.22 Sub-Designs, Ports, and Off-Sheet Connectors
+
+This group adds hierarchical design: a separately-saved design may be embedded in a higher-level design as a single component (a **sub-design**), and a circuit may be split across peer sheets joined by **off-sheet connectors**. It builds on the first-class vertex connectivity model (design.md §7.1a), which reserved a `connector` vertex kind for this purpose. The two mechanisms are distinct features sharing one primitive — the **port** (FR-094): embedding *encapsulates* a child as a component (FR-098); off-sheet connectors join peer sheets *flatly* (FR-101).
+
+**Ports (the interface primitive)**
+- FR-094: The editor shall provide a built-in **port** object (FR-067), placed from the lower palette region (FR-006a). A port has a signal **label**, a **direction** (in/out/bidir, from the pin-direction set of FR-062a), and a **width** in bits (default 1; >1 = a bus interface). It exposes a single connection point and marks the net attached there as part of the design's external interface (FR-095). Ports are assigned A-series designators (FR-011a) and are otherwise ordinary instances (select/move/rotate/delete/persist/wire). A port's connection point is a `connector` vertex (design.md §7.1a).
+- FR-094a: Within one design, all ports sharing the same label denote the same net (connectivity by label, applied per bit for width>1), so an interface net may appear at several points on the sheet without a drawn wire between them. Label match is exact; for width>1 ports bit position determines per-bit identity (consistent with FR-037a).
+
+**Interface and default rendering**
+- FR-095: A design's **external interface** is the set of its ports (FR-094): one interface pin per distinct port label, carrying that label's direction and width. A design with no ports has no interface and cannot be embedded (FR-097a).
+- FR-096: A design may carry a design-level **default embed rendering** — `ic` (integrated-circuit rectangle) or `connector` (connector strip) — settable while editing that design and persisted in its file. A design that has never set one defaults to `ic`.
+
+**Embedding (the ADD flow)**
+- FR-097: The lower palette region (FR-006a) shall include a single **ADD** entry. Placing it on the canvas (drag or click-to-place, FR-008/FR-009) opens an "Add sub-component" dialog instead of immediately creating an object; placement remains one-shot (FR-010), returning to select-tool mode whether the dialog is confirmed or cancelled.
+- FR-097a: The dialog shall let the user (a) choose a sub-design file via the file-navigation mechanism (FR-052/FR-053), (b) view the chosen file's default rendering (FR-096) and its derived interface (FR-095), and (c) override the rendering (`ic` vs `connector`) for this placement. Confirming creates a sub-design instance (FR-098) at the placement point; cancelling places nothing. A file with no ports (no interface, FR-095) shall be reported and shall not create an instance; a file that would embed itself or form an embedding cycle (FR-102a) shall be rejected with a message.
+- FR-097b: Because a sub-design instance stores its child reference relative to the parent's save directory (FR-098), embedding requires the parent to have a save location. If the parent is unsaved, the system shall prompt to save it (FR-047) before completing the embed; declining cancels the embed.
+
+**Sub-design instances**
+- FR-098: A **sub-design instance** references its child design file by a path **relative to the parent's save directory**, resolved when the parent is opened. The instance is a live reference: it stores no copy of the child's contents or interface. (This **supersedes FR-057** for sub-design instances, which carry a relative child path and a chosen render style in place of copied `typeData`.) The child's interface (FR-095) is re-derived from the child file on load.
+- FR-098a: Sub-design instances are assigned reference designators from a separate **X-series** (X1, X2, …), incremented from the highest existing X-number in the parent (cf. FR-011/FR-011a; they consume neither U- nor A-numbers). The same child file may be embedded multiple times in one parent; each placement is an independent instance.
+- FR-099: A sub-design instance is rendered in its chosen style (FR-097a). `ic`: a rectangle with interface pins on the left (inputs) and right (outputs), labeled by port label. `connector`: a tall, narrow rectangle with all interface pins ranked along one long edge, labeled by port label, ordered by label. In both styles the pins are the child's interface (FR-095); pin and designator labels render upright (FR-012/FR-015); the child's internals are not drawn (encapsulated). The render style is **purely cosmetic** and does not change electrical or simulation semantics. A width>1 interface pin is a single bus pin to which a matching-width bus snap-connects (FR-039a/FR-041).
+- FR-099a: If a sub-design instance's child file cannot be resolved or loaded when the parent opens, the instance shall render as a distinctly-marked **broken-link placeholder** naming the missing relative path, and the condition shall be reported once via the message tray (FR-074); it shall not abort loading or crash the editor (consistent with the renderer's unknown-type placeholder, design.md §6.8).
+- FR-099b: Because the reference is live (FR-098), a child interface change reaches existing instances on the next load of the parent. A parent connection to an interface pin whose port label no longer exists in the child shall be left dangling (FR-029/FR-030) and reported via the message tray (FR-074).
+
+**Navigation between sheets**
+- FR-100: The user shall be able to descend into a sub-design instance (double-click, or a context-menu "Open sub-design", FR-033b) and to follow an off-sheet connector (FR-101); either replaces the editing canvas with the target design file. Such a navigation is treated as closing the current design: the unsaved-changes warning (FR-049a) applies, so the user must save or knowingly discard before the canvas changes.
+- FR-100a: The editor shall maintain a navigation **back-stack** (breadcrumb) recording the chain of sheets descended through, so the user can return to the parent and up the chain. Returning re-opens the recorded file and is itself a save-or-lose navigation (FR-100).
+
+**Off-sheet connectors (peer sheets)**
+- FR-101: A port (FR-094) may additionally carry an **off-sheet target**: a sibling design file (relative path, per FR-098) and a port label within it. A port with a target is an **off-sheet connector**; clicking/opening it navigates to the target file (FR-100). Off-sheet connectors join peer sheets of one circuit (a flat relationship), distinct from the encapsulating embedding of sub-design instances (FR-098).
+- FR-101a: An off-sheet connector continues its net to the named port in the named target file (matched by the named label, applied per bit for width>1). This cross-file continuation is established **only** by an explicit target (FR-101) — coincidentally equal labels in unrelated files do not join. The two joined ports denote one net across the two files.
+
+**Simulation of multi-sheet / hierarchical designs**
+- FR-102: The slow simulator (§3.19) shall **flatten** hierarchical sub-design instances when evaluating: each instance is replaced by its child's contents, binding the child's interface ports (FR-095) to the nets wired to the corresponding instance pins. Flattening recurses through nested sub-designs. Reference designators are made unique by prefixing each level with its instance path (e.g., `X1/U3`, `X1/X2/U5`); the hierarchical names are used in bus-conflict and indicator messages (FR-082).
+- FR-102a: The simulator (and the embed dialog, FR-097a) shall detect cycles in the sub-design embedding graph and in the off-sheet connector graph (FR-101); on a cycle it shall refuse to run/embed with a clear message via the message tray (FR-074) rather than recursing without bound.
+- FR-103: When a design uses off-sheet connectors (FR-101), the simulator shall load the connected peer sheets (following targets transitively, subject to FR-102a) and union nets across files by their declared connector links (FR-101a), so a circuit spread across peer sheets simulates as one. Reference designators across distinct peer sheets are made unique by prefixing with a per-sheet identifier.
+
 ---
 
 ## 4. Non-Functional Requirements
@@ -250,7 +288,9 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 | Wire | endpoint A, endpoint B (each: instance+pin, junction on another wire/bus, or free coord), ordered bend points | A wire with zero connected endpoints is not persisted |
 | Bus | same as Wire, plus width in bits, snap-connection metadata, optional per-bit signal names, single-bit breakout taps | Represents N independent nets (one per bit); rendered as thick blue line with annotation |
 | Net | set of pins and wire/bus segments electrically connected through pins and junctions; a bus contributes one net per bit | Derivable from the design without pixel geometry (FR-034b, FR-059a); per-bit provenance (originating bus and bit) retained for downstream tools |
-| Design | name, save path, list of ComponentInstances, list of Wires, list of Buses | Top-level save file entity |
+| Port | label, direction (in/out/bidir), width, optional off-sheet target {file, label} | Built-in interface object (FR-094); its connection point is a `connector` vertex; same-label ports share a net (FR-094a); with a target it is an off-sheet connector (FR-101) |
+| SubDesignInstance | X-number, relative child path, render style (ic/connector), position, rotation, wiring to interface pins | Live reference to a child design file (FR-098); stores no copied child data; pins derived from the child's ports (FR-095) |
+| Design | name, save path, default embed rendering (FR-096), list of ComponentInstances, list of Wires, list of Buses | Top-level save file entity |
 
 ---
 
@@ -307,6 +347,7 @@ The minimum set of requirements needed for a usable first release:
 - OQ-007: The exact representation of electrical nets and wire-to-wire junctions in the JSON save format (FR-034b, FR-059a) needs to be settled as part of the save-format and YAML-format design session, since it affects both. This now also covers per-bit bus net representation and provenance (FR-037a, FR-060a); the design phase has proposed a first-class-vertex graph with per-bit lanes as the chosen representation.
 - OQ-008: RESOLVED. The pin-direction set is exactly input/output/bidirectional/tristate (FR-062a). Power and ground are not represented anywhere, so no power/ground direction is required; the four directions map cleanly to the future four-level logic model.
 - OQ-009: The UI for viewing and editing per-instance overrides (FR-020a) is not yet specified (e.g., a properties panel vs. a dialog).
+- OQ-010: Two minor sub-design rendering choices are assumed pending confirmation: (a) the `connector` render style ranks all interface pins along a single long edge ordered by label, rather than splitting them across both long edges; (b) a width>1 port presents as a single bus interface pin that a matching-width bus snap-connects to, rather than expanding into N single-bit pins. The default embed rendering for a design that never set one is `ic` (FR-096).
 
 ---
 
@@ -336,3 +377,8 @@ The minimum set of requirements needed for a usable first release:
 | TTL | Transistor-Transistor Logic; a family of digital logic components (e.g., 74xx series) |
 | Wire | A single-bit signal connection rendered as a thin black line |
 | YAML file | The component-definition file (`.yaml`; design.md §7.6) defining the name, pin layout, pin directions, pin groups, optional timing, and (eventually) the GALasm behavior of one TTL component type |
+| Port | A built-in interface object placed inside a design to expose a net as an external pin; its label, direction, and width define one interface pin (FR-094/FR-095) |
+| Interface | The set of a design's ports — one external pin per distinct label — used when the design is embedded (FR-095) |
+| Sub-design (hierarchical block) | A separately-saved design embedded in a higher-level design as a single encapsulated component instance (FR-098), rendered as an IC rectangle or a connector strip |
+| Off-sheet connector | A port carrying a target file+label that joins peer sheets of one circuit by label and navigates between them on click (FR-101) |
+| Flatten | Replacing each sub-design instance with its child's contents (using hierarchical reference designators) so a hierarchical design can be simulated as one circuit (FR-102) |

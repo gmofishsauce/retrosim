@@ -148,7 +148,7 @@ function pathPointWorld(design, p) {
 function endpointWorld(design, p) {
   if (p.t === "node") {
     const v = getVertex(design, p.v);
-    if (v?.kind === "pin") {
+    if (v?.kind === "pin" || v?.kind === "connector") {
       const inst = design.components.find((c) => c.refdes === v.ref);
       if (inst) return pinVisualPos(inst, v.pin);
     }
@@ -294,7 +294,9 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
   ctx.fillStyle = "#ffffff";
   ctx.lineWidth = selected ? 2 : 1;
   ctx.strokeStyle = selected ? "#4a90d9" : "#333";
-  if (td.renderType === "subunit") {
+  if (inst.broken) {
+    drawBrokenBox(ctx, inst, vp, selected);
+  } else if (td.renderType === "subunit") {
     drawSymbol(ctx, inst, vp);
   } else if (td.renderType === "indicator") {
     drawIndicator(ctx, inst, vp, selected, sim);
@@ -308,6 +310,8 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
     drawLabelBox(ctx, inst, vp, selected, "RST");
   } else if (td.renderType === "switch") {
     drawSwitch(ctx, inst, vp, selected);
+  } else if (td.renderType === "port") {
+    drawPort(ctx, inst, vp, selected);
   } else {
     const corners = [
       [0, 0],
@@ -526,6 +530,72 @@ function drawLabelBox(ctx, inst, vp, selected, label) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(label, center.x, center.y);
+}
+
+// drawBrokenBox renders a sub-design whose child file could not be loaded
+// (FR-099a): a red-outlined, light-red box. The refdes + child name (the missing
+// link's base name) come from the shared center-label path; the message tray
+// reports the unresolved path. The shared pin loop still draws the interface
+// stubs so any connected wires remain visible.
+function drawBrokenBox(ctx, inst, vp, selected) {
+  const td = inst.typeData;
+  const corners = [
+    [0, 0],
+    [td.width, 0],
+    [td.width, td.height],
+    [0, td.height],
+  ].map(([dx, dy]) => {
+    const r = rotateOffset(dx, dy, inst.rotation);
+    return worldToScreen({ x: inst.x + r.x, y: inst.y + r.y }, vp);
+  });
+  ctx.beginPath();
+  ctx.moveTo(corners[0].x, corners[0].y);
+  for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
+  ctx.closePath();
+  ctx.fillStyle = "#fdeaea";
+  ctx.fill();
+  ctx.lineWidth = selected ? 2 : 1.5;
+  ctx.strokeStyle = "#b00020";
+  ctx.stroke();
+}
+
+// drawPort renders a port / off-sheet connector (FR-094, §6.14): a box showing
+// the instance's label, a "/n" width annotation when width>1, and a small filled
+// corner mark when it carries an off-sheet target (FR-101). The body is drawn
+// upright so the label stays legible (FR-015); only the connection pin follows
+// the instance rotation, via the shared pin path.
+function drawPort(ctx, inst, vp, selected) {
+  const td = inst.typeData;
+  const cr = rotateOffset(td.width / 2, td.height / 2, inst.rotation);
+  const center = worldToScreen({ x: inst.x + cr.x, y: inst.y + cr.y }, vp);
+  const half = (Math.min(td.width, td.height) / 2) * scaleFor(vp);
+
+  ctx.beginPath();
+  ctx.rect(center.x - half, center.y - half, half * 2, half * 2);
+  ctx.fillStyle = "#fff";
+  ctx.fill();
+  ctx.lineWidth = selected ? 2 : 1;
+  ctx.strokeStyle = selected ? "#4a90d9" : "#333";
+  ctx.stroke();
+
+  // Off-sheet connectors are marked with a filled top-left triangle (FR-101).
+  if (inst.target) {
+    ctx.beginPath();
+    ctx.moveTo(center.x - half, center.y - half);
+    ctx.lineTo(center.x - half + half * 0.6, center.y - half);
+    ctx.lineTo(center.x - half, center.y - half + half * 0.6);
+    ctx.closePath();
+    ctx.fillStyle = selected ? "#4a90d9" : "#333";
+    ctx.fill();
+  }
+
+  let text = inst.label ?? "";
+  if (inst.width > 1) text += "/" + inst.width;
+  ctx.fillStyle = "#000";
+  ctx.font = Math.round(0.45 * scaleFor(vp)) + "px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, center.x, center.y);
 }
 
 // SWITCH_POSITIONS maps each dial position to a unit direction on the upright

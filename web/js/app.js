@@ -29,6 +29,14 @@ function defaultDesignName(now = new Date()) {
 // label drops the leading "74" family prefix, leaving a 2-3 digit label (FR-005).
 const paletteLabel = (name) => name.slice(2);
 
+// ADD_ICON: the lower-palette entry that opens the Add sub-component flow (§6.14).
+const ADD_ICON =
+  '<svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true">' +
+  '<rect x="4" y="4" width="28" height="28" rx="3" fill="#fff" stroke="#333" stroke-dasharray="3 2"/>' +
+  '<line x1="18" y1="11" x2="18" y2="25" stroke="#333" stroke-width="2.5" stroke-linecap="round"/>' +
+  '<line x1="11" y1="18" x2="25" y2="18" stroke="#333" stroke-width="2.5" stroke-linecap="round"/>' +
+  "</svg>";
+
 // toast surfaces a brief non-fatal message (duplicated in interaction/fileops;
 // consolidation is an R5 cleanup for the refactor pass).
 function toast(msg) {
@@ -74,6 +82,11 @@ function renderPalette({ partsEl, builtinsEl, components, builtins, store }) {
   for (const type of builtins) {
     builtinsEl.appendChild(makeTile(type, { html: type.icon }, type.title, tiles));
   }
+  // The ADD entry embeds a saved design as a sub-design (§6.14, FR-097); it is
+  // not a placeable component, so it carries the reserved type name "add".
+  builtinsEl.appendChild(
+    makeTile({ name: "add" }, { html: ADD_ICON }, "Add sub-component", tiles),
+  );
 
   // Reflect the armed click-to-place tile with a pressed-in look (FR-009a).
   store.subscribe((state) => {
@@ -134,17 +147,19 @@ async function main() {
     });
     // Built-ins are placeable too, so they must be findable by type name.
     const library = [...components, ...BUILTINS];
+    // fileops is built before interaction so the ADD tile can route through it.
+    const fileops = makeFileOps({
+      store,
+      dataDir: defaults.dataDir,
+      defaultName: defaultDesignName,
+    });
     const interaction = initInteraction({
       canvas: document.getElementById("canvas"),
       palette,
       store,
       renderer,
       library,
-    });
-    const fileops = makeFileOps({
-      store,
-      dataDir: defaults.dataDir,
-      defaultName: defaultDesignName,
+      onAddSubDesign: (x, y) => fileops.addSubDesign(x, y), // §6.14
     });
     // Heartbeat + reconnect (FR-089–FR-091, §6.12a): on recovery a dirty
     // design saves through the same path the toolbar Save uses.

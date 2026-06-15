@@ -196,6 +196,70 @@ export function promptBitNamesDialog(bus) {
   });
 }
 
+// chooseRenderDialog previews an embedded sub-design's interface and lets the
+// user pick its render style (FR-097a), defaulting to the child's own
+// defaultRender (FR-096). Resolves to "ic" | "connector", or null on cancel.
+export function chooseRenderDialog(iface, defaultRender = "ic") {
+  return new Promise((resolve) => {
+    const overlay = el("div", "dialog-overlay");
+    const box = el("div", "dialog");
+    overlay.appendChild(box);
+
+    box.appendChild(el("div", "dialog-title", "Add sub-component"));
+    box.appendChild(el("div", "dialog-path", `Interface — ${iface.length} pin(s):`));
+    const listEl = el("ul", "dialog-list");
+    for (const p of iface) {
+      listEl.appendChild(
+        el("li", "dialog-entry", `${p.label} — ${p.dir}${p.width > 1 ? " /" + p.width : ""}`),
+      );
+    }
+    box.appendChild(listEl);
+
+    let render = defaultRender === "connector" ? "connector" : "ic";
+    const row = el("div", "dialog-row");
+    row.appendChild(el("label", "dialog-label", "Render as:"));
+    const choice = (val, label) => {
+      const r = el("input");
+      r.type = "radio";
+      r.name = "subdesign-render";
+      r.value = val;
+      r.id = "render-" + val;
+      if (val === render) r.checked = true;
+      r.addEventListener("change", () => {
+        if (r.checked) render = val;
+      });
+      const l = el("label", "dialog-label", label);
+      l.htmlFor = r.id;
+      const span = el("span");
+      span.append(r, l);
+      return span;
+    };
+    row.append(choice("ic", "IC rectangle"), choice("connector", "Connector strip"));
+    box.appendChild(row);
+
+    const buttons = el("div", "dialog-buttons");
+    buttons.append(button("Cancel", () => done(null)), button("OK", () => done(render)));
+    box.appendChild(buttons);
+
+    function done(result) {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(null);
+      } else if (e.key === "Enter") {
+        e.stopPropagation();
+        done(render);
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+  });
+}
+
 // openFileDialog resolves to { path } on confirm, or null on cancel.
 export function openFileDialog({ mode, startPath, defaultName = "" }) {
   return new Promise((resolve) => {

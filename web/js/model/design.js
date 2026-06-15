@@ -29,7 +29,7 @@ export function createDesign(name) {
 // nextRefNum returns one more than the highest designator matching `re` (whose
 // first capture group is the number), so designators increment past gaps left by
 // deletions (FR-011, FR-011a).
-function nextRefNum(components, re) {
+export function nextRefNum(components, re) {
   let max = 0;
   for (const c of components) {
     const m = re.exec(c.refdes);
@@ -58,6 +58,14 @@ export function addInstance(design, type, x, y, rotation) {
   // The input switch carries per-instance dial position state (FR-071c),
   // defaulting to the ? / U position on placement.
   if (type.renderType === "switch") inst.switchState = "U";
+  // A port carries its interface fields (FR-094, §7.2): a label defaulting to the
+  // refdes (so a fresh port is its own net until the user names it), direction,
+  // and bit width. The optional off-sheet target (FR-101) is added in phase 4.
+  if (type.renderType === "port") {
+    inst.label = refdes;
+    inst.portDir = "in";
+    inst.width = 1;
+  }
   design.components.push(inst);
   return inst;
 }
@@ -129,7 +137,11 @@ export function refreshInstance(design, inst, libType) {
 
   const pinNames = new Set(td.pins.map((p) => p.name));
   for (const v of design.vertices) {
-    if (v.kind === "pin" && v.ref === inst.refdes && !pinNames.has(v.pin)) {
+    if (
+      (v.kind === "pin" || v.kind === "connector") &&
+      v.ref === inst.refdes &&
+      !pinNames.has(v.pin)
+    ) {
       return { skip: `wired pin ${v.pin} is gone from the new definition` };
     }
   }
@@ -262,20 +274,24 @@ function addVertex(design, props) {
 // is DERIVED from the instance (so wires stretch when the instance moves/rotates,
 // FR-018); junction/free vertices carry their own authoritative position (§7.1a).
 export function vertexWorld(design, v) {
-  if (v.kind === "pin") {
+  if (v.kind === "pin" || v.kind === "connector") {
     const inst = design.components.find((c) => c.refdes === v.ref);
-    if (!inst) throw new Error(`pin vertex ${v.id} references missing ${v.ref}`);
+    if (!inst) throw new Error(`${v.kind} vertex ${v.id} references missing ${v.ref}`);
     return pinWorldPos(inst, v.pin);
   }
   return { x: v.x, y: v.y };
 }
 
-// findPinVertex returns the existing vertex for a component pin, or null. A pin
-// has at most one vertex; fan-out is multiple wires sharing it (A2).
+// findPinVertex returns the existing vertex for a component pin (or a port's
+// connector point, §6.14), or null. A pin has at most one vertex; fan-out is
+// multiple wires sharing it (A2).
 function findPinVertex(design, refdes, pin) {
   return (
     design.vertices.find(
-      (v) => v.kind === "pin" && v.ref === refdes && v.pin === pin,
+      (v) =>
+        (v.kind === "pin" || v.kind === "connector") &&
+        v.ref === refdes &&
+        v.pin === pin,
     ) ?? null
   );
 }
@@ -296,8 +312,12 @@ function resolveEndpoint(design, spec) {
       const inst = design.components.find((c) => c.refdes === spec.refdes);
       if (!inst) throw new Error(`no such component ${spec.refdes}`);
       const w = pinWorldPos(inst, spec.pin);
+      // A port's connection point is a `connector` vertex (FR-094, §7.1a): it
+      // behaves like a pin vertex (position derived from the instance) but the
+      // netlist unions same-label connectors into one net (§6.6 step 6).
+      const kind = inst.typeData?.renderType === "port" ? "connector" : "pin";
       return addVertex(design, {
-        kind: "pin",
+        kind,
         ref: spec.refdes,
         pin: spec.pin,
         x: w.x,
@@ -614,7 +634,7 @@ export function rigidWiring(design, movingRefdes) {
       for (const p of conductors[i].path) {
         if (p.t !== "node") continue;
         const v = getVertex(design, p.v);
-        if (v.kind === "pin") {
+        if (v.kind === "pin" || v.kind === "connector") {
           pins++;
           if (!movingRefdes.has(v.ref)) allMoving = false;
         }
@@ -624,7 +644,12 @@ export function rigidWiring(design, movingRefdes) {
       const c = conductors[i];
       c.path.forEach((p, idx) => {
         if (p.t === "bend") bends.push({ wireId: c.id, index: idx });
-        else if (getVertex(design, p.v).kind !== "pin") vertices.add(p.v);
+        else {
+          // pin/connector vertices follow their instance (derived position), so
+          // they are excluded from the rigid set; only junction/free move here.
+          const k = getVertex(design, p.v).kind;
+          if (k !== "pin" && k !== "connector") vertices.add(p.v);
+        }
       });
     }
   }
@@ -717,7 +742,7 @@ export function deleteInstance(design, refdes) {
   const i = design.components.findIndex((c) => c.refdes === refdes);
   if (i < 0) throw new Error(`no such component ${refdes}`);
   for (const v of design.vertices) {
-    if (v.kind === "pin" && v.ref === refdes) {
+    if ((v.kind === "pin" || v.kind === "connector") && v.ref === refdes) {
       const w = vertexWorld(design, v); // instance still present
       v.kind = "free";
       v.x = w.x;

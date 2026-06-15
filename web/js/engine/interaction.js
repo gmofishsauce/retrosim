@@ -105,7 +105,12 @@ function showToast(msg) {
   setTimeout(() => el.remove(), 2000);
 }
 
-export function initInteraction({ canvas, palette, store, renderer, library }) {
+// ADD_TYPE is the sentinel "type" armed by the ADD palette tile (§6.14): instead
+// of placing a component, a canvas click opens the Add sub-component flow. Its
+// `name` matches the ADD tile so the armed-tile highlight (FR-009a) still works.
+const ADD_TYPE = { name: "add", isAdd: true };
+
+export function initInteraction({ canvas, palette, store, renderer, library, onAddSubDesign }) {
   let placeType = null; // ComponentType when tool === "place"
   let wireSource = null; // pending WIRE source spec
   let drag = null; // transient drag state for SELECT gestures
@@ -344,6 +349,13 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
 
   function placeAt(screenPt) {
     const g = snapToGrid(screenPt, store.state.viewport);
+    // The ADD tile is not a component: it opens the Add sub-component flow
+    // (§6.14), which runs its own dialog and dispatches placeSubDesign.
+    if (placeType?.isAdd) {
+      setTool("select");
+      if (onAddSubDesign) onAddSubDesign(g.x, g.y);
+      return;
+    }
     store.dispatch(placeComponent(placeType, g.x, g.y, 0));
     const placed = store.design.components[store.design.components.length - 1];
     setTool("select");
@@ -442,6 +454,7 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
     if (store.state.simulating) return; // placement disabled (FR-087)
     const tile = e.target.closest(".palette-tile");
     if (!tile) return;
+    if (tile.dataset.type === "add") return setTool("place", ADD_TYPE); // §6.14
     const type = findType(tile.dataset.type);
     if (type) setTool("place", type);
   });
@@ -453,7 +466,13 @@ export function initInteraction({ canvas, palette, store, renderer, library }) {
   canvas.addEventListener("drop", (e) => {
     e.preventDefault();
     if (store.state.simulating) return; // placement disabled (FR-087)
-    const type = findType(e.dataTransfer.getData("text/plain"));
+    const data = e.dataTransfer.getData("text/plain");
+    if (data === "add") {
+      placeType = ADD_TYPE;
+      placeAt(canvasPoint(e));
+      return;
+    }
+    const type = findType(data);
     if (!type) return;
     placeType = type;
     placeAt(canvasPoint(e));

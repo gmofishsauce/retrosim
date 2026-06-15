@@ -278,3 +278,29 @@ test("refreshTypesCmd refreshes all instances, reports, and undoes exactly (FR-0
   assert.equal(find(store.design, "U2").typeData.behavior, "Y = VCC\n");
   assert.equal(find(store.design, "U1").overrides.delays, undefined);
 });
+
+test("placeSubDesign embeds a child as an X-series instance; undo/redo round-trip", async () => {
+  const { placeSubDesign } = await import("./commands.js");
+  const store = newStore();
+  const iface = [
+    { label: "CLK", dir: "in", width: 1 },
+    { label: "Q", dir: "out", width: 1 },
+  ];
+  store.dispatch(
+    placeSubDesign(
+      { childPath: "../lib/counter.json", render: "ic", iface, childName: "counter" },
+      10,
+      10,
+    ),
+  );
+  const inst = store.design.components[0];
+  assert.equal(inst.refdes, "X1");
+  assert.equal(inst.kind, "subdesign");
+  assert.equal(inst.childPath, "../lib/counter.json");
+  assert.equal(inst.typeData.pins.length, 2);
+
+  store.undo();
+  assert.equal(store.design.components.length, 0);
+  store.redo();
+  assert.equal(store.design.components[0].refdes, "X1"); // same refdes on redo
+});

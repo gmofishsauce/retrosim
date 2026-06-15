@@ -19,6 +19,23 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-15 — Hierarchical sub-designs, ports, and off-sheet connectors
+What: Added the ability to embed a separately-saved design into a higher-level
+design. A single built-in **port** primitive declares a design's external
+interface (label/direction/width) and, with an off-sheet target, acts as an
+off-sheet connector. A single **ADD** palette entry embeds a child design as a
+sub-design instance (X-series refdes, multiple instances, live relative-path
+reference — no copied type data), rendered cosmetically as an IC rectangle or a
+connector strip. Navigation descends into a child / follows a connector via the
+Open flow (save-or-lose) with a back-stack. The slow simulator flattens
+sub-designs (hierarchical refdes) and unions off-sheet nets by label across peer
+sheets, with cycle detection. Spec only; implementation pending.
+Why: Stakeholder feature request to reuse designs hierarchically and split
+circuits across sheets; the vertex model had reserved a `connector` kind for it.
+Touches: FR-094–FR-103 (new §3.22), FR-060b (new), FR-057 (supersession note),
+§5 data table, OQ-010 (new), glossary; design §6.14 (new), §7.1a, §7.2, §6.6,
+§8, §9, §10.
+
 ## 2026-06-14 — Zoom-independent pick tolerance for wires/buses/bends
 What: Wire/bus segment and bend pick tolerances are now constants in screen
 pixels (≈6 px segments, ≈8 px bends), converted to world units at the current
