@@ -36,6 +36,13 @@ record). When in doubt whether something is user-visible, ask.
 Always use `/Users/jeff/tmp` for temporary files (set `CLAUDE_CODE_TMPDIR` and
 any `--tmp`/`TMPDIR` paths there). Never use `/tmp` — it fills up constantly.
 
+**If Bash output is lost with a bogus `ENOSPC`/"temp filesystem is full" error**
+(see claude-code issue #63909): the task runner's stdout capture has wedged for
+the session even though the disk has space. Direct shell writes still work, so
+route around it — `cmd > /Users/jeff/tmp/out.txt 2>&1` and read the file back
+with the Read tool. The condition is sticky per conversation; a fresh
+conversation clears it.
+
 ## Git
 
 Single-contributor repo; GitHub is just a backup. **Never create branches** —
