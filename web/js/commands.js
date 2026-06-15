@@ -286,6 +286,28 @@ export function setSwitchStateCmd(refdes, value) {
   };
 }
 
+// setPortPropsCmd patches a port instance's interface fields (FR-094, §6.14):
+// any of label / portDir / width supplied in `patch` is set; the prior values
+// of just those keys are captured once so undo restores them.
+export function setPortPropsCmd(refdes, patch) {
+  let captured = false;
+  const old = {};
+  return {
+    label: "Edit port",
+    apply(design) {
+      const inst = findInstance(design, refdes);
+      if (!captured) {
+        for (const k of Object.keys(patch)) old[k] = inst[k];
+        captured = true;
+      }
+      Object.assign(inst, patch);
+    },
+    revert(design) {
+      Object.assign(findInstance(design, refdes), old);
+    },
+  };
+}
+
 // refreshTypesCmd re-copies type data from the loaded component library into
 // every placed instance (FR-088) as one undoable command. Instances whose type
 // is missing from the library are left untouched; structurally incompatible

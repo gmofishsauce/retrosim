@@ -52,7 +52,12 @@ function resolveRel(baseDir, rel) {
   return "/" + out.join("/");
 }
 
-export function makeFileOps({ store, dataDir, defaultName }) {
+export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {} }) {
+  // navStack records the absolute paths of the sheets descended through, so the
+  // user can step back up the chain (FR-100a). Session-only: not persisted, not
+  // on the undo stack. A plain Open/New starts a fresh chain.
+  const navStack = [];
+  const notifyNav = () => onNavChange(navStack.length);
   // save writes the current design; prompts for a location on first save or
   // Save As (FR-046/047/048/049).
   async function save({ saveAs = false } = {}) {
@@ -81,14 +86,13 @@ export function makeFileOps({ store, dataDir, defaultName }) {
     }
   }
 
-  // open navigates to and loads a design (FR-052), warning about unsaved
-  // changes first (FR-049a).
-  async function open() {
-    if (store.state.dirty && !window.confirm("Discard unsaved changes?")) return;
-    const res = await openFileDialog({ mode: "open", startPath: dataDir });
-    if (!res) return;
+  // loadIntoStore loads the design at an absolute path and makes it the current
+  // design, resolving its sub-designs' interfaces first (FR-098). Returns true on
+  // success, false (with a toast) on failure. Shared by Open (FR-052) and
+  // navigation (FR-100); it performs no unsaved-changes guard of its own.
+  async function loadIntoStore(absPath) {
     try {
-      const obj = await apiLoad(res.path);
+      const obj = await apiLoad(absPath);
       // Warn when the file is newer than this client understands (§7.4) but
       // load it anyway (forward-compat).
       if ((obj.formatVersion ?? 1) > FORMAT_VERSION) {
@@ -100,11 +104,60 @@ export function makeFileOps({ store, dataDir, defaultName }) {
       const loaded = deserializeDesign(obj);
       // Resolve each sub-design's interface from its child file before the first
       // render (FR-098 loading): paths are stored relative to this design's dir.
-      const baseDir = dirOf(res.path);
+      const baseDir = dirOf(absPath);
       await resolveSubDesigns(loaded, (childPath) => apiLoad(resolveRel(baseDir, childPath)), toast);
-      store.replaceDesign(loaded, { savePath: res.path });
+      store.replaceDesign(loaded, { savePath: absPath });
+      return true;
     } catch (e) {
       toast("Open failed: " + e.message);
+      return false;
+    }
+  }
+
+  // navigateTo replaces the canvas with the design at an absolute path, behind
+  // the FR-049a unsaved-changes guard (the navigation = a save-or-lose Open,
+  // FR-100). Returns true once the new design is loaded, false if the user
+  // cancelled or the load failed.
+  async function navigateTo(absPath) {
+    if (store.state.dirty && !window.confirm("Discard unsaved changes?")) return false;
+    return loadIntoStore(absPath);
+  }
+
+  // descend opens the child design referenced by a sub-design instance (FR-100):
+  // it resolves the child's relative path against the current design's save dir,
+  // navigates to it, and on success pushes the parent onto the back-stack so the
+  // user can return (FR-100a). A sub-design's parent is always saved (FR-097b).
+  async function descend(childPath) {
+    const parentPath = store.state.savePath;
+    if (!parentPath) return;
+    const abs = resolveRel(dirOf(parentPath), childPath);
+    if (await navigateTo(abs)) {
+      navStack.push(parentPath);
+      notifyNav();
+    }
+  }
+
+  // back returns to the parent sheet at the top of the back-stack (FR-100a),
+  // itself a save-or-lose navigation; the entry is popped only once the parent
+  // has loaded, so a cancelled back leaves the breadcrumb intact.
+  async function back() {
+    if (!navStack.length) return;
+    if (await navigateTo(navStack[navStack.length - 1])) {
+      navStack.pop();
+      notifyNav();
+    }
+  }
+
+  // open navigates to and loads a design (FR-052), warning about unsaved
+  // changes first (FR-049a). A plain Open leaves the hierarchy, so the
+  // back-stack is cleared.
+  async function open() {
+    if (store.state.dirty && !window.confirm("Discard unsaved changes?")) return;
+    const res = await openFileDialog({ mode: "open", startPath: dataDir });
+    if (!res) return;
+    if (await loadIntoStore(res.path)) {
+      navStack.length = 0;
+      notifyNav();
     }
   }
 
@@ -148,7 +201,9 @@ export function makeFileOps({ store, dataDir, defaultName }) {
   function newDesign() {
     if (store.state.dirty && !window.confirm("Discard unsaved changes?")) return;
     store.replaceDesign(createDesign(defaultName()), { savePath: null });
+    navStack.length = 0;
+    notifyNav();
   }
 
-  return { save, open, newDesign, addSubDesign };
+  return { save, open, newDesign, addSubDesign, descend, back };
 }

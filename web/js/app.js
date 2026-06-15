@@ -148,11 +148,18 @@ async function main() {
     // Built-ins are placeable too, so they must be findable by type name.
     const library = [...components, ...BUILTINS];
     // fileops is built before interaction so the ADD tile can route through it.
+    // Breadcrumb back control (FR-100a): shown only while the back-stack is
+    // non-empty, i.e. after descending into a sub-design.
+    const backBtn = document.getElementById("nav-back");
     const fileops = makeFileOps({
       store,
       dataDir: defaults.dataDir,
       defaultName: defaultDesignName,
+      onNavChange: (depth) => {
+        backBtn.hidden = depth === 0;
+      },
     });
+    backBtn.addEventListener("click", () => fileops.back());
     const interaction = initInteraction({
       canvas: document.getElementById("canvas"),
       palette,
@@ -160,6 +167,7 @@ async function main() {
       renderer,
       library,
       onAddSubDesign: (x, y) => fileops.addSubDesign(x, y), // §6.14
+      onOpenSubDesign: (childPath) => fileops.descend(childPath), // FR-100
     });
     // Heartbeat + reconnect (FR-089–FR-091, §6.12a): on recovery a dirty
     // design saves through the same path the toolbar Save uses.

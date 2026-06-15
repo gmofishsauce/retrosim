@@ -280,7 +280,7 @@ YAML.
 | **State indicator** | one input (`IN`, bottom) | Display only — drives nothing. Shows the value of the connected net (0 / 1 / U / Z); a gray "?" bubble when undriven or at rest. Use it to watch a signal during a run. |
 | **Pull-up** | one output (`OUT`, bottom) | A **weak** driver of logic **1**: sets the net to 1 only when no enabled strong driver is present; any strong driver overrides it silently. |
 | **Pull-down** | one output (`OUT`, top) | A **weak** driver of logic **0**, symmetric to the pull-up. A pull-up and pull-down on the same net with no strong driver is a conflict. |
-| **Clock** | one output (`OUT`, right) | A square wave, 50% duty cycle: low from t = 0 with the first rising edge half a period in. Properties: `period` (ns, default 100) and `speed` (Hz, default 1). A design with a clock is *sequential* and runs continuously; see [Simulation](#12-simulation). |
+| **Clock** | one output (`OUT`, right) | A square wave, 50% duty cycle: low from t = 0 with the first rising edge half a period in. Properties: `period` (ns, default 100) and `speed` (Hz, default 1). A design with a clock is *sequential* and runs continuously; see [Simulation](#13-simulation). |
 | **Power-on reset** | two outputs (`R` active-high, `/R` active-low, right) | Asserts reset (`R`=1, `/R`=0) for the first `cycles` clock periods of a run, then releases (inverse afterward). Property: `cycles` (default 3). |
 | **Input switch** | one output (`OUT`, right) | A user-set logic source, drawn as a rotary dial with three positions **1 / 0 / ?** (the `?` position drives **U**). A **strong** driver — it overrides pull-ups/pull-downs on its net. Set its position in the properties panel while editing, or **click the dial during a simulation** to cycle it `? → 1 → 0 → ?`. The position is saved with the design (a new switch starts at `?`). |
 
@@ -291,12 +291,59 @@ select it and choose its position (`1` / `0` / `?`) in the properties panel.
 **Interactive inputs.** The input switch is an *interactive input* — a built-in
 you can change by hand **while a simulation is running**: click its body and the
 simulation immediately re-evaluates from the new value (see
-[Simulation](#12-simulation)). This is the one kind of design change allowed
+[Simulation](#13-simulation)). This is the one kind of design change allowed
 during a run.
 
 ---
 
-## 12. Simulation
+## 12. Sub-designs and ports
+
+A saved design can be **embedded** in a larger design as a single component (a
+*sub-design*), letting you build a circuit hierarchically. The interface between
+the two is defined by **ports**.
+
+**Ports.** A port is a built-in object (lower palette region, the flag glyph)
+that marks a net as part of the design's external interface. Place it like any
+built-in and wire its single connection point into your circuit. Select a port to
+edit its three fields in the properties panel:
+
+- **label** — the signal name. Within one design, **all ports with the same label
+  are the same net**, so an interface signal can appear at several points on the
+  sheet without a drawn wire between them. (A fresh port's label defaults to its
+  `A-` designator, i.e. its own net until you name it.)
+- **direction** — `in`, `out`, or `bidir`.
+- **width** — bits (default 1; greater than 1 makes it a bus interface).
+
+A design's **interface** is the set of its ports: one interface pin per distinct
+label, carrying that label's direction and width. A design with no ports has no
+interface and cannot be embedded.
+
+**Embedding a sub-design (ADD).** The **ADD** tile (the dashed `+` box at the end
+of the lower palette) embeds a saved design. Because the embedded design is
+referenced by a path **relative to where the parent is saved**, the parent must
+have a save location — if it doesn't, you'll be prompted to save it first.
+Drop ADD on the canvas to open the *Add sub-component* dialog: choose a design
+file (it must have ports), preview its interface, and pick how it should be drawn
+— an **IC** rectangle (inputs left, outputs right) or a **connector** strip (all
+pins along one edge). Confirm to place it. Sub-design instances are designated
+`X1`, `X2`, … and are wired through their interface pins like any component.
+
+The reference is **live**: the instance stores no copy of the child, so changes to
+the child design appear in the parent the next time the parent is opened. If a
+child file can't be found when the parent opens, its instance is drawn as a
+red **broken-link** box naming the missing path, and the condition is reported in
+the message tray — opening still succeeds.
+
+**Moving between sheets.** **Double-click** a sub-design instance (or right-click
+it and choose **Open sub-design**) to descend into the child design — it replaces
+the editing canvas. A **← back** button appears in the toolbar; click it to return
+to the parent. Descending and going back are each treated as closing the current
+design, so the usual unsaved-changes prompt applies — save or discard before the
+canvas changes. A plain New or Open leaves the hierarchy and clears the back path.
+
+---
+
+## 13. Simulation
 
 retrosim ships with a **slow ("debug") simulator** that runs in the browser
 directly on the editing canvas.
@@ -334,7 +381,7 @@ re-evaluates the simulation.
 
 ---
 
-## 13. If the server disconnects
+## 14. If the server disconnects
 
 Your design's source of truth is the browser tab, so editing keeps working even if
 the server goes away (the connection tray shows "disconnected"). **Do not reload
@@ -344,7 +391,7 @@ clear message until then, without losing your work.
 
 ---
 
-## 14. Keyboard and mouse reference
+## 15. Keyboard and mouse reference
 
 **Mouse (Select tool)**
 
@@ -361,6 +408,7 @@ clear message until then, without losing your work.
 | Mouse wheel | Zoom to cursor |
 | Right-click empty | Recenter view on the cursor |
 | Right-click object | Context menu |
+| Double-click a sub-design | Open it (descend); **← back** returns to the parent |
 | Left-click input switch (while simulating) | Cycle its position `? → 1 → 0 → ?` |
 
 **Keyboard**

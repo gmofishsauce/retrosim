@@ -4,7 +4,7 @@
 // dispatch setOverrideCmd through the store; the panel re-renders on every
 // store notification.
 
-import { setOverrideCmd, setSwitchStateCmd } from "../commands.js";
+import { setOverrideCmd, setSwitchStateCmd, setPortPropsCmd } from "../commands.js";
 
 function el(tag, className, text) {
   const e = document.createElement(tag);
@@ -70,6 +70,64 @@ export function initProperties({ container, store }) {
       });
       row.appendChild(select);
       container.appendChild(row);
+    }
+
+    // Port interface fields (FR-094, §6.14): a port carries a signal label, a
+    // direction (in/out/bidir), and a bit width, edited here and patched via
+    // setPortPropsCmd. Disabled while simulating (FR-087).
+    if (td.renderType === "port") {
+      container.appendChild(el("div", "prop-section", "Port"));
+
+      const labelRow = el("div", "prop-row");
+      labelRow.appendChild(el("label", "prop-label", "label"));
+      const labelInput = el("input", "prop-input");
+      labelInput.type = "text";
+      labelInput.value = inst.label ?? "";
+      labelInput.disabled = locked;
+      labelInput.addEventListener("change", () => {
+        const v = labelInput.value.trim();
+        if (v === "") {
+          render(); // reject empty label, restore display
+          return;
+        }
+        store.dispatch(setPortPropsCmd(inst.refdes, { label: v }));
+      });
+      labelRow.appendChild(labelInput);
+      container.appendChild(labelRow);
+
+      const dirRow = el("div", "prop-row");
+      dirRow.appendChild(el("label", "prop-label", "direction"));
+      const dirSelect = el("select", "prop-input");
+      for (const d of ["in", "out", "bidir"]) {
+        const opt = el("option", null, d);
+        opt.value = d;
+        dirSelect.appendChild(opt);
+      }
+      dirSelect.value = inst.portDir ?? "in";
+      dirSelect.disabled = locked;
+      dirSelect.addEventListener("change", () => {
+        store.dispatch(setPortPropsCmd(inst.refdes, { portDir: dirSelect.value }));
+      });
+      dirRow.appendChild(dirSelect);
+      container.appendChild(dirRow);
+
+      const widthRow = el("div", "prop-row");
+      widthRow.appendChild(el("label", "prop-label", "width"));
+      const widthInput = el("input", "prop-input");
+      widthInput.type = "number";
+      widthInput.min = "1";
+      widthInput.value = String(inst.width ?? 1);
+      widthInput.disabled = locked;
+      widthInput.addEventListener("change", () => {
+        const n = parseInt(widthInput.value, 10);
+        if (!Number.isInteger(n) || n < 1) {
+          render(); // reject non-positive-integer width, restore display
+          return;
+        }
+        store.dispatch(setPortPropsCmd(inst.refdes, { width: n }));
+      });
+      widthRow.appendChild(widthInput);
+      container.appendChild(widthRow);
     }
 
     // overrideRow builds one editable numeric field whose value shadows the

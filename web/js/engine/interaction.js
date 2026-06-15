@@ -110,7 +110,7 @@ function showToast(msg) {
 // `name` matches the ADD tile so the armed-tile highlight (FR-009a) still works.
 const ADD_TYPE = { name: "add", isAdd: true };
 
-export function initInteraction({ canvas, palette, store, renderer, library, onAddSubDesign }) {
+export function initInteraction({ canvas, palette, store, renderer, library, onAddSubDesign, onOpenSubDesign }) {
   let placeType = null; // ComponentType when tool === "place"
   let wireSource = null; // pending WIRE source spec
   let drag = null; // transient drag state for SELECT gestures
@@ -665,6 +665,23 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     beginMarquee(e, world);
   });
 
+  // subDesignAt returns the sub-design instance under a world point, or null.
+  function subDesignAt(world) {
+    const comp = hitComponent(store.design, world);
+    if (!comp) return null;
+    const inst = store.design.components.find((c) => c.refdes === comp.refdes);
+    return inst?.kind === "subdesign" ? inst : null;
+  }
+
+  // Double-click descends into a sub-design instance (FR-100): navigation is a
+  // save-or-lose Open, so it is suppressed while simulating (a design swap mid-
+  // sim would be jarring; consistent with the menu actions below).
+  canvas.addEventListener("dblclick", (e) => {
+    if (store.state.simulating) return;
+    const inst = subDesignAt(worldOf(e));
+    if (inst && onOpenSubDesign) onOpenSubDesign(inst.childPath);
+  });
+
   // Right-click context menu (FR-033b): hit-test the cursor and offer the actions
   // for the item under it. Priority mirrors select-mode: bend > wire > bus >
   // component. interaction.js builds the items; contextmenu.js renders them.
@@ -722,6 +739,14 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
         onClick: () => store.dispatch(deleteBusCmd(bus.id)),
       });
     } else if (comp) {
+      const inst = store.design.components.find((c) => c.refdes === comp.refdes);
+      if (inst?.kind === "subdesign" && onOpenSubDesign) {
+        items.push({
+          label: "Open sub-design",
+          onClick: () => onOpenSubDesign(inst.childPath),
+        });
+        items.push({ separator: true });
+      }
       items.push({
         label: "Delete component",
         danger: true,
