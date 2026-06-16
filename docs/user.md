@@ -156,8 +156,12 @@ This is the heart of the editor and follows KiCad's conventions.
   junctions of wires/buses whose every endpoint is on a moving component — travels
   rigidly with it. Wires running to a component you did **not** select stay
   anchored at that end and stretch (re-route them yourself).
-- **Rotate:** press **`r`** to rotate every selected component 90° clockwise,
-  **`Shift+r`** for counter-clockwise. Each component rotates about its own center.
+- **Rotate:** press **`r`** to rotate the selection 90° clockwise, **`Shift+r`**
+  for counter-clockwise. The whole selection turns together as one rigid group
+  about a single pivot — components **and** the bend points and junctions interior
+  to the selection — so the sub-circuit keeps its shape. A lone component rotates
+  in place about its own origin; a multi-component selection turns about the
+  centre of its bounding box.
 - **Delete:** press **Delete** or **Backspace** to remove every selected object.
 
 Move, rotate, and delete each apply as a single undo step.
@@ -172,10 +176,13 @@ Wires are single-bit nets, drawn as thin black lines.
 
 - Activate the **Wire** tool (toolbar or press **`w`**). Click a **source pin**,
   then a **destination pin**. As you move the cursor a rubber-band preview shows
-  the proposed **Manhattan route**, which avoids passing under component bodies and
-  prefers few corners; the route's corners become editable bend points. If no
-  clean route is found, the preview falls back to a straight line. After a wire is
-  placed the tool returns to Select.
+  the proposed **Manhattan route**, which avoids passing under component bodies,
+  avoids lying on top of existing wires and buses, and prefers few corners; the
+  route's corners become editable bend points. Wires may **cross** (meet at a
+  single point) but never run on top of one another, so a busy area pushes more
+  routes onto a straight (direct) line. If no clean route is found, the preview
+  falls back to that straight line. After a wire is placed the tool returns to
+  Select.
 - **Pin hotspot:** in Select mode, hovering a pin shows the wire cursor; clicking
   it starts a wire without switching tools.
 - **Bends:** in Select mode, **drag a wire segment** to insert a bend point at the
@@ -184,6 +191,10 @@ Wires are single-bit nets, drawn as thin black lines.
 - **Branching:** with the Wire tool active, clicking an existing wire segment
   starts a new branch from that point (an electrical junction, shown as a black
   dot). A single pin may also drive several wires (fan-out).
+- **Moving a junction:** in Select mode, **drag a junction dot** to a new grid
+  intersection. Because a junction is one shared connection point, every wire and
+  bus that meets there follows it and the branch stays connected — the move
+  changes only the layout, never the wiring.
 - A wire with one dangling end is allowed (e.g. after deleting a component); a wire
   with no connected ends is removed automatically.
 
@@ -404,6 +415,7 @@ clear message until then, without losing your work.
 | Left-drag empty → left | Crossing select (anything touched) |
 | Drag a selected component | Move the whole selection |
 | Drag a wire/bus segment | Insert and drag a bend point |
+| Drag a bend point / junction dot | Move it (the junction carries every wire that meets there) |
 | Middle-drag / Space+left-drag | Pan |
 | Mouse wheel | Zoom to cursor |
 | Right-click empty | Recenter view on the cursor |
