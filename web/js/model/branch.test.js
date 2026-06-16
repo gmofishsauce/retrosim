@@ -8,6 +8,7 @@ import {
   insertBend,
   branchWire,
   branchAtPathPoint,
+  moveVertex,
   vertexWorld,
   getVertex,
 } from "./design.js";
@@ -57,6 +58,27 @@ test("a branch wire shares the junction vertex (fan-out)", () => {
   );
   assert.equal(w2.path[0].v, j.id); // same junction as host
   assert.equal(d.wires.length, 2);
+});
+
+test("moveVertex repositions a junction and carries every conductor (FR-032a)", () => {
+  const { d, w } = setup();
+  const j = branchWire(d, w, 0, 25, 26);
+  const w2 = addWire(
+    d,
+    { kind: "vertex", id: j.id },
+    { kind: "pin", refdes: "U3", pin: "A0" },
+  );
+  moveVertex(d, j.id, 30, 31);
+  // The host's interior junction node and the branch's endpoint node both read
+  // the new position from the single shared vertex.
+  assert.deepEqual(vertexWorld(d, getVertex(d, w.path[1].v)), { x: 30, y: 31 });
+  assert.deepEqual(vertexWorld(d, getVertex(d, w2.path[0].v)), { x: 30, y: 31 });
+});
+
+test("moveVertex refuses a pin vertex (derived position)", () => {
+  const { d, w } = setup();
+  const pinVertexId = w.path[0].v; // U1./Y0 pin vertex
+  assert.throws(() => moveVertex(d, pinVertexId, 5, 5), /cannot move a pin/);
 });
 
 test("branchAtPathPoint promotes an interior bend to a junction", () => {

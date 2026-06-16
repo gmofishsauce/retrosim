@@ -533,6 +533,20 @@ export function moveBend(wire, index, x, y) {
   p.y = y;
 }
 
+// moveVertex repositions a junction or free vertex (FR-032a). Pin/connector
+// vertices are derived from their instance and cannot be moved this way. The
+// vertex is the single shared copy of the point's grid position (§7.1a), so
+// every conductor referencing it follows — keeping a branch connected.
+export function moveVertex(design, vertexId, x, y) {
+  const v = getVertex(design, vertexId);
+  if (!v) throw new Error(`no vertex ${vertexId}`);
+  if (v.kind !== "junction" && v.kind !== "free") {
+    throw new Error(`cannot move a ${v.kind} vertex`);
+  }
+  v.x = x;
+  v.y = y;
+}
+
 // deleteBend removes an interior bend, merging the two adjoining segments into
 // one (FR-033). The index must reference a bend.
 export function deleteBend(wire, index) {

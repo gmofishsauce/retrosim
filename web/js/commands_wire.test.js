@@ -10,6 +10,7 @@ import {
   deleteWireCmd,
   insertBendCmd,
   moveBendCmd,
+  moveVertexCmd,
   deleteBendCmd,
 } from "./commands.js";
 
@@ -68,6 +69,29 @@ test("addWireCmd with a branch endpoint creates a junction; undo reverts it", ()
   assert.equal(store.design.wires.length, 1);
   assert.equal(store.design.wires[0].path.length, 2);
   assert.equal(store.design.vertices.some((v) => v.kind === "junction"), false);
+});
+
+test("moveVertexCmd repositions a junction; undo/redo restore it (FR-032a)", () => {
+  const store = newStore();
+  store.dispatch(addWireCmd(pin("U1", "/Y0"), pin("U2", "A0")));
+  const w1 = store.design.wires[0];
+  store.dispatch(
+    addWireCmd(
+      { kind: "branch", wireId: w1.id, segIndex: 0, x: 25, y: 26 },
+      pin("U3", "A0"),
+    ),
+  );
+  const j = store.design.vertices.find((v) => v.kind === "junction");
+
+  store.dispatch(moveVertexCmd(j.id, 30, 31));
+  assert.deepEqual({ x: j.x, y: j.y }, { x: 30, y: 31 });
+  // The branch wire's endpoint shares the vertex, so it moved too.
+  assert.equal(getVertex(store.design, store.design.wires[1].path[0].v), j);
+
+  store.undo();
+  assert.deepEqual({ x: j.x, y: j.y }, { x: 25, y: 26 });
+  store.redo();
+  assert.deepEqual({ x: j.x, y: j.y }, { x: 30, y: 31 });
 });
 
 test("deleteWireCmd removes a wire and undo restores it with vertices", () => {

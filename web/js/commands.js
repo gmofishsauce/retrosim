@@ -12,7 +12,9 @@ import {
   branchWire,
   insertBend,
   moveBend,
+  moveVertex,
   deleteBend,
+  getVertex,
   addBus,
   deleteBus,
   setBusWidth,
@@ -22,8 +24,11 @@ import {
   setOverride,
   refreshInstance,
   shiftWiring,
+  rigidWiring,
 } from "./model/design.js";
 import { addSubDesignInstance } from "./model/subdesign.js";
+import { componentBBox } from "./engine/hittest.js";
+import { rotateOffset } from "./geometry.js";
 
 // composite bundles several commands into one undoable step (§6.10, FR-016a):
 // apply runs them in order; revert undoes them in reverse. Used for group
@@ -230,6 +235,94 @@ export function rotateComponent(refdes, delta) {
   };
 }
 
+// rotateSelectionCmd rotates a whole selection 90° as one rigid body (FR-019).
+// Every selected component and every bend/junction interior to the selection
+// (FR-018c) maps q → P + R(q − P) about a single grid-snapped pivot P, and each
+// component's rotation is bumped by `delta` — so pins, bends, and junctions all
+// turn together and the sub-circuit keeps its shape. Pivot: a lone component's
+// own origin (so it still rotates exactly in place); otherwise the grid-snapped
+// center of the selected components' combined bounding box. The pre-rotation
+// state is snapshotted on first apply, so apply re-derives the rotated state and
+// revert restores the original (undo/redo safe).
+export function rotateSelectionCmd(refdeses, delta) {
+  let snapshot = null;
+  let pivot = null;
+  const turn = (p) => {
+    const r = rotateOffset(p.x - pivot.x, p.y - pivot.y, delta);
+    return { x: pivot.x + r.x, y: pivot.y + r.y };
+  };
+  return {
+    label: refdeses.length > 1 ? "Rotate selection" : `Rotate ${refdeses[0]}`,
+    apply(design) {
+      if (snapshot === null) {
+        const insts = refdeses.map((r) => findInstance(design, r));
+        if (insts.length === 1) {
+          pivot = { x: insts[0].x, y: insts[0].y };
+        } else {
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          for (const inst of insts) {
+            const b = componentBBox(inst);
+            minX = Math.min(minX, b.minX);
+            maxX = Math.max(maxX, b.maxX);
+            minY = Math.min(minY, b.minY);
+            maxY = Math.max(maxY, b.maxY);
+          }
+          pivot = { x: Math.round((minX + maxX) / 2), y: Math.round((minY + maxY) / 2) };
+        }
+        const wiring = rigidWiring(design, new Set(refdeses));
+        snapshot = {
+          comps: insts.map((i) => ({ refdes: i.refdes, x: i.x, y: i.y, rotation: i.rotation })),
+          bends: wiring.bends.map(({ wireId, index }) => {
+            const p = findConductor(design, wireId).path[index];
+            return { wireId, index, x: p.x, y: p.y };
+          }),
+          vertices: wiring.vertices.map((id) => {
+            const v = getVertex(design, id);
+            return { id, x: v.x, y: v.y };
+          }),
+        };
+      }
+      for (const c of snapshot.comps) {
+        const inst = findInstance(design, c.refdes);
+        const o = turn(c);
+        inst.x = o.x;
+        inst.y = o.y;
+        inst.rotation = (((c.rotation + delta) % 360) + 360) % 360;
+      }
+      for (const b of snapshot.bends) {
+        const p = findConductor(design, b.wireId).path[b.index];
+        const np = turn(b);
+        p.x = np.x;
+        p.y = np.y;
+      }
+      for (const v of snapshot.vertices) {
+        const vv = getVertex(design, v.id);
+        const nv = turn(v);
+        vv.x = nv.x;
+        vv.y = nv.y;
+      }
+    },
+    revert(design) {
+      for (const c of snapshot.comps) {
+        const inst = findInstance(design, c.refdes);
+        inst.x = c.x;
+        inst.y = c.y;
+        inst.rotation = c.rotation;
+      }
+      for (const b of snapshot.bends) {
+        const p = findConductor(design, b.wireId).path[b.index];
+        p.x = b.x;
+        p.y = b.y;
+      }
+      for (const v of snapshot.vertices) {
+        const vv = getVertex(design, v.id);
+        vv.x = v.x;
+        vv.y = v.y;
+      }
+    },
+  };
+}
+
 // deleteComponent removes an instance and frees its pins, leaving connected
 // wires dangling and pruning any left fully disconnected (FR-018a/029/030).
 // Snapshot-based so undo restores the full connectivity cascade.
@@ -409,6 +502,24 @@ export function moveBendCmd(wireId, bendIndex, x, y) {
     revert(design) {
       const w = findConductor(design, wireId);
       moveBend(w, bendIndex, old.x, old.y);
+    },
+  };
+}
+
+// moveVertexCmd repositions a junction or free vertex (FR-032a), capturing the
+// old position to undo. Moving the shared vertex carries every conductor that
+// meets at it (§7.1a).
+export function moveVertexCmd(vertexId, x, y) {
+  let old = null;
+  return {
+    label: "Move junction",
+    apply(design) {
+      const v = getVertex(design, vertexId);
+      if (old === null) old = { x: v.x, y: v.y };
+      moveVertex(design, vertexId, x, y);
+    },
+    revert(design) {
+      moveVertex(design, vertexId, old.x, old.y);
     },
   };
 }

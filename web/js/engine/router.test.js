@@ -168,3 +168,103 @@ test("adjacent pins facing each other route as the direct segment", () => {
     { x: 1, y: 0 },
   ]);
 });
+
+// --- FR-027d: routed wires must not overlap existing conductors ---
+
+// wire builds a test conductor whose path is bare bend points (no vertices
+// needed); occupiedEdges reads its world points directly.
+function wire(...pts) {
+  return { path: pts.map((p) => ({ t: "bend", x: p.x, y: p.y })) };
+}
+
+// edgeKey canonicalizes a unit edge the same way the router does.
+function edgeKey(a, b) {
+  return a.y === b.y
+    ? "H" + Math.min(a.x, b.x) + "," + a.y
+    : "V" + a.x + "," + Math.min(a.y, b.y);
+}
+
+// assertNoOverlap walks the route's unit edges and asserts none coincide with
+// an existing conductor's edge (crossings, which share only a vertex, are fine).
+// `exempt` lists edge keys allowed to overlap (e.g. a permitted escape edge).
+function assertNoOverlap(path, d, exempt = []) {
+  const occ = new Set();
+  for (const c of [...d.wires, ...d.buses]) {
+    const pts = c.path.map((p) => ({ x: p.x, y: p.y }));
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      const dx = Math.sign(b.x - a.x);
+      const dy = Math.sign(b.y - a.y);
+      let { x, y } = a;
+      while (x !== b.x || y !== b.y) {
+        const nx = x + dx;
+        const ny = y + dy;
+        occ.add(edgeKey({ x, y }, { x: nx, y: ny }));
+        x = nx;
+        y = ny;
+      }
+    }
+  }
+  let prev = path[0];
+  for (const p of pointsAlong(path)) {
+    if (p.x !== prev.x || p.y !== prev.y) {
+      const k = edgeKey(prev, p);
+      assert.ok(
+        !occ.has(k) || exempt.includes(k),
+        `route edge ${prev.x},${prev.y}->${p.x},${p.y} overlaps a conductor`,
+      );
+      prev = p;
+    }
+  }
+}
+
+test("a collinear wire forces the route to detour off it (FR-027d)", () => {
+  // An existing wire runs along y=0 from x=2..8. A straight (0,0)->(10,0) route
+  // would lie on top of it; the router must step off y=0 in between.
+  const d = design();
+  d.wires.push(wire({ x: 2, y: 0 }, { x: 8, y: 0 }));
+  const from = { x: 0, y: 0 };
+  const to = { x: 10, y: 0 };
+  const path = proposeRoute(d, from, to);
+  assertValid(path, from, to, d);
+  assertNoOverlap(path, d);
+  assert.ok(path.length > 2, "expected a detour, not the straight overlap");
+});
+
+test("a crossing wire does not block a straight route (FR-027d)", () => {
+  // A vertical wire at x=5 crosses the path of a horizontal (0,0)->(10,0) route
+  // at the single point (5,0): shared vertex, no shared edge — route stays
+  // straight.
+  const d = design();
+  d.wires.push(wire({ x: 5, y: -3 }, { x: 5, y: 3 }));
+  const path = proposeRoute(d, { x: 0, y: 0 }, { x: 10, y: 0 });
+  assert.deepEqual(path, [
+    { x: 0, y: 0 },
+    { x: 10, y: 0 },
+  ]);
+});
+
+test("fan-out: an occupied escape edge stays traversable (FR-027d)", () => {
+  // The source pin already carries a wire leaving rightward (the escape edge
+  // H0,0) that then turns up to (1,5). A new wire from the same pin must still
+  // escape (escape edge exempt) and then diverge from the existing wire.
+  const d = design();
+  d.wires.push(wire({ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 5 }));
+  const from = { x: 0, y: 0, escape: { x: 1, y: 0 } };
+  const to = { x: 6, y: 3 };
+  const path = proposeRoute(d, from, to);
+  assert.ok(path, "expected a route despite the occupied escape edge");
+  // The shared escape edge (0,0)->(1,0) is permitted (exempt); the rest of the
+  // route must diverge and not overlap the existing wire.
+  assertNoOverlap(path, d, [edgeKey({ x: 0, y: 0 }, { x: 1, y: 0 })]);
+});
+
+test("a bus is an obstacle to wire routing just like a wire (FR-027d)", () => {
+  const d = design();
+  d.buses.push(wire({ x: 2, y: 0 }, { x: 8, y: 0 }));
+  const path = proposeRoute(d, { x: 0, y: 0 }, { x: 10, y: 0 });
+  assertValid(path, { x: 0, y: 0 }, { x: 10, y: 0 }, d);
+  assertNoOverlap(path, d);
+  assert.ok(path.length > 2, "expected a detour around the bus");
+});

@@ -119,7 +119,16 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
   (see FR-029, FR-030).
 
 **Component Rotation**
-- **FR-019** — Rotate a selected component 90° CW or CCW.
+- **FR-019** — Rotate the selection 90° CW or CCW as a **rigid body** about a
+  single grid-snapped pivot: each selected component's origin and each interior
+  bend/junction vertex (FR-018c) maps `q → P + R(q − P)`, and each component's
+  `rotation` is bumped by the delta — so pins, bends, and junctions all turn
+  together and the sub-circuit keeps its shape. Pivot `P`: a single component's
+  own origin (unchanged in-place rotation); otherwise the grid-snapped center of
+  the selected components' combined bounding box. One reversible
+  `rotateSelectionCmd` captures the prior origins/rotations and interior
+  positions for undo. Supersedes per-component "about its own center", which
+  tore multi-component sub-circuits apart.
 - **FR-020** — Rotation repositions pin bubbles; all text labels stay upright.
 
 **Per-Instance Type Overrides**
@@ -154,6 +163,15 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
   grid intersection, splitting the segment in two, and drags it until release.
 - **FR-032** — Drag a bend point to any grid intersection (mouse held down); the
   two adjoining segments rubber-band continuously.
+- **FR-032a** — Drag a junction point the same way. A junction is a shared
+  `Vertex` (§7.1a) referenced by every conductor that meets there, so the drag
+  targets the **vertex**, not a single path point: a `moveVertex` mutation
+  rewrites the vertex's authoritative grid position and all referencing
+  conductors' segments rubber-band together, keeping the branch connected (the
+  net is unchanged — geometry only). The interaction layer hit-tests junction
+  nodes alongside bends (§6.9) and commits via `moveVertexCmd`; the bend
+  hit-test alone did not see junction nodes, which is why they had been
+  immovable.
 - **FR-033** — Right-click a bend point → "Delete bend point"; the two adjoining
   segments merge into one straight segment.
 - **FR-033a** — In select mode, delete an entire wire or bus.
@@ -836,7 +854,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | SELECT | shift-click object | toggle it in the selection (component/wire/bus, FR-016a) | SELECT |
   | SELECT | drag selected component | `MoveComponent` for each selected component (snap, stretch connected segs FR-018) + `TranslateWiring` for the interior wiring of the moving set (FR-018c), as one `composite` | SELECT |
   | SELECT | press Delete on selection | `DeleteComponent`/`DeleteWire`/`DeleteBus` for every selected object (FR-018a/FR-033a/FR-016a) | SELECT |
-  | SELECT | press `r` on selection | `RotateComponent` for each selected component (FR-019/FR-016a) | SELECT |
+  | SELECT | press `r` on selection | one `RotateSelection` turning every selected component **and** the interior bends/junctions rigidly about a single grid-snapped pivot (FR-019/FR-016a) | SELECT |
   | SELECT | click wire/bus segment | select it, replacing the selection (FR-031) | SELECT |
   | SELECT | drag from wire/bus segment | `InsertBend` at nearest grid pt, the new bend dragging until release (FR-031) | DRAGGING_BEND |
   | SELECT | drag bend point | `MoveBend` (rubber-band FR-032) | DRAGGING_BEND |
@@ -946,7 +964,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   rubber-band preview (and the committed path) loops around components instead
   of rat's-nesting under them — notably when wiring a component's output back
   to one of its own inputs.
-- **Satisfies:** FR-027c (and the routed forms of FR-027/FR-027a); NFR-005.
+- **Satisfies:** FR-027c, FR-027d (and the routed forms of FR-027/FR-027a); NFR-005.
 - **Interface (pure function, no rendering or store state):**
   - `proposeRoute(design, from, to) → [{x,y}, …] | null` — grid-unit world
     coordinates from `from` to `to` inclusive; interior points are the proposed
@@ -960,7 +978,17 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   endpoint's own component). Obstacle cells are the rotated bounding outlines
   of all component instances (the same rectangles hit-testing uses, §6.9), so
   routes never pass under a body; the route's own endpoints are always
-  traversable so a pin on a body edge can escape. The cost function charges 1
+  traversable so a pin on a body edge can escape. In addition (FR-027d), the
+  segments of every existing wire and bus are decomposed into unit grid *edges*
+  and collected into an occupied-edge set (keyed by the canonical ordered pair
+  of the edge's two grid points); the A* neighbour expansion skips any step
+  whose edge is in that set. Edge occupancy — not cell occupancy — is what makes
+  crossings legal: two transverse conductors share a grid *vertex* but no edge,
+  so a crossing is never blocked, while two collinear conductors share edges and
+  are. Shared endpoints (fan-out at a pin, a branch junction) likewise share
+  only a vertex and stay permitted. The route's own `from`/`to` endpoints (and
+  their forced escape edges) are exempt so a wire can still leave a pin that
+  already carries another wire. The cost function charges 1
   per step plus a turn penalty (≈ 5 steps per corner) so the search prefers
   few-bend routes over shortest-but-jagged ones; ties break toward the
   destination. The search-space bound, not the design size, caps the work: a
@@ -974,6 +1002,14 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   return `null`.
 - **Dependencies:** `geometry.js`, model (read-only). No store, no canvas —
   fully unit-testable as pure geometry.
+- **Deferred (FR-027d scope boundary):** the occupied-edge constraint applies
+  only to routes proposed at draw time. It does *not* re-validate after manual
+  edits — dragging a bend (FR-031/FR-032) or moving a component (FR-018) can
+  still drop a segment onto another. Enforcing the no-overlap invariant during
+  those edits (live validation on drag, plus a chosen resolution — reject the
+  drop, nudge off the conflicting edge, or warn) is a larger interaction-layer
+  change left as a follow-up; it is not part of the router and is out of scope
+  for the current change.
 
 ### 6.10 JS: store, commands, undo/redo (`web/js/store.js`)
 - **Purpose:** single source of truth and the only mutation path; undo/redo;

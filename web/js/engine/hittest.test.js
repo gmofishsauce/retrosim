@@ -1,8 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { createDesign, addInstance, addWire, pinVisualPos, PIN_RADIUS } from "../model/design.js";
-import { hitComponent, hitPin, marqueeHits, PIN_HIT_TOL } from "./hittest.js";
+import {
+  createDesign,
+  addInstance,
+  addWire,
+  branchWire,
+  pinVisualPos,
+  PIN_RADIUS,
+} from "../model/design.js";
+import { hitComponent, hitPin, hitJunction, hitBend, marqueeHits, PIN_HIT_TOL } from "./hittest.js";
 
 function ty() {
   return {
@@ -149,4 +156,35 @@ test("subunit pins keep the on-grid connection point as the visual point (FR-013
   const w = pinVisualPos(inst, "1A");
   assert.ok(Number.isInteger(w.x) && Number.isInteger(w.y)); // no bubble offset
   assert.deepEqual(hitPin(d, w), { refdes: "U2A", pin: "1A" });
+});
+
+// junctionFixture: a wire (0,0)->(10,0) with a branch tapped at (5,0), creating
+// a junction node there (FR-032a / FR-034b).
+function junctionFixture() {
+  const d = createDesign("t");
+  const w = addWire(d, { kind: "free", x: 0, y: 0 }, { kind: "free", x: 10, y: 0 });
+  const j = branchWire(d, w, 0, 5, 0);
+  return { d, wireId: w.id, vertexId: j.id };
+}
+
+test("hitJunction picks up a junction node (FR-032a)", () => {
+  const { d, wireId, vertexId } = junctionFixture();
+  const hit = hitJunction(d, { x: 5, y: 0 }, 0.5);
+  assert.ok(hit);
+  assert.equal(hit.wire.id, wireId);
+  assert.equal(hit.vertexId, vertexId);
+});
+
+test("hitJunction misses away from the junction and at an endpoint", () => {
+  const { d } = junctionFixture();
+  assert.equal(hitJunction(d, { x: 7, y: 0 }, 0.5), null);
+  assert.equal(hitJunction(d, { x: 0, y: 0 }, 0.5), null); // free endpoint, not a junction
+});
+
+test("hitBend does not match a junction node (the old immovability bug)", () => {
+  const { d } = junctionFixture();
+  // hitBend only matches `bend` path points; a junction is a `node`, so the
+  // bend hit-test returns null — which is exactly why junctions had been
+  // undraggable before hitJunction was added.
+  assert.equal(hitBend(d, { x: 5, y: 0 }, 0.5), null);
 });

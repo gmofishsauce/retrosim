@@ -5,6 +5,7 @@
 // falls back to the straight rat's-nest line.
 
 import { hitComponent, componentBBox } from "./hittest.js";
+import { getVertex, vertexWorld } from "../model/design.js";
 
 // Tunable constants (representative; see §6.9a).
 export const TURN_PENALTY = 5; // extra cost per corner, in grid-step units
@@ -84,6 +85,62 @@ function mergeCollinear(pts) {
   return out.length >= 2 ? out : null;
 }
 
+// Edge keys identify a unit grid edge: a horizontal edge spans (x,y)→(x+1,y),
+// a vertical edge spans (x,y)→(x,y+1). Canonicalizing on the lower endpoint
+// makes a traversal and its reverse hash to the same key.
+const hEdgeKey = (x, y) => "H" + x + "," + y;
+const vEdgeKey = (x, y) => "V" + x + "," + y;
+
+// conductorWorldPoints resolves a wire/bus path to its world grid polyline:
+// node points dereference their vertex (pin positions are derived), bend
+// points carry their own coordinates (§7.1a). Points are rounded to the grid.
+function conductorWorldPoints(design, conductor) {
+  const pts = [];
+  for (const p of conductor.path) {
+    let q;
+    if (p.t === "node") {
+      const v = getVertex(design, p.v);
+      if (!v) continue;
+      q = vertexWorld(design, v);
+    } else {
+      q = p;
+    }
+    pts.push({ x: Math.round(q.x), y: Math.round(q.y) });
+  }
+  return pts;
+}
+
+// occupiedEdges collects the unit grid edges spanned by every existing wire and
+// bus, clipped to the search bounds (FR-027d). Only axis-aligned segments
+// contribute — a diagonal rat's-nest fallback (FR-027c) occupies no orthogonal
+// edge and so never blocks the search. The router refuses to traverse an edge
+// in this set, which forbids running collinearly on top of another conductor
+// while still allowing crossings (which share a vertex, not an edge).
+function occupiedEdges(design, minX, maxX, minY, maxY) {
+  const set = new Set();
+  for (const c of [...design.wires, ...design.buses]) {
+    const pts = conductorWorldPoints(design, c);
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      if (a.y === b.y && a.x !== b.x) {
+        const y = a.y;
+        if (y < minY || y > maxY) continue;
+        const lo = Math.max(Math.min(a.x, b.x), minX);
+        const hi = Math.min(Math.max(a.x, b.x), maxX);
+        for (let x = lo; x < hi; x++) set.add(hEdgeKey(x, y));
+      } else if (a.x === b.x && a.y !== b.y) {
+        const x = a.x;
+        if (x < minX || x > maxX) continue;
+        const lo = Math.max(Math.min(a.y, b.y), minY);
+        const hi = Math.min(Math.max(a.y, b.y), maxY);
+        for (let y = lo; y < hi; y++) set.add(vEdgeKey(x, y));
+      }
+    }
+  }
+  return set;
+}
+
 // proposeRoute returns a Manhattan polyline [{x,y}, …] from `from` to `to`
 // inclusive (world grid coordinates; interior points are the corners), or null
 // when no route is found. `from`/`to` may carry an optional `escape` unit
@@ -157,6 +214,12 @@ export function proposeRoute(design, from, to) {
   if (dF >= 0 && hitComponent(design, A)) return null;
   if (dT >= 0 && hitComponent(design, B)) return null;
 
+  // Edges already occupied by existing conductors (FR-027d). The forced escape
+  // steps F→A and B→T are stitched on outside the A→B search below, so they are
+  // exempt — a new wire may still leave a pin that already carries one (fan-out)
+  // before diverging.
+  const occupied = occupiedEdges(design, minX, maxX, minY, maxY);
+
   // A* over (cell, incoming direction) states. h = Manhattan distance to B
   // (admissible: turn penalties only add cost). The B→T turn/reversal cost is
   // charged on entry to B so the first B pop is optimal.
@@ -186,6 +249,13 @@ export function proposeRoute(design, from, to) {
       const ny = cur.y + DIRS[d].y;
       if (nx < minX || nx > maxX || ny < minY || ny > maxY) continue;
       if (blocked[idx(nx, ny)]) continue;
+      // Forbid running on top of an existing conductor (FR-027d); crossing it
+      // (a shared vertex, no shared edge) stays allowed.
+      const ekey =
+        DIRS[d].x !== 0
+          ? hEdgeKey(Math.min(cur.x, nx), cur.y)
+          : vEdgeKey(cur.x, Math.min(cur.y, ny));
+      if (occupied.has(ekey)) continue;
       let g = cur.g + 1 + (d === cur.d ? 0 : TURN_PENALTY);
       if (nx === B.x && ny === B.y && dT >= 0) {
         if (d === dT) continue; // B→T would reverse the entering segment

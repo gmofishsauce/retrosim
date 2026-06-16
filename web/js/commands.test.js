@@ -1,12 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { createDesign, addInstance, addWire, getVertex } from "./model/design.js";
+import { createDesign, addInstance, addWire, branchWire, getVertex } from "./model/design.js";
+import { rotateOffset } from "./geometry.js";
 import { createStore } from "./store.js";
 import {
   placeComponent,
   moveComponent,
   rotateComponent,
+  rotateSelectionCmd,
   deleteComponent,
   setOverrideCmd,
   setPortPropsCmd,
@@ -159,6 +161,95 @@ test("rotateComponent applies a delta modulo 360 and undo restores", () => {
 
   store.undo();
   assert.equal(find(store.design, "U1").rotation, 180);
+});
+
+// tyPins: one left input (A0) and one right output (/Y0), for wiring tests.
+function tyPins() {
+  return {
+    name: "T",
+    width: 6,
+    height: 12,
+    pins: [
+      { name: "A0", side: "left", position: 2, direction: "in" },
+      { name: "/Y0", side: "right", position: 2, direction: "out" },
+    ],
+  };
+}
+
+// turn rotates a point about pivot by delta, matching rotateSelectionCmd.
+function turn(p, pivot, delta) {
+  const r = rotateOffset(p.x - pivot.x, p.y - pivot.y, delta);
+  return { x: pivot.x + r.x, y: pivot.y + r.y };
+}
+
+test("rotateSelectionCmd: a lone component rotates in place about its origin (FR-019)", () => {
+  const store = newStore();
+  store.dispatch(placeComponent(tyPins(), 10, 20, 0)); // U1
+  store.dispatch(rotateSelectionCmd(["U1"], 90));
+  const u1 = find(store.design, "U1");
+  // Pivot is the origin, so origin is unchanged and only rotation advances —
+  // exactly the prior single-component behavior.
+  assert.deepEqual({ x: u1.x, y: u1.y, rotation: u1.rotation }, { x: 10, y: 20, rotation: 90 });
+});
+
+test("rotateSelectionCmd: a lone component carries its interior junction (FR-019/FR-032a)", () => {
+  const store = newStore();
+  store.dispatch(placeComponent(tyPins(), 10, 20, 0)); // U1: /Y0 (16,22), A0 (10,22)
+  // A self-contained wire on U1 with a junction at (13,22).
+  const w = addWire(
+    store.design,
+    { kind: "pin", refdes: "U1", pin: "/Y0" },
+    { kind: "pin", refdes: "U1", pin: "A0" },
+  );
+  const j = branchWire(store.design, w, 0, 13, 22);
+  store.dispatch(rotateSelectionCmd(["U1"], 90));
+  // The junction rotates about U1's origin (10,20): R90(3,2) -> (-2,3) -> (8,23).
+  assert.deepEqual({ x: j.x, y: j.y }, turn({ x: 13, y: 22 }, { x: 10, y: 20 }, 90));
+  assert.deepEqual({ x: j.x, y: j.y }, { x: 8, y: 23 });
+});
+
+test("rotateSelectionCmd: multi-select rotates rigidly about the group center; undo/redo restore (FR-019)", () => {
+  const store = newStore();
+  store.dispatch(placeComponent(tyPins(), 10, 20, 0)); // U1
+  store.dispatch(placeComponent(tyPins(), 40, 20, 0)); // U2
+  const w = addWire(
+    store.design,
+    { kind: "pin", refdes: "U1", pin: "/Y0" },
+    { kind: "pin", refdes: "U2", pin: "A0" },
+  );
+  const j = branchWire(store.design, w, 0, 25, 22); // junction between them
+  // Combined bbox x[10,46] y[20,32] -> center (28,26).
+  const pivot = { x: 28, y: 26 };
+  const before = {
+    u1: { ...find(store.design, "U1") },
+    u2: { ...find(store.design, "U2") },
+    j: { x: j.x, y: j.y },
+    junctionNode: store.design.wires[0].path[1].v, // junction node in the host path
+  };
+  assert.equal(before.junctionNode, j.id);
+
+  store.dispatch(rotateSelectionCmd(["U1", "U2"], 90));
+
+  const u1 = find(store.design, "U1");
+  assert.deepEqual(
+    { x: u1.x, y: u1.y },
+    turn({ x: before.u1.x, y: before.u1.y }, pivot, 90),
+  );
+  assert.equal(u1.rotation, 90);
+  assert.deepEqual({ x: j.x, y: j.y }, turn(before.j, pivot, 90));
+  // Connectivity is untouched: the host path still references the same junction.
+  assert.equal(store.design.wires[0].path[1].v, before.junctionNode);
+
+  store.undo();
+  assert.deepEqual({ x: find(store.design, "U1").x, y: find(store.design, "U1").y }, {
+    x: before.u1.x,
+    y: before.u1.y,
+  });
+  assert.equal(find(store.design, "U1").rotation, 0);
+  assert.deepEqual({ x: j.x, y: j.y }, before.j);
+
+  store.redo();
+  assert.deepEqual({ x: j.x, y: j.y }, turn(before.j, pivot, 90));
 });
 
 test("rotateComponent wraps below zero (0 - 90 -> 270)", () => {

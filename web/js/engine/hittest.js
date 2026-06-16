@@ -175,6 +175,27 @@ export function hitBend(design, pt, tol = 0.5) {
   return null;
 }
 
+// hitJunction returns { wire, index, vertexId } for an interior junction node
+// within tol grid units of the world point, or null (FR-032a). A junction is a
+// `node` path point referencing a junction vertex; the same shared vertex may
+// appear on several conductors, so the first conductor that carries it is
+// returned (moving the vertex moves them all). Buses are searched too (FR-039).
+export function hitJunction(design, pt, tol = 0.5) {
+  const tol2 = tol * tol;
+  for (const w of [...design.wires, ...design.buses]) {
+    for (let i = 1; i < w.path.length - 1; i++) {
+      const p = w.path[i];
+      if (p.t !== "node") continue;
+      const v = getVertex(design, p.v);
+      if (!v || v.kind !== "junction") continue;
+      const dx = v.x - pt.x;
+      const dy = v.y - pt.y;
+      if (dx * dx + dy * dy <= tol2) return { wire: w, index: i, vertexId: p.v };
+    }
+  }
+  return null;
+}
+
 // hitSegment returns { wire, segIndex, dist } for the nearest wire segment within
 // tol grid units of the world point, or null. Works in world coords (zoom-free).
 export function hitSegment(design, pt, tol = 0.5) {

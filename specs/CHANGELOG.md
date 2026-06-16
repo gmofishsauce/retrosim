@@ -19,6 +19,41 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-16 — Rotate the selection as a rigid group
+What: Rotate (R) now turns the whole selection as one rigid body about a single
+grid-snapped pivot — every selected component plus the bends/junctions interior
+to the selection (FR-018c) rotate together, preserving the sub-circuit's shape.
+Pivot: a single component's own origin (unchanged in-place rotation); otherwise
+the grid-snapped center of the selected components' bounding box. Replaces the
+old "each component about its own center", which left interior junctions/bends
+behind and tore multi-component sub-circuits apart on rotation.
+Why: Reported bug — junctions did not rotate with the parts. User chose the
+rigid-group model.
+Touches: FR-019 (reworked), FR-016a; design §6.9 (FSM), §6.10 (rotateSelectionCmd).
+
+## 2026-06-16 — Junction points are draggable
+What: A wire/bus junction (branch dot) can now be dragged to a new grid
+intersection like a bend point, moving the shared vertex so every conductor at
+the junction follows. Previously junctions were immovable: the bend hit-test
+only matched `bend` path points and ignored `junction` nodes, so a click never
+picked one up.
+Why: Reported bug — junctions could not be repositioned, with no spec covering
+the case.
+Touches: FR-032a (new); design §6.9, §7.1a (moveVertex/moveVertexCmd).
+
+## 2026-06-16 — Routed wires must not overlap existing wires
+What: The Manhattan route proposal must avoid lying collinearly on top of
+existing wires/buses; crossings (sharing a single grid point) stay legal. The
+router gains an occupied-edge set from existing conductors and refuses to
+traverse an already-occupied unit edge. More routes will fall back to the
+straight rat's-nest line as a result.
+Why: A wire resting directly on another wire is visually and electrically
+ambiguous — too obvious to have been written down originally. Reported as the
+top complaint about the editor.
+Scope: auto-routing at draw time only. Enforcing the invariant on manual bend
+drags (FR-031/FR-032) and component moves (FR-018) is a deferred follow-up.
+Touches: FR-027c, FR-027d (new); design §6.9a.
+
 ## 2026-06-15 — Hierarchical sub-designs, ports, and off-sheet connectors
 What: Added the ability to embed a separately-saved design into a higher-level
 design. A single built-in **port** primitive declares a design's external

@@ -16,6 +16,7 @@ import {
   hitPin,
   hitSegment,
   hitBend,
+  hitJunction,
   hitBusSegment,
   marqueeHits,
 } from "./hittest.js";
@@ -24,12 +25,13 @@ import { proposeRoute } from "./router.js";
 import {
   placeComponent,
   moveComponent,
-  rotateComponent,
+  rotateSelectionCmd,
   deleteComponent,
   addWireCmd,
   deleteWireCmd,
   insertBendCmd,
   moveBendCmd,
+  moveVertexCmd,
   addBusCmd,
   deleteBusCmd,
   setBusWidthCmd,
@@ -42,6 +44,7 @@ import {
 import {
   insertBend,
   moveBend,
+  moveVertex,
   matchingGroups,
   pinVisualPos,
   pinWorldPos,
@@ -607,6 +610,22 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
       wireSource = { kind: "pin", refdes: pinHit.refdes, pin: pinHit.pin };
       return;
     }
+    // A junction dot is draggable (FR-032a): the drag targets the shared vertex
+    // so every conductor meeting there follows. Checked before bends — they
+    // never coincide, but a junction node is the more specific target.
+    const junction = hitJunction(store.design, world, bendTol());
+    if (junction) {
+      select({ kind: junction.wire.id.startsWith("b") ? "bus" : "wire", id: junction.wire.id });
+      const v = getVertex(store.design, junction.vertexId);
+      drag = {
+        type: "junction",
+        vertexId: junction.vertexId,
+        origX: v.x,
+        origY: v.y,
+        moved: false,
+      };
+      return;
+    }
     const bend = hitBend(store.design, world, bendTol());
     if (bend) {
       // hitBend covers wires and buses (FR-039); the id prefix carries the kind.
@@ -837,6 +856,15 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
       return;
     }
 
+    if (drag.type === "junction") {
+      // Move the shared vertex (FR-032a); every conductor at the junction
+      // rubber-bands with it.
+      moveVertex(store.design, drag.vertexId, g.x, g.y);
+      drag.moved = true;
+      renderer.requestRender();
+      return;
+    }
+
     if (drag.type === "bend") {
       const w = findWire(drag.wireId);
       if (w) {
@@ -927,7 +955,15 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
       return;
     }
 
-    if (drag.type === "bend" && drag.moved) {
+    if (drag.type === "junction" && drag.moved) {
+      const v = getVertex(store.design, drag.vertexId);
+      const fx = v.x;
+      const fy = v.y;
+      // Rewind the live preview so the command captures the true old position
+      // for undo (FR-024/FR-032a).
+      moveVertex(store.design, drag.vertexId, drag.origX, drag.origY);
+      store.dispatch(moveVertexCmd(drag.vertexId, fx, fy));
+    } else if (drag.type === "bend" && drag.moved) {
       const w = findWire(drag.wireId);
       const p = w.path[drag.bendIndex];
       const fx = p.x;
@@ -1011,11 +1047,11 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     } else if (e.key.toLowerCase() === "r") {
       e.preventDefault();
       const delta = e.shiftKey ? -90 : 90;
-      const cmds = sel
-        .filter((r) => r.kind === "component")
-        .map((r) => rotateComponent(r.refdes, delta));
-      if (cmds.length > 0) {
-        store.dispatch(cmds.length === 1 ? cmds[0] : composite(cmds, "Rotate selection"));
+      // Rotate the selection as one rigid group about a single pivot, carrying
+      // interior bends/junctions (FR-019/FR-018c).
+      const refdeses = sel.filter((r) => r.kind === "component").map((r) => r.refdes);
+      if (refdeses.length > 0) {
+        store.dispatch(rotateSelectionCmd(refdeses, delta));
       }
     } else if (
       (e.key === "+" || e.key === "=" || e.key === "-") &&
