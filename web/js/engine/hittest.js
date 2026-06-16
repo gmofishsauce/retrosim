@@ -175,6 +175,28 @@ export function hitBend(design, pt, tol = 0.5) {
   return null;
 }
 
+// hitFreeEnd returns { wire, endIndex } for a draggable dangling free endpoint
+// (FR-027f): a wire's terminal path node whose vertex is `free`, within tol grid
+// units of the world point, or null. Only free ends are pickable — pin ends
+// follow their component and junctions are shared branch points.
+export function hitFreeEnd(design, pt, tol = 0.5) {
+  const tol2 = tol * tol;
+  for (const w of design.wires) {
+    if (w.path.length < 2) continue;
+    for (const i of [0, w.path.length - 1]) {
+      const p = w.path[i];
+      if (p.t !== "node") continue;
+      const v = getVertex(design, p.v);
+      if (!v || v.kind !== "free") continue;
+      const wp = vertexWorld(design, v);
+      const dx = wp.x - pt.x;
+      const dy = wp.y - pt.y;
+      if (dx * dx + dy * dy <= tol2) return { wire: w, endIndex: i };
+    }
+  }
+  return null;
+}
+
 // hitSegment returns { wire, segIndex, dist } for the nearest wire segment within
 // tol grid units of the world point, or null. Works in world coords (zoom-free).
 export function hitSegment(design, pt, tol = 0.5) {

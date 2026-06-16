@@ -17,6 +17,7 @@ import {
   hitSegment,
   hitBend,
   hitBusSegment,
+  hitFreeEnd,
   marqueeHits,
 } from "./hittest.js";
 import { sameRef } from "../store.js";
@@ -36,6 +37,7 @@ import {
   setBusBitNamesCmd,
   breakoutBitCmd,
   deleteBendCmd,
+  setWireEndpointCmd,
   composite,
   translateWiring,
 } from "../commands.js";
@@ -110,9 +112,38 @@ function showToast(msg) {
 // `name` matches the ADD tile so the armed-tile highlight (FR-009a) still works.
 const ADD_TYPE = { name: "add", isAdd: true };
 
+// DRAG_PX is the screen-pixel slop that distinguishes a click from a drag,
+// shared by the marquee, bend/segment drags, and wire drag-to-connect (FR-027d).
+export const DRAG_PX = 3;
+
+// movedPastThreshold reports whether the pointer travelled far enough (in screen
+// pixels) for a press-release to count as a drag rather than a click.
+export function movedPastThreshold(a, b) {
+  return Math.hypot(b.x - a.x, b.y - a.y) > DRAG_PX;
+}
+
+// resolveDragTarget decides what a drag-to-connect release does (FR-027d), given
+// the pending pin source and the resolved release target (from wireTargetAt, or
+// null for empty canvas): connect to a valid other target, drop a dangling free
+// end on empty canvas, or cancel when releasing back on the source pin. Pure so
+// it can be unit-tested without the DOM.
+export function resolveDragTarget(wireSource, target) {
+  if (!wireSource || wireSource.kind !== "pin") return { action: "cancel" };
+  if (!target) return { action: "dangling" };
+  if (
+    target.kind === "pin" &&
+    target.refdes === wireSource.refdes &&
+    target.pin === wireSource.pin
+  ) {
+    return { action: "cancel" };
+  }
+  return { action: "connect" };
+}
+
 export function initInteraction({ canvas, palette, store, renderer, library, onAddSubDesign, onOpenSubDesign }) {
   let placeType = null; // ComponentType when tool === "place"
   let wireSource = null; // pending WIRE source spec
+  let wireDrag = null; // { startScreen } while a pin press may become a drag-to-connect (FR-027d)
   let drag = null; // transient drag state for SELECT gestures
   let pan = null; // transient pan state { sx, sy, pan0 }
   let spaceDown = false; // space held -> left-drag pans
@@ -126,11 +157,13 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
   function setTool(tool, type = null) {
     placeType = type;
     wireSource = null;
+    wireDrag = null; // any in-progress drag-to-connect ends with the tool change (FR-027d)
     const label = document.getElementById("tool-mode");
     if (label) label.textContent = tool === "place" ? `place ${type.name}` : tool;
     canvas.style.cursor =
       tool === "select" ? "default" : tool === "wire" ? WIRE_CURSOR : "crosshair";
     renderer.setPreview(null); // clear any in-progress rubber-band
+    renderer.setDropTarget(null); // clear any drop-target highlight (FR-027e)
     store.setTool(tool, type ? type.name : null); // notifies subscribers (toolbar highlight, armed tile)
   }
 
@@ -376,6 +409,17 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     return null;
   }
 
+  // connectionPointWorld returns the world point to pulse on a committed wire
+  // (FR-027e): a pin's visual attachment point, or the world coords a free/branch
+  // endpoint carries.
+  function connectionPointWorld(spec) {
+    if (spec.kind === "pin") {
+      const inst = store.design.components.find((c) => c.refdes === spec.refdes);
+      if (inst) return pinVisualPos(inst, spec.pin);
+    }
+    return { x: spec.x, y: spec.y };
+  }
+
   // busTargetAt returns a bus endpoint spec: a branch on an existing bus, a
   // component (for snap-connect, FR-041), or a free grid point. Bus segments take
   // priority over component bodies (§6.9).
@@ -526,6 +570,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
         const ph = hitPin(store.design, world);
         if (ph) {
           wireSource = { kind: "pin", refdes: ph.refdes, pin: ph.pin };
+          wireDrag = { startScreen: canvasPoint(e) }; // may become drag-to-connect (FR-027d)
           return;
         }
         const bh = hitBusSegment(store.design, world, segTol());
@@ -568,6 +613,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
         return;
       }
       store.dispatch(addWireCmd(wireSource, target, routeBends(wireSource, target)));
+      renderer.pulseAt(connectionPointWorld(target)); // confirmation pulse (FR-027e)
       setTool("select"); // one-shot (FR-028)
       return;
     }
@@ -605,6 +651,25 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     if (pinHit) {
       setTool("wire"); // clears wireSource, sets wire cursor, highlights toolbar
       wireSource = { kind: "pin", refdes: pinHit.refdes, pin: pinHit.pin };
+      wireDrag = { startScreen: canvasPoint(e) }; // may become drag-to-connect (FR-027d)
+      return;
+    }
+    // A wire's dangling free end is draggable (FR-027f): pick it up to reconnect
+    // or reposition it. Checked before segment/bend so grabbing the end picks it
+    // up rather than inserting a bend on the segment that meets it.
+    const freeEnd = hitFreeEnd(store.design, world, bendTol());
+    if (freeEnd) {
+      select({ kind: "wire", id: freeEnd.wire.id });
+      const v = getVertex(store.design, freeEnd.wire.path[freeEnd.endIndex].v);
+      drag = {
+        type: "endpoint",
+        wireId: freeEnd.wire.id,
+        endIndex: freeEnd.endIndex,
+        vertexId: v.id,
+        origX: v.x,
+        origY: v.y,
+        moved: false,
+      };
       return;
     }
     const bend = hitBend(store.design, world, bendTol());
@@ -774,6 +839,22 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
       if (anchor) {
         renderer.setPreview({ points: previewRoute(anchor, gridOf(e), worldOf(e)) });
       }
+      // Drop-target highlight (FR-027e): ring a valid destination pin other than
+      // the source while a wire is in progress. The preview already snaps to it
+      // (previewRoute) and the cursor stays the wire glyph, so the cue is not
+      // color-only.
+      const ph = hitPin(store.design, worldOf(e));
+      const onSource =
+        ph &&
+        wireSource.kind === "pin" &&
+        ph.refdes === wireSource.refdes &&
+        ph.pin === wireSource.pin;
+      if (ph && !onSource) {
+        const inst = store.design.components.find((c) => c.refdes === ph.refdes);
+        renderer.setDropTarget(inst ? { point: pinVisualPos(inst, ph.pin) } : null);
+      } else {
+        renderer.setDropTarget(null);
+      }
       return;
     }
     if (!drag) {
@@ -791,7 +872,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     if (drag.type === "marquee") {
       const pt = canvasPoint(e);
       // A few pixels of slop distinguishes a click from a rubber-band drag.
-      if (!drag.moved && Math.hypot(pt.x - drag.startScreen.x, pt.y - drag.startScreen.y) <= 3) {
+      if (!drag.moved && !movedPastThreshold(drag.startScreen, pt)) {
         return;
       }
       drag.moved = true;
@@ -847,6 +928,23 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
       return;
     }
 
+    if (drag.type === "endpoint") {
+      // Move the free vertex live to the snapped cursor (FR-027f), and ring a pin
+      // under the cursor as a reconnect target (FR-027e), the same cue as drag-to-
+      // connect.
+      const v = getVertex(store.design, drag.vertexId);
+      if (v) {
+        v.x = g.x;
+        v.y = g.y;
+        drag.moved = true;
+        const ph = hitPin(store.design, worldOf(e));
+        const inst = ph && store.design.components.find((c) => c.refdes === ph.refdes);
+        renderer.setDropTarget(inst ? { point: pinVisualPos(inst, ph.pin) } : null);
+        renderer.requestRender();
+      }
+      return;
+    }
+
     if (drag.type === "segment") {
       const w = findWire(drag.wireId);
       if (!w) return;
@@ -871,11 +969,33 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     { passive: false },
   );
 
-  window.addEventListener("mouseup", () => {
+  window.addEventListener("mouseup", (e) => {
     if (pan) {
       pan = null;
       return;
     }
+
+    // Drag-to-connect (FR-027d): a pin press that moved past the click threshold
+    // commits the wire here on release. A press that did not move is a click,
+    // committed by the second mousedown (click-click, FR-027), so leave the wire
+    // armed and return.
+    if (wireDrag && wireSource) {
+      const moved = movedPastThreshold(wireDrag.startScreen, canvasPoint(e));
+      wireDrag = null;
+      if (!moved) return; // a click; the existing click-click path commits
+      const target = wireTargetAt(e);
+      const { action } = resolveDragTarget(wireSource, target);
+      if (action === "cancel") {
+        setTool("select"); // release on the source pin: create nothing
+        return;
+      }
+      const dst = action === "dangling" ? { kind: "free", ...gridOf(e) } : target;
+      store.dispatch(addWireCmd(wireSource, dst, routeBends(wireSource, dst)));
+      renderer.pulseAt(connectionPointWorld(dst)); // confirmation pulse (FR-027e)
+      setTool("select"); // one-shot return (FR-028)
+      return;
+    }
+
     if (!drag) return;
 
     if (drag.type === "marquee") {
@@ -927,7 +1047,32 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
       return;
     }
 
-    if (drag.type === "bend" && drag.moved) {
+    if (drag.type === "endpoint" && drag.moved) {
+      const w = findWire(drag.wireId);
+      const g = gridOf(e);
+      // Reconnect to a pin under the release point, else leave the end free at the
+      // snapped point (FR-027f). Skip a pin that the wire's other end already sits
+      // on (a degenerate self-loop): reposition instead.
+      const ph = hitPin(store.design, worldOf(e));
+      const otherNode = w.path[drag.endIndex === 0 ? w.path.length - 1 : 0];
+      const otherV = otherNode.t === "node" ? getVertex(store.design, otherNode.v) : null;
+      const degenerate =
+        ph && otherV && otherV.kind !== "free" &&
+        otherV.ref === ph.refdes && otherV.pin === ph.pin;
+      const spec = ph && !degenerate
+        ? { kind: "pin", refdes: ph.refdes, pin: ph.pin }
+        : { kind: "free", x: g.x, y: g.y };
+      // Rewind the live move so the command captures the true old position for
+      // undo (FR-024).
+      const v = getVertex(store.design, drag.vertexId);
+      v.x = drag.origX;
+      v.y = drag.origY;
+      store.dispatch(setWireEndpointCmd(drag.wireId, drag.endIndex, spec));
+      if (spec.kind === "pin") renderer.pulseAt(connectionPointWorld(spec)); // FR-027e
+      renderer.setDropTarget(null);
+    } else if (drag.type === "endpoint") {
+      renderer.setDropTarget(null); // a click on a free end (no move): just selected it
+    } else if (drag.type === "bend" && drag.moved) {
       const w = findWire(drag.wireId);
       const p = w.path[drag.bendIndex];
       const fx = p.x;

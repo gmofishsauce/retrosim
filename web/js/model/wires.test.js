@@ -8,6 +8,7 @@ import {
   addWire,
   vertexWorld,
   getVertex,
+  setWireEndpoint,
 } from "./design.js";
 
 // Type with one input (left) and one output (right) pin.
@@ -93,4 +94,60 @@ test("vertexWorld derives a pin vertex position and tracks instance moves", () =
 
   d.components[0].x += 5; // move U1
   assert.deepEqual(vertexWorld(d, vPin), pinWorldPos(d.components[0], "/Y0"));
+});
+
+// A wire from a pin to a dangling free end, for the pick-up-again tests (FR-027f).
+function withFreeEnd(d) {
+  return addWire(
+    d,
+    { kind: "pin", refdes: "U1", pin: "/Y0" },
+    { kind: "free", x: 30, y: 26 },
+  );
+}
+
+test("setWireEndpoint repositions a free end (FR-027f)", () => {
+  const d = setup();
+  const w = withFreeEnd(d);
+  setWireEndpoint(d, w.id, 1, { kind: "free", x: 33, y: 28 });
+  const vEnd = getVertex(d, w.path[1].v);
+  assert.equal(vEnd.kind, "free");
+  assert.deepEqual(vertexWorld(d, vEnd), { x: 33, y: 28 });
+  assert.equal(d.vertices.length, 2); // unchanged
+});
+
+test("setWireEndpoint reconnects a free end to a pin and prunes the free vertex (FR-027f)", () => {
+  const d = setup();
+  const w = withFreeEnd(d);
+  const freeId = w.path[1].v;
+  setWireEndpoint(d, w.id, 1, { kind: "pin", refdes: "U2", pin: "A0" });
+  const vEnd = getVertex(d, w.path[1].v);
+  assert.equal(vEnd.kind, "pin");
+  assert.equal(vEnd.ref, "U2");
+  assert.equal(vEnd.pin, "A0");
+  assert.equal(getVertex(d, freeId), null); // orphaned free vertex removed (FR-030)
+});
+
+test("setWireEndpoint reuses an existing pin vertex when reconnecting (fan-out)", () => {
+  const d = setup();
+  addWire(d, { kind: "pin", refdes: "U3", pin: "A0" }, { kind: "pin", refdes: "U2", pin: "A0" });
+  const before = d.vertices.length;
+  const u2a0 = d.vertices.find((v) => v.ref === "U2" && v.pin === "A0");
+  const w = withFreeEnd(d); // adds U1./Y0 (persists) + a free vertex (pruned on reconnect)
+  setWireEndpoint(d, w.id, 1, { kind: "pin", refdes: "U2", pin: "A0" });
+  // Net effect vs `before`: +1 for the kept U1./Y0 vertex; the free vertex is
+  // pruned and the existing U2.A0 vertex is reused (not duplicated).
+  assert.equal(d.vertices.length, before + 1);
+  assert.equal(w.path[1].v, u2a0.id);
+});
+
+test("setWireEndpoint rejects moving a non-free (pin) endpoint (FR-027f)", () => {
+  const d = setup();
+  const w = withFreeEnd(d);
+  assert.throws(() => setWireEndpoint(d, w.id, 0, { kind: "free", x: 5, y: 5 }), /free/);
+});
+
+test("setWireEndpoint rejects a non-endpoint index", () => {
+  const d = setup();
+  const w = withFreeEnd(d);
+  assert.throws(() => setWireEndpoint(d, w.id, 5, { kind: "free", x: 5, y: 5 }), /endpoint/);
 });

@@ -36,6 +36,8 @@ export function initCanvas(canvasEl, store) {
   let frame = null;
   let preview = null; // transient {points: [{x,y}, …]} in world coords
   let marquee = null; // transient rubber-band {a, b (world), mode} (FR-016b)
+  let dropTarget = null; // transient {point:{x,y} world} valid wire-drop pin (FR-027e)
+  let pulse = null; // transient {x, y (world), t0} connection confirmation (FR-027e)
 
   function requestRender() {
     dirty = true;
@@ -74,6 +76,19 @@ export function initCanvas(canvasEl, store) {
     drawComponents(ctx, store.design, vp, store.state.selection, store.state.hover, sim);
     if (preview) drawPreview(ctx, preview, vp);
     if (marquee) drawMarquee(ctx, marquee, vp);
+    if (dropTarget) drawDropTarget(ctx, dropTarget, vp);
+    // Connection confirmation pulse (FR-027e): a brief expanding, fading ring.
+    // It re-arms the render loop each frame for its short life, then stops, so
+    // the loop returns to idle (NFR-005).
+    if (pulse) {
+      const k = (performance.now() - pulse.t0) / PULSE_MS;
+      if (k >= 1) {
+        pulse = null;
+      } else {
+        drawPulse(ctx, pulse, k, vp);
+        requestRender();
+      }
+    }
     ctx.restore();
   }
 
@@ -89,6 +104,16 @@ export function initCanvas(canvasEl, store) {
     },
     setMarquee(m) {
       marquee = m;
+      requestRender();
+    },
+    setDropTarget(d) {
+      dropTarget = d;
+      requestRender();
+    },
+    pulseAt(point) {
+      // Suppressed when the OS requests reduced motion (FR-027e).
+      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+      pulse = { x: point.x, y: point.y, t0: performance.now() };
       requestRender();
     },
     setViewport(viewport) {
@@ -262,6 +287,44 @@ function drawMarquee(ctx, m, vp) {
   }
   ctx.fillRect(x, y, w, h);
   ctx.strokeRect(x, y, w, h);
+  ctx.restore();
+}
+
+// PULSE_MS is the lifetime of the connection confirmation animation (FR-027e):
+// short enough to read as immediate feedback (mega-design: <200 ms).
+const PULSE_MS = 180;
+
+// drawDropTarget rings a valid wire-drop pin in the selection accent color
+// (FR-027e), a few pixels outside the pin bubble, with a faint glow fill. The
+// ring is one of several cues (cursor + preview snap) so the affordance never
+// relies on color alone.
+function drawDropTarget(ctx, d, vp) {
+  const s = worldToScreen(d.point, vp);
+  const r = PIN_RADIUS * scaleFor(vp) + 3;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(74,144,217,0.18)";
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#4a90d9";
+  ctx.stroke();
+  ctx.restore();
+}
+
+// drawPulse draws one frame of the connection confirmation (FR-027e): an
+// expanding, fading accent ring centered on the just-made connection, where
+// k is the animation progress in [0, 1).
+function drawPulse(ctx, p, k, vp) {
+  const s = worldToScreen(p, vp);
+  const r = PIN_RADIUS * scaleFor(vp) + k * 12;
+  ctx.save();
+  ctx.globalAlpha = 1 - k;
+  ctx.beginPath();
+  ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#4a90d9";
+  ctx.stroke();
   ctx.restore();
 }
 

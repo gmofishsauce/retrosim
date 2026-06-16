@@ -19,6 +19,33 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-15 — Pick up a wire's dangling free end
+What: A wire's dangling free endpoint is now draggable. In select mode, pressing
+on a free end and dragging picks it up and moves it (grid-snapped); releasing over
+a pin reconnects the wire to that pin (with the same drop ring and confirmation
+pulse as drag-to-connect), and releasing over empty canvas leaves it free at the
+new spot. Reconnecting removes the now-unused free vertex. Only free ends are
+draggable; pin ends follow their component and junctions stay put.
+Why: Dropping a dangling end (or losing one to a deleted component) was a dead end:
+there was no way to grab the loose end and finish or move it.
+Touches: FR-027f (new); design §6.6, §6.9, §6.10, traceability. New `hitFreeEnd`
+(hittest.js), `SetWireEndpoint` command (commands.js, model/design.js).
+
+## 2026-06-15 — Drag-to-connect wires with drop feedback
+What: Added a press-drag-release wire gesture alongside the existing click-source,
+click-destination model. Pressing on a source pin, dragging, and releasing over a
+destination commits the wire; releasing over empty canvas drops a dangling free
+endpoint at the grid-snapped release point; releasing over the source pin cancels.
+A press that does not move past the click threshold stays a click. Drag-to-connect
+applies to pin sources only. While dragging, a valid destination pin is ringed in
+the accent color (reinforced by the wire cursor and the preview snapping to it),
+and a successful connection plays a brief confirmation pulse, suppressed under
+prefers-reduced-motion.
+Why: Dragging from one pin to another felt unfinished because the drop did nothing;
+the user had to click the destination separately.
+Touches: FR-027d (new), FR-027e (new); FR-027, FR-027a, FR-027b (cross-references);
+design §6.8, §6.9, traceability.
+
 ## 2026-06-15 — Hierarchical sub-designs, ports, and off-sheet connectors
 What: Added the ability to embed a separately-saved design into a higher-level
 design. A single built-in **port** primitive declares a design's external
