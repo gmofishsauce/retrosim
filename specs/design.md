@@ -737,18 +737,27 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
 ### 6.8 JS: Canvas renderer (`web/js/engine/canvas.js`)
 - **Purpose:** draw the whole scene; own the render loop and viewport.
-- **Satisfies:** FR-012–FR-015, FR-020, FR-021, FR-022, FR-023, FR-036, FR-037,
+- **Satisfies:** FR-012–FR-015, FR-020, FR-021, FR-022, FR-023, FR-027e (drop
+  target highlight + confirmation pulse), FR-036, FR-037,
   FR-068 (simulated indicator states), FR-082 (red conflict nets), NFR-005.
 - **Interface:** `init(canvasEl, store)`, `setViewport({pan, zoom})`,
   `setMarquee(rect | null)` (the live rubber-band rectangle + window/crossing
-  mode, FR-016b), `requestRender()`. Renders on a `requestAnimationFrame` loop
+  mode, FR-016b), `setDropTarget({point} | null)` (the valid wire-drop pin to
+  ring, FR-027e), `pulseAt(point)` (fire the connection confirmation, FR-027e),
+  `requestRender()`. Renders on a `requestAnimationFrame` loop
   **only when dirty** (a render is requested), to meet NFR-005 without busy-spinning.
+  The pulse is the one exception: while active it re-arms `requestRender` each
+  frame for its short life (about 180 ms), then stops, so the loop returns to
+  idle. `pulseAt` is suppressed under `prefers-reduced-motion` (FR-027e).
 - **Draw order:** grid → buses (thick blue, width annotation `/n` at midpoint,
   FR-036/FR-037) → wires (thin black) → junction dots → components (outline, pin
   bubbles, pin labels) → upright text labels → selection highlight → tool preview
   (rubber-band polyline — the proposed route, §6.9a, a single segment in the
   fallback case — and placement ghost) → marquee rectangle (FR-016b: window mode
-  solid, crossing mode dashed, distinct stroke colors).
+  solid, crossing mode dashed, distinct stroke colors) → drop-target ring
+  (FR-027e: an accent-color ring just outside the hovered destination pin) →
+  connection pulse (FR-027e: a brief expanding, fading accent ring at the
+  point of a just-committed wire).
 - **Component drawing dispatches on `renderType`:** a `unit` instance draws the
   rectangle path as today; a `subunit` instance draws its schematic symbol via the
   symbol module (§6.8a) — the gate/mux outline path plus an upright refdes (e.g.
@@ -822,16 +831,17 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 ### 6.9 JS: interaction / tool FSM (`web/js/engine/interaction.js`, `hittest.js`)
 - **Purpose:** translate pointer/keyboard events into Commands; hit-testing.
 - **Satisfies:** FR-008–FR-010, FR-016–FR-019, FR-025, FR-026–FR-034, FR-027b,
-  FR-027c (with §6.9a), FR-038–FR-043a, FR-039a.
+  FR-027c (with §6.9a), FR-027d, FR-027e, FR-027f, FR-038–FR-043a, FR-039a.
 - **Tools / states:** `SELECT` (default, FR-004), `PLACE(type)` (transient, set by
   palette click), `WIRE`, `BUS`. The FSM also has transient sub-states for
   in-progress gestures (e.g., `WIRE_AWAIT_DEST`, `DRAGGING_BEND`,
+  `DRAGGING_ENDPOINT` (a free wire end, FR-027f),
   `DRAGGING_COMPONENT`, `DRAGGING_BUS_ENDPOINT`, `MARQUEE`).
 
   | State | Event | Action → Command | Next state |
   |---|---|---|---|
   | SELECT | hover pin | show wire cursor (FR-027b) | SELECT |
-  | SELECT | click pin | begin wire at pin, auto-arming WIRE from select (FR-027b) | WIRE_AWAIT_DEST |
+  | SELECT | click pin | begin wire at pin, auto-arming WIRE from select; record the drag origin so a release can tell drag-to-connect (FR-027d) from a click (FR-027b) | WIRE_AWAIT_DEST |
   | SELECT | click component | select it, replacing the selection (FR-016) | SELECT |
   | SELECT | shift-click object | toggle it in the selection (component/wire/bus, FR-016a) | SELECT |
   | SELECT | drag selected component | `MoveComponent` for each selected component (snap, stretch connected segs FR-018) + `TranslateWiring` for the interior wiring of the moving set (FR-018c), as one `composite` | SELECT |
@@ -840,6 +850,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | SELECT | click wire/bus segment | select it, replacing the selection (FR-031) | SELECT |
   | SELECT | drag from wire/bus segment | `InsertBend` at nearest grid pt, the new bend dragging until release (FR-031) | DRAGGING_BEND |
   | SELECT | drag bend point | `MoveBend` (rubber-band FR-032) | DRAGGING_BEND |
+  | SELECT | drag a wire's free end | pick up the dangling endpoint, moving its `free` vertex live (FR-027f) | DRAGGING_ENDPOINT |
+  | DRAGGING_ENDPOINT | release over pin | `SetWireEndpoint` (reconnect) + confirmation pulse (FR-027f/FR-027e) | SELECT |
+  | DRAGGING_ENDPOINT | release over empty canvas | `SetWireEndpoint` (free at the snapped point) (FR-027f) | SELECT |
   | SELECT | right-click bend | context menu → `DeleteBend` (FR-033) | SELECT |
   | SELECT | right-click bus | context menu → `SetBusWidth` (FR-038) | SELECT |
   | SELECT | right-click bare canvas | recenter view on the cursor's world point (FR-023b) | SELECT |
@@ -850,9 +863,14 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | MARQUEE | Esc | cancel; restore the pre-drag selection (FR-016b) | SELECT |
   | PLACE(t) | click canvas | `PlaceComponent(t,@grid)` (FR-009) | SELECT (one-shot FR-010) |
   | (palette) | drag tile→canvas drop | `PlaceComponent(t,@grid)` (FR-008) | SELECT |
-  | WIRE | click pin | begin wire at pin | WIRE_AWAIT_DEST |
+  | WIRE | click pin | begin wire at pin; record the drag origin (FR-027d) | WIRE_AWAIT_DEST |
   | WIRE | click existing segment | begin **branch**: create/reuse a `junction` vertex at the nearest grid pt, splitting that point of the host path into a `node` (FR-034) | WIRE_AWAIT_DEST |
   | WIRE_AWAIT_DEST | click pin/segment | `AddWire(a,b,bends)` — `bends` = the current route proposal's corners (FR-027/FR-027c, FR-034a/b) | SELECT (FR-028) |
+  | WIRE_AWAIT_DEST | hover valid dest pin | highlight that pin (accent ring) and snap the preview to it (FR-027e) | WIRE_AWAIT_DEST |
+  | WIRE_AWAIT_DEST | release over pin/segment/bus after a drag from a pin | `AddWire(a,b,bends)` + confirmation pulse (FR-027d/FR-027e) | SELECT (FR-028) |
+  | WIRE_AWAIT_DEST | release over empty canvas after a drag from a pin | `AddWire(a, free@grid, bends)`, a dangling endpoint at the snapped release point (FR-027d/FR-029) + pulse | SELECT (FR-028) |
+  | WIRE_AWAIT_DEST | release over the source pin after a drag | cancel; create nothing (FR-027d) | SELECT |
+  | WIRE_AWAIT_DEST | release without moving past the click threshold | treat as a click; await the destination click (FR-027) | WIRE_AWAIT_DEST |
   | BUS | (same as WIRE) | `AddBus(...)` | SELECT (FR-040, A6) |
   | BUS | drag endpoint onto component | snap-connect (FR-041–043, §below) | SELECT |
   | BUS | drag endpoint onto another bus | join if equal width; else **reject** (FR-039a) | SELECT |
@@ -871,7 +889,10 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   size; a world-unit tolerance instead shrinks to a sub-pixel target when zoomed
   out. (The pin hot region, FR-013d, stays a world-unit 0.7-radius circle: its
   size is tied to the 1-grid-unit pin pitch, not the cursor.) `junction`/`free`
-  vertices are points. Pins take priority over
+  vertices are points. `hitFreeEnd(design, pt, tol)` returns a wire's terminal
+  node whose vertex is `free` (the draggable dangling end, FR-027f); it is
+  checked after the pin hotspot and before segment hit so grabbing the end picks
+  it up rather than inserting a bend. Pins take priority over
   segments take priority over component bodies when overlapping.
   `marqueeHits(design, world0, world1, mode)` returns the selection refs for a
   rubber-band (FR-016b): **window** mode (`mode === "window"`) keeps objects whose
@@ -907,6 +928,23 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   two-point commit (`breakoutBitCmd` carries no bends), so their preview never
   promises a route the commit won't produce. (Reworked 2026-06-12; supersedes
   the straight-line-only preview and two-point commit.)
+- **Drag-to-connect and drop feedback (FR-027d/FR-027e):** a pin press records a
+  `wireDrag` origin (screen point). The `mouseup` handler, before its marquee
+  guard, checks `wireDrag && wireSource`: if the pointer moved past the click
+  threshold (`movedPastThreshold`, the same 3 px slop the marquee uses) it is a
+  drag and commits now via the same `addWireCmd` + `routeBends` as the
+  destination click; if it did not move it is a click, so the handler returns
+  and the existing second click commits (FR-027). On a drag commit the target is
+  `wireTargetAt`: a valid non-source target connects; empty canvas commits a
+  dangling free endpoint at the grid-snapped release point (FR-029); the source
+  pin itself cancels. Drag-to-connect arms only for `wireSource.kind === "pin"`
+  (branch and breakout sources stay click-based). While awaiting the
+  destination, each mousemove also resolves `hitPin`: a valid destination pin
+  other than the source is published to `renderer.setDropTarget` for the accent
+  ring (FR-027e), reinforced by the wire cursor and the preview's existing snap
+  to the pin (the affordance is not color-only). A successful commit calls
+  `renderer.pulseAt(connectionPoint)`; both gestures use it so they feel
+  identical. `setTool` and the Esc handler clear `wireDrag` and the drop target.
 - **Bus snap-connect (FR-041–FR-043a, A3/A7):** on dropping a bus endpoint over a
   component, compute the candidate pin groups whose **member pin count == bus
   width**, then branch on the candidate count:
@@ -1020,7 +1058,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   ```
 - **Concrete commands:** `PlaceComponent`, `MoveComponent`, `RotateComponent`,
   `DeleteComponent`, `SetOverride`, `AddWire`, `AddBus`, `InsertBend`, `MoveBend`,
-  `DeleteBend`, `DeleteWire`, `SetBusWidth`, `BranchWire`, `RefreshTypes`,
+  `DeleteBend`, `DeleteWire`, `SetWireEndpoint` (repoint a wire's dangling free
+  end to a pin or a new free position, FR-027f), `SetBusWidth`, `BranchWire`, `RefreshTypes`,
   `TranslateWiring` (shifts a set of bend points and junction/free vertices by an
   offset — the interior wiring of a group move, FR-018c). A
   `composite` command bundles several of these into one undoable step — `apply`
@@ -1834,6 +1873,8 @@ No files are modified (greenfield).
 | FR-024 | §6.10 | `store.js` |
 | FR-025, FR-026 | §6.9, §6.11 | `interaction.js`, `toolbar.js` |
 | FR-027, FR-027a, FR-027b, FR-027c, FR-028 | §6.9, §6.9a, §6.10 | `interaction.js`, `router.js`, `store.js` |
+| FR-027d, FR-027e | §6.8, §6.9 | `interaction.js`, `canvas.js` |
+| FR-027f | §6.6, §6.9, §6.10 | `interaction.js`, `hittest.js`, `commands.js`, `model/design.js` |
 | FR-029, FR-030 | §6.6 | `model/design.js` |
 | FR-031, FR-032, FR-033, FR-033a | §6.9, §6.10, §6.11 | `interaction.js`, `store.js`, `contextmenu.js` |
 | FR-034, FR-034a, FR-034b | §6.6, §6.9 | `model/netlist.js`, `interaction.js` |

@@ -13,6 +13,7 @@ import {
   insertBend,
   moveBend,
   deleteBend,
+  setWireEndpoint,
   addBus,
   deleteBus,
   setBusWidth,
@@ -411,6 +412,15 @@ export function moveBendCmd(wireId, bendIndex, x, y) {
       moveBend(w, bendIndex, old.x, old.y);
     },
   };
+}
+
+// setWireEndpointCmd repoints a wire's dangling free end (FR-027f): reconnect it
+// to a pin ({kind:"pin",refdes,pin}) or reposition the free end ({kind:"free",
+// x,y}). Connectivity changes (node repoint, free-vertex prune), so it snapshots.
+export function setWireEndpointCmd(wireId, endIndex, spec) {
+  return snapshotCommand("Move wire end", (design) => {
+    setWireEndpoint(design, wireId, endIndex, spec);
+  });
 }
 
 // deleteBendCmd removes an interior bend, merging the two adjoining segments

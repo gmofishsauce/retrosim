@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { planBusEndpoint } from "./interaction.js";
+import {
+  planBusEndpoint,
+  resolveDragTarget,
+  movedPastThreshold,
+  DRAG_PX,
+} from "./interaction.js";
 
 // A type with a single 3-bit group "A".
 const typeA = {
@@ -56,4 +61,37 @@ test("planBusEndpoint passes non-component targets through unchanged", () => {
   const { spec, snap } = planBusEndpoint(t, 3);
   assert.equal(spec, t);
   assert.equal(snap, null);
+});
+
+const pinSrc = { kind: "pin", refdes: "U1", pin: "Y" };
+
+test("resolveDragTarget connects a pin source to a different pin (FR-027d)", () => {
+  const target = { kind: "pin", refdes: "U2", pin: "A" };
+  assert.deepEqual(resolveDragTarget(pinSrc, target), { action: "connect" });
+});
+
+test("resolveDragTarget connects a pin source to a wire-segment branch (FR-027d)", () => {
+  const target = { kind: "branch", wireId: "w1", segIndex: 0, x: 3, y: 4 };
+  assert.deepEqual(resolveDragTarget(pinSrc, target), { action: "connect" });
+});
+
+test("resolveDragTarget drops a dangling end on empty canvas (FR-027d/FR-029)", () => {
+  assert.deepEqual(resolveDragTarget(pinSrc, null), { action: "dangling" });
+});
+
+test("resolveDragTarget cancels when released on the source pin (FR-027d)", () => {
+  const target = { kind: "pin", refdes: "U1", pin: "Y" };
+  assert.deepEqual(resolveDragTarget(pinSrc, target), { action: "cancel" });
+});
+
+test("resolveDragTarget cancels for a non-pin source (drag-to-connect is pins-only)", () => {
+  const branchSrc = { kind: "branch", wireId: "w1", segIndex: 0, x: 0, y: 0 };
+  assert.deepEqual(resolveDragTarget(branchSrc, null), { action: "cancel" });
+});
+
+test("movedPastThreshold distinguishes a drag from a click at DRAG_PX (FR-027d)", () => {
+  const o = { x: 100, y: 100 };
+  assert.equal(movedPastThreshold(o, { x: 100, y: 100 }), false); // no move = click
+  assert.equal(movedPastThreshold(o, { x: 100 + DRAG_PX, y: 100 }), false); // exactly at slop
+  assert.equal(movedPastThreshold(o, { x: 100 + DRAG_PX + 1, y: 100 }), true); // past slop = drag
 });

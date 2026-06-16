@@ -533,6 +533,40 @@ export function moveBend(wire, index, x, y) {
   p.y = y;
 }
 
+// setWireEndpoint repoints a wire's dangling free endpoint (FR-027f): either
+// reconnect it to a pin (spec {kind:"pin",refdes,pin}) or reposition the free end
+// (spec {kind:"free",x,y}). endIndex must be the wire's first or last path point
+// and currently reference a `free` vertex; pin ends and junctions are not movable
+// this way. Reconnecting repoints the node to the pin's (shared) vertex and prunes
+// the now-unreferenced free vertex (FR-030).
+export function setWireEndpoint(design, wireId, endIndex, spec) {
+  const wire = conductorById(design, wireId);
+  if (!wire) throw new Error(`no such wire ${wireId}`);
+  const last = wire.path.length - 1;
+  if (endIndex !== 0 && endIndex !== last) {
+    throw new Error(`path index ${endIndex} is not an endpoint`);
+  }
+  const node = wire.path[endIndex];
+  if (node.t !== "node") throw new Error(`endpoint ${endIndex} is not a node`);
+  const oldV = getVertex(design, node.v);
+  if (!oldV || oldV.kind !== "free") {
+    throw new Error("only a free wire endpoint can be moved");
+  }
+  if (spec.kind === "free") {
+    oldV.x = spec.x;
+    oldV.y = spec.y;
+    return;
+  }
+  const newV = resolveEndpoint(design, spec);
+  if (newV.id === oldV.id) return;
+  const other = wire.path[endIndex === 0 ? last : 0];
+  if (other.t === "node" && other.v === newV.id) {
+    throw new Error("wire endpoints resolve to the same vertex");
+  }
+  node.v = newV.id;
+  if (vertexRefCount(design, oldV.id) === 0) removeVertexById(design, oldV.id);
+}
+
 // deleteBend removes an interior bend, merging the two adjoining segments into
 // one (FR-033). The index must reference a bend.
 export function deleteBend(wire, index) {
