@@ -1,0 +1,78 @@
+# 74244 — octal buffer/line driver; 3-state (two 4-bit groups)
+# Source: Nexperia, "74HC244; 74HCT244 Octal buffer/line driver; 3-state",
+# product data sheet Rev. 8 — 5 August 2024.
+# https://assets.nexperia.com/documents/data-sheet/74HC_HCT244.pdf
+type: "74244"
+outline: [8, 12]
+
+description: "Octal buffer/line driver, 3-state, non-inverting"
+datasheet:
+  vendor: Nexperia
+  title: "74HC244; 74HCT244 Octal buffer/line driver; 3-state"
+  rev: "Rev. 8, 5 August 2024"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT244.pdf"
+
+pins: # number: physical DIP20/SO20 pin (datasheet Table 2)
+  - { name: 1A0,  side: left,  pos: 2,  dir: in,       number: 2,  desc: "group 1 data input bit 0" }
+  - { name: 1A1,  side: left,  pos: 3,  dir: in,       number: 4,  desc: "group 1 data input bit 1" }
+  - { name: 1A2,  side: left,  pos: 4,  dir: in,       number: 6,  desc: "group 1 data input bit 2" }
+  - { name: 1A3,  side: left,  pos: 5,  dir: in,       number: 8,  desc: "group 1 data input bit 3" }
+  - { name: 2A0,  side: left,  pos: 7,  dir: in,       number: 17, desc: "group 2 data input bit 0" }
+  - { name: 2A1,  side: left,  pos: 8,  dir: in,       number: 15, desc: "group 2 data input bit 1" }
+  - { name: 2A2,  side: left,  pos: 9,  dir: in,       number: 13, desc: "group 2 data input bit 2" }
+  - { name: 2A3,  side: left,  pos: 10, dir: in,       number: 11, desc: "group 2 data input bit 3" }
+  - { name: 1Y0,  side: right, pos: 2,  dir: tristate, number: 18, desc: "group 1 3-state output bit 0" }
+  - { name: 1Y1,  side: right, pos: 3,  dir: tristate, number: 16, desc: "group 1 3-state output bit 1" }
+  - { name: 1Y2,  side: right, pos: 4,  dir: tristate, number: 14, desc: "group 1 3-state output bit 2" }
+  - { name: 1Y3,  side: right, pos: 5,  dir: tristate, number: 12, desc: "group 1 3-state output bit 3" }
+  - { name: 2Y0,  side: right, pos: 7,  dir: tristate, number: 3,  desc: "group 2 3-state output bit 0" }
+  - { name: 2Y1,  side: right, pos: 8,  dir: tristate, number: 5,  desc: "group 2 3-state output bit 1" }
+  - { name: 2Y2,  side: right, pos: 9,  dir: tristate, number: 7,  desc: "group 2 3-state output bit 2" }
+  - { name: 2Y3,  side: right, pos: 10, dir: tristate, number: 9,  desc: "group 2 3-state output bit 3" }
+  - { name: /1OE, side: top,   pos: 2,  dir: in,       number: 1,  desc: "group 1 active-low output enable" }
+  - { name: /2OE, side: top,   pos: 6,  dir: in,       number: 19, desc: "group 2 active-low output enable" }
+
+groups:
+  - { name: 1A, pins: [1A0, 1A1, 1A2, 1A3] }
+  - { name: 1Y, pins: [1Y0, 1Y1, 1Y2, 1Y3] }
+  - { name: 2A, pins: [2A0, 2A1, 2A2, 2A3] }
+  - { name: 2Y, pins: [2Y0, 2Y1, 2Y2, 2Y3] }
+
+delays: # ns, 74HC244 typical at Vcc=4.5V, 25C (datasheet Table 7)
+  tpd: 11  # nAn -> nYn
+  ten: 13  # /nOE -> output enabled (tPZH/tPZL)
+  tdis: 14 # /nOE -> output high-Z (tPHZ/tPLZ)
+
+behavior: |
+  ; 74244 — octal non-inverting 3-state buffer/line driver in two 4-bit
+  ; groups, each group gated by its own active-low output enable. Derived
+  ; from the function table (datasheet Table 3): with /nOE LOW each output
+  ; nYn follows data input nAn; with /nOE HIGH that group's outputs are in
+  ; the high-impedance OFF-state.
+  ;
+  ; 3-state outputs use GALasm's tristate construct (galasmManual.txt section
+  ; 3.4, established on the 74245): each output has a .T equation fed from its
+  ; data input plus a single-term .E enable. The pin drives only while its .E
+  ; term is true; when /nOE is HIGH the .E term is false and the output is
+  ; high-impedance.
+  ;
+  ; Equations are physical-level GALasm: '/' is the complement operator and
+  ; signal names are this file's pin names with any active-low '/' prefix
+  ; dropped (pin /1OE is GAL signal 1OE, so '/1OE' below means "pin /1OE is
+  ; LOW").
+  1Y0.T = 1A0
+  1Y0.E = /1OE
+  1Y1.T = 1A1
+  1Y1.E = /1OE
+  1Y2.T = 1A2
+  1Y2.E = /1OE
+  1Y3.T = 1A3
+  1Y3.E = /1OE
+  2Y0.T = 2A0
+  2Y0.E = /2OE
+  2Y1.T = 2A1
+  2Y1.E = /2OE
+  2Y2.T = 2A2
+  2Y2.E = /2OE
+  2Y3.T = 2A3
+  2Y3.E = /2OE

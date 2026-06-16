@@ -1,0 +1,51 @@
+# 7410 — triple 3-input NAND gate
+# Source: Nexperia, "74HC10; 74HCT10 Triple 3-input NAND gate", product data
+# sheet Rev. 5 — 20 February 2024.
+# https://assets.nexperia.com/documents/data-sheet/74HC_HCT10.pdf
+type: "7410"
+rendertype: subunit
+numunits: 3
+renderas: nand
+
+description: "Triple 3-input NAND gate"
+datasheet:
+  vendor: Nexperia
+  title: "74HC10; 74HCT10 Triple 3-input NAND gate"
+  rev: "Rev. 5, 20 February 2024"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT10.pdf"
+
+pins: # number: physical DIP14/SO14 pin (datasheet Table 2)
+  - { name: 1A, side: left,  unit: A, dir: in,  number: 1 }
+  - { name: 1B, side: left,  unit: A, dir: in,  number: 2 }
+  - { name: 1C, side: left,  unit: A, dir: in,  number: 13 }
+  - { name: 1Y, side: right, unit: A, dir: out, number: 12 }
+  - { name: 2A, side: left,  unit: B, dir: in,  number: 3 }
+  - { name: 2B, side: left,  unit: B, dir: in,  number: 4 }
+  - { name: 2C, side: left,  unit: B, dir: in,  number: 5 }
+  - { name: 2Y, side: right, unit: B, dir: out, number: 6 }
+  - { name: 3A, side: left,  unit: C, dir: in,  number: 9 }
+  - { name: 3B, side: left,  unit: C, dir: in,  number: 10 }
+  - { name: 3C, side: left,  unit: C, dir: in,  number: 11 }
+  - { name: 3Y, side: right, unit: C, dir: out, number: 8 }
+
+delays: # ns, 74HC10 typical at Vcc=4.5V, 25C (datasheet Table 7)
+  tpd: 11 # nA/nB/nC -> nY
+
+behavior: |
+  ; 7410 — triple 3-input NAND gate. Derived from the function table
+  ; (datasheet Table 3): each output nY is LOW only when all three of that
+  ; gate's inputs are HIGH, and HIGH otherwise.
+  ;
+  ; This is a subunit (multi-gate) package: the three gates are independent,
+  ; so the behavior is one sum-of-products equation per unit, each using that
+  ; unit's own pin names. (renderas: nand fixes the drawn symbol; these
+  ; equations are the authoritative logic.)
+  ;
+  ; Equations are physical-level GALasm: '/' is the complement operator and
+  ; signal names are this file's pin names with any active-low '/' prefix
+  ; dropped (no input here is active-low). Outputs are active-high, so NAND
+  ; is written at the output's polarity using De Morgan:
+  ; nY = /nA + /nB + /nC ("nY is HIGH when any input is LOW").
+  1Y = /1A + /1B + /1C
+  2Y = /2A + /2B + /2C
+  3Y = /3A + /3B + /3C

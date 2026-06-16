@@ -1,0 +1,55 @@
+# 74157 — quad 2-input multiplexer; non-inverting; common select
+# Source: Nexperia, "74HC157; 74HCT157 Quad 2-input multiplexer", product
+# data sheet Rev. 10 — 28 May 2024.
+# https://assets.nexperia.com/documents/data-sheet/74HC_HCT157.pdf
+type: "74157"
+outline: [6, 13]
+
+description: "Quad 2-input multiplexer, common select, non-inverting"
+datasheet:
+  vendor: Nexperia
+  title: "74HC157; 74HCT157 Quad 2-input multiplexer"
+  rev: "Rev. 10, 28 May 2024"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT157.pdf"
+
+pins: # number: physical DIP16/SO16 pin (datasheet Table 2)
+  - { name: 1I0, side: left,  pos: 2,  dir: in,  number: 2,  desc: "mux 1 data input from source 0" }
+  - { name: 1I1, side: left,  pos: 3,  dir: in,  number: 3,  desc: "mux 1 data input from source 1" }
+  - { name: 2I0, side: left,  pos: 5,  dir: in,  number: 5,  desc: "mux 2 data input from source 0" }
+  - { name: 2I1, side: left,  pos: 6,  dir: in,  number: 6,  desc: "mux 2 data input from source 1" }
+  - { name: 3I0, side: left,  pos: 8,  dir: in,  number: 11, desc: "mux 3 data input from source 0" }
+  - { name: 3I1, side: left,  pos: 9,  dir: in,  number: 10, desc: "mux 3 data input from source 1" }
+  - { name: 4I0, side: left,  pos: 11, dir: in,  number: 14, desc: "mux 4 data input from source 0" }
+  - { name: 4I1, side: left,  pos: 12, dir: in,  number: 13, desc: "mux 4 data input from source 1" }
+  - { name: S,   side: top,   pos: 2,  dir: in,  number: 1,  desc: "common data select (L=source 0, H=source 1)" }
+  - { name: /E,  side: top,   pos: 4,  dir: in,  number: 15, desc: "active-low enable (H forces all outputs LOW)" }
+  - { name: 1Y,  side: right, pos: 2,  dir: out, number: 4,  desc: "mux 1 output" }
+  - { name: 2Y,  side: right, pos: 5,  dir: out, number: 7,  desc: "mux 2 output" }
+  - { name: 3Y,  side: right, pos: 8,  dir: out, number: 9,  desc: "mux 3 output" }
+  - { name: 4Y,  side: right, pos: 11, dir: out, number: 12, desc: "mux 4 output" }
+
+groups:
+  - { name: I0, pins: [1I0, 2I0, 3I0, 4I0] }
+  - { name: I1, pins: [1I1, 2I1, 3I1, 4I1] }
+  - { name: Y,  pins: [1Y, 2Y, 3Y, 4Y] }
+
+delays: # ns, 74HC157 typical at Vcc=4.5V, 25C (datasheet Table 7)
+  tpd_i: 13 # nIn -> nY
+  tpd_s: 15 # S   -> nY
+  tpd_e: 14 # /E  -> nY
+
+behavior: |
+  ; 74157 — quad 2-input multiplexer with one common select S and one common
+  ; active-low enable /E. Derived from the function table (datasheet Table 3):
+  ; with /E LOW, each output nY follows nI0 when S is LOW and nI1 when S is
+  ; HIGH; with /E HIGH every output is LOW — which falls out of the equations
+  ; below, since every product term then goes false.
+  ;
+  ; Equations are physical-level GALasm: '/' is the complement operator and
+  ; signal names are this file's pin names with any active-low '/' prefix
+  ; dropped (pin /E is GAL signal E, so '/E' below means "pin /E is LOW").
+  ; Outputs are non-inverting (nY follows the selected input).
+  1Y = /E * /S * 1I0 + /E * S * 1I1
+  2Y = /E * /S * 2I0 + /E * S * 2I1
+  3Y = /E * /S * 3I0 + /E * S * 3I1
+  4Y = /E * /S * 4I0 + /E * S * 4I1

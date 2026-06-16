@@ -1,0 +1,25 @@
+Hi Claude. Please use the make-yaml-from-datasheet skill to create YAML  files for each component in this list of TTL components:
+
+74HC08
+74HC10
+74HC14
+74HC20
+74HC30
+74HC74
+74HC125
+74HC139
+74HC148
+74HC151
+74HC157
+74HC162
+74HC164
+74HC165
+74HC174
+74HC175
+74HC192
+74HC193
+74HC244
+74HC283
+74HC595
+
+If you cannot locate a data sheet for the given component in any of the usual locations, make a note in the file ./missed-components.md here in the repo root.

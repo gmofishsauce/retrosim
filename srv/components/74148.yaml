@@ -1,0 +1,93 @@
+# 74148 — 8-to-3 line priority encoder
+# Source: Texas Instruments, "SNx4HC148 8-Line to 3-Line Priority Encoders",
+# SCLS109H — April 2004 — Revised March 2022.
+# https://www.ti.com/lit/ds/symlink/sn74hc148.pdf
+# (Nexperia no longer publishes a 74HC148 data sheet; TI's SN74HC148 is the
+# cited source and its signal names are used.)
+type: "74148"
+outline: [6, 12]
+
+description: "8-to-3 line priority encoder (active-low I/O)"
+datasheet:
+  vendor: Texas Instruments
+  title: "SNx4HC148 8-Line to 3-Line Priority Encoders (SCLS109H)"
+  rev: "April 2004, revised March 2022"
+  url: "https://www.ti.com/lit/ds/symlink/sn74hc148.pdf"
+
+pins: # number: physical DIP16/SO16 pin (datasheet Pin Functions)
+  - { name: /I0, side: left,  pos: 2,  dir: in,  number: 10, desc: "active-low data input 0 (lowest priority)" }
+  - { name: /I1, side: left,  pos: 3,  dir: in,  number: 11, desc: "active-low data input 1" }
+  - { name: /I2, side: left,  pos: 4,  dir: in,  number: 12, desc: "active-low data input 2" }
+  - { name: /I3, side: left,  pos: 5,  dir: in,  number: 13, desc: "active-low data input 3" }
+  - { name: /I4, side: left,  pos: 6,  dir: in,  number: 1,  desc: "active-low data input 4" }
+  - { name: /I5, side: left,  pos: 7,  dir: in,  number: 2,  desc: "active-low data input 5" }
+  - { name: /I6, side: left,  pos: 8,  dir: in,  number: 3,  desc: "active-low data input 6" }
+  - { name: /I7, side: left,  pos: 9,  dir: in,  number: 4,  desc: "active-low data input 7 (highest priority)" }
+  - { name: /EI, side: left,  pos: 11, dir: in,  number: 5,  desc: "active-low enable input (cascade)" }
+  - { name: /A0, side: right, pos: 2,  dir: out, number: 9,  desc: "active-low encoded output bit 0 (LSB)" }
+  - { name: /A1, side: right, pos: 3,  dir: out, number: 7,  desc: "active-low encoded output bit 1" }
+  - { name: /A2, side: right, pos: 4,  dir: out, number: 6,  desc: "active-low encoded output bit 2 (MSB)" }
+  - { name: /GS, side: right, pos: 6,  dir: out, number: 14, desc: "active-low group-select (any input active)" }
+  - { name: /EO, side: right, pos: 7,  dir: out, number: 15, desc: "active-low enable output (cascade, no input active)" }
+
+groups: # active-low encoded value, LSB first
+  - { name: A, pins: [/A0, /A1, /A2] }
+
+delays: # ns, 74HC148 typical at Vcc=4.5V, 25C (datasheet Switching Characteristics)
+  tpd_a: 23  # data input -> A0/A1/A2
+  tpd_gs: 25 # data input -> GS
+  tpd_eo: 20 # data input -> EO
+  tpd_ei: 26 # EI -> outputs
+
+behavior: |
+  ; 74148 — 8-to-3 line priority encoder, all inputs and outputs active LOW.
+  ; Derived from the function table (datasheet Device Functional Modes): when
+  ; enabled (/EI LOW) the encoder reports the highest-numbered active (LOW)
+  ; data input; input 7 has highest priority, input 0 lowest. The A2..A0
+  ; outputs give the encoded number in active-LOW (inverted-binary) form, GS
+  ; is LOW whenever any data input is active, and EO is LOW only when /EI is
+  ; LOW and no data input is active (used to cascade encoders). With /EI HIGH
+  ; all five outputs are HIGH.
+  ;
+  ; Equations are physical-level GALasm: '/' is the complement operator and
+  ; signal names are this file's pin names with any active-low '/' prefix
+  ; dropped (pin /I7 is GAL signal I7, so '/I7' below means "pin /I7 is LOW",
+  ; i.e. data input 7 is asserted). A product term names input n asserted
+  ; (/In) while every higher-priority input is not asserted (Im) and the chip
+  ; is enabled (/EI). The "selected input n" condition is reused across the
+  ; A, GS outputs:
+  ;   sel7 = /EI * /I7
+  ;   sel6 = /EI * I7 * /I6
+  ;   ... down to ...
+  ;   sel0 = /EI * I7 * I6 * I5 * I4 * I3 * I2 * I1 * /I0
+  ; Each '/An = ...' drives pin An LOW (to its inverted-binary 0) exactly for
+  ; the selected inputs whose encoded bit n is 0; the disabled and all-idle
+  ; rows (all outputs HIGH) fall out because every term carries /EI and at
+  ; least one /In.
+  ;
+  ; A2 is LOW (binary value bit2 = 0) for selected inputs 7,6,5,4:
+  /A2 = /EI * /I7
+      + /EI * I7 * /I6
+      + /EI * I7 * I6 * /I5
+      + /EI * I7 * I6 * I5 * /I4
+  ; A1 is LOW for selected inputs 7,6,3,2:
+  /A1 = /EI * /I7
+      + /EI * I7 * /I6
+      + /EI * I7 * I6 * I5 * I4 * /I3
+      + /EI * I7 * I6 * I5 * I4 * I3 * /I2
+  ; A0 is LOW for selected inputs 7,5,3,1:
+  /A0 = /EI * /I7
+      + /EI * I7 * I6 * /I5
+      + /EI * I7 * I6 * I5 * I4 * /I3
+      + /EI * I7 * I6 * I5 * I4 * I3 * I2 * /I1
+  ; GS LOW whenever enabled and any data input is active:
+  /GS = /EI * /I0
+      + /EI * /I1
+      + /EI * /I2
+      + /EI * /I3
+      + /EI * /I4
+      + /EI * /I5
+      + /EI * /I6
+      + /EI * /I7
+  ; EO LOW only when enabled and no data input is active:
+  /EO = /EI * I0 * I1 * I2 * I3 * I4 * I5 * I6 * I7

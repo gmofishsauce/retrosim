@@ -1,0 +1,67 @@
+# 74174 — hex D-type flip-flop with reset; positive edge-trigger
+# Source: Nexperia, "74HC174; 74HCT174 Hex D-type flip-flop with reset;
+# positive-edge trigger", product data sheet Rev. 7 — 14 March 2024.
+# https://assets.nexperia.com/documents/data-sheet/74HC_HCT174.pdf
+type: "74174"
+outline: [6, 14]
+clock: CP # clocks the .R registered outputs in the behavior block (FR-062d)
+
+description: "Hex D flip-flop with common async reset, positive edge-trigger"
+datasheet:
+  vendor: Nexperia
+  title: "74HC174; 74HCT174 Hex D-type flip-flop with reset; positive-edge trigger"
+  rev: "Rev. 7, 14 March 2024"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT174.pdf"
+
+pins: # number: physical DIP16/SO16 pin (datasheet Table 2)
+  - { name: D0,  side: left,  pos: 2,  dir: in,  number: 3,  desc: "data input bit 0" }
+  - { name: D1,  side: left,  pos: 3,  dir: in,  number: 4,  desc: "data input bit 1" }
+  - { name: D2,  side: left,  pos: 4,  dir: in,  number: 6,  desc: "data input bit 2" }
+  - { name: D3,  side: left,  pos: 5,  dir: in,  number: 11, desc: "data input bit 3" }
+  - { name: D4,  side: left,  pos: 6,  dir: in,  number: 13, desc: "data input bit 4" }
+  - { name: D5,  side: left,  pos: 7,  dir: in,  number: 14, desc: "data input bit 5" }
+  - { name: Q0,  side: right, pos: 2,  dir: out, number: 2,  desc: "registered output bit 0" }
+  - { name: Q1,  side: right, pos: 3,  dir: out, number: 5,  desc: "registered output bit 1" }
+  - { name: Q2,  side: right, pos: 4,  dir: out, number: 7,  desc: "registered output bit 2" }
+  - { name: Q3,  side: right, pos: 5,  dir: out, number: 10, desc: "registered output bit 3" }
+  - { name: Q4,  side: right, pos: 6,  dir: out, number: 12, desc: "registered output bit 4" }
+  - { name: Q5,  side: right, pos: 7,  dir: out, number: 15, desc: "registered output bit 5" }
+  - { name: CP,  side: top,   pos: 2,  dir: in,  number: 9,  desc: "clock input, rising-edge triggered" }
+  - { name: /MR, side: top,   pos: 5,  dir: in,  number: 1,  desc: "active-low asynchronous master reset" }
+
+groups:
+  - { name: D, pins: [D0, D1, D2, D3, D4, D5] }
+  - { name: Q, pins: [Q0, Q1, Q2, Q3, Q4, Q5] }
+
+delays: # ns, 74HC174 typical at Vcc=4.5V, 25C (datasheet Table 7)
+  tpd_cp: 20 # CP -> Qn
+  tpd_mr: 16 # /MR -> Qn (asynchronous reset, tPHL)
+  tsu: 12    # Dn setup before CP edge (minimum)
+  th: 3      # Dn hold after CP edge (minimum)
+
+behavior: |
+  ; 74174 — hex D-type flip-flop with a common asynchronous master reset.
+  ; Derived from the function table (datasheet Table 3): while /MR is LOW all
+  ; six outputs are forced LOW asynchronously; otherwise each output Qn loads
+  ; the value of Dn at the LOW-to-HIGH transition of CP.
+  ;
+  ; SEQUENTIAL-PART CLOCK CONVENTION (74574.yaml): GALasm's .R registered
+  ; outputs are clocked by the GAL22V10's dedicated pin-1 clock
+  ; (galasmManual.txt section 3.4). That pin-1 clock role is played by the
+  ; part's named clock pin — here CP, rising-edge triggered. CP therefore does
+  ; NOT appear as a term in any equation below; the .R suffix implies it.
+  ;
+  ; The asynchronous master reset uses GALasm's global AR (galasmManual.txt
+  ; section 3.6): while its term is true every register is held at 0,
+  ; independent of the clock. Pin /MR is active LOW, so AR = /MR.
+  ;
+  ; Equations are physical-level GALasm: '/' is the complement operator and
+  ; signal names are this file's pin names with any active-low '/' prefix
+  ; dropped (pin /MR is GAL signal MR, so '/MR' means "pin /MR is LOW").
+  AR   = /MR
+  Q0.R = D0
+  Q1.R = D1
+  Q2.R = D2
+  Q3.R = D3
+  Q4.R = D4
+  Q5.R = D5

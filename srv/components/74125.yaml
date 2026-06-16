@@ -1,0 +1,57 @@
+# 74125 — quad buffer/line driver; 3-state (individual active-low enables)
+# Source: Nexperia, "74HC125; 74HCT125 Quad buffer/line driver; 3-state",
+# product data sheet Rev. 8 — 22 February 2024.
+# https://assets.nexperia.com/documents/data-sheet/74HC_HCT125.pdf
+type: "74125"
+outline: [6, 13]
+
+description: "Quad buffer/line driver, 3-state, individual active-low enables"
+datasheet:
+  vendor: Nexperia
+  title: "74HC125; 74HCT125 Quad buffer/line driver; 3-state"
+  rev: "Rev. 8, 22 February 2024"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT125.pdf"
+
+pins: # number: physical DIP14/SO14 pin (datasheet Table 2)
+  - { name: 1A,   side: left,  pos: 2,  dir: in,       number: 2,  desc: "buffer 1 data input" }
+  - { name: /1OE, side: left,  pos: 3,  dir: in,       number: 1,  desc: "buffer 1 active-low output enable" }
+  - { name: 2A,   side: left,  pos: 5,  dir: in,       number: 5,  desc: "buffer 2 data input" }
+  - { name: /2OE, side: left,  pos: 6,  dir: in,       number: 4,  desc: "buffer 2 active-low output enable" }
+  - { name: 3A,   side: left,  pos: 8,  dir: in,       number: 9,  desc: "buffer 3 data input" }
+  - { name: /3OE, side: left,  pos: 9,  dir: in,       number: 10, desc: "buffer 3 active-low output enable" }
+  - { name: 4A,   side: left,  pos: 11, dir: in,       number: 12, desc: "buffer 4 data input" }
+  - { name: /4OE, side: left,  pos: 12, dir: in,       number: 13, desc: "buffer 4 active-low output enable" }
+  - { name: 1Y,   side: right, pos: 2,  dir: tristate, number: 3,  desc: "buffer 1 3-state output" }
+  - { name: 2Y,   side: right, pos: 5,  dir: tristate, number: 6,  desc: "buffer 2 3-state output" }
+  - { name: 3Y,   side: right, pos: 8,  dir: tristate, number: 8,  desc: "buffer 3 3-state output" }
+  - { name: 4Y,   side: right, pos: 11, dir: tristate, number: 11, desc: "buffer 4 3-state output" }
+
+delays: # ns, 74HC125 typical at Vcc=4.5V, 25C (datasheet Table 7)
+  tpd: 11  # nA -> nY
+  ten: 15  # /nOE -> output enabled (tPZH/tPZL)
+  tdis: 15 # /nOE -> output high-Z (tPHZ/tPLZ)
+
+behavior: |
+  ; 74125 — quad non-inverting 3-state buffer with four independent,
+  ; individually active-low output enables. Derived from the function table
+  ; (datasheet Table 3): with /nOE LOW the output nY follows data input nA;
+  ; with /nOE HIGH the output is in the high-impedance OFF-state.
+  ;
+  ; The four buffers are independent (each has its own enable), so each gets
+  ; its own 3-state pair. Bidirectional/3-state pins use GALasm's tristate
+  ; construct (galasmManual.txt section 3.4, established on the 74245): a .T
+  ; output equation fed from the data input, plus a single-term .E enable.
+  ;
+  ; Equations are physical-level GALasm: '/' is the complement operator and
+  ; signal names are this file's pin names with any active-low '/' prefix
+  ; dropped (pin /1OE is GAL signal 1OE, so '/1OE' below means "pin /1OE is
+  ; LOW"). The pin drives only while its .E term is true; when /nOE is HIGH
+  ; the .E term is false and nY is high-impedance.
+  1Y.T = 1A
+  1Y.E = /1OE
+  2Y.T = 2A
+  2Y.E = /2OE
+  3Y.T = 3A
+  3Y.E = /3OE
+  4Y.T = 4A
+  4Y.E = /4OE

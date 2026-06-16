@@ -1,0 +1,68 @@
+# 74164 — 8-bit serial-in, parallel-out shift register
+# Source: Nexperia, "74HC164; 74HCT164 8-bit serial-in, parallel-out shift
+# register", product data sheet Rev. 11 — 28 May 2024.
+# https://assets.nexperia.com/documents/data-sheet/74HC_HCT164.pdf
+type: "74164"
+outline: [6, 12]
+clock: CP # clocks the .R registered outputs in the behavior block (FR-062d)
+
+description: "8-bit serial-in, parallel-out shift register, async reset"
+datasheet:
+  vendor: Nexperia
+  title: "74HC164; 74HCT164 8-bit serial-in, parallel-out shift register"
+  rev: "Rev. 11, 28 May 2024"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT164.pdf"
+
+pins: # number: physical DIP14/SO14 pin (datasheet Table 2)
+  - { name: DSA, side: left,  pos: 2,  dir: in,  number: 1,  desc: "serial data input A (gated with DSB)" }
+  - { name: DSB, side: left,  pos: 3,  dir: in,  number: 2,  desc: "serial data input B (gated with DSA)" }
+  - { name: Q0,  side: right, pos: 2,  dir: out, number: 3,  desc: "parallel output bit 0 (first stage)" }
+  - { name: Q1,  side: right, pos: 3,  dir: out, number: 4,  desc: "parallel output bit 1" }
+  - { name: Q2,  side: right, pos: 4,  dir: out, number: 5,  desc: "parallel output bit 2" }
+  - { name: Q3,  side: right, pos: 5,  dir: out, number: 6,  desc: "parallel output bit 3" }
+  - { name: Q4,  side: right, pos: 6,  dir: out, number: 10, desc: "parallel output bit 4" }
+  - { name: Q5,  side: right, pos: 7,  dir: out, number: 11, desc: "parallel output bit 5" }
+  - { name: Q6,  side: right, pos: 8,  dir: out, number: 12, desc: "parallel output bit 6" }
+  - { name: Q7,  side: right, pos: 9,  dir: out, number: 13, desc: "parallel output bit 7 (last stage)" }
+  - { name: CP,  side: top,   pos: 2,  dir: in,  number: 8,  desc: "clock input, rising-edge triggered" }
+  - { name: /MR, side: top,   pos: 5,  dir: in,  number: 9,  desc: "active-low asynchronous master reset" }
+
+groups:
+  - { name: Q, pins: [Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7] }
+
+delays: # ns, 74HC164 typical at Vcc=4.5V, 25C (datasheet Table 7)
+  tpd_cp: 15 # CP -> Qn
+  tpd_mr: 14 # /MR -> Qn (asynchronous reset, tPHL)
+  tsu: 12    # DSA/DSB setup before CP edge (minimum)
+  th: 4      # DSA/DSB hold after CP edge (minimum)
+
+behavior: |
+  ; 74164 — 8-bit serial-in, parallel-out shift register with asynchronous
+  ; master reset. Derived from the function table (datasheet Table 3): while
+  ; /MR is LOW all eight outputs are forced LOW asynchronously; otherwise, on
+  ; each LOW-to-HIGH transition of CP the register shifts one place toward Q7
+  ; and the new Q0 loads the AND of the two serial data inputs (DSA * DSB).
+  ;
+  ; SEQUENTIAL-PART CLOCK CONVENTION (74574.yaml): GALasm's .R registered
+  ; outputs are clocked by the GAL22V10's dedicated pin-1 clock
+  ; (galasmManual.txt section 3.4). That pin-1 clock role is played by the
+  ; part's named clock pin — here CP, rising-edge triggered. CP therefore does
+  ; NOT appear as a term in any equation below; the .R suffix implies it.
+  ;
+  ; The asynchronous master reset uses GALasm's global AR (galasmManual.txt
+  ; section 3.6): while its term is true every register is held at 0,
+  ; independent of the clock. Pin /MR is active LOW, so AR = /MR ("reset while
+  ; pin /MR is LOW").
+  ;
+  ; Equations are physical-level GALasm: '/' is the complement operator and
+  ; signal names are this file's pin names with any active-low '/' prefix
+  ; dropped (pin /MR is GAL signal MR, so '/MR' means "pin /MR is LOW").
+  AR   = /MR
+  Q0.R = DSA * DSB
+  Q1.R = Q0
+  Q2.R = Q1
+  Q3.R = Q2
+  Q4.R = Q3
+  Q5.R = Q4
+  Q6.R = Q5
+  Q7.R = Q6

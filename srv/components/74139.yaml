@@ -1,0 +1,62 @@
+# 74139 — dual 2-to-4 line decoder/demultiplexer; inverting
+# Source: Nexperia, "74HC139; 74HCT139 Dual 2-to-4 line decoder/
+# demultiplexer", product data sheet Rev. 6 — 29 February 2024.
+# https://assets.nexperia.com/documents/data-sheet/74HC_HCT139.pdf
+# Rendered as a single unit (one rectangle): two independent decoders share
+# one package; like the 74153 there is no decoder symbol so it is drawn as
+# one rectangle.
+type: "74139"
+outline: [6, 12]
+
+description: "Dual 2-to-4 line decoder/demultiplexer, inverting"
+datasheet:
+  vendor: Nexperia
+  title: "74HC139; 74HCT139 Dual 2-to-4 line decoder/demultiplexer"
+  rev: "Rev. 6, 29 February 2024"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT139.pdf"
+
+pins: # number: physical DIP16/SO16 pin (datasheet Table 2)
+  - { name: /1E,  side: left,  pos: 2,  dir: in,  number: 1,  desc: "decoder 1 active-low enable" }
+  - { name: 1A0,  side: left,  pos: 3,  dir: in,  number: 2,  desc: "decoder 1 address bit 0 (LSB)" }
+  - { name: 1A1,  side: left,  pos: 4,  dir: in,  number: 3,  desc: "decoder 1 address bit 1 (MSB)" }
+  - { name: /2E,  side: left,  pos: 7,  dir: in,  number: 15, desc: "decoder 2 active-low enable" }
+  - { name: 2A0,  side: left,  pos: 8,  dir: in,  number: 14, desc: "decoder 2 address bit 0 (LSB)" }
+  - { name: 2A1,  side: left,  pos: 9,  dir: in,  number: 13, desc: "decoder 2 address bit 1 (MSB)" }
+  - { name: /1Y0, side: right, pos: 2,  dir: out, number: 4,  desc: "decoder 1 active-low output 0" }
+  - { name: /1Y1, side: right, pos: 3,  dir: out, number: 5,  desc: "decoder 1 active-low output 1" }
+  - { name: /1Y2, side: right, pos: 4,  dir: out, number: 6,  desc: "decoder 1 active-low output 2" }
+  - { name: /1Y3, side: right, pos: 5,  dir: out, number: 7,  desc: "decoder 1 active-low output 3" }
+  - { name: /2Y0, side: right, pos: 7,  dir: out, number: 12, desc: "decoder 2 active-low output 0" }
+  - { name: /2Y1, side: right, pos: 8,  dir: out, number: 11, desc: "decoder 2 active-low output 1" }
+  - { name: /2Y2, side: right, pos: 9,  dir: out, number: 10, desc: "decoder 2 active-low output 2" }
+  - { name: /2Y3, side: right, pos: 10, dir: out, number: 9,  desc: "decoder 2 active-low output 3" }
+
+groups: # LSB first
+  - { name: 1A, pins: [1A0, 1A1] }
+  - { name: 2A, pins: [2A0, 2A1] }
+
+delays: # ns, 74HC139 typical at Vcc=4.5V, 25C (datasheet Table 7)
+  tpd_a: 14 # nAn -> nYn
+  tpd_e: 12 # /nE  -> nYn
+
+behavior: |
+  ; 74139 — dual 2-to-4 line decoder/demultiplexer, inverting. Derived from
+  ; the function table (datasheet Table 3): with /nE LOW (enabled) the one
+  ; output addressed by nA1:nA0 (nA0 = LSB) is LOW and the other three are
+  ; HIGH; with /nE HIGH (disabled) all four outputs are HIGH. The two
+  ; decoders are independent, each with its own enable and address.
+  ;
+  ; Equations are physical-level GALasm: '/' is the complement operator and
+  ; signal names are this file's pin names with any active-low '/' prefix
+  ; dropped (pin /1E is GAL signal 1E, so '/1E' below means "pin /1E is
+  ; LOW"). Each output is a single AND term; '/nYn = term' drives pin nYn LOW
+  ; exactly when the term is true, so the disabled rows (all outputs HIGH)
+  ; fall out of the same equations.
+  /1Y0 = /1E * /1A1 * /1A0
+  /1Y1 = /1E * /1A1 *  1A0
+  /1Y2 = /1E *  1A1 * /1A0
+  /1Y3 = /1E *  1A1 *  1A0
+  /2Y0 = /2E * /2A1 * /2A0
+  /2Y1 = /2E * /2A1 *  2A0
+  /2Y2 = /2E *  2A1 * /2A0
+  /2Y3 = /2E *  2A1 *  2A0
