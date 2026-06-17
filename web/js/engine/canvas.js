@@ -36,16 +36,30 @@ export function initCanvas(canvasEl, store) {
   let frame = null;
   let preview = null; // transient {points: [{x,y}, …]} in world coords
   let marquee = null; // transient rubber-band {a, b (world), mode} (FR-016b)
+  let lastW = 0; // last applied CSS size / DPR, so resize() is idempotent and a
+  let lastH = 0; // ResizeObserver tick that didn't change the box is a no-op.
+  let lastDpr = 0;
 
   function requestRender() {
     dirty = true;
     if (frame == null) frame = requestAnimationFrame(draw);
   }
 
+  // resize keeps the device-pixel backing store matched to the element's CSS
+  // box. Driven by a ResizeObserver (below), not the window resize event alone:
+  // the canvas shrinks whenever sibling chrome grows (e.g. the status bar
+  // populating its trays after init) with no window resize, which would leave
+  // the backing store taller than the cleared area — an uncleared bottom strip.
   function resize() {
     const dpr = window.devicePixelRatio || 1;
-    canvasEl.width = Math.round(canvasEl.clientWidth * dpr);
-    canvasEl.height = Math.round(canvasEl.clientHeight * dpr);
+    const w = canvasEl.clientWidth;
+    const h = canvasEl.clientHeight;
+    if (w === lastW && h === lastH && dpr === lastDpr) return;
+    lastW = w;
+    lastH = h;
+    lastDpr = dpr;
+    canvasEl.width = Math.round(w * dpr);
+    canvasEl.height = Math.round(h * dpr);
     requestRender();
   }
 
@@ -65,8 +79,11 @@ export function initCanvas(canvasEl, store) {
     const conflicts = sim ? sim.conflictedConductors() : null;
 
     ctx.save();
+    // Clear the whole backing store in device pixels (identity transform) so a
+    // round() sub-pixel sliver, or a momentarily stale size, cannot leave an
+    // uncleared bottom strip; then apply the DPR scale for CSS-pixel drawing.
+    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
     ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, w, h);
     drawGrid(ctx, w, h, vp);
     drawBuses(ctx, store.design, vp, store.state.selection, conflicts);
     drawWires(ctx, store.design, vp, store.state.selection, conflicts);
@@ -78,6 +95,12 @@ export function initCanvas(canvasEl, store) {
   }
 
   const unsubscribe = store.subscribe(requestRender);
+  // Track the element's box directly: catches layout-driven size changes (the
+  // status bar populating, the properties panel toggling) that fire no window
+  // resize. The window listener still covers devicePixelRatio-only changes
+  // (e.g. dragging the window between monitors of different scaling).
+  const resizeObserver = new ResizeObserver(resize);
+  resizeObserver.observe(canvasEl);
   window.addEventListener("resize", resize);
   resize();
 
@@ -97,6 +120,7 @@ export function initCanvas(canvasEl, store) {
     },
     destroy() {
       unsubscribe();
+      resizeObserver.disconnect();
       window.removeEventListener("resize", resize);
       if (frame != null) cancelAnimationFrame(frame);
     },
@@ -598,59 +622,64 @@ function drawPort(ctx, inst, vp, selected) {
   ctx.fillText(text, center.x, center.y);
 }
 
-// SWITCH_POSITIONS maps each dial position to a unit direction on the upright
-// dial face (FR-071c): 1 at top, 0 lower-right, ? lower-left (screen space,
-// x right / y down). Keyed by switchState value ("U" is the "?" position).
-const SWITCH_POSITIONS = {
-  "1": { x: 0, y: -1 },
-  "0": { x: 0.866, y: 0.5 },
-  U: { x: -0.866, y: 0.5 },
-};
+// switchFace maps the input switch's state to its value-bubble colors and glyph
+// (FR-071c), mirroring the state indicator's driven look (indicatorState): a
+// white bubble with a black "1", or a black bubble with a white "0". A legacy
+// "U" (older saved design) and any unset value read as 0.
+function switchFace(inst) {
+  if (inst.switchState === "1") return { bg: "#ffffff", fg: "#000", glyph: "1" };
+  return { bg: "#000000", fg: "#fff", glyph: "0" };
+}
 
-// drawSwitch renders the input-switch rotary dial (FR-071c): a circle with
-// 1 / 0 / ? position marks and a pointer at the current position
-// (inst.switchState, default "U" → "?"). The face is drawn upright so its
-// labels stay legible (FR-015); only the OUT pin follows the instance rotation,
-// via the shared pin path.
+// Switch value-bubble radius (grid units): a touch smaller than the indicator's
+// so the source arrow fits between the rim and the OUT pin point (grid x=2) on
+// the 2×2 footprint.
+const SWITCH_RADIUS = 0.7;
+
+// drawSwitch renders the input switch (FR-071c): the same value bubble as the
+// state indicator showing inst.switchState (white 1 / black 0), plus a small
+// arrow off the bubble toward the OUT pin marking it a signal source. The
+// glyph is drawn upright (FR-015); the arrow is built in the unrotated local
+// grid frame and rotated with the instance, so it always points along the
+// output pin (right when unrotated).
 function drawSwitch(ctx, inst, vp, selected) {
-  const td = inst.typeData;
-  const cr = rotateOffset(td.width / 2, td.height / 2, inst.rotation);
+  const cr = rotateOffset(1, 1, inst.rotation); // 2×2 center
   const center = worldToScreen({ x: inst.x + cr.x, y: inst.y + cr.y }, vp);
-  const r = INDICATOR_RADIUS * scaleFor(vp);
+  const r = SWITCH_RADIUS * scaleFor(vp);
   const stroke = selected ? "#4a90d9" : "#333";
 
-  // Dial face.
+  // Value bubble (same look as the indicator).
+  const face = switchFace(inst);
   ctx.beginPath();
   ctx.arc(center.x, center.y, r, 0, Math.PI * 2);
-  ctx.fillStyle = "#fff";
+  ctx.fillStyle = face.bg;
   ctx.fill();
   ctx.lineWidth = selected ? 2 : 1;
   ctx.strokeStyle = stroke;
   ctx.stroke();
 
-  // Position marks near the rim.
-  ctx.fillStyle = "#000";
-  ctx.font = "bold " + Math.round(0.42 * scaleFor(vp)) + "px system-ui, sans-serif";
+  ctx.fillStyle = face.fg;
+  ctx.font = "bold " + Math.round(r * 1.2) + "px system-ui, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  for (const [key, glyph] of [["1", "1"], ["0", "0"], ["U", "?"]]) {
-    const d = SWITCH_POSITIONS[key];
-    ctx.fillText(glyph, center.x + d.x * r * 0.74, center.y + d.y * r * 0.74);
-  }
+  ctx.fillText(face.glyph, center.x, center.y);
 
-  // Pointer to the current position, plus a center hub.
-  const state = inst.switchState === "1" || inst.switchState === "0" ? inst.switchState : "U";
-  const d = SWITCH_POSITIONS[state];
+  // Source arrow: a filled triangle from the bubble rim out to the OUT pin
+  // point, in the unrotated local frame (origin at inst.x,inst.y; +x toward the
+  // pin), then rotated and projected so it follows the instance.
+  const local = (dx, dy) => {
+    const o = rotateOffset(dx, dy, inst.rotation);
+    return worldToScreen({ x: inst.x + o.x, y: inst.y + o.y }, vp);
+  };
+  const tip = local(2.0, 1); // the OUT pin grid point
+  const a = local(1.72, 0.82);
+  const b = local(1.72, 1.18);
   ctx.beginPath();
-  ctx.moveTo(center.x, center.y);
-  ctx.lineTo(center.x + d.x * r * 0.55, center.y + d.y * r * 0.55);
-  ctx.strokeStyle = stroke;
-  ctx.lineWidth = 2;
-  ctx.lineCap = "round";
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(center.x, center.y, Math.max(2, r * 0.14), 0, Math.PI * 2);
-  ctx.fillStyle = "#333";
+  ctx.moveTo(tip.x, tip.y);
+  ctx.lineTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.closePath();
+  ctx.fillStyle = stroke;
   ctx.fill();
 }
 

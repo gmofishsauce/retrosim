@@ -19,6 +19,27 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-17 — Input switch: two states, indicator-style bubble
+What: Redesigned the input-switch built-in. It now has only two states, 1 and 0
+(the undefined ? / U state is removed; default is now 0). It is drawn like the
+state indicator — a round value bubble (white 1 / black 0) — with a small arrow
+off the bubble toward the output pin, instead of the hard-to-read rotary dial
+with tiny 1/0/? marks. Clicking it during a run toggles 0↔1; the properties
+panel offers a 1/0 selector. A legacy "U" in an old saved design reads as 0.
+Why: the dial marks were too small to read and the U state added little value.
+Touches: FR-071c, FR-087a, FR-020c; design §2.1, §6.9, §6.11, §6.13, §7.2
+
+## 2026-06-17 — Fix never-clearing canvas bottom strip
+What: The renderer sized its device-pixel backing store only on `window` resize
+(and once at init, before the status bar populated its trays), so a layout
+change that shrank the canvas without a window resize left the backing store
+stale; the per-frame `clearRect` then cleared only the live (smaller)
+`clientHeight`, leaving an uncleared bottom strip that accumulated drag-image
+fragments. Fix: keep the backing store in sync via a `ResizeObserver` on the
+canvas, and clear the whole backing store in device pixels each frame.
+Why: visible garbage strip above the status bar.
+Touches: design §6.8
+
 ## 2026-06-17 — GALasm dialect: device-named strict vs. extended
 What: Added an optional `gal: <device>` YAML key (one of GALasm's four device
 names: GAL16V8/GAL20V8/GAL22V10/GAL20RA10). Naming a device selects *strict*

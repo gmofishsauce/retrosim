@@ -97,21 +97,21 @@ export function initProperties({ container, store }) {
     // The panel is read-only while a simulation runs (FR-087).
     const locked = store.state.simulating;
 
-    // Input switch position (FR-020c): a 1 / 0 / ? selector for the switch's
-    // per-instance dial position (inst.switchState), not an override. While
-    // simulating the position is changed by clicking the dial instead (FR-087a),
-    // so the control is disabled (locked).
+    // Input switch state (FR-020c): a 1 / 0 selector for the switch's
+    // per-instance state (inst.switchState), not an override. While simulating
+    // the state is changed by clicking the switch instead (FR-087a), so the
+    // control is disabled (locked).
     if (td.renderType === "switch") {
-      container.appendChild(el("div", "prop-section", "Position"));
+      container.appendChild(el("div", "prop-section", "State"));
       const row = el("div", "prop-row");
       row.appendChild(el("label", "prop-label", "state"));
       const select = el("select", "prop-input");
-      for (const [val, text] of [["1", "1"], ["0", "0"], ["U", "?"]]) {
+      for (const [val, text] of [["1", "1"], ["0", "0"]]) {
         const opt = el("option", null, text);
         opt.value = val;
         select.appendChild(opt);
       }
-      const cur = inst.switchState === "1" || inst.switchState === "0" ? inst.switchState : "U";
+      const cur = inst.switchState === "1" ? "1" : "0";
       select.value = cur;
       select.disabled = locked;
       select.addEventListener("change", () => {

@@ -357,18 +357,18 @@ export function setOverrideCmd(refdes, group, key, value) {
   };
 }
 
-// setSwitchStateCmd sets an input switch's dial position (inst.switchState —
-// "0" | "1" | "U", FR-020c/FR-071c). Per-instance interactive state, not an
-// override; the prior value is captured once so undo restores it.
+// setSwitchStateCmd sets an input switch's state (inst.switchState — "0" | "1",
+// FR-020c/FR-071c). Per-instance interactive state, not an override; the prior
+// value is captured once so undo restores it.
 export function setSwitchStateCmd(refdes, value) {
   let captured = false;
   let old = null;
   return {
-    label: "Set switch position",
+    label: "Set switch state",
     apply(design) {
       const inst = findInstance(design, refdes);
       if (!captured) {
-        old = inst.switchState ?? "U";
+        old = inst.switchState ?? "0";
         captured = true;
       }
       inst.switchState = value;

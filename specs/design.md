@@ -102,12 +102,15 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-071b** — Power-on reset: a box reading `RST`, two right-edge pins (R
   active high, /R active low); drives reset for the first `cycles` clock
   cycles of a run (property, default 3). Tooltip "power-on reset".
-- **FR-071c** — Input switch: 2×2, one right-center `out` pin; a rotary dial
-  showing positions 1 / 0 / ? (U) with a pointer at the current one. A strong
-  driver of its position's value (FR-087a). Position is persisted per-instance
-  state (`switchState`, default `U`), set via the properties panel while editing
-  (FR-020c) or by clicking the dial while simulating (FR-087a). Tooltip "input
-  switch".
+- **FR-071c** — Input switch: 2×2, one right-center `out` pin; drawn like the
+  state indicator (FR-068) — a round bubble showing its value (white bubble /
+  black `1`, or black bubble / white `0`) — with a small arrow off the bubble
+  toward the output pin marking it a source. Two states only, `1` and `0`. A
+  strong driver of its value (FR-087a). State is persisted per-instance
+  (`switchState`, default `0`), set via the properties panel while editing
+  (FR-020c) or by clicking it while simulating, which toggles 0↔1 (FR-087a).
+  Tooltip "input switch". (Reworked 2026-06-17; supersedes the 1/0/? rotary dial
+  with a U state.)
 
 **Component Selection and Movement**
 - **FR-016** — In select mode, click a component to select it.
@@ -766,6 +769,16 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `setMarquee(rect | null)` (the live rubber-band rectangle + window/crossing
   mode, FR-016b), `requestRender()`. Renders on a `requestAnimationFrame` loop
   **only when dirty** (a render is requested), to meet NFR-005 without busy-spinning.
+- **Backing-store sizing:** the device-pixel backing store
+  (`canvas.width/height = round(clientSize × devicePixelRatio)`) is kept in sync
+  with the element's CSS box by a **`ResizeObserver` on the canvas** (plus the
+  `window` resize listener for `devicePixelRatio`-only changes), not by the
+  window resize event alone — the canvas shrinks whenever sibling chrome grows
+  (e.g. the status bar populating its trays after init) with no window resize,
+  which would otherwise leave the backing store stale. Each frame clears the
+  **whole backing store in device pixels** (identity transform) before applying
+  the DPR scale, so neither a stale size nor the `round()` sub-pixel sliver can
+  leave an uncleared bottom strip that accumulates drag-image fragments.
 - **Draw order:** grid → buses (thick blue, width annotation `/n` at midpoint,
   FR-036/FR-037) → wires (thin black) → junction dots → components (outline, pin
   bubbles, pin labels) → upright text labels → selection highlight → tool preview
@@ -957,7 +970,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   component's type has an `INTERACTIONS` handler (§6.11), the FSM applies it via
   `store.applyLive(() => INTERACTIONS[type](inst))` — a non-undoable live change
   that marks the design modified and wakes the simulator (§6.10) — instead of
-  selecting. The switch's handler cycles `switchState` ? → 1 → 0 → ? (FR-087a).
+  selecting. The switch's handler toggles `switchState` 0↔1 (FR-087a).
   Clicks on non-interactive components still select (FR-087).
 - **Error handling:** clicks on empty space in WIRE/BUS state are ignored (no
   partial wire). A gesture that would create a zero-endpoint wire is discarded
@@ -1133,24 +1146,26 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `drawComponent` has a render branch per built-in renderType: the
   indicator bubble (gray `?` until the simulator, then white `1`/black `0`), the
   pull-up two-headed arrow, the pull-down upside-down `T`, the clock and
-  reset boxes, and the switch dial (a circle with 1 / 0 / ? marks and a pointer
-  at `inst.switchState`, FR-071c). Pin
+  reset boxes, and the switch (the same value bubble as the indicator — white
+  `1`/black `0` from `inst.switchState` — plus a small arrow off the bubble
+  toward the output pin marking it a source, FR-071c). Pin
   name labels are suppressed for built-ins (the glyph owns the body); the refdes is
   drawn above the symbol.
 - **Switch interactive state (FR-071c)** — the input switch carries one
-  per-instance field, `inst.switchState` (`"0"` | `"1"` | `"U"`, default `"U"`),
+  per-instance field, `inst.switchState` (`"0"` | `"1"`, default `"0"`),
   set on the instance directly rather than through `overrides`. It round-trips
   through save/load for free (the whole instance is serialized, §7.2). It is
   changed while editing by the properties panel control (§6.12, FR-020c) and
-  while simulating by a dial click routed through the interaction FSM (§6.9,
-  FR-087a). `drawComponent` reads it to draw the pointer; the switch behavior
-  (§6.13) reads it to drive its output.
+  while simulating by a click routed through the interaction FSM (§6.9,
+  FR-087a). `drawComponent` reads it to draw the value bubble; the switch behavior
+  (§6.13) reads it to drive its output. (A legacy `"U"` from an older saved
+  design reads as `0`.)
 - **Interactive-input registry (`INTERACTIONS`, FR-087b)** — a second registry
   exported beside `BEHAVIORS`, mapping built-in type name → an interaction
   handler `(inst) => void` that mutates the instance's interactive state in
   place. It is the input-side analogue of `BEHAVIORS` (output side): a type with
   an entry is *interactive* and accepts a sim-time click. The **switch** entry
-  cycles `inst.switchState` ? → 1 → 0 → ? (FR-087a). The interaction FSM (§6.9)
+  toggles `inst.switchState` 0↔1 (FR-087a). The interaction FSM (§6.9)
   routes a simulating-mode click on any interactive built-in through
   `store.applyLive(() => INTERACTIONS[type](inst))` — no per-type special case —
   and `applyLive` wakes the simulator (§6.10, §6.13). Adding a new interactive
@@ -1401,9 +1416,9 @@ no sequential part could ever leave U.)
   weak 1/0; **indicator** returns nothing (display only); **power-on reset**
   (FR-071b) drives `R` 1 and `/R` 0 while `simTime < cycles × clockPeriod`,
   the inverse afterward; **input switch** (FR-087a) strong-drives `OUT` to the
-  logic value of `state` (`"1"`→V1, `"0"`→V0, `"U"`→VU). `props` carries
+  logic value of `state` (`"1"`→V1, else V0). `props` carries
   effective values: `overrides.props` else the declared default (FR-020b).
-  `state` is the live `inst.switchState` (§6.11), supplied so a dial click during
+  `state` is the live `inst.switchState` (§6.11), supplied so a click during
   a run takes effect the next step; the simulator entity therefore retains its
   source `inst` reference for built-ins. `clockPeriod` is resolved once at Run:
   the effective `period` of the design's clock instance when exactly one is
@@ -1589,7 +1604,7 @@ branch wire that meet at it share one position and cannot drift apart (A1).
 | `rotation` | int | `0`\|`90`\|`180`\|`270` |
 | `typeData` | `ComponentType` | full copy at save time (FR-057) |
 | `overrides` | object | per-instance field overrides, grouped by kind: `{"delays":{"tpd":12},"props":{"period":200}}` — `delays` shadows `typeData.delays` (FR-058), `props` shadows `typeData.properties` defaults (FR-020b) |
-| `switchState` | string? | input-switch built-in only (FR-071c): current dial position, `"0"` \| `"1"` \| `"U"` (default `"U"`). Per-instance interactive state, not an `overrides` entry; set via the properties panel (FR-020c) or a dial click during a run (FR-087a) |
+| `switchState` | string? | input-switch built-in only (FR-071c): current state, `"0"` \| `"1"` (default `"0"`; a legacy `"U"` reads as `0`). Per-instance interactive state, not an `overrides` entry; set via the properties panel (FR-020c) or a click during a run (FR-087a) |
 | `kind` | string? | `"subdesign"` for a sub-design instance (FR-098); absent/`"component"` for an ordinary, subunit, or built-in instance (§6.14) |
 | `childPath` | string? | sub-design only: child design file path **relative to the parent's save dir** (FR-098), resolved on load to derive the interface; no `typeData` is stored (supersedes FR-057 for sub-designs) |
 | `render` | string? | sub-design only: chosen embed rendering `"ic"` \| `"connector"` (FR-099) |

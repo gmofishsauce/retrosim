@@ -149,7 +149,7 @@ export function buildSimulation(design, { onMessage = () => {} } = {}) {
         behave,
         props: effectiveProps(inst),
         // Retain the live instance so behaviors can read mutable interactive
-        // state each step (the switch's dial position, FR-087a/§6.13).
+        // state each step (the switch's state, FR-087a/§6.13).
         inst,
       });
     } else if (inst.typeData.renderType === "subunit") {

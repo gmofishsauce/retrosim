@@ -136,7 +136,7 @@ export function createStore(initial = {}) {
     },
 
     // applyLive runs a non-undoable mutation that is permitted during a run —
-    // an interactive input such as the switch dial click (FR-087a/FR-087b).
+    // an interactive input such as the switch click (FR-087a/FR-087b).
     // Unlike dispatch it bypasses both the simulation lock and the undo/redo
     // stacks, but still marks the design dirty and notifies so the backup
     // snapshot (FR-092) and the properties panel observe the change. The live

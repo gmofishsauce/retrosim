@@ -55,9 +55,9 @@ export function addInstance(design, type, x, y, rotation) {
     typeData: structuredClone(type),
     overrides: {},
   };
-  // The input switch carries per-instance dial position state (FR-071c),
-  // defaulting to the ? / U position on placement.
-  if (type.renderType === "switch") inst.switchState = "U";
+  // The input switch carries per-instance state (FR-071c), defaulting to 0 on
+  // placement (two states only, 0 and 1).
+  if (type.renderType === "switch") inst.switchState = "0";
   // A port carries its interface fields (FR-094, §7.2): a label defaulting to the
   // refdes (so a fresh port is its own net until the user names it), direction,
   // and bit width. The optional off-sheet target (FR-101) is added in phase 4.

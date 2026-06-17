@@ -293,11 +293,11 @@ YAML.
 | **Pull-down** | one output (`OUT`, top) | A **weak** driver of logic **0**, symmetric to the pull-up. A pull-up and pull-down on the same net with no strong driver is a conflict. |
 | **Clock** | one output (`OUT`, right) | A square wave, 50% duty cycle: low from t = 0 with the first rising edge half a period in. Properties: `period` (ns, default 100) and `speed` (Hz, default 1). A design with a clock is *sequential* and runs continuously; see [Simulation](#13-simulation). |
 | **Power-on reset** | two outputs (`R` active-high, `/R` active-low, right) | Asserts reset (`R`=1, `/R`=0) for the first `cycles` clock periods of a run, then releases (inverse afterward). Property: `cycles` (default 3). |
-| **Input switch** | one output (`OUT`, right) | A user-set logic source, drawn as a rotary dial with three positions **1 / 0 / ?** (the `?` position drives **U**). A **strong** driver — it overrides pull-ups/pull-downs on its net. Set its position in the properties panel while editing, or **click the dial during a simulation** to cycle it `? → 1 → 0 → ?`. The position is saved with the design (a new switch starts at `?`). |
+| **Input switch** | one output (`OUT`, right) | A user-set logic source with two states, **1** and **0**, drawn like the state indicator — a round value bubble (white **1** / black **0**) — with a small arrow toward its output pin. A **strong** driver: it overrides pull-ups/pull-downs on its net. Set its state in the properties panel while editing, or **click it during a simulation** to toggle **0 ↔ 1**. The state is saved with the design (a new switch starts at **0**). |
 
 You can override a built-in's properties per instance via the properties panel
 (e.g. give one clock a different `period`). The input switch is set the same way:
-select it and choose its position (`1` / `0` / `?`) in the properties panel.
+select it and choose its state (`1` / `0`) in the properties panel.
 
 **Interactive inputs.** The input switch is an *interactive input* — a built-in
 you can change by hand **while a simulation is running**: click its body and the
@@ -421,7 +421,7 @@ clear message until then, without losing your work.
 | Right-click empty | Recenter view on the cursor |
 | Right-click object | Context menu |
 | Double-click a sub-design | Open it (descend); **← back** returns to the parent |
-| Left-click input switch (while simulating) | Cycle its position `? → 1 → 0 → ?` |
+| Left-click input switch (while simulating) | Toggle its state `0 ↔ 1` |
 
 **Keyboard**
 

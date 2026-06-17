@@ -225,7 +225,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
   // interactDuringSim applies an interactive built-in's input action on a
   // sim-time click (FR-087b): a non-undoable live mutation (store.applyLive)
   // that wakes the simulator to re-evaluate (§6.10/§6.13). The handler — e.g.
-  // the switch's dial cycle (FR-087a) — comes from the INTERACTIONS registry,
+  // the switch's 0↔1 toggle (FR-087a) — comes from the INTERACTIONS registry,
   // so the FSM stays generic with no per-type special case.
   function interactDuringSim(inst, interact) {
     store.applyLive(() => interact(inst));
