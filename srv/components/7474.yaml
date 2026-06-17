@@ -1,0 +1,64 @@
+# 7474 — dual D-type flip-flop with set and reset, positive edge-triggered
+# Source: Nexperia, "74HC74; 74HCT74 Dual D-type flip-flop with set and reset;
+# positive edge-trigger", product data sheet Rev. 9 — 2 April 2024.
+# https://assets.nexperia.com/documents/data-sheet/74HC_HCT74.pdf
+type: "7474"
+outline: [6, 13]
+
+description: "dual D-type flip-flop with set and reset, positive edge-triggered"
+datasheet:
+  vendor: Nexperia
+  title: "74HC74; 74HCT74 Dual D-type flip-flop with set and reset; positive edge-trigger"
+  rev: "Rev. 9, 2 April 2024"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT74.pdf"
+
+pins: # number: physical DIP14/SO14 pin (datasheet Table 2). Each flip-flop has
+      # its own clock — an independent clock domain (per-output .CLK, below).
+  - { name: 1D,   side: left,  pos: 2,  dir: in,  number: 2,  desc: "FF1 data input" }
+  - { name: 1CP,  side: left,  pos: 3,  dir: in,  number: 3,  desc: "FF1 clock (LOW-to-HIGH edge)" }
+  - { name: /1SD, side: left,  pos: 4,  dir: in,  number: 4,  desc: "FF1 async set-direct (active LOW)" }
+  - { name: /1RD, side: left,  pos: 5,  dir: in,  number: 1,  desc: "FF1 async reset-direct (active LOW)" }
+  - { name: 2D,   side: left,  pos: 8,  dir: in,  number: 12, desc: "FF2 data input" }
+  - { name: 2CP,  side: left,  pos: 9,  dir: in,  number: 11, desc: "FF2 clock (LOW-to-HIGH edge)" }
+  - { name: /2SD, side: left,  pos: 10, dir: in,  number: 10, desc: "FF2 async set-direct (active LOW)" }
+  - { name: /2RD, side: left,  pos: 11, dir: in,  number: 13, desc: "FF2 async reset-direct (active LOW)" }
+  - { name: 1Q,   side: right, pos: 2,  dir: out, number: 5,  desc: "FF1 output" }
+  - { name: 1QB,  side: right, pos: 3,  dir: out, number: 6,  desc: "FF1 complement output (Q-bar)" }
+  - { name: 2Q,   side: right, pos: 8,  dir: out, number: 9,  desc: "FF2 output" }
+  - { name: 2QB,  side: right, pos: 9,  dir: out, number: 8,  desc: "FF2 complement output (Q-bar)" }
+
+delays: # ns, 74HC74 typical at Vcc=4.5V, 25C (datasheet Table 8)
+  tpd_cp_q: 17 # CP -> Q
+  tpd_sd_q: 18 # SD -> Q (async set)
+  tpd_rd_q: 19 # RD -> Q (async reset)
+
+behavior: |
+  ; 7474 — two independent positive-edge D flip-flops with async set and reset.
+  ;
+  ; Equations are physical-level GALasm: '/' is the complement operator and a
+  ; signal name is this file's pin name with any active-low '/' prefix dropped
+  ; (pin /1SD is GAL signal 1SD, so '/1SD' means "pin /1SD is LOW" = set
+  ; asserted). Derived from the function tables (datasheet Tables 3 and 4).
+  ;
+  ; Each flip-flop has its OWN clock, so there is no global clock: key. Instead
+  ; each registered output carries the GAL20RA10 extended-dialect suffixes
+  ; (FR-079a): .CLK names its clock pin, .APRST its async set, .ARST its async
+  ; reset. Set/reset are level-sensitive and override the clock (async).
+  ;
+  ; Complementary outputs: the datasheet's Q-bar pins cannot be named '/1Q'/'/2Q'
+  ; (the '/' strips to the same signal as 1Q/2Q and would collide), so they are
+  ; named 1QB/2QB and derived as the inverse of the Q net (one unit-delay later,
+  ; invisible at human pacing). NOTE: the datasheet's not-recommended state
+  ; SD=RD=LOW (both asserted, where the real part drives BOTH outputs HIGH) is
+  ; not modeled faithfully — reset dominates here and the derived complement
+  ; keeps Q and Q-bar opposite.
+  1Q.R = 1D
+  1Q.CLK = 1CP
+  1Q.APRST = /1SD
+  1Q.ARST = /1RD
+  1QB = /1Q
+  2Q.R = 2D
+  2Q.CLK = 2CP
+  2Q.APRST = /2SD
+  2Q.ARST = /2RD
+  2QB = /2Q

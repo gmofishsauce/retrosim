@@ -1,0 +1,66 @@
+# 74283 — 4-bit binary full adder with fast carry
+# Source: Texas Instruments, "CD54HC283, CD74HC283, CD54HCT283, CD74HCT283 —
+# High-Speed CMOS Logic 4-Bit Binary Full Adder with Fast Carry",
+# SCHS176E — November 1997, revised July 2022.
+# https://www.ti.com/lit/ds/symlink/cd74hc283.pdf
+type: "74283"
+outline: [6, 15]
+
+description: "4-bit binary full adder with fast carry"
+datasheet:
+  vendor: Texas Instruments
+  title: "CD74HC283 High-Speed CMOS Logic 4-Bit Binary Full Adder with Fast Carry"
+  rev: "SCHS176E, Revised July 2022"
+  url: "https://www.ti.com/lit/ds/symlink/cd74hc283.pdf"
+
+pins: # number: physical DIP16/SO16 pin (datasheet §4, Top View)
+  - { name: A0,   side: left,  pos: 2,  dir: in,  number: 5,  desc: "operand A bit 0 (LSB)" }
+  - { name: B0,   side: left,  pos: 3,  dir: in,  number: 6,  desc: "operand B bit 0 (LSB)" }
+  - { name: A1,   side: left,  pos: 5,  dir: in,  number: 3,  desc: "operand A bit 1" }
+  - { name: B1,   side: left,  pos: 6,  dir: in,  number: 2,  desc: "operand B bit 1" }
+  - { name: A2,   side: left,  pos: 8,  dir: in,  number: 14, desc: "operand A bit 2" }
+  - { name: B2,   side: left,  pos: 9,  dir: in,  number: 15, desc: "operand B bit 2" }
+  - { name: A3,   side: left,  pos: 11, dir: in,  number: 12, desc: "operand A bit 3 (MSB)" }
+  - { name: B3,   side: left,  pos: 12, dir: in,  number: 11, desc: "operand B bit 3 (MSB)" }
+  - { name: CIN,  side: left,  pos: 14, dir: in,  number: 7,  desc: "carry input" }
+  - { name: S0,   side: right, pos: 2,  dir: out, number: 4,  desc: "sum bit 0 (LSB)" }
+  - { name: S1,   side: right, pos: 5,  dir: out, number: 1,  desc: "sum bit 1" }
+  - { name: S2,   side: right, pos: 8,  dir: out, number: 13, desc: "sum bit 2" }
+  - { name: S3,   side: right, pos: 11, dir: out, number: 10, desc: "sum bit 3 (MSB)" }
+  - { name: COUT, side: right, pos: 14, dir: out, number: 9,  desc: "carry output" }
+
+groups:
+  - { name: A, pins: [A0, A1, A2, A3] }
+  - { name: B, pins: [B0, B1, B2, B3] }
+  - { name: S, pins: [S0, S1, S2, S3] }
+
+delays: # ns, 74HC283 typical at Vcc=5V, CL=15pF, 25C (datasheet §5.5)
+  tpd_cin_s0:   13 # CIN -> S0
+  tpd_cin_s1:   15 # CIN -> S1
+  tpd_cin_s2:   16 # CIN -> S2
+  tpd_cin_s3:   19 # CIN -> S3
+  tpd_cin_cout: 16 # CIN -> COUT
+  tpd_ab_s:     18 # An/Bn -> Sn
+  tpd_ab_cout:  16 # An/Bn -> COUT
+
+behavior: |
+  ; 74283 — 4-bit binary full adder, S = A + B + CIN (A0/B0/S0 = LSB).
+  ;
+  ; Equations are physical-level GALasm: '/' is the complement operator and a
+  ; signal name is this file's pin name (the adder pins are all active-high, so
+  ; no '/' prefixes appear). ':+:' is the extended-dialect XOR operator
+  ; (FR-079a) — without it, a flat sum-of-products sum bit explodes (the MSB to
+  ; ~256 terms), so XOR is what makes this part expressible.
+  ;
+  ; Each sum bit is Sn = An XOR Bn XOR Cn, where Cn is the carry into bit n:
+  ;   C0 = CIN, and C(n+1) = An*Bn + (An + Bn)*Cn  (generate + propagate*carry).
+  ; The carries Cn are not package pins, so each is inlined as the flat
+  ; sum-of-products of the primary inputs (the GAL has no internal nodes and no
+  ; parentheses). COUT is the bit-4 carry (the part's fast-carry output). The
+  ; equations were machine-generated and verified against arithmetic for all
+  ; 512 input combinations.
+  S0 = A0 :+: B0 :+: CIN
+  S1 = A1 :+: B1 :+: A0 * B0 + A0 * CIN + B0 * CIN
+  S2 = A2 :+: B2 :+: A1 * B1 + A0 * B0 * A1 + A0 * A1 * CIN + B0 * A1 * CIN + A0 * B0 * B1 + A0 * B1 * CIN + B0 * B1 * CIN
+  S3 = A3 :+: B3 :+: A2 * B2 + A1 * B1 * A2 + A0 * B0 * A1 * A2 + A0 * A1 * A2 * CIN + B0 * A1 * A2 * CIN + A0 * B0 * B1 * A2 + A0 * B1 * A2 * CIN + B0 * B1 * A2 * CIN + A1 * B1 * B2 + A0 * B0 * A1 * B2 + A0 * A1 * B2 * CIN + B0 * A1 * B2 * CIN + A0 * B0 * B1 * B2 + A0 * B1 * B2 * CIN + B0 * B1 * B2 * CIN
+  COUT = A3 * B3 + A2 * B2 * A3 + A1 * B1 * A2 * A3 + A0 * B0 * A1 * A2 * A3 + A0 * A1 * A2 * A3 * CIN + B0 * A1 * A2 * A3 * CIN + A0 * B0 * B1 * A2 * A3 + A0 * B1 * A2 * A3 * CIN + B0 * B1 * A2 * A3 * CIN + A1 * B1 * B2 * A3 + A0 * B0 * A1 * B2 * A3 + A0 * A1 * B2 * A3 * CIN + B0 * A1 * B2 * A3 * CIN + A0 * B0 * B1 * B2 * A3 + A0 * B1 * B2 * A3 * CIN + B0 * B1 * B2 * A3 * CIN + A2 * B2 * B3 + A1 * B1 * A2 * B3 + A0 * B0 * A1 * A2 * B3 + A0 * A1 * A2 * B3 * CIN + B0 * A1 * A2 * B3 * CIN + A0 * B0 * B1 * A2 * B3 + A0 * B1 * A2 * B3 * CIN + B0 * B1 * A2 * B3 * CIN + A1 * B1 * B2 * B3 + A0 * B0 * A1 * B2 * B3 + A0 * A1 * B2 * B3 * CIN + B0 * A1 * B2 * B3 * CIN + A0 * B0 * B1 * B2 * B3 + A0 * B1 * B2 * B3 * CIN + B0 * B1 * B2 * B3 * CIN
