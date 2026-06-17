@@ -19,6 +19,28 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-17 — GALasm dialect: device-named strict vs. extended
+What: Added an optional `gal: <device>` YAML key (one of GALasm's four device
+names: GAL16V8/GAL20V8/GAL22V10/GAL20RA10). Naming a device selects *strict*
+simulation — the slow simulator accepts only that device's GALasm language
+subset and physical capacity and refuses to run otherwise (a pure accept/reject
+preflight gate that never changes simulation results). Omitting it (the default
+for the non-GAL 74-series library) selects the *extended* dialect: the union of
+the four GAL device dialects with capacity limits lifted, plus an XOR operator
+and the GAL20RA10 per-output `.CLK`/`.ARST`/`.APRST` clock/reset/preset suffixes.
+Extended reaches parts flat SOP could not — the 74HC283 adder (XOR) and the
+dual-clock 74HC74/192/193/595 (per-output clocks). Documented that complementary
+outputs (74HC151/175/165) need no language change (name the inverted pin without
+a leading `/` and derive it), and that async load of *variable* data (74HC165)
+remains outside even the extended dialect.
+Why: Several `moar-parts` components could not be modeled (notes/missed-components.md).
+Discussion rejected a full Verilog parser (disproportionate; stakeholder dislikes
+it) and a bare strict/extended boolean (can't name which device); a device-named
+knob makes strict a real fit-checker and gives extended a principled definition
+grounded in real GALasm. Specs-only; implementation to follow.
+Touches: FR-062d, FR-066a (new), FR-079a (new), FR-079b (new), glossary; design
+§6.3, §6.13, §7.6, §8.
+
 ## 2026-06-16 — Rotate the selection as a rigid group
 What: Rotate (R) now turns the whole selection as one rigid body about a single
 grid-snapped pivot — every selected component plus the bends/junctions interior

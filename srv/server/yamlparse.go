@@ -24,6 +24,13 @@ const (
 var validSides = map[string]bool{"left": true, "right": true, "top": true, "bottom": true}
 var validDirs = map[string]bool{"in": true, "out": true, "bidir": true, "tristate": true}
 
+// validGalDevices is GALasm's own device set (galasmManual.txt); naming one in
+// `gal:` selects strict dialect (FR-066a). The server validates only the name —
+// the dialect it selects is enforced client-side at Run (§6.13, FR-079b).
+var validGalDevices = map[string]bool{
+	"GAL16V8": true, "GAL20V8": true, "GAL22V10": true, "GAL20RA10": true,
+}
+
 // validRenderAs is the schematic-symbol set for subunit components (FR-013b).
 var validRenderAs = map[string]bool{
 	"nand": true, "and": true, "or": true, "nor": true, "xor": true, "xnor": true,
@@ -50,6 +57,7 @@ type yamlComponent struct {
 	Delays     map[string]float64 `yaml:"delays"`
 	Behavior   string             `yaml:"behavior"`
 	Clock      string             `yaml:"clock"`
+	Gal        string             `yaml:"gal"`
 
 	// Documentation (FR-104), all optional.
 	Description string         `yaml:"description"`
@@ -169,6 +177,12 @@ func ParseComponent(path string) (ComponentType, error) {
 		}
 	}
 
+	// gal: (FR-066a) — validate only the device name; the strict-vs-extended
+	// dialect it selects is enforced client-side at Run (§6.13).
+	if doc.Gal != "" && !validGalDevices[doc.Gal] {
+		return ComponentType{}, fmt.Errorf("%s: gal names unknown device %q (want GAL16V8|GAL20V8|GAL22V10|GAL20RA10)", path, doc.Gal)
+	}
+
 	var groups []PinGroup
 	groupNames := make(map[string]bool, len(doc.Groups))
 	for _, g := range doc.Groups {
@@ -206,6 +220,7 @@ func ParseComponent(path string) (ComponentType, error) {
 			Delays:      doc.Delays,
 			Behavior:    doc.Behavior,
 			Clock:       doc.Clock,
+			Gal:         doc.Gal,
 			Description: doc.Description,
 			Datasheet:   datasheet,
 		}, nil
@@ -242,6 +257,7 @@ func ParseComponent(path string) (ComponentType, error) {
 		Delays:      doc.Delays,
 		Behavior:    doc.Behavior,
 		Clock:       doc.Clock,
+		Gal:         doc.Gal,
 		Description: doc.Description,
 		Datasheet:   datasheet,
 	}, nil

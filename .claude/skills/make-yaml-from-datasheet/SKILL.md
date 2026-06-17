@@ -14,9 +14,16 @@ match its structure, comment style, and conventions exactly.
 - `specs/design.md` §7.6 — the **binding** YAML format and field reference.
 - `specs/design.md` §6.3 — the server-side validation rules the file must pass
   (unique pin/group names, pins within outline, valid side/dir, etc.).
-- `specs/galasmManual.txt` — the **authoritative** GALasm reference
-  (parser-verified, GAL22V10 dialect); equations must conform to it.
-- `srv/components/74138.yaml` — the exemplar (unit part with behavior).
+- `specs/galasmManual.txt` — the GALasm language reference (the **strict**
+  GAL-device dialect). The simulator evaluates the **extended** dialect by
+  default (FR-079a): everything in the manual **plus** an XOR operator and
+  per-output clocks (see §4). Equations must conform to the manual *unless* you
+  rely on a clearly-labelled extended feature — and you only need strict
+  conformance when the part declares `gal:` (FR-066a/FR-079b, below).
+- `srv/components/74138.yaml` — the exemplar (unit part, plain combinational).
+- `srv/components/74283.yaml` — exemplar for the extended-dialect `:+:` XOR
+  operator (the 4-bit adder's sum bits).
+- `srv/components/74574.yaml` — exemplar for sequential (`.R` + `clock:`) parts.
 - `srv/components/7400.yaml` — exemplar for `rendertype: subunit` parts.
 
 ## 2. Find the datasheet
@@ -80,11 +87,21 @@ This is the hard part. Conventions (established with the stakeholder on the
   to a signal name; signal names are the YAML pin names with any active-low
   `/` prefix dropped. So for pin `/E1`, the token `/E1` means "pin /E1 is
   LOW (asserted)". State this convention in the block's header comment.
-- **Sum-of-products only**: AND terms (`*`) joined by OR (`+`). GALasm has
-  **no parentheses** — `/(A * B)` is not in the language. If the function
-  needs a complemented product, apply De Morgan by hand or put the `/` on the
-  output (LHS `/Yn = term` drives pin Yn LOW exactly when the term is true).
-  The full polarity rule (declaration/use XOR) is galasmManual.txt §3.3.
+- **Sum-of-products**: AND terms (`*`) joined by OR (`+`). GALasm has **no
+  parentheses** — `/(A * B)` is not in the language. If the function needs a
+  complemented product, apply De Morgan by hand or put the `/` on the output
+  (LHS `/Yn = term` drives pin Yn LOW exactly when the term is true). The full
+  polarity rule (declaration/use XOR) is galasmManual.txt §3.3.
+- **XOR via `:+:` (extended dialect, FR-079a)**: when a flat sum-of-products
+  blows up — parity, comparators, adder sum bits — join SOP groups with the
+  `:+:` operator instead: `S = A :+: B :+: CIN`. `:+:` binds looser than `+`,
+  so each operand is a full SOP. There are no internal nodes, so a value that
+  ripples (e.g. an adder carry into bit n) must be inlined as the flat SOP of
+  the primary inputs; only the rippling term grows, while the XOR keeps the
+  output itself tiny (see 74283.yaml — the sum bits are trivial, only the
+  fast-carry `COUT` expands). `:+:` is **extended-only**: never use it in a part
+  that declares `gal:` (the GAL devices have no XOR), and never inside `AR`/`SP`/
+  `.E`/`.CLK`/`.ARST`/`.APRST` (single-term constructs).
 - Derive the equations from the function/truth table and then **verify every
   row**, including the disabled/default rows (for active-low outputs these
   usually fall out of the same equations — say so in a comment rather than
@@ -101,9 +118,13 @@ This is the hard part. Conventions (established with the stakeholder on the
   symbol; the equations are the authoritative logic. GALasm pin names may
   begin with a digit (galasmManual.txt §1.3), so the datasheet's `1A`/`1Y`
   names are used verbatim.
-- **Physical GAL capacity is NOT a constraint**: behavior blocks use the
-  GALasm language, not the 22V10's pin count, OLMC count, or per-pin
-  product-term limits (galasmManual.txt §5).
+- **Extended by default; strict only on request (FR-066a/FR-079a/FR-079b)**: a
+  74-series part models behavior, so omit `gal:` — it gets the extended dialect
+  (XOR, per-output clocks, no capacity limit). Add a top-level `gal: <device>`
+  (`GAL16V8`/`GAL20V8`/`GAL22V10`/`GAL20RA10`) **only** when authoring an actual
+  GAL you intend to burn: that turns on strict validation, which rejects the
+  extended-only features and enforces the device's pin/OLMC/product-term
+  capacity. Don't reach for `gal:` to model a 7400-series chip.
 - Cite the datasheet table number in the block's comments.
 - **Sequential parts** (latches, flip-flops, counters): registered outputs
   are fully documented — `.R` outputs, AR/SP, and `.E` are galasmManual.txt
@@ -115,6 +136,16 @@ This is the hard part. Conventions (established with the stakeholder on the
   states this and names the clock pin and its active edge. Registered outputs
   are then `Qn.R = <data>` with an optional single-term `.E` enable for
   3-state outputs (see `srv/components/74574.yaml`).
+- **Independent clock domains (extended dialect, FR-079a)**: the single global
+  `clock:` pin clocks every plain `.R` register, so a part with **two or more
+  independent clocks** (dual flip-flops like the 74HC74, up/down counters, a
+  shift register with a separate output-latch clock) cannot use it alone.
+  Instead give each registered output its own GAL20RA10-style suffix — a
+  single-term `.CLK` naming its clock pin, and optional single-term `.ARST`
+  (async reset) / `.APRST` (async preset): `Q1.R = D1` / `Q1.CLK = CP1`. An
+  output that carries its own `.CLK` ignores the global `clock:`; mix the two
+  freely (some registers global, some self-clocked). A part whose `.R` outputs
+  **all** carry `.CLK` needs no top-level `clock:` key at all.
 - **`clock:` keyword (REQUIRED for sequential parts, FR-062d)**: whenever the
   behavior block uses `.R`, add a top-level `clock: <pin name>` key naming the
   clock input pin (e.g. `clock: CP`) — it is how the simulator knows which pin
@@ -131,7 +162,15 @@ This is the hard part. Conventions (established with the stakeholder on the
    `Number`. Run it, then **delete it**. (Pattern: see the 74138 session —
    count equation lines by prefix, not by `=`, since comments contain `=`.)
 2. Run `go test ./...` from `sim/srv` to confirm the library still loads.
-3. Re-read the finished YAML against the datasheet one last time: pin numbers,
+3. **Verify the logic by simulation**, not by eye — essential for anything
+   beyond a small truth table (adders, comparators, multi-term carries) and for
+   machine-generated equations. Write a throwaway Node script in `/Users/jeff/tmp`
+   that imports `web/js/engine/galasm.js`, reads the YAML's `behavior:` block,
+   `compileBehavior`s it, and checks every output via `evalCombinational`
+   (combinational) or `updateRegisters` (sequential) against the datasheet truth
+   table — or against arithmetic for an exhaustive input sweep (the 74283 was
+   verified over all 512 input combinations this way). Run it, then delete it.
+4. Re-read the finished YAML against the datasheet one last time: pin numbers,
    truth-table rows, delay values.
 
 ## Notes

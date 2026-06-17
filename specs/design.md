@@ -518,7 +518,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
 ### 6.3 Go: YAML parser (`sim/server/yamlparse.go`)
 - **Purpose:** convert one YAML file's bytes (YAML — §7.6) into a `ComponentType`.
-- **Satisfies:** FR-061, FR-062, FR-062a, FR-062b, FR-062c, FR-062d, FR-063, FR-064, FR-066, FR-104.
+- **Satisfies:** FR-061, FR-062, FR-062a, FR-062b, FR-062c, FR-062d, FR-063, FR-064, FR-066, FR-066a, FR-104.
 - **Interface (the deferral boundary — now bound to the YAML format in §7.6):**
   - `ParseComponent(path string) (ComponentType, error)`
   - The returned `ComponentType` MUST be fully populated for the fields in §7.1.
@@ -539,7 +539,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   explicit `outline:` can violate this). An optional `clock: <pin name>`
   (FR-062d) must name an existing pin with `dir: in`; whether the behavior block
   actually *requires* a clock (uses `.R`) is checked client-side at Run time
-  (§6.13), since the server keeps the behavior opaque (FR-066). Power and ground
+  (§6.13), since the server keeps the behavior opaque (FR-066). An optional
+  `gal: <device>` (FR-066a) must be one of `GAL16V8`/`GAL20V8`/`GAL22V10`/
+  `GAL20RA10`; the server validates only the device **name** and carries it onto
+  the `ComponentType` — the dialect it selects (strict vs extended) is enforced
+  client-side by the simulator at Run (§6.13), since the behavior block is
+  otherwise opaque (FR-066). Power and ground
   pins are **not represented** — there is no `pwr`/`power` direction and such
   pins are simply omitted from the file (and thus from the symbol and the
   simulation).
@@ -1320,6 +1325,43 @@ no sequential part could ever leave U.)
   contributes U (pessimistic). `AR` true forces all the instance's registers to
   the reset state each step (async); `AR` U forces them U; `SP` true at a clock
   edge sets them (manual §3.6).
+- **Dialect modes (FR-066a/FR-079a/FR-079b).** `compileBehavior` takes the
+  dialect from `typeData.gal`: absent → **extended** (default); a device name →
+  **strict** for that device. The two modes share **one** evaluator — strictness
+  is a validation gate layered over compile, never a second code path (FR-079b),
+  so a block that passes strict validation evaluates bit-identically to the same
+  block in extended mode.
+  - *Extended* adds two things over flat SOP (FR-079a): (a) an **XOR** operator
+    (the multi-char token `:+:`, PALASM's spelling) that joins sum-of-products
+    operands — evaluation XORs the operand values with the
+    same selective pessimism as the rest (a 0/1 result only when no operand is
+    U/Z, else U); the compiled output record carries XOR-joined term groups
+    rather than a single sum. (b) **Per-output clock/async control** via the
+    GAL20RA10 suffixes `.CLK`/`.ARST`/`.APRST` (one product term each): a `.R`
+    output may name its own clock signal in `.CLK`, and its own async reset/preset
+    in `.ARST`/`.APRST`, instead of sharing the part's global `clock:`+`AR`/`SP`.
+  - *Strict* (`gal:` present) runs a device table — pin/OLMC counts, which
+    suffixes and which of `AR`/`SP`/`.CLK`/`.ARST`/`.APRST` the device allows, and
+    the per-OLMC product-term profile — and pushes a preflight error (§6.13
+    `errors`) for any construct or capacity the device lacks (e.g. XOR on any
+    device, `.CLK` on a non-20RA10, `AR`/`SP` on a 16V8/20V8). The product-term
+    profile is checked **conservatively** (terms as written, no minimization —
+    FR-079b); the cheap structural limits are exact.
+- **Per-register clocks (sim.js).** Extended per-output `.CLK` means a single
+  evaluation entity may hold registers on **different** clock nets, so the
+  engine's one-`clockNet`-per-entity assumption generalizes to a clock net **per
+  `.R` register** (the global `clock:` pin is the default when an output gives no
+  `.CLK`). Each step latches each register on the 0→1 of *its own* clock net and
+  applies that register's own `.ARST`/`.APRST` (async) — the existing rising-edge
+  and `AR`/`SP` machinery, indexed per register instead of per entity.
+- **Complementary outputs — convention, no language change.** A part that exposes
+  both a true output and its complement on separate pins (74HC151 `Y`//`Y`,
+  74HC175 `Qn`//`Qn`, 74HC165 `/Q7`) must **not** name the inverted pin `/Q0`:
+  the signal-name rule (§7.6) strips the `/`, so `Q0` and `/Q0` would collide on
+  one net. Name the inverted pin without a leading `/` (e.g. `Q0B`/`nQ0`) and
+  drive it with a derived inverse equation reading the true net (`Q0B = /Q0`).
+  The complement then lags its true output by one unit — invisible at human
+  pacing — and no language extension is needed.
 
 **`sim.js` — engine:**
 - **Interface:** `createSim({store, renderer, library}) → {run(), stop(),
@@ -1722,7 +1764,8 @@ pins:                    # unit + dir; pos is not used (FR-014a)
 | `groups[].pins` | — | `PinGroup.pins` | ordered member names (bit order) |
 | `delays` | no | `delays` | `map[string]number`, ns (FR-064) |
 | `behavior` | no | `behavior` | literal block scalar; verbatim (FR-066); evaluated by the slow simulator (FR-079) |
-| `clock` | iff `.R` | `clock` | names the clock input pin for `.R` registered outputs (FR-062d); must exist with `dir: in`. E.g. `clock: CP` in 74574.yaml |
+| `clock` | iff `.R` | `clock` | names the global clock input pin for `.R` registered outputs (FR-062d); must exist with `dir: in`. E.g. `clock: CP` in 74574.yaml. A `.R` output that gives its own `.CLK` (extended, FR-079a) needs no global `clock:` |
+| `gal` | no | `gal` | optional GAL device name selecting **strict** dialect (FR-066a): one of `GAL16V8`/`GAL20V8`/`GAL22V10`/`GAL20RA10`. Omit ⇒ **extended** dialect (default; FR-079a). Server validates the name only |
 | `description` | no | `description` | optional one-line function summary (FR-104); presentation-only |
 | `datasheet` | no | `datasheet` | optional mapping `{vendor, title, rev, url}` (FR-104) |
 | `pins[].desc` | no | `Pin.desc` | optional pin role text (FR-104) |
@@ -1753,6 +1796,19 @@ lowest-ceremony way to hand-type equations. Two gotchas the author must know:
 for comments there; (2) the block's indentation is stripped, so indent the whole
 block consistently.
 
+**Behavior dialect — `gal:` (FR-066a).** Omitting `gal:` (the case for every
+74-series part, which is not a GAL) selects the **extended** dialect (FR-079a):
+the union of the four GAL device languages with capacity limits lifted, plus an
+XOR operator — enough to model parts that flat SOP cannot (the 74HC283 adder via
+XOR; the dual-clock 74HC74/192/193/595 via per-output `.CLK`). Naming a device
+(`gal: GAL22V10`) selects **strict** validation (FR-079b): the simulator accepts
+only that device's language and capacity and refuses to run otherwise — the mode
+to use when authoring an actual GAL you intend to burn. The value vocabulary is
+GALasm's own four device names, so a strict part's `gal:` matches the device line
+of the equivalent `.pld`. Strict never changes simulation *results*, only whether
+the block is accepted, so a part can be developed in extended mode and later
+locked to a device.
+
 **Authoring gotchas (hand- or AI-written).** Quote any all-digit scalar (`type:
 "74138"`); single-letter names such as `N`/`Y` stay strings under the 1.2 core
 schema (`yaml.v3`) and need no quoting; unknown top-level keys are ignored, not
@@ -1781,6 +1837,7 @@ errors (FR-066), so future sections (e.g., richer timing) are additive.
 | Slow-simulator timing model | Zero-delay settle (fixpoint per edge); event-driven with the YAML ns delays | **Unit delay: 1 unit = 1 simulated ns, double-buffered synchronous update (FR-078)** | Stakeholder-chosen. Deterministic and evaluation-order-independent; settling ripples one component level per step (observable sequence); the clock `period` (ns) sets steps/cycle with no conversion factor; a design not settled by the next edge is a *visible* timing failure. Trade-off accepted: every component takes 1 ns regardless of internal depth |
 | Four-state combination rule | Strict pessimism (any U operand → U; the vision statement's original rule, chosen first) | **Selective pessimism: `0 AND x = 0`, `1 OR x = 1`; other U combinations → U; Z reads as U (FR-077)** | Reworked 2026-06-12 (supersedes the strict-pessimism decision): under strict-U, registered feedback could never be initialized — `0 AND U = U` made even a held synchronous clear/load ineffective (discovered on the 74163), so no sequential part could leave U. Selective pessimism is what real logic permits; genuinely uninitialized paths still surface as U, preserving the debug intent |
 | Clock pin for `.R` outputs | Name convention (CP/CLK/CK); infer from equations | **Explicit `clock:` YAML key (FR-062d)** | Unambiguous and parser-validated; makes the 74574's named-clock convention machine-readable; additive per FR-066 |
+| Expressing parts beyond flat SOP / one clock (74HC74, 165, 283, 595, …) | (a) integrate a full **Verilog** parser + 4-state event simulator; (b) a bare `galasm: strict` boolean; (c) hand-coded **native-JS** behaviors for the hard parts (the `BEHAVIORS` escape hatch already used by built-ins); (d) compose hard parts as **sub-designs** of primitive built-ins (§6.14 hierarchy) | **Device-named dialect: `gal: <device>` ⇒ strict that device; omit ⇒ extended (union of the four GAL dialects, capacity lifted, plus XOR) — FR-066a/FR-079a/FR-079b** | Verilog is an order of magnitude more code than the whole engine, imports a worldview that clashes with the unit-delay SOP model, and the stakeholder dislikes it — disproportionate for ~5 parts. A boolean can't say "fits *what*", and breaks the moment a second device matters; naming the device makes strict a real "would this burn?" gate and gives *extended* a principled definition (the GAL20RA10's per-output `.CLK` is real GALasm, so independent clock domains aren't invented syntax). Strict is a pure accept/reject gate, never a second evaluator. The native-JS (c) and sub-design (d) paths remain available for behaviors no GAL can express (74HC165 async variable load) — they sit *outside* the `gal:` flag and are out of scope for this change |
 | API versioning | Unversioned routes | **`/api/v1/` prefix** | New endpoints (future transpiler) added without breaking clients (NFR-004) |
 | Sub-design embedding & off-sheet connectors (FR-094–FR-103) | (a) embed a copy of the child like FR-057; (b) two separate primitives (a port object and a distinct connector object); (c) compute multi-sheet/hierarchical nets in the editor at edit time | **One `port` built-in (a new `connector` vertex kind) serving both roles; a sub-design instance is a live relative-path reference whose interface is resolved to a synthetic in-memory `ComponentType`; flatten + cross-file label-union composed only at Run** | The synthetic type lets the whole pin/vertex/wire/netlist/render pipeline serve hierarchy unchanged — only render style, navigation, and flatten are new; a live reference keeps one source of truth (no stale copy, supersedes FR-057 here); the junction-identity decision already reserved a single `connector` vertex kind for this; composing cross-file nets only at Run keeps single-sheet editing fast and local (NFR-005); render style is deliberately cosmetic so simulation semantics never depend on a symbol toggle (stakeholder-confirmed) |
 

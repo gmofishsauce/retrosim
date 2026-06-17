@@ -22,6 +22,7 @@ type ComponentType struct {
 	Delays     map[string]float64 `json:"delays,omitempty"`    // optional propagation delays, ns (FR-064)
 	Behavior   string             `json:"behavior,omitempty"`  // GALasm text, captured verbatim (FR-066); evaluated client-side (FR-079)
 	Clock      string             `json:"clock,omitempty"`     // optional clock input pin for .R behavior outputs (FR-062d)
+	Gal        string             `json:"gal,omitempty"`       // optional GAL device selecting strict dialect (FR-066a); "" = extended (FR-079a)
 
 	// Documentation (FR-104): optional, presentation-only. Copied through to the
 	// properties panel (FR-105); never affects geometry, pins, or simulation.

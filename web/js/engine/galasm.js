@@ -15,7 +15,9 @@
 //   {
 //     outputs: [ { signal, pin, kind: "plain"|"T"|"R", lhsLow,
 //                  terms: [[{signal, low}]],   // sum of products
-//                  enable: [{signal, low}]|null } ],   // single .E term
+//                  xor: [ terms, … ],          // :+: groups XORed with terms (FR-079a)
+//                  enable: [{signal, low}]|null,       // single .E term
+//                  clk, arst, aprst: term|null } ],    // GAL20RA10 per-output (FR-079a)
 //     ar: [{signal, low}]|null,   // async reset term (manual §3.6)
 //     sp: [{signal, low}]|null,   // sync preset term
 //   }
@@ -33,6 +35,62 @@ export const VZ = 3;
 const NAME_RE = /^[A-Za-z0-9]+$/;
 const OUTPUT_DIRS = new Set(["out", "bidir", "tristate"]);
 
+// GAL_DEVICES drives strict validation (FR-079b): the cheap, exact per-device
+// limits. `ioPins` is the device's pin count minus the two power/ground pins
+// (not represented in the YAML). `maxTerms` is the device's largest per-OLMC
+// product-term capacity (the position-specific 22V10 profile is not enforced —
+// physical OLMC pins are not assigned here). `ar` = supports AR/SP (22V10 only);
+// `ra10` = supports per-output .CLK/.ARST/.APRST (GAL20RA10 only); `eOnReg` =
+// allows .E on a registered output (the 16V8 forbids it, manual §6).
+const GAL_DEVICES = {
+  GAL16V8: { ioPins: 18, olmc: 8, maxTerms: 8, ar: false, ra10: false, eOnReg: false },
+  GAL20V8: { ioPins: 22, olmc: 8, maxTerms: 8, ar: false, ra10: false, eOnReg: true },
+  GAL22V10: { ioPins: 22, olmc: 10, maxTerms: 16, ar: true, ra10: false, eOnReg: true },
+  GAL20RA10: { ioPins: 22, olmc: 10, maxTerms: 8, ar: false, ra10: true, eOnReg: true },
+};
+
+// validateStrict enforces a named GAL device's language subset and capacity
+// (FR-079b). It is a pure accept/reject gate run only when `gal:` is set: it
+// never alters the compiled form, so a block that passes evaluates identically
+// to the extended dialect. The first violation throws via `fail` (preflight
+// refuses to start). The product-term check counts terms as written (no
+// minimization), so it is conservative — it may reject a block real GALasm
+// would fit after reduction.
+function validateStrict(typeData, compiled, fail) {
+  const dev = GAL_DEVICES[typeData.gal];
+  if (!dev) fail(`unknown gal device ${typeData.gal}`);
+  const d = typeData.gal;
+  for (const out of compiled.outputs) {
+    if (out.xor.length) {
+      fail(`${d} has no XOR operator (:+:) — XOR is extended-dialect only`);
+    }
+    if ((out.clk || out.arst || out.aprst) && !dev.ra10) {
+      fail(`${d} has no per-output .CLK/.ARST/.APRST (GAL20RA10 only)`);
+    }
+    if (dev.ra10 && out.kind === "R" && !out.clk) {
+      fail(`${d} registered output ${out.signal} requires a .CLK equation`);
+    }
+    if (out.kind === "R" && out.enable && !dev.eOnReg) {
+      fail(`${d} does not allow .E on the registered output ${out.signal}`);
+    }
+    if (out.terms.length > dev.maxTerms) {
+      fail(
+        `${out.signal}: ${out.terms.length} product terms exceed ${d}'s ${dev.maxTerms}-term capacity ` +
+          `(counted as written; no minimization)`,
+      );
+    }
+  }
+  if ((compiled.ar || compiled.sp) && !dev.ar) {
+    fail(`${d} has no AR/SP (GAL22V10 only)`);
+  }
+  if (compiled.outputs.length > dev.olmc) {
+    fail(`${compiled.outputs.length} outputs exceed ${d}'s ${dev.olmc} OLMCs`);
+  }
+  if (typeData.pins.length > dev.ioPins) {
+    fail(`${typeData.pins.length} pins exceed ${d}'s ${dev.ioPins} usable I/O pins`);
+  }
+}
+
 // tokenize strips ';' comments and splits the block into tokens: names and
 // the single-character operators / ! * & + # = . (manual §2).
 function tokenize(text) {
@@ -48,6 +106,14 @@ function tokenize(text) {
       } else if ("/!*&+#=.".includes(c)) {
         tokens.push(c);
         i++;
+      } else if (c === ":") {
+        // XOR is the multi-char token :+: (PALASM spelling, FR-079a).
+        if (line.slice(i, i + 3) === ":+:") {
+          tokens.push(":+:");
+          i += 3;
+        } else {
+          throw new Error('illegal character ":" (XOR is spelled :+:)');
+        }
       } else {
         let j = i;
         while (j < line.length && /[A-Za-z0-9]/.test(line[j])) j++;
@@ -168,6 +234,7 @@ export function compileBehavior(typeData) {
       if (peek() === ".") fail(`${name} takes no suffix`);
       if (next() !== "=") fail(`expected = after ${name}`);
       const terms = parseRHS();
+      if (peek() === ":+:") fail(`${name} may not use XOR (:+:)`);
       if (terms.length !== 1) fail(`${name} takes exactly one product term`);
       if (name === "AR") {
         if (ar) fail("AR defined twice");
@@ -183,8 +250,8 @@ export function compileBehavior(typeData) {
     if (peek() === ".") {
       next();
       suffix = parseName("a suffix");
-      if (suffix !== "T" && suffix !== "R" && suffix !== "E") {
-        fail(`unknown suffix .${suffix} (want .T, .R, or .E)`);
+      if (!["T", "R", "E", "CLK", "ARST", "APRST"].includes(suffix)) {
+        fail(`unknown suffix .${suffix} (want .T, .R, .E, .CLK, .ARST, or .APRST)`);
       }
     }
     if (next() !== "=") fail(`expected = after ${suffix ? `${name}.${suffix}` : name}`);
@@ -196,6 +263,13 @@ export function compileBehavior(typeData) {
     }
     const lhsLow = useNeg;
     const terms = parseRHS();
+    // XOR groups (FR-079a): the output's value is `terms` XORed with each
+    // :+:-joined sum-of-products group. Empty for the common (non-XOR) case.
+    const xor = [];
+    while (peek() === ":+:") {
+      next();
+      xor.push(parseRHS());
+    }
 
     if (suffix === "E") {
       // .E: after its output's equation; only on .T/.R; one per pin; LHS not
@@ -205,8 +279,24 @@ export function compileBehavior(typeData) {
       if (out.kind === "plain") fail(`.E on plain output ${name} (must be .T or .R)`);
       if (out.enable) fail(`two .E equations for ${name}`);
       if (lhsLow) fail(`.E left-hand side for ${name} may not be negated`);
+      if (xor.length) fail(`.E for ${name} may not use XOR (:+:)`);
       if (terms.length !== 1) fail(`.E for ${name} takes exactly one product term`);
       out.enable = terms[0];
+      continue;
+    }
+
+    // .CLK/.ARST/.APRST (GAL20RA10, FR-079a): per-output clock and async
+    // reset/preset, each a single product term, after the output's .R equation.
+    if (suffix === "CLK" || suffix === "ARST" || suffix === "APRST") {
+      const out = bySignal.get(name);
+      if (!out) fail(`.${suffix} for ${name} before its output equation`);
+      if (out.kind !== "R") fail(`.${suffix} on ${name} requires a registered (.R) output`);
+      if (lhsLow) fail(`.${suffix} left-hand side for ${name} may not be negated`);
+      if (xor.length) fail(`.${suffix} for ${name} may not use XOR (:+:)`);
+      if (terms.length !== 1) fail(`.${suffix} for ${name} takes exactly one product term`);
+      const key = suffix === "CLK" ? "clk" : suffix === "ARST" ? "arst" : "aprst";
+      if (out[key]) fail(`two .${suffix} equations for ${name}`);
+      out[key] = terms[0];
       continue;
     }
 
@@ -217,14 +307,22 @@ export function compileBehavior(typeData) {
       kind: suffix ?? "plain",
       lhsLow,
       terms,
+      xor,
       enable: null,
+      clk: null, // per-output clock term (.CLK); null ⇒ uses the global clock: pin
+      arst: null, // per-output async reset term (.ARST)
+      aprst: null, // per-output async preset term (.APRST)
     };
     bySignal.set(name, out);
     outputs.push(out);
   }
 
   if (outputs.length === 0) fail("no equations found");
-  return { outputs, ar, sp };
+  const compiled = { outputs, ar, sp };
+  // Strict device gate (FR-079b): only when `gal:` names a device. Never alters
+  // `compiled` — a passing block evaluates identically to extended mode.
+  if (typeData.gal) validateStrict(typeData, compiled, fail);
+  return compiled;
 }
 
 // --- Evaluation (§6.13, FR-077 selective pessimism) ---
@@ -274,6 +372,24 @@ function xorLow(v, low) {
   return v === V0 ? V1 : V0;
 }
 
+// xorValues: XOR of two 0/1/U values (FR-079a). XOR has no controlling value,
+// so any U operand yields U (full pessimism); otherwise equal → 0, differ → 1.
+function xorValues(a, b) {
+  if (a === VU || b === VU) return VU;
+  return a === b ? V0 : V1;
+}
+
+// evalCombinational: an output's combinational value — its sum-of-products
+// (`terms`) XORed with each `:+:` group (`xor`, FR-079a). With no XOR groups
+// this is exactly evalSum(terms).
+export function evalCombinational(output, readNet) {
+  let v = evalSum(output.terms, readNet);
+  for (const group of output.xor ?? []) {
+    v = xorValues(v, evalSum(group, readNet));
+  }
+  return v;
+}
+
 // evalOutput returns one output's driver contribution: V0/V1, VU, or VZ when
 // a .T/.R enable is false. A plain/.T output drives its sum XOR lhsLow; a .R
 // output presents its register XOR lhsLow (the sum is the D input, latched by
@@ -286,27 +402,55 @@ export function evalOutput(output, readNet, registers) {
     if (e === VU) return VU; // uncertain enable: pessimistic U, not Z
   }
   const v =
-    output.kind === "R" ? registers.get(output.signal) : evalSum(output.terms, readNet);
+    output.kind === "R" ? registers.get(output.signal) : evalCombinational(output, readNet);
   return xorLow(v, output.lhsLow);
 }
 
 // updateRegisters advances one instance's .R registers for one unit step
-// (called by sim.js *before* outputs are evaluated). On a rising clock edge
-// (clockRose, detected by sim.js as a strict 0→1 of the clock net) each
-// register latches its sum-of-products D input; SP true at that edge sets all
-// registers (manual §3.6). AR is asynchronous: evaluated every step, true
-// resets all registers, U forces them U (pessimistic); it overrides the edge.
-export function updateRegisters(compiled, readNet, registers, clockRose) {
-  if (clockRose) {
-    for (const out of compiled.outputs) {
-      if (out.kind === "R") registers.set(out.signal, evalSum(out.terms, readNet));
+// (called by sim.js *before* outputs are evaluated, every step). Registers come
+// in two families (FR-079a/FR-062d):
+//
+//   • Global-clock registers — a .R output with no .CLK. They latch on
+//     `globalRose` (sim.js detects the 0→1 of the type's `clock:` net); the
+//     global SP sets them at that edge and the global AR resets them
+//     asynchronously (manual §3.6). This is the GAL16V8/20V8/22V10 model.
+//   • Per-output-clock registers — a .R output carrying a GAL20RA10 `.CLK`
+//     term. Each latches on the rising edge of *its own* clock term (edge
+//     detected here against `clockPrev`, a signal→prev-value map the entity
+//     persists), and applies its own async `.APRST` (set) and `.ARST` (reset)
+//     every step. The global SP/AR do not touch these.
+//
+// U on a reset/preset/clock forces the affected register U (pessimistic).
+export function updateRegisters(compiled, readNet, registers, globalRose, clockPrev) {
+  for (const out of compiled.outputs) {
+    if (out.kind !== "R") continue;
+    if (out.clk) {
+      const cur = evalTerm(out.clk, readNet);
+      const prev = clockPrev.get(out.signal);
+      if (prev === V0 && cur === V1) {
+        registers.set(out.signal, evalCombinational(out, readNet));
+      }
+      clockPrev.set(out.signal, cur);
+      if (out.aprst) {
+        const p = evalTerm(out.aprst, readNet);
+        if (p !== V0) registers.set(out.signal, p === V1 ? V1 : VU);
+      }
+      if (out.arst) {
+        const a = evalTerm(out.arst, readNet);
+        if (a !== V0) registers.set(out.signal, a === V1 ? V0 : VU); // reset wins over preset
+      }
+    } else if (globalRose) {
+      registers.set(out.signal, evalCombinational(out, readNet));
     }
-    if (compiled.sp) {
-      const s = evalTerm(compiled.sp, readNet);
-      if (s !== V0) {
-        for (const out of compiled.outputs) {
-          if (out.kind === "R") registers.set(out.signal, s === V1 ? V1 : VU);
-        }
+  }
+
+  // Global SP (synchronous preset) and AR (asynchronous reset) apply only to
+  // global-clock registers (those without their own .CLK).
+  if (globalRose && compiled.sp) {
+    const s = evalTerm(compiled.sp, readNet);
+    if (s !== V0) {
+      for (const out of compiled.outputs) {
+        if (out.kind === "R" && !out.clk) registers.set(out.signal, s === V1 ? V1 : VU);
       }
     }
   }
@@ -314,7 +458,7 @@ export function updateRegisters(compiled, readNet, registers, clockRose) {
     const a = evalTerm(compiled.ar, readNet);
     if (a !== V0) {
       for (const out of compiled.outputs) {
-        if (out.kind === "R") registers.set(out.signal, a === V1 ? V0 : VU);
+        if (out.kind === "R" && !out.clk) registers.set(out.signal, a === V1 ? V0 : VU);
       }
     }
   }

@@ -180,6 +180,7 @@ func TestParseComponentErrors(t *testing.T) {
 		{"mux wrong arity", "type: T\nrendertype: subunit\nnumunits: 1\nrenderas: mux2\npins:\n  - { name: I0, side: left, unit: A, dir: in }\n  - { name: S, side: top, unit: A, dir: in }\n  - { name: Y, side: right, unit: A, dir: out }\n", "data inputs"},
 		{"clock unknown pin", "type: T\nclock: CP\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "clock names unknown pin"},
 		{"clock non-input pin", "type: T\nclock: Q0\npins:\n  - { name: Q0, side: right, pos: 1, dir: out }\n", "must have dir in"},
+		{"gal unknown device", "type: T\ngal: GAL99X9\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "gal names unknown device"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -209,6 +210,23 @@ pins:
 	}
 	if got.Clock != "CP" {
 		t.Fatalf("Clock = %q, want %q", got.Clock, "CP")
+	}
+}
+
+// A valid gal: device name lands in Gal (FR-066a); the dialect it selects is
+// enforced client-side, so the server only checks the name.
+func TestParseComponentGal(t *testing.T) {
+	got, err := ParseComponent(writeYAML(t, `
+type: "GAL22V10ADDER"
+gal: GAL22V10
+pins:
+  - { name: A0, side: left, pos: 1, dir: in }
+`))
+	if err != nil {
+		t.Fatalf("ParseComponent: %v", err)
+	}
+	if got.Gal != "GAL22V10" {
+		t.Fatalf("Gal = %q, want %q", got.Gal, "GAL22V10")
 	}
 }
 

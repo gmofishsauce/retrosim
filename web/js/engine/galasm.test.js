@@ -5,6 +5,7 @@ import {
   compileBehavior,
   evalTerm,
   evalSum,
+  evalCombinational,
   evalOutput,
   updateRegisters,
   V0,
@@ -13,12 +14,14 @@ import {
   VZ,
 } from "./galasm.js";
 
-// ty builds a minimal typeData with the given pins and behavior text.
-function ty(pins, behavior) {
+// ty builds a minimal typeData with the given pins and behavior text. An
+// optional `gal` device name selects strict validation (FR-079b).
+function ty(pins, behavior, gal) {
   return {
     name: "TT",
     pins: pins.map(([name, direction]) => ({ name, direction })),
     behavior,
+    ...(gal ? { gal } : {}),
   };
 }
 
@@ -166,7 +169,12 @@ test("validation errors (language rules)", () => {
     ["Q.T = A\n/Q.E = B\n", ".E left-hand side for Q may not be negated"],
     ["Q.T = A\nQ.E = A + B\n", ".E for Q takes exactly one product term"],
     ["Y.X = A\n", "unknown suffix .X"],
-    ["Y.CLK = A\n", "unknown suffix .CLK"],
+    ["Y.CLK = A\n", ".CLK for Y before its output equation"],
+    ["Y.CLK = A\nY = B\n", ".CLK for Y before its output equation"],
+    ["Q.T = A\nQ.CLK = B\n", ".CLK on Q requires a registered (.R) output"],
+    ["Q.R = A\nQ.CLK = A + B\n", ".CLK for Q takes exactly one product term"],
+    ["Q.R = A\nQ.CLK = B\nQ.CLK = A\n", "two .CLK equations for Q"],
+    ["Q.R = A\n/Q.ARST = B\n", ".ARST left-hand side for Q may not be negated"],
     ["AR = A + B\n", "AR takes exactly one product term"],
     ["Y.R = A\nAR = A\nAR = B\n", "AR defined twice"],
     ["/AR = A\n", "AR may not be negated"],
@@ -378,6 +386,226 @@ test("updateRegisters: latch on rising edge only; AR/SP semantics (FR-079)", () 
   // AR = U forces registers U (pessimistic).
   updateRegisters(c, nets({ D: V1, RST: VU, PRE: V0 }), registers, false);
   assert.equal(registers.get("Q"), VU);
+});
+
+test("XOR operator :+: compiles to xor groups; plain output has empty xor (FR-079a)", () => {
+  const c = compileBehavior(
+    ty(
+      [
+        ["A", "in"],
+        ["B", "in"],
+        ["C", "in"],
+        ["S", "out"],
+        ["Y", "out"],
+      ],
+      "S = A * B :+: C\nY = A * B\n",
+    ),
+  );
+  const [s, y] = c.outputs;
+  // S = (A*B) XOR (C): terms is the first SOP group, xor holds the rest.
+  assert.deepEqual(s.terms, [[lit("A"), lit("B")]]);
+  assert.deepEqual(s.xor, [[[lit("C")]]]);
+  // A plain output carries an empty xor list.
+  assert.deepEqual(y.xor, []);
+});
+
+test("XOR evaluation: truth table and U pessimism (no controlling value) (FR-079a)", () => {
+  const c = compileBehavior(
+    ty(
+      [
+        ["A", "in"],
+        ["B", "in"],
+        ["Y", "out"],
+      ],
+      "Y = A :+: B\n",
+    ),
+  );
+  const [out] = c.outputs;
+  const at = (A, B) => evalCombinational(out, nets({ A, B }));
+  assert.equal(at(V0, V0), V0);
+  assert.equal(at(V1, V0), V1);
+  assert.equal(at(V0, V1), V1);
+  assert.equal(at(V1, V1), V0);
+  // XOR has no controlling value: any U operand yields U.
+  assert.equal(at(VU, V0), VU);
+  assert.equal(at(V1, VU), VU);
+  // Through evalOutput (xorLow identity here): same results.
+  assert.equal(evalOutput(out, nets({ A: V1, B: V0 }), null), V1);
+});
+
+test("adder sum bit: chained XOR S = A :+: B :+: CIN (FR-079a, 74HC283)", () => {
+  const c = compileBehavior(
+    ty(
+      [
+        ["A", "in"],
+        ["B", "in"],
+        ["CIN", "in"],
+        ["S", "out"],
+      ],
+      "S = A :+: B :+: CIN\n",
+    ),
+  );
+  const [s] = c.outputs;
+  assert.equal(s.xor.length, 2);
+  const sum = (A, B, CIN) => evalCombinational(s, nets({ A, B, CIN }));
+  assert.equal(sum(V0, V0, V0), V0);
+  assert.equal(sum(V1, V0, V0), V1);
+  assert.equal(sum(V1, V1, V0), V0);
+  assert.equal(sum(V1, V1, V1), V1);
+});
+
+test("XOR in a registered D input latches the XOR (FR-079a)", () => {
+  const c = compileBehavior(
+    ty(
+      [
+        ["A", "in"],
+        ["B", "in"],
+        ["Q", "out"],
+      ],
+      "Q.R = A :+: B\n",
+    ),
+  );
+  const registers = new Map([["Q", VU]]);
+  updateRegisters(c, nets({ A: V1, B: V0 }), registers, true);
+  assert.equal(registers.get("Q"), V1);
+  updateRegisters(c, nets({ A: V1, B: V1 }), registers, true);
+  assert.equal(registers.get("Q"), V0);
+});
+
+test("XOR rejected on AR/SP and .E (FR-079a single-term constructs)", () => {
+  const pins = [
+    ["A", "in"],
+    ["B", "in"],
+    ["Q", "tristate"],
+  ];
+  for (const [behavior, sub] of [
+    ["Q.R = A\nAR = A :+: B\n", "AR may not use XOR"],
+    ["Q.R = A\nSP = A :+: B\n", "SP may not use XOR"],
+    ["Q.T = A\nQ.E = A :+: B\n", "may not use XOR"],
+    ["Y = A : B\n", "illegal character"],
+  ]) {
+    assert.throws(
+      () => compileBehavior(ty([...pins, ["Y", "out"]], behavior)),
+      (e) => e.message.includes(sub),
+      `behavior ${JSON.stringify(behavior)}: expected ${JSON.stringify(sub)}`,
+    );
+  }
+});
+
+test("per-output .CLK: independent clock domains (FR-079a, 74HC74-style)", () => {
+  const c = compileBehavior(
+    ty(
+      [
+        ["D1", "in"],
+        ["CP1", "in"],
+        ["Q1", "out"],
+        ["D2", "in"],
+        ["CP2", "in"],
+        ["Q2", "out"],
+      ],
+      "Q1.R = D1\nQ1.CLK = CP1\nQ2.R = D2\nQ2.CLK = CP2\n",
+    ),
+  );
+  const [q1, q2] = c.outputs;
+  assert.deepEqual(q1.clk, [lit("CP1")]);
+  assert.deepEqual(q2.clk, [lit("CP2")]);
+
+  const registers = new Map([["Q1", VU], ["Q2", VU]]);
+  const clockPrev = new Map();
+  const step = (m) => updateRegisters(c, nets(m), registers, false, clockPrev);
+
+  step({ D1: V1, D2: V0, CP1: V0, CP2: V0 });
+  assert.equal(registers.get("Q1"), VU); // no edge yet
+  // Rising CP1 only: Q1 latches D1=1; Q2's domain untouched.
+  step({ D1: V1, D2: V0, CP1: V1, CP2: V0 });
+  assert.equal(registers.get("Q1"), V1);
+  assert.equal(registers.get("Q2"), VU);
+  // Rising CP2 only (CP1 held high → no new edge): Q2 latches D2=0; Q1 holds.
+  step({ D1: V0, D2: V0, CP1: V1, CP2: V1 });
+  assert.equal(registers.get("Q1"), V1);
+  assert.equal(registers.get("Q2"), V0);
+});
+
+test("per-output .ARST/.APRST: async reset/preset, reset dominates (FR-079a)", () => {
+  const c = compileBehavior(
+    ty(
+      [
+        ["D", "in"],
+        ["CP", "in"],
+        ["CLR", "in"],
+        ["PRE", "in"],
+        ["Q", "out"],
+      ],
+      "Q.R = D\nQ.CLK = CP\nQ.ARST = CLR\nQ.APRST = PRE\n",
+    ),
+  );
+  const registers = new Map([["Q", VU]]);
+  const clockPrev = new Map();
+  const step = (m) => updateRegisters(c, nets(m), registers, false, clockPrev);
+
+  step({ D: V1, CP: V0, CLR: V0, PRE: V0 });
+  // Async preset with no clock edge.
+  step({ D: V0, CP: V0, CLR: V0, PRE: V1 });
+  assert.equal(registers.get("Q"), V1);
+  // Reset and preset both asserted: reset wins.
+  step({ D: V0, CP: V0, CLR: V1, PRE: V1 });
+  assert.equal(registers.get("Q"), V0);
+  // Rising edge latches D with both async controls released.
+  step({ D: V1, CP: V1, CLR: V0, PRE: V0 });
+  assert.equal(registers.get("Q"), V1);
+});
+
+test("strict GAL22V10 accepts ordinary SOP and is identical to extended (FR-079b)", () => {
+  const pins = [["A", "in"], ["B", "in"], ["Y", "out"]];
+  const behavior = "Y = A * /B + /A * B\n";
+  const strict = compileBehavior(ty(pins, behavior, "GAL22V10"));
+  const extended = compileBehavior(ty(pins, behavior));
+  // The gate never alters the compiled form.
+  assert.deepEqual(strict.outputs, extended.outputs);
+});
+
+test("strict validation rejects extended-only and out-of-capacity constructs (FR-079b)", () => {
+  const io = [["A", "in"], ["B", "in"], ["CP", "in"], ["Y", "out"], ["Q", "tristate"]];
+  const bad = [
+    // XOR is extended-only on every device.
+    [io, "Y = A :+: B\n", "GAL22V10", "no XOR operator"],
+    // AR/SP only on the 22V10.
+    [io, "Q.R = A\nAR = B\n", "GAL16V8", "no AR/SP"],
+    // Per-output .CLK only on the 20RA10.
+    [io, "Q.R = A\nQ.CLK = CP\n", "GAL22V10", "no per-output .CLK"],
+    // 16V8 forbids .E on a registered output.
+    [io, "Q.R = A\nQ.E = B\n", "GAL16V8", "does not allow .E on the registered output"],
+    // 20RA10 registered output requires a .CLK.
+    [io, "Q.R = A\n", "GAL20RA10", "requires a .CLK equation"],
+  ];
+  for (const [pins, behavior, gal, sub] of bad) {
+    assert.throws(
+      () => compileBehavior(ty(pins, behavior, gal)),
+      (e) => e.message.includes(sub),
+      `${gal} ${JSON.stringify(behavior)}: expected ${JSON.stringify(sub)}`,
+    );
+  }
+});
+
+test("strict over-capacity product-term count is rejected, counted as written (FR-079b)", () => {
+  // Nine single-literal terms on a GAL16V8 output (max 8 terms).
+  const ins = Array.from({ length: 9 }, (_, i) => [`I${i}`, "in"]);
+  const behavior = "Y = " + ins.map(([n]) => n).join(" + ") + "\n";
+  assert.throws(
+    () => compileBehavior(ty([...ins, ["Y", "out"]], behavior, "GAL16V8")),
+    /product terms exceed GAL16V8's 8-term capacity/,
+  );
+  // The same equation is fine in extended mode (no capacity limit).
+  assert.ok(compileBehavior(ty([...ins, ["Y", "out"]], behavior)));
+});
+
+test("strict GAL20RA10 accepts per-output .CLK/.ARST; rejects AR (FR-079b)", () => {
+  const pins = [["D", "in"], ["CP", "in"], ["CLR", "in"], ["Q", "out"]];
+  assert.ok(compileBehavior(ty(pins, "Q.R = D\nQ.CLK = CP\nQ.ARST = CLR\n", "GAL20RA10")));
+  assert.throws(
+    () => compileBehavior(ty(pins, "Q.R = D\nQ.CLK = CP\nAR = CLR\n", "GAL20RA10")),
+    /no AR\/SP/,
+  );
 });
 
 test("the real 74138 and 74574 behavior blocks compile", () => {

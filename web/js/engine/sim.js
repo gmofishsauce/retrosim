@@ -103,6 +103,7 @@ export function buildSimulation(design, { onMessage = () => {} } = {}) {
       registers: new Map(),
       prevClock: VU,
       clockNet: undefined,
+      clockPrev: new Map(), // per-output .CLK previous values (FR-079a edge detection)
       pinOwner,
       uPins,
       readNet(signal) {
@@ -112,14 +113,16 @@ export function buildSimulation(design, { onMessage = () => {} } = {}) {
     };
 
     if (c) {
-      let hasRegs = false;
+      // A .R output without its own .CLK uses the global clock: pin (FR-062d);
+      // one carrying a .CLK is self-clocked (FR-079a) and needs no global clock.
+      let needsGlobalClock = false;
       for (const out of c.outputs) {
         if (out.kind === "R") {
-          hasRegs = true;
           e.registers.set(out.signal, VU); // power-up U (FR-079)
+          if (!out.clk) needsGlobalClock = true;
         }
       }
-      if (hasRegs) {
+      if (needsGlobalClock) {
         const clockPin = insts[0].typeData.clock;
         if (!clockPin) {
           errors.push(`${typeName}: behavior uses .R but the type declares no clock: pin (FR-062d)`);
@@ -208,9 +211,11 @@ export function buildSimulation(design, { onMessage = () => {} } = {}) {
   function step() {
     for (const e of entities) {
       if (e.kind !== "galasm" || e.registers.size === 0) continue;
+      // Global clock edge (for .R outputs without their own .CLK); per-output
+      // .CLK edges are detected inside updateRegisters against e.clockPrev.
       const cur = e.clockNet === undefined ? VZ : curr[e.clockNet];
-      const rose = e.prevClock === V0 && cur === V1;
-      updateRegisters(e.compiled, e.readNet, e.registers, rose);
+      const globalRose = e.prevClock === V0 && cur === V1;
+      updateRegisters(e.compiled, e.readNet, e.registers, globalRose, e.clockPrev);
       e.prevClock = cur;
     }
 
