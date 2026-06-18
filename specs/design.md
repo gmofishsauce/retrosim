@@ -1684,21 +1684,40 @@ bus yields up to *w* nets:
   bus endpoint named by a `groupConnections` entry is connected per
   FR-041a/FR-042 even though its vertex kind is `free`) runs after any deletion.
 
-### 7.4 Persistence & migration
-Files are JSON written atomically (§6.5). `formatVersion` enables future
-migration; this phase only writes/reads version `1`. Because nothing has shipped,
-the **vertex/graph model (§7.1a) is the version-`1` format from the outset — there
-is no runtime migration to write.** For the record, the conceptual map from the
-earlier endpoint-union sketch is: old `pin` endpoint → a `pin` vertex; old `free`
-→ a `free` vertex; old `junction{target,x,y}` → a `junction` vertex at `(x,y)`
-inserted as a `node` path-point in the target wire's `path`, with the branch
-wire's endpoint referencing it. Loading a file with an unknown `formatVersion` →
-server returns it as-is and the SPA warns if it is newer than it understands
-(forward-compat per NFR-004 spirit). On load the SPA also runs a cheap
-structural sanity pass (every conductor path has ≥ 2 points; every `node` path
-point and every `pin` vertex references something that exists) and rejects the
-file with a legible error instead of failing later deep in render/hit-test —
-the server validates only that the payload is JSON.
+### 7.4 Persistence & migration (FR-060c)
+Files are JSON written atomically (§6.5). `formatVersion` is the migration anchor;
+this phase writes/reads version `1`. The **vertex/graph model (§7.1a) is the
+version-`1` format from the outset** (nothing older shipped). For the record, the
+conceptual map from the earlier endpoint-union sketch is: old `pin` endpoint → a
+`pin` vertex; old `free` → a `free` vertex; old `junction{target,x,y}` → a
+`junction` vertex at `(x,y)` inserted as a `node` path-point in the target wire's
+`path`, with the branch wire's endpoint referencing it.
+
+**Migration framework (`persist.js`, FR-060c).** The compatibility scaffolding is
+in place from version 1 so future format changes slot in without touching callers:
+
+- `MIGRATIONS` maps a version *n* to a pure function upgrading a parsed save
+  object from version *n* to *n+1*. It is empty while only version 1 exists; each
+  format change bumps `FORMAT_VERSION` and adds the one step keyed by the version
+  it upgrades *from*.
+- `migrate(obj, {target = FORMAT_VERSION, migrations = MIGRATIONS})` normalizes a
+  parsed object to the target version: it reads `obj.formatVersion ?? 1` (absent =
+  oldest understood) and, while below the target, applies each step in turn,
+  stamping `formatVersion` after each. A missing step throws a legible error
+  (rejecting the load, not misreading it). A file at or beyond the target is
+  returned unchanged. `target`/`migrations` are injected only by tests, so the
+  chain is exercised before a real version 2 exists.
+- `deserializeDesign` calls `migrate` first, so every load path — Open (fileops),
+  backup recovery (§6.10), tests — sees one normalized shape.
+
+Forward-compat (newer than understood) is **not** a migrate concern: `migrate`
+passes such a file through untouched and the load flow (`fileops.loadIntoStore`)
+warns via toast `(obj.formatVersion ?? 1) > FORMAT_VERSION`, then loads best-effort
+(NFR-004 spirit). On load the SPA also runs a cheap structural sanity pass (every
+conductor path has ≥ 2 points; every `node` path point and every `pin` vertex
+references something that exists) and rejects the file with a legible error
+instead of failing later deep in render/hit-test — the server validates only that
+the payload is JSON.
 
 ### 7.5 In-memory client structures
 The live model mirrors §7.2 but additionally keeps `nextWireId` and
@@ -1994,6 +2013,7 @@ No files are modified (greenfield).
 | FR-101, FR-101a | §6.6, §6.14 | `subdesign.js`, `model/netlist.js` |
 | FR-102, FR-102a, FR-103 | §6.13, §6.14 | `sim.js`, `subdesign.js` |
 | FR-060b | §6.14, §7.1a, §7.2 | `types.go`, `model/design.js` |
+| FR-060c | §7.2, §7.4 | `model/persist.js`, `chrome/fileops.js` |
 | FR-104 | §6.3, §7.1, §7.6 | `yamlparse.go`, `types.go`, `srv/components/*.yaml` |
 | FR-105 | §6.11, §7.1 | `properties.js`, `style.css` |
 | NFR-001 | §6.1 | `main.go` |

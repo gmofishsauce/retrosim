@@ -7,7 +7,7 @@ import {
   addWire,
   addBus,
 } from "./design.js";
-import { serializeDesign, deserializeDesign } from "./persist.js";
+import { serializeDesign, deserializeDesign, migrate } from "./persist.js";
 
 function ty() {
   return {
@@ -84,4 +84,40 @@ test("deserializeDesign tolerates a minimal/empty document", () => {
   assert.equal(d.name, "empty");
   assert.deepEqual(d.components, []);
   assert.equal(d.nextVertexId, 1);
+});
+
+// --- format-version migration (§7.4). The chain is empty while only version 1
+// exists, so these exercise it with injected migrations and target version. ---
+
+test("migrate upgrades an older file through the whole migration chain", () => {
+  const migrations = {
+    1: (o) => ({ ...o, addedInV2: true }),
+    2: (o) => ({ ...o, addedInV3: true }),
+  };
+  const out = migrate({ formatVersion: 1, name: "old" }, { target: 3, migrations });
+  assert.equal(out.formatVersion, 3); // stamped up to the target
+  assert.equal(out.addedInV2, true);
+  assert.equal(out.addedInV3, true);
+  assert.equal(out.name, "old"); // untouched fields carry through
+});
+
+test("migrate treats a missing formatVersion as version 1", () => {
+  const migrations = { 1: (o) => ({ ...o, migrated: true }) };
+  const out = migrate({ name: "legacy" }, { target: 2, migrations });
+  assert.equal(out.formatVersion, 2);
+  assert.equal(out.migrated, true);
+});
+
+test("migrate rejects a file when an upgrade step is missing", () => {
+  assert.throws(
+    () => migrate({ formatVersion: 1, name: "x" }, { target: 2, migrations: {} }),
+    /no migration from save-format version 1 to 2/,
+  );
+});
+
+test("migrate leaves a current-or-newer file unchanged (forward-compat)", () => {
+  // Default target is FORMAT_VERSION (1): a current file is a no-op.
+  assert.equal(migrate({ formatVersion: 1, name: "x" }).formatVersion, 1);
+  // A newer-than-understood file passes through untouched (the load flow warns).
+  assert.equal(migrate({ formatVersion: 99, name: "y" }).formatVersion, 99);
 });

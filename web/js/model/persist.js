@@ -7,9 +7,43 @@ import { createDesign } from "./design.js";
 import { buildNets } from "./netlist.js";
 import { placeholderTypeFromWiring } from "./subdesign.js";
 
-// FORMAT_VERSION is the save-file version this client writes and understands
-// (§7.4). Loading a newer version warns but proceeds (forward-compat).
+// FORMAT_VERSION is the save-file format this client writes and understands
+// (§7.4). On load, a file from an older format version is migrated forward to
+// this version through the MIGRATIONS chain (compatibility mode); a file from a
+// newer version is loaded best-effort and the load flow warns (forward-compat,
+// fileops.js). Bump this whenever the save shape changes and add the matching
+// MIGRATIONS step.
 export const FORMAT_VERSION = 1;
+
+// MIGRATIONS upgrades a parsed save object across a single format version:
+// MIGRATIONS[n] takes a version-n object and returns a version-(n+1) object
+// (§7.4). migrate() applies the steps in order to bring any older file up to
+// FORMAT_VERSION. It is empty while only version 1 exists; each future format
+// change adds one entry keyed by the version it upgrades *from*.
+const MIGRATIONS = {
+  // 1: (obj) => ({ ...obj, /* …shape changes that define version 2… */ }),
+};
+
+// migrate normalizes a parsed save object to the current format version (§7.4).
+// A file with no `formatVersion` is treated as the oldest understood version (1).
+// An older file is upgraded by applying each MIGRATIONS step in turn, stamping
+// the new `formatVersion` after each; a missing step is a legible error. A file
+// already at — or beyond — the target is returned unchanged, so a newer-than-
+// understood file loads best-effort (the load flow warns separately). `target`
+// and `migrations` are injectable so the chain is testable before a real second
+// version exists.
+export function migrate(obj, { target = FORMAT_VERSION, migrations = MIGRATIONS } = {}) {
+  let v = obj.formatVersion ?? 1;
+  while (v < target) {
+    const step = migrations[v];
+    if (!step) {
+      throw new Error(`cannot load design: no migration from save-format version ${v} to ${v + 1}`);
+    }
+    obj = { ...step(obj), formatVersion: v + 1 };
+    v += 1;
+  }
+  return obj;
+}
 
 // serializeDesign returns the JSON-serializable save object. `nets` is recomputed
 // here and treated as derived/non-authoritative (A4).
@@ -80,6 +114,9 @@ function validateStructure(d) {
 // the id counters past the loaded ids. The derived `nets` field is ignored.
 // Throws a legible Error if the file is structurally inconsistent (§7.4).
 export function deserializeDesign(obj) {
+  // Bring an older save forward to the current format before building the model,
+  // so every load path (Open, backup recovery) sees one normalized shape (§7.4).
+  obj = migrate(obj);
   const d = createDesign(obj.name ?? "untitled");
   if (obj.defaultRender) d.defaultRender = obj.defaultRender; // FR-096
   d.components = structuredClone(obj.components ?? []);

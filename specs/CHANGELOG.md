@@ -19,6 +19,19 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-18 — Save-format versioning & migration scaffolding
+What: Formalized save-file versioning. The `formatVersion` field (already written
+as `1`) now anchors a migration framework in `persist.js`: a `MIGRATIONS` chain
+plus a `migrate()` step, called from `deserializeDesign`, that upgrades an older
+file forward to the current version on load (absent version = oldest), rejects a
+load when a required upgrade step is missing, and passes a newer file through for
+the existing forward-compat warning. The chain is empty while only version 1
+exists; `FORMAT_VERSION` stays 1. Added unit tests exercising the chain via
+injected migrations.
+Why: prepare the compatibility path now so future save-format changes — adding
+information as the product evolves — can load older designs without breaking them.
+Touches: FR-060c (new); design §7.4, §7.2
+
 ## 2026-06-17 — Clear selection and message tray on Run/Stop
 What: Starting a simulation now clears the current selection (it is locked during
 a run anyway) and clears the status-bar message tray before the run's own
