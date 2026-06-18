@@ -71,6 +71,40 @@ const PORT_ICON =
   ' font-family="system-ui,sans-serif" font-weight="bold" font-size="9" fill="#000">P</text>' +
   "</svg>";
 
+// PORT8_ICON: a short stacked column of right-pointing pentagons, suggesting the
+// 8-wide port (FR-071e). Fewer than eight, with no letter — the stack only marks
+// the type. The same glyph is used for the palette tile and the placed object.
+const PORT8_ICON =
+  '<svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"' +
+  ' fill="#fff" stroke="#333" stroke-width="1.5" stroke-linejoin="round">' +
+  "0 8 16 24".split(" ").map(Number)
+    .map((y) => `<path d="M7 ${y + 3} H20 L28 ${y + 7.5} L20 ${y + 12} H7 Z"/>`)
+    .join("") +
+  "</svg>";
+
+// BARGRAPH_ICON: an LED bar-graph — a rectangle of horizontal stripes — for the
+// 8-wide indicator (FR-071d). Alternating dark/light stripes read as lit/unlit
+// segments. Same glyph for the palette tile and the placed object's silhouette.
+const BARGRAPH_ICON =
+  '<svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true">' +
+  '<rect x="7" y="3" width="22" height="30" fill="#fff" stroke="#333" stroke-width="1.5"/>' +
+  [0, 1, 2, 3, 4, 5, 6, 7]
+    .map(
+      (i) =>
+        `<rect x="10" y="${5 + i * 3.4}" width="16" height="2.2" fill="${i % 2 ? "#cfcfcf" : "#222"}"/>`,
+    )
+    .join("") +
+  "</svg>";
+
+// BIT_NAMES returns the eight bit names "<prefix>0".."<prefix>7" for an 8-wide
+// built-in's pins and its single pin group (FR-071d/e).
+const BIT_NAMES = (prefix) => Array.from({ length: 8 }, (_, i) => `${prefix}${i}`);
+
+// BIT_PINS lays the eight bit pins down one side at grid rows 1..8 — a 3×9
+// footprint leaves a one-unit margin top and bottom (FR-071d/e).
+const BIT_PINS = (prefix, side, direction) =>
+  BIT_NAMES(prefix).map((name, i) => ({ name, side, position: i + 1, direction }));
+
 export const BUILTINS = [
   {
     name: "indicator",
@@ -163,6 +197,35 @@ export const BUILTINS = [
     //   label (signal name), portDir (in|out|bidir), width (bits, default 1),
     //   and an optional off-sheet target {file, label} (FR-101). (§6.14, §7.2)
   },
+  {
+    name: "indicator8",
+    builtin: true,
+    title: "state indicator (8-wide)", // FR-071d palette tooltip
+    icon: BARGRAPH_ICON,
+    renderType: "indicator8",
+    width: 3,
+    height: 9,
+    // Eight input bits down the left edge (one grid row each), grouped so an
+    // 8-bit bus snap-connects to all of them at once (FR-041/FR-042), adopting
+    // D0..D7 as its bit names. Display-only, like the 1-wide indicator (FR-068).
+    pins: BIT_PINS("D", "left", "in"),
+    pinGroups: [{ name: "D", pins: BIT_NAMES("D") }],
+  },
+  {
+    name: "port8",
+    builtin: true,
+    title: "port / off-sheet connector (8 wide)", // FR-071e palette tooltip
+    icon: PORT8_ICON,
+    renderType: "port8",
+    width: 3,
+    height: 9,
+    // Eight on-sheet ("internal") bits down the left edge, grouped for bus snap
+    // (FR-041/FR-042), adopting P0..P7. A grouped bus terminal only for now: it
+    // drives nothing and does no off-sheet net joining yet (FR-071e); the
+    // external/off-sheet side stays virtual.
+    pins: BIT_PINS("P", "left", "bidir"),
+    pinGroups: [{ name: "P", pins: BIT_NAMES("P") }],
+  },
 ];
 
 // BEHAVIORS maps built-in type name → behavior function (FR-067a). Behaviors
@@ -212,6 +275,16 @@ export const BEHAVIORS = {
   // net (FR-094a, netlist step 6); cross-file continuation is composed at Run by
   // flatten (FR-101a, §6.14). It is a net-label node, not a source.
   port() {
+    return [];
+  },
+  // Display only, like the 1-wide indicator (FR-071d): drives nothing; the
+  // renderer reads each bit's net value to light the bar-graph stripes.
+  indicator8() {
+    return [];
+  },
+  // Grouped bus terminal (FR-071e): drives nothing on its own. Off-sheet net
+  // joining (same-label / cross-file) is deferred to a later change.
+  port8() {
     return [];
   },
 };

@@ -610,12 +610,24 @@ function conductorById(design, id) {
 
 // rigidWiring returns the wiring interior to a group move (FR-018c): the bend
 // points (`{wireId, index}`) and the junction/free vertex ids of every conductor
-// network all of whose pin endpoints connect to a component in `movingRefdes` (a
-// Set of refdes). Pin vertices are excluded — they follow their components. A
-// network with any pin on a non-moving component, or with no pins at all, is left
-// alone (its segments stretch per FR-018).
+// network all of whose component connections are to a component in `movingRefdes`
+// (a Set of refdes). A *component connection* is a pin/connector endpoint or a
+// group-snapped bus endpoint (FR-042) — the latter is a `free` vertex but is bound
+// to its component, so it counts toward the test and is carried by the move. Pin/
+// connector vertices follow their components via derived position, so they are
+// excluded from the returned set; junction/free vertices (including snapped bus
+// endpoints) are listed because they must be shifted explicitly. A network with a
+// connection on a non-moving component, or none at all, is left alone (it stretches
+// per FR-018) — but a group-snapped endpoint on a moving component is still
+// returned so a boundary bus stays attached and only stretches.
 export function rigidWiring(design, movingRefdes) {
   const conductors = allConductors(design);
+  // Map a group-snapped bus endpoint vertex id → its bound instance (FR-042), so
+  // such a free vertex is treated as a connection to that component.
+  const snapInst = new Map();
+  for (const b of design.buses) {
+    for (const gc of b.groupConnections ?? []) snapInst.set(gc.vertex, gc.instance);
+  }
 
   // Union-find over conductor indices, joined where they share a vertex.
   const parent = conductors.map((_, i) => i);
@@ -642,30 +654,39 @@ export function rigidWiring(design, movingRefdes) {
   const bends = [];
   const vertices = new Set();
   for (const idxs of nets.values()) {
-    let pins = 0;
+    let conns = 0; // component connections: pins/connectors + group-snapped endpoints
     let allMoving = true;
     for (const i of idxs)
       for (const p of conductors[i].path) {
         if (p.t !== "node") continue;
         const v = getVertex(design, p.v);
-        if (v.kind === "pin" || v.kind === "connector") {
-          pins++;
-          if (!movingRefdes.has(v.ref)) allMoving = false;
+        const ref =
+          v.kind === "pin" || v.kind === "connector" ? v.ref : snapInst.get(v.id);
+        if (ref != null) {
+          conns++;
+          if (!movingRefdes.has(ref)) allMoving = false;
         }
       }
-    if (pins === 0 || !allMoving) continue; // boundary or free-floating: stretch
+    if (conns === 0 || !allMoving) continue; // boundary or free-floating: stretch
     for (const i of idxs) {
       const c = conductors[i];
       c.path.forEach((p, idx) => {
         if (p.t === "bend") bends.push({ wireId: c.id, index: idx });
         else {
           // pin/connector vertices follow their instance (derived position), so
-          // they are excluded from the rigid set; only junction/free move here.
+          // they are excluded from the rigid set; junction/free (incl. snapped bus
+          // endpoints) move here.
           const k = getVertex(design, p.v).kind;
           if (k !== "pin" && k !== "connector") vertices.add(p.v);
         }
       });
     }
+  }
+  // Boundary buses (a group-snapped endpoint on a moving component, the rest
+  // outside the moving set) are skipped above as stretching networks, but their
+  // snapped endpoint must still follow its component (FR-018), so add those.
+  for (const [vid, inst] of snapInst) {
+    if (movingRefdes.has(inst)) vertices.add(vid);
   }
   return { bends, vertices: [...vertices] };
 }

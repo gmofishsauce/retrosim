@@ -57,12 +57,12 @@ forwarding any extra flags:
 - `--addr` — loopback host:port to bind (default `127.0.0.1:8137`; non-loopback
   addresses are refused).
 - `--components-dir` — directory of 74-series component YAML files
-  (default `./components`).
+  (default `./srv/components`).
 - `--web-dir` — directory of the web app assets (default `./web`).
 - `--data-dir` — designs root (default: the documents folder above).
 
 The component library is read once at startup. If you edit a component YAML file,
-you must restart the server and reload the page for the change to be loaded (see
+you must restart the server and reload the page for the change to be loaded.  You must use the refresh button to update a design from the catalog (see
 [Refreshing type data](#9-refreshing-type-data)).
 
 ---

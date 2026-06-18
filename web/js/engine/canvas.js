@@ -87,8 +87,10 @@ export function initCanvas(canvasEl, store) {
     drawGrid(ctx, w, h, vp);
     drawBuses(ctx, store.design, vp, store.state.selection, conflicts);
     drawWires(ctx, store.design, vp, store.state.selection, conflicts);
-    drawVertices(ctx, store.design, vp);
     drawComponents(ctx, store.design, vp, store.state.selection, store.state.hover, sim);
+    // Vertex marks last, so a component body never hides a connection or dangling
+    // indicator that sits on or under it (§6.8).
+    drawVertices(ctx, store.design, vp);
     if (preview) drawPreview(ctx, preview, vp);
     if (marquee) drawMarquee(ctx, marquee, vp);
     ctx.restore();
@@ -289,10 +291,17 @@ function drawMarquee(ctx, m, vp) {
   ctx.restore();
 }
 
-// drawVertices marks junctions (filled dots) and dangling free ends (hollow
-// squares) so connectivity is visible.
+// drawVertices marks junctions (filled dots), group-snapped bus endpoints
+// (filled bus-colored diamonds — connected, FR-042), and dangling free ends
+// (red hollow squares, FR-029) so connectivity is visible (§6.8).
 function drawVertices(ctx, design, vp) {
   if (!design) return;
+  // Bus endpoints named by a bus's groupConnections are connected even though
+  // their vertex kind is "free" (FR-042) — same set the cleanup sweep uses (§6.6).
+  const snapped = new Set();
+  for (const b of design.buses) {
+    for (const gc of b.groupConnections ?? []) snapped.add(gc.vertex);
+  }
   for (const v of design.vertices) {
     if (v.kind === "junction") {
       const s = worldToScreen(vertexWorld(design, v), vp);
@@ -302,9 +311,23 @@ function drawVertices(ctx, design, vp) {
       ctx.fill();
     } else if (v.kind === "free") {
       const s = worldToScreen(vertexWorld(design, v), vp);
-      ctx.strokeStyle = "#b00020";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(s.x - 2.5, s.y - 2.5, 5, 5);
+      if (snapped.has(v.id)) {
+        // Group-snap connection (FR-042): a filled bus-colored diamond, distinct
+        // from the dangling square — positive proof the bus is connected.
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y - 3.5);
+        ctx.lineTo(s.x + 3.5, s.y);
+        ctx.lineTo(s.x, s.y + 3.5);
+        ctx.lineTo(s.x - 3.5, s.y);
+        ctx.closePath();
+        ctx.fillStyle = "#1565c0";
+        ctx.fill();
+      } else {
+        // Dangling, unconnected end (FR-029): a red hollow square.
+        ctx.strokeStyle = "#b00020";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(s.x - 2.5, s.y - 2.5, 5, 5);
+      }
     }
   }
 }
@@ -334,6 +357,10 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
     drawLabelBox(ctx, inst, vp, selected, "RST");
   } else if (td.renderType === "switch") {
     drawSwitch(ctx, inst, vp, selected);
+  } else if (td.renderType === "indicator8") {
+    drawIndicator8(ctx, inst, vp, selected, sim);
+  } else if (td.renderType === "port8") {
+    drawPort8(ctx, inst, vp, selected);
   } else if (td.renderType === "port") {
     drawPort(ctx, inst, vp, selected);
   } else {
@@ -471,6 +498,91 @@ function indicatorState(inst, sim) {
     if (v === V0) return { bg: "#000000", fg: "#fff", glyph: "0" };
   }
   return { bg: "#9a9a9a", fg: "#000", glyph: "?" };
+}
+
+// fillLocalPoly fills (and optionally strokes) a polygon whose points are given
+// in the instance's unrotated local grid frame ([dx,dy] from the origin),
+// applying the instance rotation and the viewport. Used by the 8-wide built-ins.
+function fillLocalPoly(ctx, inst, vp, pts2d, fill, stroke) {
+  const pts = pts2d.map(([dx, dy]) => {
+    const r = rotateOffset(dx, dy, inst.rotation);
+    return worldToScreen({ x: inst.x + r.x, y: inst.y + r.y }, vp);
+  });
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.closePath();
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.stroke();
+  }
+}
+
+// bit8Fill maps one bit of an 8-wide indicator to its stripe color (FR-071d),
+// the same white-1 / black-0 / gray-undriven mapping as the 1-wide indicator
+// (indicatorState): the bit's simulated value when a sim view is present, else
+// the undriven gray (U and Z also gray).
+function bit8Fill(sim, refdes, pin) {
+  if (sim) {
+    const v = sim.valueOfPin(refdes, pin);
+    if (v === V1) return "#ffffff";
+    if (v === V0) return "#000000";
+  }
+  return "#9a9a9a";
+}
+
+// drawIndicator8 renders the 8-wide state indicator as an LED bar-graph (FR-071d):
+// a body rectangle with eight horizontal stripes aligned to the eight left-edge
+// pins (grid rows 1..8), each stripe filled from its bit's live value. Stripes are
+// stroked so a white "1" stays visible against the white body. The shared pin loop
+// draws the eight connection bubbles down the left edge.
+function drawIndicator8(ctx, inst, vp, selected, sim) {
+  const td = inst.typeData;
+  const stroke = selected ? "#4a90d9" : "#333";
+  ctx.lineWidth = selected ? 2 : 1;
+  fillLocalPoly(
+    ctx,
+    inst,
+    vp,
+    [[0, 0], [td.width, 0], [td.width, td.height], [0, td.height]],
+    "#fff",
+    stroke,
+  );
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 8; i++) {
+    const y = i + 1; // pin row
+    fillLocalPoly(
+      ctx,
+      inst,
+      vp,
+      [[0.8, y - 0.42], [td.width, y - 0.42], [td.width, y + 0.42], [0.8, y + 0.42]],
+      bit8Fill(sim, inst.refdes, "D" + i),
+      "#333",
+    );
+  }
+}
+
+// drawPort8 renders the 8-wide port as a short stacked column of right-pointing
+// pentagons (FR-071e) — fewer than eight, just enough to suggest the type. The
+// shared pin loop draws the eight connection bubbles down the left edge.
+function drawPort8(ctx, inst, vp, selected) {
+  const stroke = selected ? "#4a90d9" : "#333";
+  ctx.lineWidth = selected ? 2 : 1;
+  for (const [y0, y1] of [[0.4, 2.2], [2.4, 4.2], [4.6, 6.4], [6.6, 8.4]]) {
+    const mid = (y0 + y1) / 2;
+    fillLocalPoly(
+      ctx,
+      inst,
+      vp,
+      [[0.8, y0], [2.2, y0], [2.9, mid], [2.2, y1], [0.8, y1]],
+      "#fff",
+      stroke,
+    );
+  }
 }
 
 // strokePaths strokes one or more polylines given in the instance's unrotated

@@ -19,6 +19,37 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-18 — Fix group-snapped bus: connected indicator + follow on move
+What: A bus snap-connected to a component's pin group (FR-042) is a `free` vertex
+that the model treats as connected, but two paths misrepresented it: (A) the
+renderer drew the red "dangling" square on it (hidden under the component body, so
+it looked connected until the component was moved), and (B) moving/rotating the
+component left the snapped endpoint behind, detaching the bus visually. Fixes:
+drawVertices now draws a positive connected marker (not the dangling square) for a
+group-snapped free vertex, and vertex marks are drawn after components so a body
+can't hide them; rigidWiring now counts a group-snapped bus endpoint as a
+connection to its component, so the endpoint follows the move/rotate (rigidly when
+interior, stretching when a boundary bus). Both bugs were pre-existing for any
+group-snapped bus; the large 8-wide port just made them obvious.
+Why: a connected bus was indistinguishable from a disconnected one and broke on
+move.
+Touches: FR-018, FR-018c, FR-042; design §6.8
+
+## 2026-06-18 — Add 8-wide indicator and 8-wide port built-ins
+What: Added two built-in objects, each 3×9 with eight left-edge pins forming one
+pin group so an 8-bit bus snap-connects to all bits at once. (1) `indicator8` —
+an 8-wide state indicator drawn as an LED bar-graph (eight stripes, each lit from
+its bit's live value with the 1-wide indicator's white/black/gray mapping);
+display-only, pins D0–D7, group "D", tooltip "state indicator (8-wide)".
+(2) `port8` — an 8-wide port / off-sheet connector drawn as a short stacked column
+of pentagons; pins P0–P7, group "P", tooltip "port / off-sheet connector (8 wide)".
+For now port8 is a grouped bus terminal only — it drives nothing and does not yet
+do same-label net joining (FR-094a) or off-sheet cross-file links (FR-101); those
+off-sheet semantics are deferred.
+Why: let an 8-bit bus terminate at a labeled off-sheet point and be monitored as a
+bar-graph, both via a single bus snap.
+Touches: FR-071d, FR-071e (new); design §6.8, §6.11
+
 ## 2026-06-18 — Save-format versioning & migration scaffolding
 What: Formalized save-file versioning. The `formatVersion` field (already written
 as `1`) now anchors a migration framework in `persist.js`: a `MIGRATIONS` chain

@@ -72,6 +72,42 @@ test("rigidWiring carries a free (dangling) vertex; shiftWiring offsets it (FR-0
   assert.deepEqual({ x: free.x, y: free.y }, { x: 10, y: 7 });
 });
 
+test("rigidWiring carries a group-snapped bus endpoint with its component (FR-018c/FR-042)", () => {
+  const d = createDesign("t");
+  // A small 2-bit group so the bus can snap to all of it.
+  const ty = {
+    name: "grp",
+    width: 4,
+    height: 6,
+    pins: [
+      { name: "A0", side: "left", position: 1, direction: "in" },
+      { name: "A1", side: "left", position: 2, direction: "in" },
+    ],
+    pinGroups: [{ name: "A", pins: ["A0", "A1"] }],
+  };
+  addInstance(d, ty, 0, 0, 0); // U1
+  addInstance(d, ty, 20, 0, 0); // U2
+  const bus = addBus(d, { kind: "free", x: 1, y: 1 }, { kind: "free", x: 19, y: 1 }, 2);
+  const aEnd = bus.path[0].v;
+  const bEnd = bus.path[bus.path.length - 1].v;
+  snapBusGroup(d, bus.id, aEnd, "U1", "A");
+  snapBusGroup(d, bus.id, bEnd, "U2", "A");
+
+  // Move U1 only: its snapped endpoint follows (boundary bus stretches), the U2
+  // endpoint stays — previously neither moved and the bus was left behind.
+  const refs = rigidWiring(d, new Set(["U1"]));
+  assert.ok(refs.vertices.includes(aEnd));
+  assert.ok(!refs.vertices.includes(bEnd));
+  shiftWiring(d, refs, 5, 0);
+  assert.equal(getVertex(d, aEnd).x, 6);
+  assert.equal(getVertex(d, bEnd).x, 19); // untouched
+
+  // Move both: both snapped endpoints are carried (rigid translate).
+  const both = rigidWiring(d, new Set(["U1", "U2"]));
+  assert.ok(both.vertices.includes(aEnd));
+  assert.ok(both.vertices.includes(bEnd));
+});
+
 test("createDesign produces an empty design with the given name", () => {
   const d = createDesign("unnamed schematic 2026-06-02 10:00");
   assert.equal(d.name, "unnamed schematic 2026-06-02 10:00");

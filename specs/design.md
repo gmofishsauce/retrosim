@@ -780,11 +780,20 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   the DPR scale, so neither a stale size nor the `round()` sub-pixel sliver can
   leave an uncleared bottom strip that accumulates drag-image fragments.
 - **Draw order:** grid → buses (thick blue, width annotation `/n` at midpoint,
-  FR-036/FR-037) → wires (thin black) → junction dots → components (outline, pin
-  bubbles, pin labels) → upright text labels → selection highlight → tool preview
-  (rubber-band polyline — the proposed route, §6.9a, a single segment in the
-  fallback case — and placement ghost) → marquee rectangle (FR-016b: window mode
-  solid, crossing mode dashed, distinct stroke colors).
+  FR-036/FR-037) → wires (thin black) → components (outline, pin bubbles, pin
+  labels) → **vertex marks** → upright text labels → selection highlight → tool
+  preview (rubber-band polyline — the proposed route, §6.9a, a single segment in
+  the fallback case — and placement ghost) → marquee rectangle (FR-016b: window
+  mode solid, crossing mode dashed, distinct stroke colors). Vertex marks are drawn
+  **after** components (moved 2026-06-18; previously before) so a component body
+  can never hide a connection/dangling indicator that sits on or under it.
+- **Vertex marks (`drawVertices`):** a `junction` vertex draws a filled black dot.
+  A `free` vertex draws either a red hollow "dangling" square (FR-029, an
+  unconnected end) **or**, when it is a bus endpoint named by some bus's
+  `groupConnections` (group-snapped, FR-042), a filled bus-colored "connected"
+  marker instead — the snapped end is electrically connected even though its kind
+  is `free`, so it must not show the dangling mark. The group-snapped set is built
+  the same way the §6.6 cleanup sweep builds its `snapped` set.
 - **Component drawing dispatches on `renderType`:** a `unit` instance draws the
   rectangle path as today; a `subunit` instance draws its schematic symbol via the
   symbol module (§6.8a) — the gate/mux outline path plus an upright refdes (e.g.
@@ -1128,7 +1137,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   each scrolls independently. Lower-region tiles render an SVG icon (the object's
   glyph, e.g. the indicator bubble) with a descriptive `title`, and `dataset.type`
   set to the built-in type name; the armed-state subscription covers both regions.
-- **Built-in objects (`builtins.js`)** — Satisfies FR-067–FR-071c. Exports a
+- **Built-in objects (`builtins.js`)** — Satisfies FR-067–FR-071e. Exports a
   client-side array of synthetic `ComponentType`s (no server/YAML). Each carries
   `builtin: true`, an `icon` (inline-SVG palette glyph), a `title` (tooltip), plus
   the usual `name`/`width`/`height`/`pins`/`renderType`. Entries: **indicator**
@@ -1137,7 +1146,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   2×2, one top-center pin, FR-070); **clock** (`"clock"`, 3×2, one right-center
   pin, FR-071); **power-on reset** (`"reset"`, 3×3, two right-edge `out` pins
   `R` and `/R`, FR-071b); **input switch** (`"switch"`, 2×2, one right-center
-  `out` pin, FR-071c). On placement these flow through the normal
+  `out` pin, FR-071c); **8-wide indicator** (`"indicator8"`, 3×9, eight left-edge
+  `in` pins `D0`–`D7` in one pin group `D`, FR-071d); **8-wide port** (`"port8"`,
+  3×9, eight left-edge `bidir` pins `P0`–`P7` in one pin group `P`, FR-071e). The
+  two 8-wide entries declare `pinGroups` so an 8-bit bus snap-connects to all eight
+  bits at once (FR-041/FR-042, `matchingGroups`); `port8` is a grouped bus terminal
+  only for now (drives nothing, no off-sheet net joining yet — FR-071e). On
+  placement these flow through the normal
   non-subunit
   `addInstance` path; `addInstance` assigns an `A-<n>` refdes (FR-011a) when
   `type.builtin`. Each entry may declare `properties` (FR-020b): the clock
@@ -1152,7 +1167,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   pull-up two-headed arrow, the pull-down upside-down `T`, the clock and
   reset boxes, and the switch (the same value bubble as the indicator — white
   `1`/black `0` from `inst.switchState` — plus a small arrow off the bubble
-  toward the output pin marking it a source, FR-071c). Pin
+  toward the output pin marking it a source, FR-071c). The two 8-wide built-ins
+  add branches: `drawIndicator8` draws the LED bar-graph (eight horizontal
+  stripes, each filled by its bit's value via `sim.valueOfPin(refdes,"D"+i)` with
+  the same white/black/gray mapping as the 1-wide indicator, FR-071d), and
+  `drawPort8` draws the short stacked column of pentagons (FR-071e). The shared
+  pin loop draws the eight connection bubbles down the left edge for both. Pin
   name labels are suppressed for built-ins (the glyph owns the body); the refdes is
   drawn above the symbol.
 - **Switch interactive state (FR-071c)** — the input switch carries one
@@ -1963,6 +1983,7 @@ No files are modified (greenfield).
 | FR-020b | §6.11, §7.1, §7.2 | `properties.js`, `builtins.js`, `model/design.js`, `commands.js` |
 | FR-067a, FR-071a, FR-071b | §6.11, §6.13, §7.1 | `builtins.js`, `sim.js`, `canvas.js` |
 | FR-071c, FR-087a | §6.8, §6.9, §6.11, §6.13, §7.2 | `builtins.js`, `canvas.js`, `interaction.js`, `sim.js`, `model/design.js` |
+| FR-071d, FR-071e | §6.8, §6.11 | `builtins.js`, `canvas.js`, `model/design.js` |
 | FR-020c | §6.12, §7.2 | `properties.js`, `model/design.js`, `commands.js` |
 | FR-021 | §6.7, §6.8 | `geometry.js`, `canvas.js` |
 | FR-022, FR-023 | §6.8, §6.11 | `canvas.js`, `toolbar.js` |
