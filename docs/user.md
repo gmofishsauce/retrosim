@@ -213,11 +213,23 @@ with a `/N` width annotation.
 - **Right-click a bus** for: **Set width…**, **Edit bit names…**, and
   **Delete bus**. (With exactly one bus selected you can also press `+` / `-` to
   change its width.)
-- **Snap-connect:** drag a bus endpoint onto a component. The editor finds the
-  component pin group(s) whose pin count equals the bus width and connects each bus
-  bit to the corresponding pin in declared bit order. If one group matches it
-  connects automatically; if several match you're prompted to choose; if none
-  match nothing is connected. Joining two buses of unequal width is prevented.
+- **Snap-connect to a pin group:** the editor connects a whole bus to a matching
+  **pin group** — a set of pins whose count equals the bus width (e.g. the 8 `D`
+  inputs of a `74574`, or the 8 bits of an 8-wide port/indicator) — wiring each bus
+  bit to the corresponding pin in declared bit order, so you don't wire bits one at
+  a time.
+  - With the **Bus** tool active, move the cursor **near a group's pins** — you do
+    **not** need to click on the part body. A large **curly brace** appears,
+    enclosing the group and opening toward its pins, with the bus running to the
+    brace's **point** (the connection point). Click while the brace is showing to
+    start or finish the bus there. The same works at both ends.
+  - If several groups are in range (e.g. the 574's `D` inputs and `Q` outputs) the
+    brace snaps to the group **nearest the cursor**. (Clicking the part body still
+    works too: one matching group connects automatically; several prompt you to
+    choose; none connects nothing.) Joining two buses of unequal width is prevented.
+  - A **connected** bus end is always drawn with its curly brace; a **red square**
+    marks an end that is still **dangling** (unconnected). The brace tracks the part
+    if you move or rotate it.
 - **Bit names:** a bus may carry a name per bit; snap-connecting to a named pin
   group adopts those names (bit position, not name, determines connectivity).
 - **Breakout:** you can break a single bit out of a bus and route it as an ordinary
@@ -294,6 +306,8 @@ YAML.
 | **Clock** | one output (`OUT`, right) | A square wave, 50% duty cycle: low from t = 0 with the first rising edge half a period in. Properties: `period` (ns, default 100) and `speed` (Hz, default 1). A design with a clock is *sequential* and runs continuously; see [Simulation](#13-simulation). |
 | **Power-on reset** | two outputs (`R` active-high, `/R` active-low, right) | Asserts reset (`R`=1, `/R`=0) for the first `cycles` clock periods of a run, then releases (inverse afterward). Property: `cycles` (default 3). |
 | **Input switch** | one output (`OUT`, right) | A user-set logic source with two states, **1** and **0**, drawn like the state indicator — a round value bubble (white **1** / black **0**) — with a small arrow toward its output pin. A **strong** driver: it overrides pull-ups/pull-downs on its net. Set its state in the properties panel while editing, or **click it during a simulation** to toggle **0 ↔ 1**. The state is saved with the design (a new switch starts at **0**). |
+| **State indicator (8-wide)** | eight inputs (`D0`–`D7`, left) | An 8-bit display, drawn as an LED **bar-graph** (eight stripes). Display only — drives nothing. The eight pins form one pin group, so an 8-wide bus snap-connects to all bits at once (see [Buses](#7-buses)); each stripe shows its bit's value (white **1** / black **0** / gray **?**) during and after a run. |
+| **Port / off-sheet connector (8 wide)** | eight pins (`P0`–`P7`, left) | An 8-bit off-sheet connector, drawn as a stacked column of pentagons. The eight pins form one pin group so an 8-wide bus snap-connects to all bits at once (see [Buses](#7-buses)). It is a bus terminal for now: it drives nothing and does not yet join to same-label or cross-file ports (that's the 1-wide [port](#12-sub-designs-and-ports)'s job today). |
 
 You can override a built-in's properties per instance via the properties panel
 (e.g. give one clock a different `period`). The input switch is set the same way:

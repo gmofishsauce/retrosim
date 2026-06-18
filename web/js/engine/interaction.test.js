@@ -57,3 +57,15 @@ test("planBusEndpoint passes non-component targets through unchanged", () => {
   assert.equal(spec, t);
   assert.equal(snap, null);
 });
+
+test("planBusEndpoint snaps a proximity group target at the apex (FR-042a)", () => {
+  // A "group" target (chosen by cursor proximity) snaps directly to that group,
+  // with the endpoint placed at the supplied apex and no disambiguation deferred.
+  const plan = planBusEndpoint(
+    { kind: "group", refdes: "A-1", group: "P", x: -2, y: 4.5, busWidth: 8 },
+    8,
+  );
+  assert.deepEqual(plan.snap, { refdes: "A-1", group: "P" });
+  assert.deepEqual(plan.spec, { kind: "free", x: -2, y: 4.5 });
+  assert.deepEqual(plan.groups, []);
+});

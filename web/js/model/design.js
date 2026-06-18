@@ -234,6 +234,36 @@ export function pinVisualPos(instance, pinName) {
   return { x: w.x + r.x * PIN_RADIUS, y: w.y + r.y * PIN_RADIUS };
 }
 
+// BUS_BRACE_DEPTH is how far (grid units) a group-snap brace's apex juts beyond
+// the group's pins (FR-042a). Integer so the apex stays on the grid.
+export const BUS_BRACE_DEPTH = 2;
+
+// busGroupBrace computes the curly-brace geometry for a bus group-snapped to
+// `group` on instance `inst` (FR-042a): `a` and `b` are the visual attachment
+// points of the group's two outermost pins (the brace tips), `apex` is the brace's
+// point where the bus terminates, and `out` is the outward unit normal (rotation-
+// aware). The apex's position along the pin row is taken from the group's **middle
+// pin** (`floor(n/2)`), not the tip midpoint, so it lands on a grid point even when
+// the group has an even pin count — the brace halves are then slightly asymmetric.
+// Combined with the integer BUS_BRACE_DEPTH (and components always being on grid),
+// the apex is a grid intersection. Pure geometry; used by the renderer and to place
+// the snapped bus endpoint. The group's pins are assumed colinear along one edge.
+export function busGroupBrace(inst, group) {
+  const first = inst.typeData.pins.find((p) => p.name === group.pins[0]);
+  const o = sideOutward(first?.side);
+  const out = rotateOffset(o.x, o.y, inst.rotation);
+  // Rank the pins along the pin row (tangent, perpendicular to outward).
+  const t = { x: -out.y, y: out.x };
+  const named = group.pins.map((name) => ({ name, v: pinVisualPos(inst, name) }));
+  named.sort((m, n) => m.v.x * t.x + m.v.y * t.y - (n.v.x * t.x + n.v.y * t.y));
+  const a = named[0].v;
+  const b = named[named.length - 1].v;
+  // Apex on the grid: anchored at the middle pin's grid point, BUS_BRACE_DEPTH out.
+  const g = pinWorldPos(inst, named[Math.floor(named.length / 2)].name);
+  const apex = { x: g.x + out.x * BUS_BRACE_DEPTH, y: g.y + out.y * BUS_BRACE_DEPTH };
+  return { a, b, apex, out };
+}
+
 // setOverride sets or clears a per-instance override (FR-020a/FR-020b/FR-058).
 // `group` selects the override kind (§7.2): "delays" shadows the type's
 // `delays[key]`, "props" shadows the default of the declared property `key`.

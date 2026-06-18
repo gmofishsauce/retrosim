@@ -19,6 +19,24 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-18 — Group-snap bus connection rendered as a curly brace
+What: Replaced the interim blue-diamond connected mark with a large curly brace
+enclosing the connected pin group: tips touch the group's outermost pins and the
+two halves (upper/lower cubic splines) meet just outside the group in a point (the
+apex), where the bus terminates. The apex is grid-aligned — anchored on the
+group's middle pin (floor(n/2)) with an integer outward depth, so it lands on a
+grid intersection even for an even pin count (the halves are then slightly
+asymmetric). On connect, the bus endpoint is placed at the apex (geometry only —
+connectivity unchanged). Group targeting is now by proximity (FR-042b): the brace
+previews live whenever the bus tool's cursor nears a width-matching group's pins —
+no click on the part body required — choosing the nearest group when several
+match, and a click anywhere the brace shows starts/ends the bus there. Every
+connected bus is always drawn with its brace; dangling free ends keep the red
+square.
+Why: a clear, schematic-style indication that a bus is connected to a group, far
+more legible than a small mark hidden under the body, and easier to target.
+Touches: FR-042, FR-042a, FR-042b (new); design §6.8, §6.9
+
 ## 2026-06-18 — Fix group-snapped bus: connected indicator + follow on move
 What: A bus snap-connected to a component's pin group (FR-042) is a `free` vertex
 that the model treats as connected, but two paths misrepresented it: (A) the

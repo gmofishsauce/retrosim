@@ -14,6 +14,7 @@ import {
   sideOutward,
   getVertex,
   vertexWorld,
+  busGroupBrace,
   PIN_RADIUS,
 } from "../model/design.js";
 import { drawSymbol, pinHasOwnBubble, pinLabelEdge } from "./symbols.js";
@@ -88,9 +89,10 @@ export function initCanvas(canvasEl, store) {
     drawBuses(ctx, store.design, vp, store.state.selection, conflicts);
     drawWires(ctx, store.design, vp, store.state.selection, conflicts);
     drawComponents(ctx, store.design, vp, store.state.selection, store.state.hover, sim);
-    // Vertex marks last, so a component body never hides a connection or dangling
-    // indicator that sits on or under it (§6.8).
+    // Vertex marks and group-snap braces last, so a component body never hides a
+    // connection/dangling indicator that sits on or under it (§6.8).
     drawVertices(ctx, store.design, vp);
+    drawBusBraces(ctx, store.design, vp);
     if (preview) drawPreview(ctx, preview, vp);
     if (marquee) drawMarquee(ctx, marquee, vp);
     ctx.restore();
@@ -248,20 +250,27 @@ function drawBuses(ctx, design, vp, selection, conflicts) {
 // Manhattan route, or the straight fallback segment (FR-027a/FR-027c).
 function drawPreview(ctx, preview, vp) {
   const pts = preview.points;
-  if (!pts || pts.length < 2) return;
-  ctx.save();
-  ctx.setLineDash([4, 4]);
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = "#888";
-  ctx.beginPath();
-  const a = worldToScreen(pts[0], vp);
-  ctx.moveTo(a.x, a.y);
-  for (let i = 1; i < pts.length; i++) {
-    const p = worldToScreen(pts[i], vp);
-    ctx.lineTo(p.x, p.y);
+  if (pts && pts.length >= 2) {
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "#888";
+    ctx.beginPath();
+    const a = worldToScreen(pts[0], vp);
+    ctx.moveTo(a.x, a.y);
+    for (let i = 1; i < pts.length; i++) {
+      const p = worldToScreen(pts[i], vp);
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+    ctx.restore();
   }
-  ctx.stroke();
-  ctx.restore();
+  // Prospective group-snap brace while dragging a bus near a matching group
+  // (FR-042a): solid bus-color so it previews how the connection will look.
+  if (preview.brace) {
+    const br = preview.brace;
+    strokeBrace(ctx, br.a, br.b, br.apex, vp, "#1565c0", 2);
+  }
 }
 
 // drawMarquee draws the rubber-band selection rectangle (FR-016b): window mode
@@ -291,9 +300,10 @@ function drawMarquee(ctx, m, vp) {
   ctx.restore();
 }
 
-// drawVertices marks junctions (filled dots), group-snapped bus endpoints
-// (filled bus-colored diamonds — connected, FR-042), and dangling free ends
-// (red hollow squares, FR-029) so connectivity is visible (§6.8).
+// drawVertices marks junctions (filled dots) and dangling free ends (red hollow
+// squares, FR-029) so connectivity is visible (§6.8). A group-snapped bus endpoint
+// is also a `free` vertex but is connected (FR-042) — it draws no dangling mark;
+// its curly brace (drawBusBraces) is its indicator.
 function drawVertices(ctx, design, vp) {
   if (!design) return;
   // Bus endpoints named by a bus's groupConnections are connected even though
@@ -309,25 +319,68 @@ function drawVertices(ctx, design, vp) {
       ctx.arc(s.x, s.y, 3, 0, Math.PI * 2);
       ctx.fillStyle = "#000";
       ctx.fill();
-    } else if (v.kind === "free") {
+    } else if (v.kind === "free" && !snapped.has(v.id)) {
+      // Dangling, unconnected end (FR-029): a red hollow square. (A group-snapped
+      // free end draws nothing here — its brace is the indicator, FR-042a.)
       const s = worldToScreen(vertexWorld(design, v), vp);
-      if (snapped.has(v.id)) {
-        // Group-snap connection (FR-042): a filled bus-colored diamond, distinct
-        // from the dangling square — positive proof the bus is connected.
-        ctx.beginPath();
-        ctx.moveTo(s.x, s.y - 3.5);
-        ctx.lineTo(s.x + 3.5, s.y);
-        ctx.lineTo(s.x, s.y + 3.5);
-        ctx.lineTo(s.x - 3.5, s.y);
-        ctx.closePath();
-        ctx.fillStyle = "#1565c0";
-        ctx.fill();
-      } else {
-        // Dangling, unconnected end (FR-029): a red hollow square.
-        ctx.strokeStyle = "#b00020";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(s.x - 2.5, s.y - 2.5, 5, 5);
-      }
+      ctx.strokeStyle = "#b00020";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(s.x - 2.5, s.y - 2.5, 5, 5);
+    }
+  }
+}
+
+// strokeBrace strokes a curly brace whose tips are at world points `a` and `b`
+// and whose middle point (beak) is at world `apex` (FR-042a). It is two cubic
+// Béziers — the upper half (tip a → apex) and the lower half (apex → tip b) —
+// meeting at the apex with opposing tangents so the brace comes to a **point**
+// there (the bus connection point). Control points are derived from the tip→tip
+// span (`al`) and the outward beak offset (`ou`), so it orients correctly for any
+// pin side and component rotation.
+function strokeBrace(ctx, a, b, apex, vp, color, lineWidth) {
+  const A = worldToScreen(a, vp);
+  const B = worldToScreen(b, vp);
+  const P = worldToScreen(apex, vp);
+  const mid = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+  let alx = B.x - A.x, aly = B.y - A.y;
+  const span = Math.hypot(alx, aly) || 1;
+  alx /= span;
+  aly /= span; // unit along, A → B
+  let oux = P.x - mid.x, ouy = P.y - mid.y;
+  const depth = Math.hypot(oux, ouy) || 1;
+  oux /= depth;
+  ouy /= depth; // unit outward, mid → apex
+  const sp = span * 0.22; // beak-flank offset along the span
+  const dp = depth * 0.5; // beak-flank inset from the apex
+  const tip = depth * 0.6; // how far the arcs bow out at the tips
+  const c1u = { x: A.x + oux * tip, y: A.y + ouy * tip };
+  const c2u = { x: P.x - alx * sp - oux * dp, y: P.y - aly * sp - ouy * dp };
+  const c1l = { x: P.x + alx * sp - oux * dp, y: P.y + aly * sp - ouy * dp };
+  const c2l = { x: B.x + oux * tip, y: B.y + ouy * tip };
+  ctx.beginPath();
+  ctx.moveTo(A.x, A.y);
+  ctx.bezierCurveTo(c1u.x, c1u.y, c2u.x, c2u.y, P.x, P.y);
+  ctx.bezierCurveTo(c1l.x, c1l.y, c2l.x, c2l.y, B.x, B.y);
+  ctx.lineWidth = lineWidth;
+  ctx.strokeStyle = color;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.stroke();
+}
+
+// drawBusBraces strokes a curly brace for every group-snap bus connection
+// (FR-042a), recomputed each frame from the bound instance + group, so it tracks
+// component moves/rotations and the bus terminates exactly at the brace apex.
+function drawBusBraces(ctx, design, vp) {
+  if (!design) return;
+  for (const b of design.buses) {
+    for (const gc of b.groupConnections ?? []) {
+      const inst = design.components.find((c) => c.refdes === gc.instance);
+      if (!inst) continue;
+      const group = (inst.typeData.pinGroups ?? []).find((g) => g.name === gc.group);
+      if (!group) continue;
+      const br = busGroupBrace(inst, group);
+      strokeBrace(ctx, br.a, br.b, br.apex, vp, "#1565c0", 2);
     }
   }
 }

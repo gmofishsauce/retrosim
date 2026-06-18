@@ -52,6 +52,7 @@ import {
   packageSiblings,
   rigidWiring,
   getVertex,
+  busGroupBrace,
 } from "../model/design.js";
 import {
   chooseGroupDialog,
@@ -94,6 +95,16 @@ const WIRE_CURSOR =
 // the disambiguation dialog (FR-041b). Non-component
 // targets pass through unchanged. Exported for testing.
 export function planBusEndpoint(target, width) {
+  if (target.kind === "group") {
+    // Proximity (FR-042a) already picked the specific group; snap directly with
+    // the endpoint at the brace apex — no disambiguation needed.
+    return {
+      spec: { kind: "free", x: target.x, y: target.y },
+      snap: { refdes: target.refdes, group: target.group },
+      groups: [],
+      refdes: target.refdes,
+    };
+  }
   if (target.kind === "component") {
     const spec = { kind: "free", x: target.x, y: target.y };
     const groups = matchingGroups(target.type, width);
@@ -384,10 +395,51 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     return null;
   }
 
-  // busTargetAt returns a bus endpoint spec: a branch on an existing bus, a
-  // component (for snap-connect, FR-041), or a free grid point. Bus segments take
-  // priority over component bodies (§6.9).
-  function busTargetAt(e) {
+  // GROUP_SNAP_RANGE is how near (grid units) the cursor must come to a pin
+  // group's pins (or its brace apex) for the group to become a bus termination
+  // target — no click on the component body required (FR-042a).
+  const GROUP_SNAP_RANGE = 2;
+
+  // distToSegment returns the distance from point p to segment a–b.
+  function distToSegment(p, a, b) {
+    const vx = b.x - a.x;
+    const vy = b.y - a.y;
+    const len2 = vx * vx + vy * vy;
+    let t = len2 ? ((p.x - a.x) * vx + (p.y - a.y) * vy) / len2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    const dx = p.x - (a.x + t * vx);
+    const dy = p.y - (a.y + t * vy);
+    return Math.hypot(dx, dy);
+  }
+
+  // busGroupAt returns the nearest width-matching pin group whose pins (or brace
+  // apex) the cursor is within GROUP_SNAP_RANGE of, as { inst, group, brace } —
+  // or null. Shared by the drag preview and the click commit so a click anywhere
+  // the brace is shown terminates the bus at that group (FR-042a).
+  function busGroupAt(world, width) {
+    let best = null;
+    let bestD = GROUP_SNAP_RANGE;
+    for (const inst of store.design.components) {
+      for (const group of matchingGroups(inst.typeData, width)) {
+        const brace = busGroupBrace(inst, group);
+        const d = Math.min(
+          distToSegment(world, brace.a, brace.b),
+          Math.hypot(brace.apex.x - world.x, brace.apex.y - world.y),
+        );
+        if (d < bestD) {
+          bestD = d;
+          best = { inst, group, brace };
+        }
+      }
+    }
+    return best;
+  }
+
+  // busTargetAt returns a bus endpoint spec: a branch on an existing bus, a pin
+  // group the cursor is near (snap-connect at the brace apex, FR-042a), a
+  // component body (FR-041, may disambiguate), or a free grid point. Priority:
+  // bus segment > nearby group > component body > empty (§6.9).
+  function busTargetAt(e, width) {
     const world = worldOf(e);
     const bh = hitBusSegment(store.design, world, segTol());
     const g = gridOf(e);
@@ -399,6 +451,18 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
         x: g.x,
         y: g.y,
         busWidth: bh.bus.width,
+      };
+    }
+    const near = busGroupAt(world, width);
+    if (near) {
+      // Proximity already chose the specific group; the endpoint is the apex.
+      return {
+        kind: "group",
+        refdes: near.inst.refdes,
+        group: near.group.name,
+        x: near.brace.apex.x,
+        y: near.brace.apex.y,
+        busWidth: near.group.pins.length,
       };
     }
     const comp = hitComponent(store.design, world);
@@ -415,6 +479,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
   async function commitBus(srcTarget, dstTarget, width) {
     const a = planBusEndpoint(srcTarget, width);
     const b = planBusEndpoint(dstTarget, width);
+    const specs = { a: a.spec, b: b.spec };
     const snaps = [];
     for (const [end, plan] of [
       ["a", a],
@@ -425,9 +490,43 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
         const chosen = await chooseGroupDialog(plan.groups);
         if (chosen) snap = { refdes: plan.refdes, group: chosen };
       }
-      if (snap) snaps.push({ end, ...snap });
+      if (snap) {
+        snaps.push({ end, ...snap });
+        // Place the snapped endpoint at the brace apex (FR-042a) so the bus
+        // terminates there; the connection itself is the recorded group binding.
+        const apex = busApex(snap.refdes, snap.group);
+        if (apex) specs[end] = { kind: "free", x: apex.x, y: apex.y };
+      }
     }
-    store.dispatch(addBusCmd(a.spec, b.spec, width, snaps, routeBends(a.spec, b.spec)));
+    store.dispatch(addBusCmd(specs.a, specs.b, width, snaps, routeBends(specs.a, specs.b)));
+  }
+
+  // busApex returns the group-snap brace apex (FR-042a) for a component's pin
+  // group — the canonical attachment point a snapped bus endpoint is placed at.
+  function busApex(refdes, groupName) {
+    const inst = store.design.components.find((c) => c.refdes === refdes);
+    const group = inst && (inst.typeData.pinGroups ?? []).find((g) => g.name === groupName);
+    return group ? busGroupBrace(inst, group).apex : null;
+  }
+
+  // busGroupHoverPreview returns the bus-drag feedback when the cursor nears a
+  // width-matching pin group (FR-042a): the nearest group's brace, plus — when a
+  // bus is already in progress (`anchor` set) — the in-progress bus routed to the
+  // brace apex. Returns null when not near any group (caller falls back to the
+  // normal route preview, or clears the preview before the first click).
+  function busGroupHoverPreview(anchor, e) {
+    if (store.state.tool !== "bus") return null;
+    const width = wireSource?.busWidth ?? DEFAULT_BUS_WIDTH;
+    const near = busGroupAt(worldOf(e), width);
+    if (!near) return null;
+    const apex = near.brace.apex;
+    if (!anchor) return { brace: near.brace }; // before the first click: brace only
+    const from = routerEndpoint(wireSource);
+    const route = from ? proposeRoute(store.design, from, apex) : null;
+    const points = route ? [...route] : [anchor, apex];
+    points[0] = anchor; // draw from the visual anchor (FR-013d)
+    points[points.length - 1] = apex; // terminate exactly at the apex
+    return { points, brace: near.brace };
   }
 
   // startBreakout begins a single-bit tap off a bus (FR-043a): it picks the bit
@@ -583,7 +682,10 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     }
 
     if (store.state.tool === "bus") {
-      const target = busTargetAt(e);
+      // The first endpoint sizes a fresh bus at the default width; the second
+      // endpoint's group proximity is judged at the bus's actual width (FR-042a).
+      const width = wireSource?.busWidth ?? DEFAULT_BUS_WIDTH;
+      const target = busTargetAt(e, width);
       if (!wireSource) {
         wireSource = target;
         return;
@@ -600,8 +702,8 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
         setTool("select");
         return;
       }
-      const width = wireSource.busWidth ?? target.busWidth ?? DEFAULT_BUS_WIDTH;
-      commitBus(wireSource, target, width);
+      const finalWidth = wireSource.busWidth ?? target.busWidth ?? DEFAULT_BUS_WIDTH;
+      commitBus(wireSource, target, finalWidth);
       setTool("select"); // one-shot (FR-040)
       return;
     }
@@ -798,7 +900,12 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     if (wireSource) {
       const anchor = previewAnchorWorld(wireSource);
       if (anchor) {
-        renderer.setPreview({ points: previewRoute(anchor, gridOf(e), worldOf(e)) });
+        // Near a width-matching pin group, preview its group-snap brace and route
+        // the in-progress bus to the apex (FR-042a); else the normal route preview.
+        const groupPreview = busGroupHoverPreview(anchor, e);
+        renderer.setPreview(
+          groupPreview ?? { points: previewRoute(anchor, gridOf(e), worldOf(e)) },
+        );
       }
       return;
     }
@@ -810,6 +917,11 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
       if (store.state.tool === "select") {
         const overPin = !!hitPin(store.design, world);
         canvas.style.cursor = overPin ? WIRE_CURSOR : "default";
+      } else if (store.state.tool === "bus") {
+        // Before the first click, still preview a group's brace when near it, so
+        // the user can see (and click to start the bus at) a termination point.
+        const gp = busGroupHoverPreview(null, e);
+        renderer.setPreview(gp ?? null);
       }
       return;
     }

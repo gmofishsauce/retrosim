@@ -781,19 +781,30 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   leave an uncleared bottom strip that accumulates drag-image fragments.
 - **Draw order:** grid → buses (thick blue, width annotation `/n` at midpoint,
   FR-036/FR-037) → wires (thin black) → components (outline, pin bubbles, pin
-  labels) → **vertex marks** → upright text labels → selection highlight → tool
-  preview (rubber-band polyline — the proposed route, §6.9a, a single segment in
-  the fallback case — and placement ghost) → marquee rectangle (FR-016b: window
-  mode solid, crossing mode dashed, distinct stroke colors). Vertex marks are drawn
-  **after** components (moved 2026-06-18; previously before) so a component body
-  can never hide a connection/dangling indicator that sits on or under it.
+  labels) → **vertex marks** → **group-snap braces** → upright text labels →
+  selection highlight → tool preview (rubber-band polyline — the proposed route,
+  §6.9a — plus the prospective group-snap brace, and the placement ghost) →
+  marquee rectangle (FR-016b: window mode solid, crossing mode dashed, distinct
+  stroke colors). Vertex marks and braces are drawn **after** components (moved
+  2026-06-18; previously before) so a component body can never hide a
+  connection/dangling indicator that sits on or under it.
 - **Vertex marks (`drawVertices`):** a `junction` vertex draws a filled black dot.
-  A `free` vertex draws either a red hollow "dangling" square (FR-029, an
-  unconnected end) **or**, when it is a bus endpoint named by some bus's
-  `groupConnections` (group-snapped, FR-042), a filled bus-colored "connected"
-  marker instead — the snapped end is electrically connected even though its kind
-  is `free`, so it must not show the dangling mark. The group-snapped set is built
-  the same way the §6.6 cleanup sweep builds its `snapped` set.
+  A `free` vertex draws a red hollow "dangling" square (FR-029) **unless** it is a
+  bus endpoint named by some bus's `groupConnections` (group-snapped, FR-042), in
+  which case it draws nothing — its group-snap brace (below) is its indicator and
+  it must not show the dangling mark. The group-snapped set is built the same way
+  the §6.6 cleanup sweep builds its `snapped` set.
+- **Group-snap braces (`drawBusBraces`, FR-042a):** for each bus `groupConnection`
+  the renderer recomputes the brace from the bound instance + group via
+  `busGroupBrace(inst, group)` — the two tips at the group's outermost pins' visual
+  positions and the apex anchored at the **middle pin's grid point** (`floor(n/2)`),
+  `BUS_BRACE_DEPTH` (integer) grid units outward — and strokes it as two cubic
+  Béziers meeting at the apex in a point (`strokeBrace`). Anchoring on a real middle
+  pin keeps the apex on a grid intersection for an even pin count (the halves are
+  then asymmetric), so the bus endpoint placed there is on-grid too. Because that
+  endpoint follows the component (FR-018c), the bus terminates exactly at the brace
+  point. The live bus-drag preview reuses the same helper for the width-matching
+  group nearest the cursor (§6.9).
 - **Component drawing dispatches on `renderType`:** a `unit` instance draws the
   rectangle path as today; a `subunit` instance draws its schematic symbol via the
   symbol module (§6.8a) — the gate/mux outline path plus an upright refdes (e.g.
@@ -952,16 +963,22 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   two-point commit (`breakoutBitCmd` carries no bends), so their preview never
   promises a route the commit won't produce. (Reworked 2026-06-12; supersedes
   the straight-line-only preview and two-point commit.)
-- **Bus snap-connect (FR-041–FR-043a, A3/A7):** on dropping a bus endpoint over a
-  component, compute the candidate pin groups whose **member pin count == bus
-  width**, then branch on the candidate count:
-  - **0 candidates** → leave the endpoint **unconnected** (FR-043).
-  - **1 candidate** → snap-connect automatically: store a `groupConnection`
-    mapping bit *i* → `group.pins[i]` (FR-041a/FR-042). If the bus has no
-    `bitNames`, adopt the group's member pin names (FR-037b).
-  - **≥2 candidates** → open the **disambiguation dialog** (§6.11), list groups by
-    name; on choose, snap as above; on cancel, leave the endpoint unconnected
-    (FR-041b).
+- **Bus snap-connect (FR-041–FR-043a, A3/A7):** an endpoint targets a pin group
+  one of two ways (`busTargetAt`, priority: bus segment > nearby group > body):
+  - **Proximity (FR-042b):** `busGroupAt(world, width)` returns the width-matching
+    group nearest the cursor within `GROUP_SNAP_RANGE` of its pins or brace apex —
+    no body click required. This yields a `kind:"group"` target naming that exact
+    group, so it snaps directly (no dialog) with the endpoint at the brace apex.
+    The same helper drives the live brace feedback, so a click wherever the brace
+    shows starts/ends the bus there.
+  - **Body click (FR-041):** falling back to the component body, compute the
+    candidate groups whose **member pin count == bus width**: **0** → leave the
+    endpoint **unconnected** (FR-043); **1** → snap automatically; **≥2** → open the
+    **disambiguation dialog** (§6.11), choose by name (cancel → unconnected,
+    FR-041b).
+  A snap stores a `groupConnection` mapping bit *i* → `group.pins[i]` (FR-042) and,
+  if the bus has no `bitNames`, adopts the group's member pin names (FR-037b). The
+  snapped endpoint is placed at the brace apex (`busGroupBrace`, §6.8/FR-042a).
 - **Breakout (FR-043a):** in WIRE mode, clicking a **bus** segment creates a
   `junction` vertex on that bus with `bit` = the chosen lane (defaulting to the
   bus's nearest bit; if the bus has `bitNames`, a small picker offers them) and

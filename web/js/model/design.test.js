@@ -16,6 +16,8 @@ import {
   refreshInstance,
   rigidWiring,
   shiftWiring,
+  busGroupBrace,
+  BUS_BRACE_DEPTH,
 } from "./design.js";
 
 // A representative component type (stub-shaped, see server stubComponents).
@@ -106,6 +108,36 @@ test("rigidWiring carries a group-snapped bus endpoint with its component (FR-01
   const both = rigidWiring(d, new Set(["U1", "U2"]));
   assert.ok(both.vertices.includes(aEnd));
   assert.ok(both.vertices.includes(bEnd));
+});
+
+test("busGroupBrace tips touch the outer pins; apex juts outward (FR-042a)", () => {
+  const ty = {
+    name: "p8",
+    width: 3,
+    height: 9,
+    pins: Array.from({ length: 8 }, (_, i) => ({
+      name: "P" + i,
+      side: "left",
+      position: i + 1,
+      direction: "bidir",
+    })),
+    pinGroups: [{ name: "P", pins: Array.from({ length: 8 }, (_, i) => "P" + i) }],
+  };
+  const d = createDesign("t");
+  const inst = addInstance(d, ty, 0, 0, 0);
+  const br = busGroupBrace(inst, inst.typeData.pinGroups[0]);
+
+  assert.deepEqual(br.out, { x: -1, y: 0 }); // left side, no rotation
+  // tips at the outermost pins (P0 at y=1, P7 at y=8); order along the span is
+  // immaterial to the brace
+  assert.deepEqual(
+    [br.a, br.b].map((p) => Math.round(p.y)).sort((x, y) => x - y),
+    [1, 8],
+  );
+  // apex on a grid point: the floor(8/2)=4th pin's row (y=4), BUS_BRACE_DEPTH left
+  // of the pins' grid line (x=0). Even pin count -> halves are slightly asymmetric.
+  assert.deepEqual(br.apex, { x: -BUS_BRACE_DEPTH, y: 4 });
+  assert.equal(Number.isInteger(br.apex.x) && Number.isInteger(br.apex.y), true);
 });
 
 test("createDesign produces an empty design with the given name", () => {
