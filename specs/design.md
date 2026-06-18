@@ -963,15 +963,19 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   dispatched. *Snap-connect, breakout, and bit-names may be deferred from the MVP
   per requirements; the model and save format support them regardless (A7).*
 - **Simulation lock (FR-087):** while `store.state.simulating` the FSM accepts
-  only pan, zoom, selection, and hover; gestures that would dispatch a command —
-  drags, deletes, wire/bus starts (including pin hotspots), placements — and
-  palette/tool arming are ignored, as is the context menu's mutating items. The
-  sole exception is a click on an **interactive built-in** (FR-087b): if the hit
+  only pan, zoom, and hover; gestures that would dispatch a command — drags,
+  deletes, wire/bus starts (including pin hotspots), placements — and palette/tool
+  arming are ignored, as is the context menu's mutating items. Selection is locked
+  too: a left-click that would select a wire, bus, or component instead posts the
+  status-bar message "Editor is locked while the simulator is running" via
+  `postMessage` (§6.11, `chrome/statusbar.js`) and leaves the selection unchanged;
+  a bare-canvas click is ignored silently (no marquee, no message). The sole
+  exception is a click on an **interactive built-in** (FR-087b): if the hit
   component's type has an `INTERACTIONS` handler (§6.11), the FSM applies it via
   `store.applyLive(() => INTERACTIONS[type](inst))` — a non-undoable live change
   that marks the design modified and wakes the simulator (§6.10) — instead of
-  selecting. The switch's handler toggles `switchState` 0↔1 (FR-087a).
-  Clicks on non-interactive components still select (FR-087).
+  reporting the lock. The switch's handler toggles `switchState` 0↔1 (FR-087a).
+  (Reworked 2026-06-17; supersedes selection remaining available during a run.)
 - **Error handling:** clicks on empty space in WIRE/BUS state are ignored (no
   partial wire). A gesture that would create a zero-endpoint wire is discarded
   (FR-030). Pressing `Esc` cancels an in-progress gesture, restoring SELECT.
@@ -1382,7 +1386,11 @@ no sequential part could ever leave U.)
 - **Interface:** `createSim({store, renderer, library}) → {run(), stop(),
   isRunning()}`. `run()`/`stop()` own the FR-076 transitions: toolbar relabel,
   `setAppState("simulating"|"editing")` (§6.11 status bar), and the store's
-  transient `simulating` flag (§6.10).
+  transient `simulating` flag (§6.10). `run()` first `clearMessage()`s the tray
+  (so a stale editing-time message is dropped before compile/start-up reports are
+  posted), and on a successful start clears the selection (`store.setSelection([])`,
+  locked during a run, FR-087); `stop()` `clearMessage()`s the tray again,
+  dropping any leftover run-time message such as the selection-lock notice (FR-074).
 - **Compile at Run:** `buildNets(design)` (§6.6) gives the net partition; build a
   `(refdes, pin) → net` map and per-net **driver lists**. Per instance: built-in
   → its `BEHAVIORS` entry (below); 74-series → `compileBehavior` of its

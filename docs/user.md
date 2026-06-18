@@ -384,11 +384,15 @@ directly on the editing canvas.
 - A 74-series part whose YAML has no behavior block holds its outputs at U and is
   reported once when the run starts.
 
-While simulating, the design is **read-only**: placing, wiring, moving, rotating,
-deleting, overrides, undo/redo, New, and Open are disabled. Pan, zoom, selection,
-right-click recenter, and Save remain available. The one exception is clicking an
-**interactive input** (the input switch), which changes its value live and
-re-evaluates the simulation.
+While simulating, the design is **read-only** and the **selection is locked**:
+placing, wiring, moving, rotating, deleting, overrides, undo/redo, New, Open, and
+changing the selection are all disabled. Pan, zoom, right-click recenter, and Save
+remain available. Starting a run clears the current selection and the message
+tray; stopping a run clears the message tray again. A click that would normally
+select an item instead shows "Editor is locked while the simulator is running" in
+the status bar and changes nothing (a click on empty canvas does nothing). The one
+exception is clicking an **interactive input** (the input switch), which changes
+its value live and re-evaluates the simulation.
 
 ---
 
@@ -422,6 +426,7 @@ clear message until then, without losing your work.
 | Right-click object | Context menu |
 | Double-click a sub-design | Open it (descend); **← back** returns to the parent |
 | Left-click input switch (while simulating) | Toggle its state `0 ↔ 1` |
+| Left-click any other item (while simulating) | Selection is locked — status bar shows "Editor is locked while the simulator is running" |
 
 **Keyboard**
 

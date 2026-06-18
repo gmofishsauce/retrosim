@@ -16,7 +16,7 @@ import {
 } from "./galasm.js";
 import { buildNets } from "../model/netlist.js";
 import { BEHAVIORS } from "../builtins.js";
-import { setAppState, postMessage } from "../chrome/statusbar.js";
+import { setAppState, postMessage, clearMessage } from "../chrome/statusbar.js";
 
 // SETTLE_BOUND is the combinational settling bound (FR-085).
 export const SETTLE_BOUND = 10000;
@@ -303,6 +303,9 @@ export function createSim({ store, renderer }) {
 
   function run() {
     if (sim) return;
+    // Clear any stale editing-time message before the run; compile/start-up
+    // reports (FR-080, conflicts) posted below then survive into the run (FR-074).
+    clearMessage();
     try {
       sim = buildSimulation(store.design, { onMessage: postMessage });
     } catch (err) {
@@ -315,6 +318,7 @@ export function createSim({ store, renderer }) {
       conflictedConductors: sim.conflictedConductors,
     });
     store.setSimulating(true); // design read-only (FR-087); notifies chrome
+    store.setSelection([]); // selection is locked during a run, so clear it (FR-087)
     // Re-evaluate after any live interactive input during the run (FR-087b).
     unsubLive = store.subscribeLive(wake);
     if (sim.hasClocks()) startPaced();
@@ -336,6 +340,7 @@ export function createSim({ store, renderer }) {
     // the next design modification (FR-085).
     setAppState("editing");
     store.setSimulating(false);
+    clearMessage(); // drop any leftover run-time message, e.g. the lock notice (FR-074)
     renderer.requestRender();
   }
 

@@ -61,6 +61,11 @@ import {
 } from "../chrome/dialogs.js";
 import { INTERACTIONS } from "../builtins.js";
 import { openContextMenu } from "../chrome/contextmenu.js";
+import { postMessage } from "../chrome/statusbar.js";
+
+// LOCKED_MSG is posted when a click attempts to select an item while the
+// simulator is running (FR-087): editing — including selection — is locked.
+const LOCKED_MSG = "Editor is locked while the simulator is running";
 
 const DEFAULT_BUS_WIDTH = 8;
 
@@ -496,23 +501,25 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     if (e.button !== 0) return;
     const pt = canvasPoint(e);
 
-    // Simulation lock (FR-087): selection and pan only — no drags, no wire
-    // starts (pin hotspots included), no placement. The lone exception is a
-    // click on an interactive built-in (FR-087b), which applies its input action.
+    // Simulation lock (FR-087): pan only — no drags, no wire starts (pin
+    // hotspots included), no placement, and no selection. The lone exception is
+    // a click on an interactive built-in (FR-087b), which applies its input
+    // action; any other click that would select an item posts the lock message.
     if (store.state.simulating) {
       const world = worldOf(e);
-      const seg = hitSegment(store.design, world, segTol());
-      if (seg) return select({ kind: "wire", id: seg.wire.id }, e.shiftKey);
-      const busSeg = hitBusSegment(store.design, world, segTol());
-      if (busSeg) return select({ kind: "bus", id: busSeg.bus.id }, e.shiftKey);
       const comp = hitComponent(store.design, world);
       if (comp) {
         const inst = store.design.components.find((c) => c.refdes === comp.refdes);
         const interact = inst && INTERACTIONS[inst.type];
         if (interact) return interactDuringSim(inst, interact);
-        return select({ kind: "component", refdes: comp.refdes }, e.shiftKey);
       }
-      beginMarquee(e, world); // bare canvas: rubber-band selection (FR-016b)
+      // A click on a selectable item is locked: report it and change nothing. A
+      // bare-canvas click is ignored silently (it was not selecting an item).
+      const onItem =
+        comp ||
+        hitSegment(store.design, world, segTol()) ||
+        hitBusSegment(store.design, world, segTol());
+      if (onItem) postMessage(LOCKED_MSG);
       return;
     }
 

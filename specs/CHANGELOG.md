@@ -19,6 +19,27 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-17 — Clear selection and message tray on Run/Stop
+What: Starting a simulation now clears the current selection (it is locked during
+a run anyway) and clears the status-bar message tray before the run's own
+start-up reports are posted; stopping a simulation clears the message tray again
+(dropping any leftover run-time message, e.g. the selection-lock notice).
+Why: a stale editing-time message or a stuck selection highlight carrying into or
+out of a run is confusing.
+Touches: FR-076, FR-087; design §6.13
+
+## 2026-06-17 — Lock editor selection while the simulator runs
+What: While a simulation runs, the editor's selection is now locked along with
+the rest of editing. A click that would select a wire, bus, or non-interactive
+component instead posts "Editor is locked while the simulator is running" to the
+status bar and changes nothing; bare-canvas clicks (and their marquee) are
+ignored silently. Clicks on interactive built-ins (the input switch, FR-087a/b)
+still apply their input action. Previously selection stayed available during a
+run.
+Why: selecting/retargeting/clearing objects during a run served no purpose once
+all editing was locked, and was confusing.
+Touches: FR-087, FR-087b; design §6.9
+
 ## 2026-06-17 — Input switch: two states, indicator-style bubble
 What: Redesigned the input-switch built-in. It now has only two states, 1 and 0
 (the undefined ? / U state is removed; default is now 0). It is drawn like the
