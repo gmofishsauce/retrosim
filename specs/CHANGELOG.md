@@ -19,6 +19,24 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-19 — Draw the 8-wide port as eight pin-aligned pentagons
+What: Change the placed (canvas) rendering of the built-in 8-wide port / off-sheet
+connector from four stacked pentagons to eight narrow pentagons, one roughly
+aligned with each of the eight left-edge bit pins. The palette icon (PORT8_ICON)
+is left unchanged, so the placed object and the icon no longer match exactly.
+Why: Eight pentagons read as one-per-bit, matching the eight connection points.
+Touches: FR-071e (amended); design §6.11 (drawPort8)
+
+## 2026-06-19 — Draw the 1-wide port / off-sheet connector as a pentagon
+What: Render the built-in single port / off-sheet connector on the canvas as a
+pentagon "flag" (apex pointing off-sheet at the front, connection pin on the flat
+back edge facing into the sheet) instead of a box. The apex↔pin relationship is
+preserved under rotation; the label stays upright. The palette icon (PORT_ICON) is
+flipped to match (apex away from the connection point).
+Why: A pentagon reads as an interface/off-sheet flag and matches the 8-wide port
+(FR-071e); the box did not convey signal-leaves-the-sheet directionality.
+Touches: FR-094b (new); design §6.14 (drawPort pentagon)
+
 ## 2026-06-19 — In-app "New GAL part" authoring (22V10) with per-part number
 What: Add a GAL-part authoring path so a 22V10 can be specified in-app instead of
 hand-editing YAML, strictly enough to later burn with real GALasm. A "New GAL part"

@@ -61,13 +61,15 @@ const SWITCH_ICON =
   '<line x1="27" y1="18" x2="31" y2="18" stroke="#333" stroke-width="2"/>' +
   '<path d="M29 14 L35 18 L29 22 Z" fill="#333"/></svg>';
 
-// PORT_ICON: a flag/tag pointing at its connection point (FR-094). The port is
-// the shared primitive behind both hierarchical interfaces and off-sheet
+// PORT_ICON: a pentagon "flag" whose apex points off-sheet, away from its
+// connection point (FR-094/FR-094b) — matching the placed object, where the flat
+// back edge carries the pin (into the sheet) and the apex is the front. The port
+// is the shared primitive behind both hierarchical interfaces and off-sheet
 // connectors (§6.14); the placed object shows the instance's label.
 const PORT_ICON =
   '<svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true">' +
-  '<path d="M5 11 H22 L31 18 L22 25 H5 Z" fill="#fff" stroke="#333"/>' +
-  '<text x="14" y="18" text-anchor="middle" dominant-baseline="central"' +
+  '<path d="M31 11 H14 L5 18 L14 25 H31 Z" fill="#fff" stroke="#333"/>' +
+  '<text x="22" y="18" text-anchor="middle" dominant-baseline="central"' +
   ' font-family="system-ui,sans-serif" font-weight="bold" font-size="9" fill="#000">P</text>' +
   "</svg>";
 

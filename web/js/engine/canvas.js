@@ -619,14 +619,17 @@ function drawIndicator8(ctx, inst, vp, selected, sim) {
   }
 }
 
-// drawPort8 renders the 8-wide port as a short stacked column of right-pointing
-// pentagons (FR-071e) — fewer than eight, just enough to suggest the type. The
-// shared pin loop draws the eight connection bubbles down the left edge.
+// drawPort8 renders the 8-wide port as eight narrow right-pointing pentagons
+// (FR-071e), one centered on each bit pin's row (BIT_PINS positions 1..8) so the
+// flags line up with the eight connection bubbles the shared pin loop draws down
+// the left edge. Each points off-sheet (apex right, away from the pins).
 function drawPort8(ctx, inst, vp, selected) {
   const stroke = selected ? "#4a90d9" : "#333";
   ctx.lineWidth = selected ? 2 : 1;
-  for (const [y0, y1] of [[0.4, 2.2], [2.4, 4.2], [4.6, 6.4], [6.6, 8.4]]) {
-    const mid = (y0 + y1) / 2;
+  for (let i = 0; i < 8; i++) {
+    const mid = i + 1; // pin row
+    const y0 = mid - 0.42;
+    const y1 = mid + 0.42;
     fillLocalPoly(
       ctx,
       inst,
@@ -748,31 +751,55 @@ function drawBrokenBox(ctx, inst, vp, selected) {
   ctx.stroke();
 }
 
-// drawPort renders a port / off-sheet connector (FR-094, §6.14): a box showing
-// the instance's label, a "/n" width annotation when width>1, and a small filled
-// corner mark when it carries an off-sheet target (FR-101). The body is drawn
-// upright so the label stays legible (FR-015); only the connection pin follows
-// the instance rotation, via the shared pin path.
+// drawPort renders a port / off-sheet connector (FR-094/FR-094b, §6.14): a
+// pentagon "flag" showing the instance's label, a "/n" width annotation when
+// width>1, and a small filled apex mark when it carries an off-sheet target
+// (FR-101). The flat back edge sits on the connection-pin side (into the sheet);
+// the body tapers to an apex pointing off-sheet (the front), opposite the pin.
+// The pentagon is built in the local grid frame and projected through
+// rotateOffset, so it rotates with the instance and the apex/pin relationship
+// holds (FR-020); the label is drawn upright so it stays legible (FR-015).
 function drawPort(ctx, inst, vp, selected) {
   const td = inst.typeData;
-  const cr = rotateOffset(td.width / 2, td.height / 2, inst.rotation);
-  const center = worldToScreen({ x: inst.x + cr.x, y: inst.y + cr.y }, vp);
-  const half = (Math.min(td.width, td.height) / 2) * scaleFor(vp);
+  const w = td.width;
+  const h = td.height;
+  // Project a local grid point (origin at the instance, before rotation) to the
+  // screen, following the instance rotation — same path the pin bubble takes.
+  const local = (dx, dy) => {
+    const o = rotateOffset(dx, dy, inst.rotation);
+    return worldToScreen({ x: inst.x + o.x, y: inst.y + o.y }, vp);
+  };
+  const center = local(w / 2, h / 2);
+  const shoulderX = w * 0.4; // where the rectangular body tapers toward the apex
 
+  // Pentagon: flat back edge at local x=w (the pin side), apex at local x=0.
+  const pts = [
+    local(w, 0), // back-top
+    local(w, h), // back-bottom
+    local(shoulderX, h), // bottom shoulder
+    local(0, h / 2), // apex (off-sheet front)
+    local(shoulderX, 0), // top shoulder
+  ];
   ctx.beginPath();
-  ctx.rect(center.x - half, center.y - half, half * 2, half * 2);
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.closePath();
   ctx.fillStyle = "#fff";
   ctx.fill();
   ctx.lineWidth = selected ? 2 : 1;
   ctx.strokeStyle = selected ? "#4a90d9" : "#333";
   ctx.stroke();
 
-  // Off-sheet connectors are marked with a filled top-left triangle (FR-101).
+  // Off-sheet connectors are marked with a small filled triangle at the apex
+  // (FR-101) — the end that leaves the sheet.
   if (inst.target) {
+    const tip = local(0, h / 2);
+    const a = local(w * 0.25, h / 2 - 0.3);
+    const b = local(w * 0.25, h / 2 + 0.3);
     ctx.beginPath();
-    ctx.moveTo(center.x - half, center.y - half);
-    ctx.lineTo(center.x - half + half * 0.6, center.y - half);
-    ctx.lineTo(center.x - half, center.y - half + half * 0.6);
+    ctx.moveTo(tip.x, tip.y);
+    ctx.lineTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
     ctx.closePath();
     ctx.fillStyle = selected ? "#4a90d9" : "#333";
     ctx.fill();
