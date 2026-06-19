@@ -65,7 +65,9 @@ func TestShippedComponentsParse(t *testing.T) {
 	for _, c := range lib.List() {
 		got[c.Name] = true
 	}
-	for _, want := range []string{"7400", "7404", "7432", "74138", "74153"} {
+	// 74157 and 74283 were re-laid-out so their interleaved buses are contiguous
+	// (FR-063a); their presence confirms they still pass the geometry check.
+	for _, want := range []string{"7400", "7404", "7432", "74138", "74153", "74157", "74283"} {
 		if !got[want] {
 			t.Errorf("component %q missing from library (parse error?)", want)
 		}

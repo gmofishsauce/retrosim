@@ -14,15 +14,17 @@ datasheet:
   url: "https://www.ti.com/lit/ds/symlink/cd74hc283.pdf"
 
 pins: # number: physical DIP16/SO16 pin (datasheet §4, Top View)
+  # Pins are laid out so each bus group (A, B) occupies a contiguous run on its
+  # side (FR-063a); `number` keeps the true DIP pin, which interleaves A/B.
   - { name: A0,   side: left,  pos: 2,  dir: in,  number: 5,  desc: "operand A bit 0 (LSB)" }
-  - { name: B0,   side: left,  pos: 3,  dir: in,  number: 6,  desc: "operand B bit 0 (LSB)" }
-  - { name: A1,   side: left,  pos: 5,  dir: in,  number: 3,  desc: "operand A bit 1" }
-  - { name: B1,   side: left,  pos: 6,  dir: in,  number: 2,  desc: "operand B bit 1" }
-  - { name: A2,   side: left,  pos: 8,  dir: in,  number: 14, desc: "operand A bit 2" }
+  - { name: A1,   side: left,  pos: 3,  dir: in,  number: 3,  desc: "operand A bit 1" }
+  - { name: A2,   side: left,  pos: 4,  dir: in,  number: 14, desc: "operand A bit 2" }
+  - { name: A3,   side: left,  pos: 5,  dir: in,  number: 12, desc: "operand A bit 3 (MSB)" }
+  - { name: B0,   side: left,  pos: 7,  dir: in,  number: 6,  desc: "operand B bit 0 (LSB)" }
+  - { name: B1,   side: left,  pos: 8,  dir: in,  number: 2,  desc: "operand B bit 1" }
   - { name: B2,   side: left,  pos: 9,  dir: in,  number: 15, desc: "operand B bit 2" }
-  - { name: A3,   side: left,  pos: 11, dir: in,  number: 12, desc: "operand A bit 3 (MSB)" }
-  - { name: B3,   side: left,  pos: 12, dir: in,  number: 11, desc: "operand B bit 3 (MSB)" }
-  - { name: CIN,  side: left,  pos: 14, dir: in,  number: 7,  desc: "carry input" }
+  - { name: B3,   side: left,  pos: 10, dir: in,  number: 11, desc: "operand B bit 3 (MSB)" }
+  - { name: CIN,  side: left,  pos: 13, dir: in,  number: 7,  desc: "carry input" }
   - { name: S0,   side: right, pos: 2,  dir: out, number: 4,  desc: "sum bit 0 (LSB)" }
   - { name: S1,   side: right, pos: 5,  dir: out, number: 1,  desc: "sum bit 1" }
   - { name: S2,   side: right, pos: 8,  dir: out, number: 13, desc: "sum bit 2" }

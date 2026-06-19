@@ -184,6 +184,8 @@ func TestParseComponentErrors(t *testing.T) {
 		{"gal unknown device", "type: T\ngal: GAL99X9\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "gal names unknown device"},
 		{"gal without partnumber", "type: \"22V10\"\ngal: GAL22V10\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "requires a 'partnumber'"},
 		{"partnumber without gal", "type: T\npartnumber: PC-DECODE-A\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "only valid on a gal part"},
+		{"group spans two sides", "type: T\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n  - { name: A1, side: right, pos: 1, dir: out }\ngroups:\n  - { name: A, pins: [A0, A1] }\n", "different sides"},
+		{"group not contiguous", "type: T\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n  - { name: X, side: left, pos: 2, dir: in }\n  - { name: A1, side: left, pos: 3, dir: in }\ngroups:\n  - { name: A, pins: [A0, A1] }\n", "not contiguous"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

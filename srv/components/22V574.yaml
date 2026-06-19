@@ -27,6 +27,9 @@ pins:
   - { name: "Q2", side: right, pos: 8, dir: out, number: 21 }
   - { name: "Q1", side: right, pos: 9, dir: out, number: 22 }
   - { name: "Q0", side: right, pos: 10, dir: out, number: 23 }
+groups:
+  - { name: D, pins: [D0, D1, D2, D3, D4, D5, D6, D7] }
+  - { name: Q, pins: [Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7] }
 behavior: |
   Q0.R = CLR * /EN * D0
        + CLR *  EN * Q0

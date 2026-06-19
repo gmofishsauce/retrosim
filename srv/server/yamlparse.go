@@ -202,6 +202,10 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		return ComponentType{}, fmt.Errorf("%s: 'partnumber' is only valid on a gal part (set 'gal:')", path)
 	}
 
+	pinByName := make(map[string]Pin, len(pins))
+	for _, p := range pins {
+		pinByName[p.Name] = p
+	}
 	var groups []PinGroup
 	groupNames := make(map[string]bool, len(doc.Groups))
 	for _, g := range doc.Groups {
@@ -213,6 +217,9 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 			if !pinNames[member] {
 				return ComponentType{}, fmt.Errorf("%s: group %q names unknown pin %q", path, g.Name, member)
 			}
+		}
+		if err := validateGroupGeometry(path, g, pins, pinByName, subunit); err != nil {
+			return ComponentType{}, err
 		}
 		groups = append(groups, PinGroup{Name: g.Name, Pins: g.Pins})
 	}
@@ -282,6 +289,40 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		Description: doc.Description,
 		Datasheet:   datasheet,
 	}, nil
+}
+
+// validateGroupGeometry enforces the pin-group geometry rule (FR-063a): a group's
+// members must all be on one side, and (for unit components, where `pos` is
+// meaningful) form a contiguous run there — no non-member pin may lie between
+// them. The bus-snap curly brace (design §6.8/§6.9) assumes members are colinear
+// on one edge, so a violating group would render and target incorrectly. `pos` is
+// not meaningful for subunit symbols, so contiguity is skipped for them.
+func validateGroupGeometry(path string, g yamlGroup, pins []Pin, byName map[string]Pin, subunit bool) error {
+	side := byName[g.Pins[0]].Side
+	memberPos := make(map[int]bool, len(g.Pins))
+	minPos, maxPos := byName[g.Pins[0]].Position, byName[g.Pins[0]].Position
+	for _, m := range g.Pins {
+		p := byName[m]
+		if p.Side != side {
+			return fmt.Errorf("%s: group %q has members on different sides (%s and %s); all members must be on one side (FR-063a)", path, g.Name, side, p.Side)
+		}
+		memberPos[p.Position] = true
+		if p.Position < minPos {
+			minPos = p.Position
+		}
+		if p.Position > maxPos {
+			maxPos = p.Position
+		}
+	}
+	if subunit {
+		return nil
+	}
+	for _, p := range pins {
+		if p.Side == side && p.Position > minPos && p.Position < maxPos && !memberPos[p.Position] {
+			return fmt.Errorf("%s: group %q is not contiguous: non-member pin %q lies between its members (FR-063a); lay out the symbol so each bus group is contiguous on its side", path, g.Name, p.Name)
+		}
+	}
+	return nil
 }
 
 // validateSubunit checks a subunit package's symbol, unit count, and per-unit pin

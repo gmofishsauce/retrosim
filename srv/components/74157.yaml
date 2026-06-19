@@ -13,14 +13,16 @@ datasheet:
   url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT157.pdf"
 
 pins: # number: physical DIP16/SO16 pin (datasheet Table 2)
+  # Pins are laid out so each bus group (I0, I1) occupies a contiguous run on its
+  # side (FR-063a); `number` keeps the true DIP pin, which interleaves I0/I1.
   - { name: 1I0, side: left,  pos: 2,  dir: in,  number: 2,  desc: "mux 1 data input from source 0" }
-  - { name: 1I1, side: left,  pos: 3,  dir: in,  number: 3,  desc: "mux 1 data input from source 1" }
-  - { name: 2I0, side: left,  pos: 5,  dir: in,  number: 5,  desc: "mux 2 data input from source 0" }
-  - { name: 2I1, side: left,  pos: 6,  dir: in,  number: 6,  desc: "mux 2 data input from source 1" }
-  - { name: 3I0, side: left,  pos: 8,  dir: in,  number: 11, desc: "mux 3 data input from source 0" }
+  - { name: 2I0, side: left,  pos: 3,  dir: in,  number: 5,  desc: "mux 2 data input from source 0" }
+  - { name: 3I0, side: left,  pos: 4,  dir: in,  number: 11, desc: "mux 3 data input from source 0" }
+  - { name: 4I0, side: left,  pos: 5,  dir: in,  number: 14, desc: "mux 4 data input from source 0" }
+  - { name: 1I1, side: left,  pos: 7,  dir: in,  number: 3,  desc: "mux 1 data input from source 1" }
+  - { name: 2I1, side: left,  pos: 8,  dir: in,  number: 6,  desc: "mux 2 data input from source 1" }
   - { name: 3I1, side: left,  pos: 9,  dir: in,  number: 10, desc: "mux 3 data input from source 1" }
-  - { name: 4I0, side: left,  pos: 11, dir: in,  number: 14, desc: "mux 4 data input from source 0" }
-  - { name: 4I1, side: left,  pos: 12, dir: in,  number: 13, desc: "mux 4 data input from source 1" }
+  - { name: 4I1, side: left,  pos: 10, dir: in,  number: 13, desc: "mux 4 data input from source 1" }
   - { name: S,   side: top,   pos: 2,  dir: in,  number: 1,  desc: "common data select (L=source 0, H=source 1)" }
   - { name: /E,  side: top,   pos: 4,  dir: in,  number: 15, desc: "active-low enable (H forces all outputs LOW)" }
   - { name: 1Y,  side: right, pos: 2,  dir: out, number: 4,  desc: "mux 1 output" }

@@ -493,12 +493,17 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
   // busGroupAt returns the nearest width-matching pin group whose pins (or brace
   // apex) the cursor is within GROUP_SNAP_RANGE of, as { inst, group, brace } —
   // or null. Shared by the drag preview and the click commit so a click anywhere
-  // the brace is shown terminates the bus at that group (FR-042a).
+  // the brace is shown terminates the bus at that group (FR-042a). A null width
+  // means "any width" — every group is a candidate, used for the first endpoint
+  // before the bus has a committed width so a fresh bus adopts the group's width
+  // (FR-042c).
   function busGroupAt(world, width) {
     let best = null;
     let bestD = GROUP_SNAP_RANGE;
     for (const inst of store.design.components) {
-      for (const group of matchingGroups(inst.typeData, width)) {
+      const groups =
+        width == null ? inst.typeData.pinGroups ?? [] : matchingGroups(inst.typeData, width);
+      for (const group of groups) {
         const brace = busGroupBrace(inst, group);
         const d = Math.min(
           distToSegment(world, brace.a, brace.b),
@@ -599,7 +604,8 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
   // locked legs.
   function busGroupHoverPreview(srcSpec, anchor, e) {
     if (store.state.tool !== "bus") return null;
-    const width = wireSource?.busWidth ?? DEFAULT_BUS_WIDTH;
+    // No in-progress bus → no committed width yet, so match any-width group (FR-042c).
+    const width = wireSource ? wireSource.busWidth ?? DEFAULT_BUS_WIDTH : null;
     const near = busGroupAt(worldOf(e), width);
     if (!near) return null;
     const apex = near.brace.apex;
@@ -775,9 +781,10 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     }
 
     if (store.state.tool === "bus") {
-      // The first endpoint sizes a fresh bus at the default width; the second
-      // endpoint's group proximity is judged at the bus's actual width (FR-042a).
-      const width = wireSource?.busWidth ?? DEFAULT_BUS_WIDTH;
+      // The first endpoint has no committed width, so it matches a group of any
+      // width and adopts it (FR-042c); the second endpoint's group proximity is
+      // then judged at the bus's actual width (FR-042a).
+      const width = wireSource ? wireSource.busWidth ?? DEFAULT_BUS_WIDTH : null;
       const target = busTargetAt(e, width);
       if (!wireSource) {
         wireSource = target;

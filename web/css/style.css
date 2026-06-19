@@ -331,6 +331,7 @@ body {
 }
 .galdlg-validate.ok { color: #1a7f37; }
 .galdlg-validate.err { color: #b00; }
+.galdlg-grouptext { font-size: 0.85rem; }
 
 .context-menu {
   position: fixed;

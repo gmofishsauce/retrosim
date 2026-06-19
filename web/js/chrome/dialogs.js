@@ -303,7 +303,7 @@ const OLMC_DIRS = [
 // galPartYaml serializes the authored part to component YAML (§7.3). Quoted
 // scalars use JSON.stringify (valid YAML 1.2 double-quoted form); the behavior is
 // emitted as a literal block scalar with each line indented two spaces.
-function galPartYaml({ partnumber, description, inputs, olmcs, behavior }) {
+export function galPartYaml({ partnumber, description, inputs, olmcs, groups, behavior }) {
   const lines = [`type: "22V10"`, `gal: GAL22V10`, `partnumber: ${JSON.stringify(partnumber)}`];
   if (description) lines.push(`description: ${JSON.stringify(description)}`);
   if (olmcs.some((o) => o.kind === "reg")) {
@@ -317,11 +317,155 @@ function galPartYaml({ partnumber, description, inputs, olmcs, behavior }) {
     const dir = OLMC_DIRS.find((d) => d.kind === o.kind).dir;
     lines.push(`  - { name: ${JSON.stringify(o.name)}, side: right, pos: ${o.pos}, dir: ${dir}, number: ${o.number} }`);
   }
+  // Pin groups (FR-066d/FR-063): members are stored by skeleton DIP number; emit
+  // them resolved to current labels, ordered by physical pin layout (the bus bit
+  // order). `inputs` then `olmcs` is exactly that layout order.
+  if (groups && groups.length) {
+    const layout = [...inputs, ...olmcs]; // pin-layout order
+    const labelOf = new Map(layout.map((p) => [p.number, p.name]));
+    const orderOf = new Map(layout.map((p, i) => [p.number, i]));
+    lines.push(`groups:`);
+    for (const g of groups) {
+      const members = g.members
+        .slice()
+        .sort((a, b) => orderOf.get(a) - orderOf.get(b))
+        .map((n) => JSON.stringify(labelOf.get(n)));
+      lines.push(`  - { name: ${JSON.stringify(g.name)}, pins: [${members.join(", ")}] }`);
+    }
+  }
   if (behavior.trim()) {
     lines.push(`behavior: |`);
     for (const ln of behavior.replace(/\s+$/, "").split("\n")) lines.push(`  ${ln}`);
   }
   return lines.join("\n") + "\n";
+}
+
+// pinGroupGeometryError returns a reason string if the chosen members violate the
+// pin-group geometry rule (FR-063a), else null. The bus-snap brace can only render
+// a group whose pins are colinear on one edge with no foreign pin between them, so
+// members must share a side and be contiguous (no non-member pin between them by
+// `pos`). `pins` is the part's pins ({ number, label, side, pos }); `members` is
+// the chosen DIP numbers. Pure and exported for testing; mirrors the server's
+// validateGroupGeometry.
+export function pinGroupGeometryError(pins, members) {
+  const pinOf = new Map(pins.map((p) => [p.number, p]));
+  const mp = members.map((n) => pinOf.get(n));
+  const side = mp[0].side;
+  if (mp.some((p) => p.side !== side)) return "All pins in a group must be on the same side.";
+  const positions = mp.map((p) => p.pos);
+  const lo = Math.min(...positions), hi = Math.max(...positions);
+  const have = new Set(positions);
+  const between = pins.find((p) => p.side === side && p.pos > lo && p.pos < hi && !have.has(p.pos));
+  return between ? `Pins must be contiguous: "${between.label}" lies between the selected pins.` : null;
+}
+
+// pinGroupsDialog edits a GAL part's named pin groups (FR-066d). `pins` is the
+// part's pins in layout order ({ number, label }); `groups` is the current list
+// ({ name, members: [number] }). It works on a copy: list existing groups (each
+// removable) and define more from a name + a checkbox subset. Resolves to the
+// updated list on Done, or null on Cancel (discarding this session's edits).
+export function pinGroupsDialog({ pins, groups }) {
+  return new Promise((resolve) => {
+    const working = groups.map((g) => ({ name: g.name, members: g.members.slice() }));
+    const labelOf = new Map(pins.map((p) => [p.number, p.label]));
+
+    const overlay = el("div", "dialog-overlay");
+    const box = el("div", "dialog");
+    overlay.appendChild(box);
+    box.appendChild(el("div", "dialog-title", "Pin groups"));
+
+    // Existing groups, each removable.
+    const listEl = el("div", "dialog-list galdlg-pins");
+    box.appendChild(listEl);
+    function renderList() {
+      listEl.replaceChildren();
+      if (!working.length) {
+        listEl.appendChild(el("div", "galdlg-section", "No groups yet."));
+        return;
+      }
+      working.forEach((g, i) => {
+        const row = el("div", "galdlg-row");
+        const names = g.members.map((n) => labelOf.get(n)).join(", ");
+        const text = el("span", "galdlg-grouptext", `${g.name} (${names})`);
+        const rm = button("✕", () => {
+          working.splice(i, 1);
+          renderList();
+        });
+        row.append(rm, text);
+        listEl.appendChild(row);
+      });
+    }
+    renderList();
+
+    // New-group form: name + a checkbox per pin (shown by current label).
+    box.appendChild(el("div", "galdlg-section", "Define a group"));
+    const nameInput = el("input", "dialog-name");
+    nameInput.type = "text";
+    nameInput.placeholder = "group name, e.g. D";
+    const nameRow = el("div", "dialog-row");
+    nameRow.append(el("label", "dialog-label", "Name:"), nameInput);
+    box.appendChild(nameRow);
+
+    const checks = el("div", "dialog-list galdlg-pins");
+    const boxes = pins.map((p) => {
+      const row = el("div", "galdlg-row");
+      const cb = el("input");
+      cb.type = "checkbox";
+      cb.id = "grp-pin-" + p.number;
+      const lab = el("label", "galdlg-grouptext", `${p.number}  ${p.label}`);
+      lab.htmlFor = cb.id;
+      row.append(cb, lab);
+      checks.appendChild(row);
+      return { number: p.number, cb };
+    });
+    box.appendChild(checks);
+
+    const errEl = el("div", "galdlg-error");
+    errEl.hidden = true;
+    box.appendChild(errEl);
+
+    function addGroup() {
+      const name = nameInput.value.trim();
+      if (!name) return showError("A group name is required.");
+      if (working.some((g) => g.name === name)) return showError(`Group "${name}" already exists.`);
+      const members = boxes.filter((b) => b.cb.checked).map((b) => b.number);
+      if (!members.length) return showError("Select at least one pin.");
+      const geomErr = pinGroupGeometryError(pins, members);
+      if (geomErr) return showError(geomErr);
+      working.push({ name, members });
+      nameInput.value = "";
+      for (const b of boxes) b.cb.checked = false;
+      errEl.hidden = true;
+      renderList();
+    }
+    function showError(msg) {
+      errEl.textContent = msg;
+      errEl.hidden = false;
+    }
+
+    const buttons = el("div", "dialog-buttons");
+    buttons.append(
+      button("Cancel", () => done(null)),
+      button("Add group", addGroup),
+      button("Done", () => done(working)),
+    );
+    box.appendChild(buttons);
+
+    function done(result) {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(null);
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+    nameInput.focus();
+  });
 }
 
 // newGalPartDialog authors a new GAL22V10 part (FR-066c). It presents the fixed
@@ -385,6 +529,44 @@ export function newGalPartDialog({ submit }) {
       pins.appendChild(row);
       return { meta: o, input, sel };
     });
+
+    // Pin groups (FR-066d): edited in a sub-dialog; tracked by skeleton DIP number
+    // so a later relabel can't break a group.
+    let groups = [];
+    let subOpen = false; // suppress this dialog's Escape while a sub-dialog is open
+    const currentPins = () => [
+      ...inputFields.map((f) => ({
+        number: f.meta.number,
+        label: f.input.value.trim() || f.meta.name,
+        side: "left",
+        pos: f.meta.pos,
+      })),
+      ...olmcFields.map((f) => ({
+        number: f.meta.number,
+        label: f.input.value.trim() || f.meta.name,
+        side: "right",
+        pos: f.meta.pos,
+      })),
+    ];
+    const groupsRow = el("div", "dialog-row");
+    const groupsSummary = el("span", "dialog-label", "no pin groups");
+    const groupsBtn = button("Pin groups…", async () => {
+      subOpen = true;
+      let updated;
+      try {
+        updated = await pinGroupsDialog({ pins: currentPins(), groups });
+      } finally {
+        subOpen = false;
+      }
+      if (updated) {
+        groups = updated;
+        groupsSummary.textContent = groups.length
+          ? `${groups.length} group(s): ${groups.map((g) => g.name).join(", ")}`
+          : "no pin groups";
+      }
+    });
+    groupsRow.append(groupsBtn, groupsSummary);
+    box.appendChild(groupsRow);
 
     box.appendChild(el("div", "galdlg-section", "Behavior (GALasm)"));
     const behavior = el("textarea", "galdlg-behavior");
@@ -477,7 +659,7 @@ export function newGalPartDialog({ submit }) {
       const g = gather();
       if (!g.partnumber) return showError("A part number is required.");
       if (!validate()) return; // behavior must pass the strict gate (FR-066c)
-      const yaml = galPartYaml({ ...g, behavior: behavior.value });
+      const yaml = galPartYaml({ ...g, groups, behavior: behavior.value });
       createBtn.disabled = true;
       try {
         const comp = await submit(yaml);
@@ -497,6 +679,7 @@ export function newGalPartDialog({ submit }) {
       resolve(result);
     }
     function onKey(e) {
+      if (subOpen) return; // the pin-groups sub-dialog owns Escape while open
       if (e.key === "Escape") {
         e.stopPropagation();
         done(null);

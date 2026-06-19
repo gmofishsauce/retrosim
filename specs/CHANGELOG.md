@@ -19,6 +19,40 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-19 — First-click bus width adapts to nearby pin group
+What: Before a bus's first endpoint is placed (no committed width), group-proximity feedback/snap now matches a group of any width and the bus adopts that group's width; strict width-matching resumes for the second endpoint.
+Why: A bus started near a non-default-width group (e.g. a 4-wide 74157 group) showed no snap feedback because the first endpoint probed only at the default width (8).
+Touches: FR-042c (new); design §6.9
+
+## 2026-06-19 — Require pin groups to be same-side and contiguous
+What: Made the long-standing implicit pin-group geometry assumption a hard rule:
+every group's member pins must share one side and be contiguous on it (no
+non-member pin between them) — the bus-snap curly brace (FR-042a) assumes the
+members are colinear on one edge. The server now rejects a violating component at
+load, and the New GAL part pin-groups sub-dialog refuses such a selection. Two
+shipped parts whose symbols interleaved two same-side buses — 74157 (I0/I1) and
+74283 (A/B) — were re-laid-out so each bus is contiguous on the symbol (`pos`),
+keeping `number` at the true (interleaved) DIP pinout. Audit confirmed all other
+groups already comply; no group was ever multi-side.
+Why: an interleaved group draws a brace that spans the other bus's pins and makes
+proximity targeting ambiguous; codifying the rule keeps every group's snap UI
+correct and catches bad hand-authored or dialog-authored groups.
+Touches: FR-063a (new); FR-066d (amended); design §6.3 (parser group validation),
+§6.11 (pin-groups sub-dialog); components 74157.yaml, 74283.yaml (pin pos relayout)
+
+## 2026-06-19 — Define pin groups in the New GAL part dialog
+What: Added pin-group authoring to the New GAL part dialog (FR-066c). A "Pin
+groups…" button opens a modal sub-dialog that lists the part's existing groups
+(each removable) and defines one more from a name plus a checkbox subset of the
+part's pins; a part may have several groups. Member order follows the pins'
+physical layout order (the bus bit order). Membership is tracked by skeleton pin
+(stable DIP number), not the label, so renaming a pin afterward doesn't break a
+group; galPartYaml resolves members to current labels and emits a `groups:` block.
+Groups don't affect the strict behavior validation.
+Why: A multi-bit bus can only snap-connect to a declared pin group (FR-041/FR-063);
+without this, an authored GAL part had no bus interface short of hand-editing YAML.
+Touches: FR-066d (new); FR-066c (amended); design §6.11 (pin-groups sub-dialog)
+
 ## 2026-06-19 — Locked waypoints while drawing wires & buses (KiCad-style)
 What: While a wire or bus is in progress, a single click on bare canvas now locks
 an intermediate waypoint instead of being ignored (wires) or ending the conductor
