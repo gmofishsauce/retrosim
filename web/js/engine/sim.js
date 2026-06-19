@@ -76,7 +76,10 @@ export function buildSimulation(design, { onMessage = () => {} } = {}) {
   // instances. `pins` is the union of the siblings' pins; pinOwner maps each
   // signal to the sibling refdes + YAML pin name that owns it (§6.13).
   function makeGalasmEntity(typeName, insts, pins) {
-    const typeData = { name: typeName, pins, behavior: insts[0].typeData.behavior };
+    // Carry `gal` so a GAL part's behavior is strict-validated at Run (FR-079b);
+    // absent on 74-series, so they stay in the extended dialect (FR-079a).
+    const td0 = insts[0].typeData;
+    const typeData = { name: typeName, pins, behavior: td0.behavior, gal: td0.gal };
     const c = compiled(typeName, typeData);
     // c === null means either no behavior block (report once, FR-080) or a
     // parse error (already in `errors`; preflight will refuse to start).

@@ -15,11 +15,11 @@ import (
 // API routes live under the /api/v1/ prefix so new endpoints can be added later
 // without breaking existing clients (NFR-004). dataDir is the default designs
 // root reported by /defaults and used when a request omits an explicit path.
-func NewRouter(lib *Library, dataDir, webDir string) http.Handler {
+func NewRouter(lib *Library, dataDir, componentsDir, webDir string) http.Handler {
 	mux := http.NewServeMux()
 
 	api := http.NewServeMux()
-	api.HandleFunc("/api/v1/components", handleComponents(lib))
+	api.HandleFunc("/api/v1/components", handleComponents(lib, componentsDir))
 	api.HandleFunc("/api/v1/defaults", handleDefaults(dataDir))
 	api.HandleFunc("/api/v1/files", handleFiles(dataDir))
 	api.HandleFunc("/api/v1/design/load", handleDesignLoad())
@@ -58,13 +58,40 @@ func handlePing() http.HandlerFunc {
 	}
 }
 
-// handleComponents serves the parsed component library (FR-065).
-func handleComponents(lib *Library) http.HandlerFunc {
+// handleComponents serves the parsed component library on GET (FR-065) and
+// creates a new component on POST (FR-007a). POST parses the submitted YAML with
+// the same validation as a startup load, persists it into componentsDir under a
+// part-number-derived filename, adds it to the live library, and returns it so
+// the client can add the tile without a restart.
+func handleComponents(lib *Library, componentsDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !requireMethod(w, r, http.MethodGet) {
-			return
+		switch r.Method {
+		case http.MethodGet:
+			writeJSON(w, http.StatusOK, map[string]any{"components": lib.List()})
+		case http.MethodPost:
+			var body struct {
+				YAML string `json:"yaml"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				writeError(w, http.StatusBadRequest, "invalid request body")
+				return
+			}
+			comp, err := lib.Create(componentsDir, []byte(body.YAML))
+			switch {
+			case err == nil:
+				writeJSON(w, http.StatusCreated, map[string]any{"component": comp})
+			case errors.Is(err, ErrDuplicateComponent):
+				writeError(w, http.StatusConflict, err.Error())
+			case errors.Is(err, ErrComponentWrite):
+				log.Printf("api: create component: %v", err)
+				writeError(w, http.StatusInternalServerError, "could not write component")
+			default:
+				// Parse/validation failure: a client (authoring) error.
+				writeError(w, http.StatusBadRequest, err.Error())
+			}
+		default:
+			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"components": lib.List()})
 	}
 }
 

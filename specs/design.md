@@ -593,6 +593,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | Method & Path | Request | Success Response | Errors |
   |---|---|---|---|
   | `GET /api/v1/components` | – | `{"components":[ComponentType,…]}` | 500 on internal error |
+  | `POST /api/v1/components` | `{"yaml":"<authored YAML>"}` | `{"component":ComponentType}` | 400 bad body / invalid YAML, 409 duplicate part number, 500 write failure |
   | `GET /api/v1/defaults` | – | `{"dataDir":"<abs path>"}` | – |
   | `GET /api/v1/files?path=<p>` | query `path` (abs; empty = data dir) | `{"path","parent","entries":[{"name","isDir"}]}` | 400 bad path, 404 missing, 403 not a dir |
   | `GET /api/v1/design/load?path=<p>` | query `path` | `{"design":Design}` | 400, 404, 422 malformed JSON |
@@ -602,7 +603,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   Directory entries: only `.json` files and subdirectories are returned for
   navigation; the response includes `parent` so the dialog can offer "up".
 - **Behavior:** decode JSON, delegate to `storage.go`/`components.go`, encode
-  JSON. All responses `Content-Type: application/json`. Static handler serves
+  JSON. All responses `Content-Type: application/json`. `POST /api/v1/components`
+  (FR-007a) parses the submitted YAML through the same `yamlparse.go` path as a
+  startup load, requires a non-empty library-unique `partnumber` (FR-066b),
+  writes `<partnumber>.yaml` into the library dir (filename sanitized from the
+  part number; reject on collision → 409), appends the parsed `ComponentType` to
+  the in-memory library, and returns it so the client can add the tile live. Static handler serves
   `web/` for any non-`/api/` path; unknown SPA routes fall back to `index.html`.
   Static responses carry `Cache-Control: no-store` so a plain browser reload
   always picks up edited SPA assets (localhost-only authoring tool served from the
@@ -1144,7 +1150,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   sorted ascending by the numeric abbreviated part number (`Number(name.slice(2))`).
   Each tile is labeled `name.slice(2)` (the `74` prefix dropped) with the full
   `name` as its `title`/tooltip; `dataset.type` keeps the full name so placement is
-  unaffected. Tiles are raised (drop shadow); a tile is `draggable` (HTML5 DnD →
+  unaffected. A **GAL part** (a type carrying `partnumber`, FR-005b/FR-066b) is the
+  exception: its tile is labeled with the unabbreviated `name` (the device family,
+  e.g. "22V10"), and its `title` leads with `partnumber` then the `description`
+  (FR-005a) — the part number is what disambiguates same-family tiles on hover;
+  the library keys and `dataset.type` use `partnumber` so each authored part
+  places distinctly. An authored part created in-app (FR-066c/FR-007a) is appended
+  to the upper region live (no reload), keeping the FR-006 sort. Tiles are raised (drop shadow); a tile is `draggable` (HTML5 DnD →
   drop on canvas, FR-008) and click-selectable (sets `PLACE(type)`, FR-009). The
   armed tile shows a pressed-in (inset) look (FR-009a) by subscribing to the store
   and matching `state.placeType` while `tool === "place"`. Disabled/overlaid until
@@ -1402,7 +1414,9 @@ no sequential part could ever leave U.)
     `errors`) for any construct or capacity the device lacks (e.g. XOR on any
     device, `.CLK` on a non-20RA10, `AR`/`SP` on a 16V8/20V8). The product-term
     profile is checked **conservatively** (terms as written, no minimization —
-    FR-079b); the cheap structural limits are exact.
+    FR-079b); the cheap structural limits are exact. This same `validateStrict`
+    gate is what the **New GAL part dialog** (§6.11, FR-066c) runs live while
+    authoring, so a part cannot be created that Run would later reject.
 - **Per-register clocks (sim.js).** Extended per-output `.CLK` means a single
   evaluation entity may hold registers on **different** clock nets, so the
   engine's one-`clockNet`-per-entity assumption generalizes to a clock net **per
@@ -1511,6 +1525,8 @@ no sequential part could ever leave U.)
 
 **The ADD flow (FR-097/097a/097b).** `builtins.js` exposes a single non-placeable lower-palette entry **ADD**. Arming it and clicking (or dropping it on) the canvas opens the **Add sub-component dialog** (`dialogs.js`) at the grid point instead of creating an object. The dialog: (1) navigates/loads a child via `/api/v1/files`+`/design/load` (§6.4); (2) shows the child's `defaultRender` (§7.2) and resolved interface; (3) offers an `ic`/`connector` choice defaulting to `defaultRender`. OK → dispatch `PlaceSubDesign(childPath, render, @grid)`; Cancel → nothing; both return to SELECT (one-shot, FR-010). `childPath` is stored **relative to the parent's save dir**, so an unsaved parent first routes through Save (FR-047/FR-097b) and declining cancels. The dialog rejects an interface-less file, and a self/cyclic embed (`wouldCycle`), with a message.
 
+**The New GAL part flow (FR-066b/066c/007a).** `builtins.js` exposes a non-placeable upper-palette action **New GAL part** (a tile that opens a dialog rather than arming placement). The **New GAL part dialog** (`dialogs.js`) renders the device's fixed skeleton — for the GAL22V10, the 24-pin map (pin 1 clock/in, 2–11 + 13 in, 14–23 OLMC I/O, 12 GND, 24 VCC) — and collects only the per-part data: `partnumber`, optional `description`, a label per I/O pin, a per-OLMC direction (in / comb-out / reg-out), and the `behavior` block. As the user types, the dialog assembles a candidate `typeData` (`type:"22V10"`, `gal:"GAL22V10"`, the chosen `pins`, the `behavior`) and runs `galasm.js` `compileBehavior`+`validateStrict` (§6.13) **live**, surfacing the same accept/reject diagnostics Run would (FR-079b) — the dialog reuses that one gate, adding no second validator. OK serializes the `typeData` to YAML client-side and `POST`s it to `/api/v1/components` (§6.4); on success it dispatches the live palette add (above) and returns to SELECT (one-shot, FR-010). A duplicate-partnumber 409 or validation error is shown in the dialog; Cancel discards. Placement of the resulting tile is then ordinary FR-008/FR-009.
+
 **Sub-design instance (FR-098/098a/099).** An entry in `design.components` with `kind:"subdesign"`, `childPath`, `render`, `x`, `y`, `rotation`, and an `X-<n>` refdes — a third series beside U and A (`addInstance` scans X-suffixes, FR-098a); a child may be embedded repeatedly as independent X-instances. It stores **no** `typeData` (supersedes FR-057 for it); its in-memory `typeData` is the synthetic interface type, recomputed on load and whenever the child changes (FR-099b). Rendering (`canvas.js`, §6.8 dispatch on `kind`): `ic` — the existing rectangle over the synthetic type (inputs left, outputs right, pins labelled by port label, `X1` + child base name upright); `connector` — a tall narrow rectangle with all interface pins ranked along **one** long edge in label order (OQ-010). Both are purely cosmetic (same interface, same connectivity, FR-099); a `width>1` interface pin is a single bus-capable pin (bus snap, FR-041/FR-039a). A child that fails to load renders as a **broken-link placeholder** (a red box naming the missing relative path), reported once via the message tray (FR-099a), reusing §6.8's unknown-type placeholder.
 
 **Navigation & back-stack (FR-100/100a).** Descending into a sub-design instance (double-click, or context-menu "Open sub-design") and following an off-sheet connector (clicking a port whose `target` is set) both resolve the target path (relative→absolute against the current design's save dir) and perform a **navigation** = the existing Open flow with the FR-049a unsaved-changes guard (save or discard before the canvas is replaced). `app.js` keeps a transient `navStack` of absolute paths recording the descended chain; a breadcrumb in the chrome offers **back**, popping and re-opening the parent (itself save-or-lose). The stack is session state — not persisted, not on the undo stack.
@@ -1534,7 +1550,8 @@ no sequential part could ever leave U.)
 
 | Field | Type | Notes |
 |---|---|---|
-| `name` | string | unique type name, e.g. `"74138"` (FR-062) |
+| `name` | string | unique type name, e.g. `"74138"` (FR-062); for a GAL part the device family, e.g. `"22V10"` (FR-066b), and not unique on its own |
+| `partnumber` | string? | GAL parts only (FR-066b): library-unique part identity, e.g. `"PC-DECODE-A"`; the library key and YAML filename stem for GAL parts. Absent on 74-series types |
 | `renderType` | enum | `unit` (default) \| `subunit` (FR-062c) |
 | `numUnits` | int | subunit packages only: number of functional units (FR-062c); 0/omitted for `unit` |
 | `renderAs` | string | subunit packages only: schematic symbol — `nand`\|`and`\|`or`\|`nor`\|`xor`\|`xnor`\|`not`\|`mux2`\|`mux4`\|`mux8` (FR-013b) |
@@ -1644,7 +1661,7 @@ branch wire that meet at it share one position and cannot drift apart (A1).
 | Field | Type | Notes |
 |---|---|---|
 | `refdes` | string | `"U3"` — unique id within the design; used by wire endpoints |
-| `type` | string | type name |
+| `type` | string | the placed type's **library identity** (ComponentType.Key, FR-066b): the type name for 74-series/built-ins, the **part number** for a GAL instance (e.g. `"PC-DECODE-A"`, not the family `"22V10"`). Unique per design's needs — it keys the simulator's per-type behavior cache and Refresh Types matching, and labels the chip on canvas. The device family for a GAL is still available as `typeData.name` |
 | `x`, `y` | int | grid coordinates of unrotated origin (FR-021) |
 | `rotation` | int | `0`\|`90`\|`180`\|`270` |
 | `typeData` | `ComponentType` | full copy at save time (FR-057) |
@@ -1845,7 +1862,8 @@ pins:                    # unit + dir; pos is not used (FR-014a)
 | `behavior` | no | `behavior` | literal block scalar; verbatim (FR-066); evaluated by the slow simulator (FR-079) |
 | `clock` | iff `.R` | `clock` | names the global clock input pin for `.R` registered outputs (FR-062d); must exist with `dir: in`. E.g. `clock: CP` in 74574.yaml. A `.R` output that gives its own `.CLK` (extended, FR-079a) needs no global `clock:` |
 | `gal` | no | `gal` | optional GAL device name selecting **strict** dialect (FR-066a): one of `GAL16V8`/`GAL20V8`/`GAL22V10`/`GAL20RA10`. Omit ⇒ **extended** dialect (default; FR-079a). Server validates the name only |
-| `description` | no | `description` | optional one-line function summary (FR-104); presentation-only |
+| `partnumber` | iff `gal` | `partnumber` | GAL parts only (FR-066b): non-empty, library-unique part identity; the library key and `<partnumber>.yaml` filename stem. Server rejects empty/duplicate on create (FR-007a). Absent on 74-series types |
+| `description` | no | `description` | optional one-line function summary (FR-104); presentation-only. For a GAL part it is authored in the New GAL part dialog (FR-066c) since the part has no datasheet of its own |
 | `datasheet` | no | `datasheet` | optional mapping `{vendor, title, rev, url}` (FR-104) |
 | `pins[].desc` | no | `Pin.desc` | optional pin role text (FR-104) |
 

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -181,6 +182,8 @@ func TestParseComponentErrors(t *testing.T) {
 		{"clock unknown pin", "type: T\nclock: CP\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "clock names unknown pin"},
 		{"clock non-input pin", "type: T\nclock: Q0\npins:\n  - { name: Q0, side: right, pos: 1, dir: out }\n", "must have dir in"},
 		{"gal unknown device", "type: T\ngal: GAL99X9\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "gal names unknown device"},
+		{"gal without partnumber", "type: \"22V10\"\ngal: GAL22V10\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "requires a 'partnumber'"},
+		{"partnumber without gal", "type: T\npartnumber: PC-DECODE-A\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "only valid on a gal part"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -214,11 +217,14 @@ pins:
 }
 
 // A valid gal: device name lands in Gal (FR-066a); the dialect it selects is
-// enforced client-side, so the server only checks the name.
+// enforced client-side, so the server only checks the name. A gal part also
+// carries a partnumber (FR-066b): type names the device family, partnumber the
+// unique part, and Key() is the part number.
 func TestParseComponentGal(t *testing.T) {
 	got, err := ParseComponent(writeYAML(t, `
-type: "GAL22V10ADDER"
+type: "22V10"
 gal: GAL22V10
+partnumber: PC-DECODE-A
 pins:
   - { name: A0, side: left, pos: 1, dir: in }
 `))
@@ -228,7 +234,61 @@ pins:
 	if got.Gal != "GAL22V10" {
 		t.Fatalf("Gal = %q, want %q", got.Gal, "GAL22V10")
 	}
+	if got.Name != "22V10" {
+		t.Fatalf("Name = %q, want %q (device family)", got.Name, "22V10")
+	}
+	if got.PartNumber != "PC-DECODE-A" {
+		t.Fatalf("PartNumber = %q, want %q", got.PartNumber, "PC-DECODE-A")
+	}
+	if got.Key() != "PC-DECODE-A" {
+		t.Fatalf("Key() = %q, want the part number", got.Key())
+	}
 }
+
+// A full 24-pin GAL22V10 skeleton — the shape the New GAL part dialog emits
+// (FR-066c): 12 left inputs (pin 1 the clock), 10 right OLMC outputs, an explicit
+// outline, physical pin numbers, and a behavior block — parses cleanly and yields
+// 22 signal pins (power pins omitted) with the gal/partnumber/clock fields set.
+func TestParse22V10Skeleton(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("type: \"22V10\"\ngal: GAL22V10\npartnumber: \"PC-DECODE-A\"\n")
+	b.WriteString("clock: \"CLK\"\noutline: [8, 14]\npins:\n")
+	inNums := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13}
+	for pos, num := range inNums {
+		name := "CLK"
+		if pos > 0 {
+			name = "I" + itoa(num)
+		}
+		b.WriteString("  - { name: \"" + name + "\", side: left, pos: " + itoa(pos+1) + ", dir: in, number: " + itoa(num) + " }\n")
+	}
+	for i := 0; i < 10; i++ {
+		num := 14 + i
+		b.WriteString("  - { name: \"IO" + itoa(num) + "\", side: right, pos: " + itoa(i+1) + ", dir: out, number: " + itoa(num) + " }\n")
+	}
+	b.WriteString("behavior: |\n  IO14.R = I2 * /I3\n")
+
+	got, err := ParseComponent(writeYAML(t, b.String()))
+	if err != nil {
+		t.Fatalf("ParseComponent: %v", err)
+	}
+	if got.Gal != "GAL22V10" || got.PartNumber != "PC-DECODE-A" || got.Clock != "CLK" {
+		t.Fatalf("gal/partnumber/clock = %q/%q/%q", got.Gal, got.PartNumber, got.Clock)
+	}
+	if len(got.Pins) != 22 {
+		t.Fatalf("pins = %d, want 22 (power pins omitted)", len(got.Pins))
+	}
+	outs := 0
+	for _, p := range got.Pins {
+		if p.Direction == "out" {
+			outs++
+		}
+	}
+	if outs != 10 {
+		t.Fatalf("output pins = %d, want 10 (OLMC)", outs)
+	}
+}
+
+func itoa(n int) string { return strconv.Itoa(n) }
 
 // The optional documentation fields (FR-104) round-trip onto ComponentType:
 // description, datasheet, and per-pin desc.

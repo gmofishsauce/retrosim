@@ -291,6 +291,47 @@ body {
 }
 .dialog-buttons .tool-btn { background: #444; }
 
+/* New GAL part dialog (FR-066c) */
+.galdlg-pins { padding: 0.25rem 0.5rem; min-height: 10rem; }
+.galdlg-section {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #555;
+  margin: 0.4rem 0 0.2rem;
+}
+.galdlg-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.2rem;
+}
+.galdlg-pin {
+  flex: 0 0 3.5rem;
+  font-size: 0.75rem;
+  color: #777;
+  text-align: right;
+}
+.galdlg-dir { flex: 0 0 auto; }
+.galdlg-behavior {
+  width: 100%;
+  min-height: 6rem;
+  font-family: monospace;
+  font-size: 0.85rem;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.galdlg-error {
+  color: #b00;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+.galdlg-validate {
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+.galdlg-validate.ok { color: #1a7f37; }
+.galdlg-validate.err { color: #b00; }
+
 .context-menu {
   position: fixed;
   z-index: 40;

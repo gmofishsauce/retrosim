@@ -18,6 +18,7 @@ import {
   shiftWiring,
   busGroupBrace,
   BUS_BRACE_DEPTH,
+  typeIdentity,
 } from "./design.js";
 
 // A representative component type (stub-shaped, see server stubComponents).
@@ -156,6 +157,33 @@ test("addInstance assigns sequential refdes from U1", () => {
   assert.equal(u1.refdes, "U1");
   assert.equal(u2.refdes, "U2");
   assert.equal(d.components.length, 2);
+});
+
+// A GAL part is identified by its part number, not the device family (FR-066b).
+function galPart(partnumber) {
+  return {
+    name: "22V10",
+    gal: "GAL22V10",
+    partnumber,
+    width: 6,
+    height: 12,
+    pins: [{ name: "I0", side: "left", position: 2, direction: "in" }],
+  };
+}
+
+test("typeIdentity is the part number for a GAL, the name otherwise (FR-066b)", () => {
+  assert.equal(typeIdentity(type74138()), "74138");
+  assert.equal(typeIdentity(galPart("PC-DECODE-A")), "PC-DECODE-A");
+});
+
+test("addInstance records a GAL instance's type as its part number (§7.2)", () => {
+  const d = createDesign("t");
+  const a = addInstance(d, galPart("PC-DECODE-A"), 0, 0, 0);
+  const b = addInstance(d, galPart("PC-DECODE-B"), 5, 0, 0);
+  assert.equal(a.type, "PC-DECODE-A");
+  assert.equal(b.type, "PC-DECODE-B");
+  // The device family is still reachable for display.
+  assert.equal(a.typeData.name, "22V10");
 });
 
 // A subunit package: quad 2-input NAND (two units shown).

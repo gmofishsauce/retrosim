@@ -3,9 +3,10 @@
 // only then removes the loading overlay so the canvas is not interactable until
 // the library is ready (FR-003).
 
-import { getComponents, getDefaults } from "./api.js";
+import { getComponents, getDefaults, createComponent } from "./api.js";
+import { newGalPartDialog } from "./chrome/dialogs.js";
 import { BUILTINS } from "./builtins.js";
-import { createDesign } from "./model/design.js";
+import { createDesign, typeIdentity } from "./model/design.js";
 import { createStore } from "./store.js";
 import { initCanvas } from "./engine/canvas.js";
 import { initInteraction } from "./engine/interaction.js";
@@ -29,6 +30,32 @@ function defaultDesignName(now = new Date()) {
 // label drops the leading "74" family prefix, leaving a 2-3 digit label (FR-005).
 const paletteLabel = (name) => name.slice(2);
 
+// isGal marks a GAL part (FR-066b): identified by part number, labeled by its
+// device family rather than the abbreviated 74-series number (FR-005b).
+const isGal = (type) => Boolean(type.partnumber);
+
+// partTileText is the tile's visible label: the device family for a GAL part
+// (FR-005b), else the abbreviated 74-series number (FR-005).
+const partTileText = (type) => (isGal(type) ? type.name : paletteLabel(type.name));
+
+// partTileTip is the hover tooltip: a GAL leads with its part number then the
+// description (FR-005b); a 74-series part shows its full name then description
+// (FR-005, FR-005a).
+function partTileTip(type) {
+  const head = isGal(type) ? type.partnumber : type.name;
+  return type.description ? `${head} — ${type.description}` : head;
+}
+
+// partOrder packs the upper region: 74-series ascending by abbreviated number,
+// then GAL parts (FR-005b), each group then ordered by library identity.
+function partOrder(a, b) {
+  const an = isGal(a) ? Infinity : Number(paletteLabel(a.name));
+  const bn = isGal(b) ? Infinity : Number(paletteLabel(b.name));
+  if (an !== bn) return an - bn;
+  const ai = typeIdentity(a), bi = typeIdentity(b);
+  return ai < bi ? -1 : ai > bi ? 1 : 0;
+}
+
 // ADD_ICON: the lower-palette entry that opens the Add sub-component flow (§6.14).
 const ADD_ICON =
   '<svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true">' +
@@ -50,36 +77,43 @@ function toast(msg) {
 // makeTile builds one draggable palette tile, recording it in `tiles` for the
 // armed-state subscription. `content` is either {text} or {html} (an icon).
 function makeTile(type, content, title, tiles) {
+  const id = type.name === "add" ? "add" : typeIdentity(type);
   const tile = document.createElement("div");
   tile.className = "palette-tile";
   if (content.html) tile.innerHTML = content.html;
   else tile.textContent = content.text;
   tile.title = title;
-  tile.dataset.type = type.name; // full name; placement uses this (FR-005)
+  tile.dataset.type = id; // library identity; placement looks up by this (FR-066b)
   tile.draggable = true;
-  tiles[type.name] = tile;
+  tiles[id] = tile;
   return tile;
 }
 
-// renderPalette fills the two palette regions (FR-006a): 74-series parts up top,
-// built-in objects below, then wires the armed-tile highlight across both.
+// renderPalette fills the two palette regions (FR-006a): loaded parts up top
+// (74-series and authored GAL parts, FR-005b), built-in objects below, then wires
+// the armed-tile highlight across both. Returns { addPart } so a newly authored
+// GAL part can be inserted live without re-rendering (FR-007a).
 function renderPalette({ partsEl, builtinsEl, components, builtins, store }) {
   partsEl.replaceChildren();
   builtinsEl.replaceChildren();
   const tiles = {};
 
-  // Parts: ascending by abbreviated part number, packed left→right top→bottom.
-  const sorted = [...components].sort(
-    (a, b) => Number(paletteLabel(a.name)) - Number(paletteLabel(b.name)),
-  );
-  for (const type of sorted) {
-    // Tooltip is the full name, plus the one-line description when present so a
-    // hover previews what the part does (FR-005, FR-005a, FR-104).
-    const tip = type.description ? `${type.name}: ${type.description}` : type.name;
+  // Upper-region parts kept sorted (FR-005b) so a live insert lands in order.
+  const parts = [...components].sort(partOrder);
+  for (const type of parts) {
     partsEl.appendChild(
-      makeTile(type, { text: paletteLabel(type.name) }, tip, tiles),
+      makeTile(type, { text: partTileText(type) }, partTileTip(type), tiles),
     );
   }
+  // Action tile that opens the New GAL part dialog (FR-066c); not placeable, so
+  // it is not draggable and not registered in `tiles`. Kept last so addPart's
+  // index math (which addresses part tiles by position) stays valid.
+  const newGalTile = document.createElement("div");
+  newGalTile.className = "palette-tile galdlg-newtile";
+  newGalTile.textContent = "+ GAL";
+  newGalTile.dataset.type = "newgal";
+  newGalTile.title = "New GAL part (GAL22V10)";
+  partsEl.appendChild(newGalTile);
 
   // Built-ins: icon + descriptive tooltip per object (FR-067).
   for (const type of builtins) {
@@ -98,6 +132,17 @@ function renderPalette({ partsEl, builtinsEl, components, builtins, store }) {
       tile.classList.toggle("armed", name === armed);
     }
   });
+
+  // addPart inserts a newly created part tile in sorted position (FR-007a); the
+  // armed-state subscription above covers it since it shares the `tiles` map.
+  function addPart(type) {
+    const tile = makeTile(type, { text: partTileText(type) }, partTileTip(type), tiles);
+    let at = parts.findIndex((p) => partOrder(type, p) < 0);
+    if (at < 0) at = parts.length;
+    parts.splice(at, 0, type);
+    partsEl.insertBefore(tile, partsEl.children[at] ?? null);
+  }
+  return { addPart };
 }
 
 async function main() {
@@ -141,15 +186,30 @@ async function main() {
       getDefaults().catch(() => ({ dataDir: "" })),
     ]);
     const palette = document.getElementById("palette");
-    renderPalette({
+    const paletteApi = renderPalette({
       partsEl: document.getElementById("palette-parts"),
       builtinsEl: document.getElementById("palette-builtins"),
       components,
       builtins: BUILTINS,
       store,
     });
-    // Built-ins are placeable too, so they must be findable by type name.
+    // Built-ins are placeable too, so they must be findable by type identity.
     const library = [...components, ...BUILTINS];
+    // addCreatedPart registers a newly authored GAL part (FR-007a): it joins the
+    // placement library and gets a live palette tile, no reload (consumed by the
+    // New GAL part dialog, §6.11).
+    const addCreatedPart = (type) => {
+      library.push(type);
+      paletteApi.addPart(type);
+    };
+    // Open the New GAL part dialog (FR-066c); on success register the part live.
+    const onNewGalPart = async () => {
+      const created = await newGalPartDialog({ submit: createComponent });
+      if (created) {
+        addCreatedPart(created);
+        toast(`Added GAL part ${created.partnumber}`);
+      }
+    };
     // fileops is built before interaction so the ADD tile can route through it.
     // Breadcrumb back control (FR-100a): shown only while the back-stack is
     // non-empty, i.e. after descending into a sub-design.
@@ -171,6 +231,7 @@ async function main() {
       library,
       onAddSubDesign: (x, y) => fileops.addSubDesign(x, y), // §6.14
       onOpenSubDesign: (childPath) => fileops.descend(childPath), // FR-100
+      onNewGalPart, // FR-066c: upper-palette action tile
     });
     // Heartbeat + reconnect (FR-089–FR-091, §6.12a): on recovery a dirty
     // design saves through the same path the toolbar Save uses.

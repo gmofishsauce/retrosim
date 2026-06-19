@@ -13,7 +13,7 @@ import (
 
 func newTestServer(t *testing.T, dataDir string) *httptest.Server {
 	t.Helper()
-	srv := httptest.NewServer(NewRouter(testLibrary(), dataDir, t.TempDir()))
+	srv := httptest.NewServer(NewRouter(testLibrary(), dataDir, t.TempDir(), t.TempDir()))
 	t.Cleanup(srv.Close)
 	return srv
 }

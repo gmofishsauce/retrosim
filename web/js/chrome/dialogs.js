@@ -2,6 +2,7 @@
 // server's /files endpoint to browse directories (no native file picker).
 
 import { listDir } from "../api.js";
+import { compileBehavior } from "../engine/galasm.js";
 
 function el(tag, className, text) {
   const e = document.createElement(tag);
@@ -257,6 +258,253 @@ export function chooseRenderDialog(iface, defaultRender = "ic") {
     }
     document.addEventListener("keydown", onKey, true);
     document.body.appendChild(overlay);
+  });
+}
+
+// GAL22V10 is the fixed physical skeleton of a 24-pin GAL22V10 (FR-066c): pin 1
+// is the dedicated clock/input, pins 2–11 and 13 are inputs, pins 14–23 are the
+// ten OLMC I/O pins; pins 12/24 are GND/VCC and (like every other part's power
+// pins) are not represented. Only labels, per-OLMC direction, and the behavior
+// vary between parts — this constant supplies everything else. Inputs sit on the
+// left, OLMC pins on the right; `outline` gives the symbol a sensible size.
+const GAL22V10 = {
+  outline: [8, 14],
+  inputs: [
+    { name: "CLK", pos: 1, number: 1, clock: true },
+    { name: "I2", pos: 2, number: 2 },
+    { name: "I3", pos: 3, number: 3 },
+    { name: "I4", pos: 4, number: 4 },
+    { name: "I5", pos: 5, number: 5 },
+    { name: "I6", pos: 6, number: 6 },
+    { name: "I7", pos: 7, number: 7 },
+    { name: "I8", pos: 8, number: 8 },
+    { name: "I9", pos: 9, number: 9 },
+    { name: "I10", pos: 10, number: 10 },
+    { name: "I11", pos: 11, number: 11 },
+    { name: "I13", pos: 12, number: 13 },
+  ],
+  // OLMC pins, top→bottom = DIP 14→23.
+  olmcs: Array.from({ length: 10 }, (_, i) => ({
+    name: "IO" + (14 + i),
+    pos: i + 1,
+    number: 14 + i,
+  })),
+};
+
+// OLMC direction choices (FR-066c): input, combinational output, or registered
+// output. `dir` is the YAML pin direction; combinational and registered outputs
+// are both `out` pins (registered is expressed by a `.R` behavior equation).
+const OLMC_DIRS = [
+  { kind: "comb", label: "comb out", dir: "out" },
+  { kind: "reg", label: "reg out", dir: "out" },
+  { kind: "in", label: "input", dir: "in" },
+];
+
+// galPartYaml serializes the authored part to component YAML (§7.3). Quoted
+// scalars use JSON.stringify (valid YAML 1.2 double-quoted form); the behavior is
+// emitted as a literal block scalar with each line indented two spaces.
+function galPartYaml({ partnumber, description, inputs, olmcs, behavior }) {
+  const lines = [`type: "22V10"`, `gal: GAL22V10`, `partnumber: ${JSON.stringify(partnumber)}`];
+  if (description) lines.push(`description: ${JSON.stringify(description)}`);
+  if (olmcs.some((o) => o.kind === "reg")) {
+    lines.push(`clock: ${JSON.stringify(inputs[0].name)}`); // pin-1 clock
+  }
+  lines.push(`outline: [${GAL22V10.outline[0]}, ${GAL22V10.outline[1]}]`, `pins:`);
+  for (const p of inputs) {
+    lines.push(`  - { name: ${JSON.stringify(p.name)}, side: left, pos: ${p.pos}, dir: in, number: ${p.number} }`);
+  }
+  for (const o of olmcs) {
+    const dir = OLMC_DIRS.find((d) => d.kind === o.kind).dir;
+    lines.push(`  - { name: ${JSON.stringify(o.name)}, side: right, pos: ${o.pos}, dir: ${dir}, number: ${o.number} }`);
+  }
+  if (behavior.trim()) {
+    lines.push(`behavior: |`);
+    for (const ln of behavior.replace(/\s+$/, "").split("\n")) lines.push(`  ${ln}`);
+  }
+  return lines.join("\n") + "\n";
+}
+
+// newGalPartDialog authors a new GAL22V10 part (FR-066c). It presents the fixed
+// skeleton and collects the part number, description, per-pin labels, per-OLMC
+// direction, and behavior, then calls submit(yaml) — which persists and returns
+// the created ComponentType (FR-007a). A submit failure (duplicate part number,
+// validation error) is shown inline and the dialog stays open. Resolves to the
+// created component, or null on cancel.
+export function newGalPartDialog({ submit }) {
+  return new Promise((resolve) => {
+    const overlay = el("div", "dialog-overlay");
+    const box = el("div", "dialog");
+    overlay.appendChild(box);
+    box.appendChild(el("div", "dialog-title", "New GAL part — GAL22V10"));
+
+    const pnInput = el("input", "dialog-name");
+    pnInput.type = "text";
+    pnInput.placeholder = "e.g. PC-DECODE-A";
+    const pnRow = el("div", "dialog-row");
+    pnRow.append(el("label", "dialog-label", "Part number:"), pnInput);
+    box.appendChild(pnRow);
+
+    const descInput = el("input", "dialog-name");
+    descInput.type = "text";
+    descInput.placeholder = "one-line description (optional)";
+    const descRow = el("div", "dialog-row");
+    descRow.append(el("label", "dialog-label", "Description:"), descInput);
+    box.appendChild(descRow);
+
+    // Scrollable pin region: inputs (labels) and OLMC pins (label + direction).
+    const pins = el("div", "dialog-list galdlg-pins");
+    box.appendChild(pins);
+
+    pins.appendChild(el("div", "galdlg-section", "Inputs (pins 1–13)"));
+    const inputFields = GAL22V10.inputs.map((p) => {
+      const row = el("div", "galdlg-row");
+      const tag = el("span", "galdlg-pin", `${p.number}${p.clock ? " CLK" : ""}`);
+      const input = el("input", "dialog-name");
+      input.type = "text";
+      input.value = p.name;
+      row.append(tag, input);
+      pins.appendChild(row);
+      return { meta: p, input };
+    });
+
+    pins.appendChild(el("div", "galdlg-section", "I/O — OLMC (pins 14–23)"));
+    const olmcFields = GAL22V10.olmcs.map((o) => {
+      const row = el("div", "galdlg-row");
+      const tag = el("span", "galdlg-pin", String(o.number));
+      const input = el("input", "dialog-name");
+      input.type = "text";
+      input.value = o.name;
+      const sel = el("select", "galdlg-dir");
+      for (const d of OLMC_DIRS) {
+        const opt = el("option", null, d.label);
+        opt.value = d.kind;
+        sel.appendChild(opt);
+      }
+      sel.value = "comb";
+      row.append(tag, input, sel);
+      pins.appendChild(row);
+      return { meta: o, input, sel };
+    });
+
+    box.appendChild(el("div", "galdlg-section", "Behavior (GALasm)"));
+    const behavior = el("textarea", "galdlg-behavior");
+    behavior.placeholder = "; sum-of-products equations, e.g.\n; IO14 = I2 * /I3 + I4";
+    box.appendChild(behavior);
+
+    // Live strict-validation status (FR-066c): the same gate Run applies
+    // (compileBehavior + validateStrict, §6.13), so a part that fails here can't
+    // be created.
+    const valEl = el("div", "galdlg-validate");
+    valEl.hidden = true;
+    box.appendChild(valEl);
+
+    const errEl = el("div", "galdlg-error");
+    errEl.hidden = true;
+    box.appendChild(errEl);
+
+    const createBtn = button("Create", onOk);
+    const buttons = el("div", "dialog-buttons");
+    buttons.append(button("Cancel", () => done(null)), createBtn);
+    box.appendChild(buttons);
+
+    // Re-validate live as labels, directions, or the behavior change (FR-066c).
+    behavior.addEventListener("input", validate);
+    for (const f of inputFields) f.input.addEventListener("input", validate);
+    for (const f of olmcFields) {
+      f.input.addEventListener("input", validate);
+      f.sel.addEventListener("change", validate);
+    }
+    validate(); // initial Create-enabled state
+
+    // gather reads the current field values into a part description.
+    function gather() {
+      return {
+        partnumber: pnInput.value.trim(),
+        description: descInput.value.trim(),
+        inputs: inputFields.map((f) => ({ ...f.meta, name: f.input.value.trim() })),
+        olmcs: olmcFields.map((f) => ({ ...f.meta, name: f.input.value.trim(), kind: f.sel.value })),
+      };
+    }
+
+    // candidateTypeData assembles the in-memory ComponentType the strict gate
+    // validates — pins carry their resolved direction so behavior signal/output
+    // checks match what Run would see (§6.13).
+    function candidateTypeData(g) {
+      const pins = [
+        ...g.inputs.map((p) => ({ name: p.name, direction: "in" })),
+        ...g.olmcs.map((o) => ({
+          name: o.name,
+          direction: OLMC_DIRS.find((d) => d.kind === o.kind).dir,
+        })),
+      ];
+      const reg = g.olmcs.some((o) => o.kind === "reg");
+      return {
+        name: g.partnumber || "22V10",
+        gal: "GAL22V10",
+        pins,
+        behavior: behavior.value,
+        clock: reg ? g.inputs[0].name : undefined,
+      };
+    }
+
+    // validate runs the strict gate live; an empty behavior is allowed (a part may
+    // be authored without logic). Returns whether the part may be created.
+    function validate() {
+      errEl.hidden = true; // clear any stale submit error on edit
+      if (!behavior.value.trim()) {
+        setStatus("", null);
+        createBtn.disabled = false;
+        return true;
+      }
+      try {
+        compileBehavior(candidateTypeData(gather()));
+        setStatus("✓ valid GAL22V10 behavior", "ok");
+        createBtn.disabled = false;
+        return true;
+      } catch (e) {
+        setStatus(e.message, "err");
+        createBtn.disabled = true;
+        return false;
+      }
+    }
+    function setStatus(msg, kind) {
+      valEl.textContent = msg;
+      valEl.hidden = !msg;
+      valEl.className = "galdlg-validate" + (kind ? " " + kind : "");
+    }
+
+    async function onOk() {
+      const g = gather();
+      if (!g.partnumber) return showError("A part number is required.");
+      if (!validate()) return; // behavior must pass the strict gate (FR-066c)
+      const yaml = galPartYaml({ ...g, behavior: behavior.value });
+      createBtn.disabled = true;
+      try {
+        const comp = await submit(yaml);
+        done(comp);
+      } catch (e) {
+        createBtn.disabled = false;
+        showError(e.message);
+      }
+    }
+    function showError(msg) {
+      errEl.textContent = msg;
+      errEl.hidden = false;
+    }
+    function done(result) {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(null);
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+    pnInput.focus();
   });
 }
 

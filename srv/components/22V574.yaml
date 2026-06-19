@@ -1,0 +1,58 @@
+type: "22V10"
+gal: GAL22V10
+partnumber: "22V574"
+description: "8-bit register with additional features"
+clock: "CLK"
+outline: [8, 14]
+pins:
+  - { name: "CLK", side: left, pos: 1, dir: in, number: 1 }
+  - { name: "D0", side: left, pos: 2, dir: in, number: 2 }
+  - { name: "D1", side: left, pos: 3, dir: in, number: 3 }
+  - { name: "D2", side: left, pos: 4, dir: in, number: 4 }
+  - { name: "D3", side: left, pos: 5, dir: in, number: 5 }
+  - { name: "D4", side: left, pos: 6, dir: in, number: 6 }
+  - { name: "D5", side: left, pos: 7, dir: in, number: 7 }
+  - { name: "D6", side: left, pos: 8, dir: in, number: 8 }
+  - { name: "D7", side: left, pos: 9, dir: in, number: 9 }
+  - { name: "CLR", side: left, pos: 10, dir: in, number: 10 }
+  - { name: "EN", side: left, pos: 11, dir: in, number: 11 }
+  - { name: "OE", side: left, pos: 12, dir: in, number: 13 }
+  - { name: "SET", side: right, pos: 1, dir: in, number: 14 }
+  - { name: "RST", side: right, pos: 2, dir: in, number: 15 }
+  - { name: "Q7", side: right, pos: 3, dir: out, number: 16 }
+  - { name: "Q6", side: right, pos: 4, dir: out, number: 17 }
+  - { name: "Q5", side: right, pos: 5, dir: out, number: 18 }
+  - { name: "Q4", side: right, pos: 6, dir: out, number: 19 }
+  - { name: "Q3", side: right, pos: 7, dir: out, number: 20 }
+  - { name: "Q2", side: right, pos: 8, dir: out, number: 21 }
+  - { name: "Q1", side: right, pos: 9, dir: out, number: 22 }
+  - { name: "Q0", side: right, pos: 10, dir: out, number: 23 }
+behavior: |
+  Q0.R = CLR * /EN * D0
+       + CLR *  EN * Q0
+  Q1.R = CLR * /EN * D1
+       + CLR *  EN * Q1
+  Q2.R = CLR * /EN * D2
+       + CLR *  EN * Q2
+  Q3.R = CLR * /EN * D3
+       + CLR *  EN * Q3
+  Q4.R = CLR * /EN * D4
+       + CLR *  EN * Q4
+  Q5.R = CLR * /EN * D5
+       + CLR *  EN * Q5
+  Q6.R = CLR * /EN * D6
+       + CLR *  EN * Q6
+  Q7.R = CLR * /EN * D7
+       + CLR *  EN * Q7
+  
+  Q0.E = /OE
+  Q1.E = /OE
+  Q2.E = /OE
+  Q3.E = /OE
+  Q4.E = /OE
+  Q5.E = /OE
+  Q6.E = /OE
+  Q7.E = /OE
+  
+  AR   = /RST
+  SP   = /SET

@@ -92,6 +92,13 @@ func SaveDesign(path string, design json.RawMessage) error {
 	}
 	pretty.WriteByte('\n')
 
+	return atomicWrite(path, pretty.Bytes())
+}
+
+// atomicWrite writes data to path via a temp file in the same directory, fsynced
+// and renamed over the destination, so a failure never truncates an existing file
+// (§6.5). Shared by SaveDesign (FR-046–FR-049) and component create (FR-007a).
+func atomicWrite(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	tmp, err := os.CreateTemp(dir, ".retrosim-*.tmp")
 	if err != nil {
@@ -100,7 +107,7 @@ func SaveDesign(path string, design json.RawMessage) error {
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName) // no-op once renamed away
 
-	if _, err := tmp.Write(pretty.Bytes()); err != nil {
+	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		return err
 	}

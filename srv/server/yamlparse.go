@@ -58,6 +58,7 @@ type yamlComponent struct {
 	Behavior   string             `yaml:"behavior"`
 	Clock      string             `yaml:"clock"`
 	Gal        string             `yaml:"gal"`
+	PartNumber string             `yaml:"partnumber"`
 
 	// Documentation (FR-104), all optional.
 	Description string         `yaml:"description"`
@@ -94,7 +95,14 @@ func ParseComponent(path string) (ComponentType, error) {
 	if err != nil {
 		return ComponentType{}, fmt.Errorf("%s: %w", path, err)
 	}
+	return ParseComponentBytes(data, path)
+}
 
+// ParseComponentBytes parses already-read component YAML with the same validation
+// as ParseComponent (§6.3); it backs the in-app create path (FR-007a), whose YAML
+// arrives in a request body rather than on disk. The path argument only labels
+// error messages (a file path, or a stand-in like "(submitted)").
+func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 	var doc yamlComponent
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return ComponentType{}, fmt.Errorf("%s: %w", path, err)
@@ -183,6 +191,17 @@ func ParseComponent(path string) (ComponentType, error) {
 		return ComponentType{}, fmt.Errorf("%s: gal names unknown device %q (want GAL16V8|GAL20V8|GAL22V10|GAL20RA10)", path, doc.Gal)
 	}
 
+	// partnumber: a GAL part (gal set) names a specific programmed part, with type
+	// giving only the device family and partnumber the unique identity & library
+	// key (FR-066b). The two go together: gal requires a partnumber, and a
+	// partnumber is meaningless without gal.
+	if doc.Gal != "" && doc.PartNumber == "" {
+		return ComponentType{}, fmt.Errorf("%s: a gal part requires a 'partnumber' (the unique part identity; type names only the device family)", path)
+	}
+	if doc.Gal == "" && doc.PartNumber != "" {
+		return ComponentType{}, fmt.Errorf("%s: 'partnumber' is only valid on a gal part (set 'gal:')", path)
+	}
+
 	var groups []PinGroup
 	groupNames := make(map[string]bool, len(doc.Groups))
 	for _, g := range doc.Groups {
@@ -221,6 +240,7 @@ func ParseComponent(path string) (ComponentType, error) {
 			Behavior:    doc.Behavior,
 			Clock:       doc.Clock,
 			Gal:         doc.Gal,
+			PartNumber:  doc.PartNumber,
 			Description: doc.Description,
 			Datasheet:   datasheet,
 		}, nil
@@ -258,6 +278,7 @@ func ParseComponent(path string) (ComponentType, error) {
 		Behavior:    doc.Behavior,
 		Clock:       doc.Clock,
 		Gal:         doc.Gal,
+		PartNumber:  doc.PartNumber,
 		Description: doc.Description,
 		Datasheet:   datasheet,
 	}, nil

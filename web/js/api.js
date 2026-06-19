@@ -26,6 +26,19 @@ export async function getComponents() {
   return body.components;
 }
 
+// createComponent submits authored component YAML, persisting it into the
+// library and returning the parsed ComponentType so the caller can add the tile
+// live (FR-007a). Rejects with the server's message on a duplicate part number or
+// a validation failure.
+export async function createComponent(yaml) {
+  const body = await request("/components", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ yaml }),
+  });
+  return body.component;
+}
+
 // getDefaults returns server defaults, including the designs root (FR-050).
 export async function getDefaults() {
   return request("/defaults");

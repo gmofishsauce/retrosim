@@ -63,7 +63,9 @@ forwarding any extra flags:
 
 The component library is read once at startup. If you edit a component YAML file,
 you must restart the server and reload the page for the change to be loaded.  You must use the refresh button to update a design from the catalog (see
-[Refreshing type data](#9-refreshing-type-data)).
+[Refreshing type data](#9-refreshing-type-data)). The one exception is creating a
+GAL part in-app (see [Creating a custom GAL part](#creating-a-custom-gal-part-22v10)),
+which is added to the running library and palette without a restart.
 
 ---
 
@@ -75,8 +77,10 @@ The window has four regions plus a status bar:
   `New`, `Open`, `Save`, `Save As`, `Refresh`, `Run`. The current design name and
   tool mode are shown next to the buttons; an asterisk marks unsaved changes.
 - **Palette** (left): split into two scrolling regions. The **upper** region
-  holds the 74-series parts loaded from the library; the **lower** region holds
-  the built-in objects (see [Built-in components](#11-built-in-components)).
+  holds the loaded parts — 74-series parts plus any custom GAL parts you author
+  (see [Creating a custom GAL part](#creating-a-custom-gal-part-22v10)), including
+  a **+ GAL** tile that opens the authoring dialog; the **lower** region holds the
+  built-in objects (see [Built-in components](#11-built-in-components)).
 - **Canvas** (center): the grid drawing surface. Everything snaps to grid
   intersections.
 - **Properties panel** (right): shows the type data and per-instance overrides of
@@ -93,7 +97,9 @@ The app opens with an empty, unsaved design named `unnamed schematic <date time>
 
 Palette tiles are labeled by part number with the leading `74` removed (so `74138`
 shows as `138`, `7400` as `00`); the full name is the tile's tooltip. Built-in
-tiles show an icon instead.
+tiles show an icon instead. A **custom GAL part** tile shows its device family
+(`22V10`) and uses its **part number** as the tooltip, so several GAL parts of the
+same family stay distinguishable on hover.
 
 To place a part, either:
 
@@ -108,6 +114,36 @@ packages**: they are drawn as separate gate symbols, one per unit, and all units
 are dropped at once, slightly offset. Each unit is independently selectable,
 movable, and rotatable, but deleting any one unit deletes the whole package (after
 a confirmation).
+
+### Creating a custom GAL part (22V10)
+
+Unlike the fixed-function 74-series parts, a GAL22V10 is **programmable** — its
+logic is yours to define. Instead of hand-editing a YAML file you can author one
+in-app: click the **+ GAL** tile in the upper palette region to open the **New GAL
+part** dialog. It presents the chip's fixed 24-pin skeleton (pin 1 is the
+clock/input, pins 2–11 and 13 are inputs, pins 14–23 are the ten I/O "OLMC" pins,
+pins 12/24 are ground/power) and collects only what varies between parts:
+
+- **Part number** — a required, unique name for this specific programmed part
+  (e.g. `PC-DECODE-A`). Since every 22V10 tile is labeled `22V10`, the part number
+  is how you tell them apart; it is also the chip's on-canvas label.
+- **Description** — an optional one-line summary (shown in the tile's tooltip).
+- **Pin labels** — a name for each input and I/O pin.
+- **Per-I/O direction** — for each OLMC pin: **comb out** (combinational output),
+  **reg out** (registered output, clocked by pin 1), or **input**.
+- **Behavior** — the logic as GALasm sum-of-products equations (the same dialect
+  used by the 74-series behavior blocks).
+
+As you type, the behavior is **validated live against the real GAL22V10**: the
+status line shows a green check when it is acceptable, or the specific problem
+otherwise, and **Create** is disabled until it passes. This is the same strict
+check the simulator applies at Run, so a part you can create is one you could
+later produce on an actual device with GALasm.
+
+**Create** saves the part into the component library (as a YAML file named after
+the part number) and adds its tile to the upper palette **immediately** — no
+restart. From there it places, wires, and simulates like any other part. (Cancel
+discards it.)
 
 ---
 

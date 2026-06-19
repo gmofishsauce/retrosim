@@ -25,6 +25,7 @@ import {
   refreshInstance,
   shiftWiring,
   rigidWiring,
+  typeIdentity,
 } from "./model/design.js";
 import { addSubDesignInstance } from "./model/subdesign.js";
 import { componentBBox } from "./engine/hittest.js";
@@ -417,7 +418,7 @@ export function refreshTypesCmd(library, onReport = () => {}) {
       const skipped = new Map(); // type name → reason (reported once per type)
       let refreshed = 0;
       for (const inst of design.components) {
-        const libType = library.find((t) => t.name === inst.type);
+        const libType = library.find((t) => typeIdentity(t) === inst.type);
         if (!libType) continue;
         const before = {
           refdes: inst.refdes,

@@ -34,6 +34,26 @@ func TestLibraryDuplicateLastWins(t *testing.T) {
 	}
 }
 
+// Two GAL parts of the same device family coexist, keyed by part number, not by
+// the shared type name (FR-066b). has() recognizes the key for duplicate
+// rejection (FR-007a).
+func TestLibraryKeysGalByPartNumber(t *testing.T) {
+	lib := newLibrary()
+	lib.add(ComponentType{Name: "22V10", Gal: "GAL22V10", PartNumber: "PC-DECODE-A"})
+	lib.add(ComponentType{Name: "22V10", Gal: "GAL22V10", PartNumber: "PC-DECODE-B"})
+
+	got := lib.List()
+	if len(got) != 2 {
+		t.Fatalf("List() len = %d, want 2 (same family, distinct part numbers)", len(got))
+	}
+	if !lib.has("PC-DECODE-A") || !lib.has("PC-DECODE-B") {
+		t.Fatalf("has() missing one of the part numbers")
+	}
+	if lib.has("22V10") {
+		t.Fatalf("has() matched the shared family name; GAL parts key by part number")
+	}
+}
+
 // Every shipped component file in ../components must parse: a parse failure is
 // logged and skipped by LoadLibrary, so it would simply be absent here.
 func TestShippedComponentsParse(t *testing.T) {

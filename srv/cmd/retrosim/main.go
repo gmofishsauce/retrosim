@@ -38,7 +38,7 @@ func main() {
 		log.Fatalf("retrosim: loading components: %v", err)
 	}
 
-	srv := &http.Server{Addr: *addr, Handler: server.NewRouter(lib, *dataDir, *webDir)}
+	srv := &http.Server{Addr: *addr, Handler: server.NewRouter(lib, *dataDir, *componentsDir, *webDir)}
 
 	log.Printf("retrosim: listening on http://%s", *addr)
 	if err := srv.ListenAndServe(); err != nil {

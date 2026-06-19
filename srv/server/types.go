@@ -23,11 +23,22 @@ type ComponentType struct {
 	Behavior   string             `json:"behavior,omitempty"`  // GALasm text, captured verbatim (FR-066); evaluated client-side (FR-079)
 	Clock      string             `json:"clock,omitempty"`     // optional clock input pin for .R behavior outputs (FR-062d)
 	Gal        string             `json:"gal,omitempty"`       // optional GAL device selecting strict dialect (FR-066a); "" = extended (FR-079a)
+	PartNumber string             `json:"partnumber,omitempty"` // GAL parts only: unique part identity & library key (FR-066b); "" for 74-series
 
 	// Documentation (FR-104): optional, presentation-only. Copied through to the
 	// properties panel (FR-105); never affects geometry, pins, or simulation.
 	Description string     `json:"description,omitempty"` // one-line function summary
 	Datasheet   *Datasheet `json:"datasheet,omitempty"`   // datasheet provenance + link
+}
+
+// Key is a component's library identity (§6.2): the part number for a GAL part
+// (whose Name is only the device family, FR-066b), else the unique type name
+// (FR-005). Distinct GAL parts of the same family thus coexist in the library.
+func (t ComponentType) Key() string {
+	if t.PartNumber != "" {
+		return t.PartNumber
+	}
+	return t.Name
 }
 
 // Datasheet is the optional documentation provenance for a component (FR-104).

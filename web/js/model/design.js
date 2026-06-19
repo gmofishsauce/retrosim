@@ -38,6 +38,15 @@ export function nextRefNum(components, re) {
   return max + 1;
 }
 
+// typeIdentity is a component type's library identity (FR-066b, §7.2): the part
+// number for a GAL part (whose name is only the device family), else the type
+// name. This is what an instance records as its `type` and what keys the palette,
+// placement lookup, simulator behavior cache, and Refresh Types — so two GAL
+// parts of one family stay distinct everywhere.
+export function typeIdentity(type) {
+  return type.partnumber || type.name;
+}
+
 // addInstance places a component instance, assigning it a unique reference
 // designator and a private copy of the type data (FR-011, FR-057). Built-in
 // objects (FR-067) use a separate A-<n> series (FR-011a); ICs use U<n>, ignoring
@@ -48,7 +57,7 @@ export function addInstance(design, type, x, y, rotation) {
     : "U" + nextRefNum(design.components, /^U(\d+)[A-Z]*$/);
   const inst = {
     refdes,
-    type: type.name,
+    type: typeIdentity(type),
     x,
     y,
     rotation,

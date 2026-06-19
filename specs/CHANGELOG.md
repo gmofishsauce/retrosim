@@ -19,6 +19,26 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-19 — In-app "New GAL part" authoring (22V10) with per-part number
+What: Add a GAL-part authoring path so a 22V10 can be specified in-app instead of
+hand-editing YAML, strictly enough to later burn with real GALasm. A "New GAL part"
+dialog presents the fixed 24-pin GAL22V10 skeleton and collects only the per-part
+data (part number, description, pin labels, per-OLMC direction, behavior), runs the
+existing strict validator (`galasm.js validateStrict`) live, and on OK POSTs the
+authored YAML to a new create endpoint that writes it into the library and serves it
+live. GAL parts are keyed by a new unique `partnumber` (distinct from the device
+family `type`); tiles read the family ("22V10") and the tooltip leads with the part
+number so many same-family parts stay distinguishable on hover. A placed GAL
+instance records its part number as its instance type identity (saved value, sim
+behavior-cache key, Refresh Types match, on-canvas chip label), so same-family
+instances stay distinct everywhere.
+Why: A 22V10 is programmable — its logic is user-authored, not transcribed from a
+datasheet — so it needs an authoring UI and a unique identity per programmed part.
+Touches: FR-005b, FR-007a, FR-066b, FR-066c (new); FR-007, FR-088 (amended);
+design §6.2/§6.4 (create endpoint), §6.11 (palette + New GAL part dialog), §6.13
+(validator reuse), §7.1 (`partnumber`), §7.2 (instance `type` = library identity),
+§7.3 (YAML writer table)
+
 ## 2026-06-18 — Group-snap bus connection rendered as a curly brace
 What: Replaced the interim blue-diamond connected mark with a large curly brace
 enclosing the connected pin group: tips touch the group's outermost pins and the

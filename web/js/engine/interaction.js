@@ -53,6 +53,7 @@ import {
   rigidWiring,
   getVertex,
   busGroupBrace,
+  typeIdentity,
 } from "../model/design.js";
 import {
   chooseGroupDialog,
@@ -129,14 +130,14 @@ function showToast(msg) {
 // `name` matches the ADD tile so the armed-tile highlight (FR-009a) still works.
 const ADD_TYPE = { name: "add", isAdd: true };
 
-export function initInteraction({ canvas, palette, store, renderer, library, onAddSubDesign, onOpenSubDesign }) {
+export function initInteraction({ canvas, palette, store, renderer, library, onAddSubDesign, onOpenSubDesign, onNewGalPart }) {
   let placeType = null; // ComponentType when tool === "place"
   let wireSource = null; // pending WIRE source spec
   let drag = null; // transient drag state for SELECT gestures
   let pan = null; // transient pan state { sx, sy, pan0 }
   let spaceDown = false; // space held -> left-drag pans
 
-  const findType = (name) => library.find((c) => c.name === name);
+  const findType = (id) => library.find((c) => typeIdentity(c) === id);
   // Resolves a wire or bus id: bend drags apply to both (FR-039).
   const findWire = (id) =>
     store.design.wires.find((w) => w.id === id) ??
@@ -146,11 +147,11 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     placeType = type;
     wireSource = null;
     const label = document.getElementById("tool-mode");
-    if (label) label.textContent = tool === "place" ? `place ${type.name}` : tool;
+    if (label) label.textContent = tool === "place" ? `place ${typeIdentity(type)}` : tool;
     canvas.style.cursor =
       tool === "select" ? "default" : tool === "wire" ? WIRE_CURSOR : "crosshair";
     renderer.setPreview(null); // clear any in-progress rubber-band
-    store.setTool(tool, type ? type.name : null); // notifies subscribers (toolbar highlight, armed tile)
+    store.setTool(tool, type ? typeIdentity(type) : null); // notifies subscribers (toolbar highlight, armed tile)
   }
 
   // previewAnchorWorld returns the world-space start point of an in-progress
@@ -562,6 +563,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     const tile = e.target.closest(".palette-tile");
     if (!tile) return;
     if (tile.dataset.type === "add") return setTool("place", ADD_TYPE); // §6.14
+    if (tile.dataset.type === "newgal") return void onNewGalPart?.(); // FR-066c
     const type = findType(tile.dataset.type);
     if (type) setTool("place", type);
   });
