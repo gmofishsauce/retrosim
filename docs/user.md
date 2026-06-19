@@ -219,6 +219,15 @@ Wires are single-bit nets, drawn as thin black lines.
   routes onto a straight (direct) line. If no clean route is found, the preview
   falls back to that straight line. After a wire is placed the tool returns to
   Select.
+- **Steering the route (locked waypoints):** while drawing, **click on empty
+  canvas** to lock a corner at that grid point. The auto-router restarts from
+  there and proposes the rest of the route as you keep moving, so you can shape a
+  wire instead of taking one suggestion whole. Place as many as you like.
+  **Backspace** removes the most recent one; **Esc** cancels the whole wire. Once
+  the wire is finished the locked corners are just **ordinary bend points** — drag
+  or delete them like any other. A wire is completed only by clicking a **real
+  target** (a pin or an existing wire/bus segment); an empty-canvas click always
+  adds a waypoint.
 - **Pin hotspot:** in Select mode, hovering a pin shows the wire cursor; clicking
   it starts a wire without switching tools.
 - **Bends:** in Select mode, **drag a wire segment** to insert a bend point at the
@@ -244,8 +253,11 @@ set of electrical nets independently of geometry.
 Buses carry N independent single-bit signals and are drawn as thick blue lines
 with a `/N` width annotation.
 
-- Use the **Bus** tool (or press **`b`**). Drawing, bends, and branching work just
-  like wires.
+- Use the **Bus** tool (or press **`b`**). Drawing, bends, branching, and
+  **locked waypoints** (click empty canvas to lock a corner) work just like wires.
+  A bus is completed by clicking a pin group, an existing bus/wire, or a component
+  body — **not** by clicking empty space, which adds a waypoint. (A bus may still
+  *start* in empty space.)
 - **Right-click a bus** for: **Set width…**, **Edit bit names…**, and
   **Delete bus**. (With exactly one bus selected you can also press `+` / `-` to
   change its width.)
@@ -488,7 +500,7 @@ clear message until then, without losing your work.
 | `w` | Wire tool |
 | `b` | Bus tool |
 | `r` / `Shift+r` | Rotate selection CW / CCW |
-| `Delete` / `Backspace` | Delete selection |
+| `Delete` / `Backspace` | Delete selection (while drawing a wire/bus, `Backspace` removes the last locked waypoint instead) |
 | `+` / `-` | Change width of the one selected bus |
 | `Ctrl/Cmd+Z` | Undo |
 | `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` | Redo |

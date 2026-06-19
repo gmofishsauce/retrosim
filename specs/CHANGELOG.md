@@ -19,6 +19,21 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-19 — Locked waypoints while drawing wires & buses (KiCad-style)
+What: While a wire or bus is in progress, a single click on bare canvas now locks
+an intermediate waypoint instead of being ignored (wires) or ending the conductor
+(buses). The auto-router re-initializes from each waypoint, so the committed
+conductor is the concatenation of independently-routed legs; the waypoints become
+ordinary, draggable bend points on commit. Backspace removes the last waypoint;
+Esc cancels the whole conductor. A conductor now completes only on a real target
+(pin, wire/bus segment, or — for buses — a pin group / component body); a bus can
+no longer be terminated at a free point in empty space by clicking (it may still
+start free). UI-only: commands, model, and save format are unchanged.
+Why: Let the user steer the router with locked corners without giving up
+auto-routing, matching KiCad's interactive wiring.
+Touches: FR-027e (new), FR-027a (amended); design §6.9 (FSM rows, route preview,
+`wireWaypoints`/`legBends`)
+
 ## 2026-06-19 — Draw the 8-wide port as eight pin-aligned pentagons
 What: Change the placed (canvas) rendering of the built-in 8-wide port / off-sheet
 connector from four stacked pentagons to eight narrow pentagons, one roughly

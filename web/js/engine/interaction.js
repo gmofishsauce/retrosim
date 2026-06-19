@@ -133,6 +133,8 @@ const ADD_TYPE = { name: "add", isAdd: true };
 export function initInteraction({ canvas, palette, store, renderer, library, onAddSubDesign, onOpenSubDesign, onNewGalPart }) {
   let placeType = null; // ComponentType when tool === "place"
   let wireSource = null; // pending WIRE source spec
+  let wireWaypoints = []; // locked intermediate waypoints for the in-progress wire/bus (FR-027e)
+  let lastMove = null; // last mousemove event, for refreshing the preview after a Backspace pop
   let drag = null; // transient drag state for SELECT gestures
   let pan = null; // transient pan state { sx, sy, pan0 }
   let spaceDown = false; // space held -> left-drag pans
@@ -146,6 +148,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
   function setTool(tool, type = null) {
     placeType = type;
     wireSource = null;
+    wireWaypoints = []; // discard any in-progress waypoints (FR-027e)
     const label = document.getElementById("tool-mode");
     if (label) label.textContent = tool === "place" ? `place ${typeIdentity(type)}` : tool;
     canvas.style.cursor =
@@ -196,12 +199,12 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
   // straight rubber band when the router finds no route. Endpoint *drawing*
   // positions use the FR-013d visual attachment points (the route itself runs
   // on grid points).
-  function previewRoute(anchor, g, world) {
+  function previewRoute(srcSpec, anchor, g, world) {
     // Breakout taps (FR-043a) keep the straight preview: they also commit
     // straight (breakoutBitCmd carries no bends), and the preview must not
     // promise a route the commit won't produce (§6.9).
-    if (wireSource.kind === "breakout") return [anchor, { x: g.x, y: g.y }];
-    const from = routerEndpoint(wireSource);
+    if (srcSpec.kind === "breakout") return [anchor, { x: g.x, y: g.y }];
+    const from = routerEndpoint(srcSpec);
     let to = { x: g.x, y: g.y };
     let toVisual = null;
     const ph = hitPin(store.design, world);
@@ -227,6 +230,80 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     const to = routerEndpoint(dstSpec);
     const route = from && to ? proposeRoute(store.design, from, to) : null;
     return route ? route.slice(1, -1) : [];
+  }
+
+  // waypointSpecs turns the locked waypoint coords (FR-027e) into free endpoint
+  // specs the router/leg helpers can consume.
+  const waypointSpecs = () => wireWaypoints.map((p) => ({ kind: "free", x: p.x, y: p.y }));
+
+  // legBends concatenates the interior corners of every leg between consecutive
+  // stops (source, locked waypoints, destination), inserting each waypoint coord
+  // between legs (FR-027e). The result is the committing conductor's full bend
+  // list; with no waypoints it equals routeBends. Waypoints become ordinary,
+  // draggable bend points — nothing marks them special after commit.
+  function legBends(stops) {
+    const bends = [];
+    for (let i = 0; i < stops.length - 1; i++) {
+      bends.push(...routeBends(stops[i], stops[i + 1]));
+      if (i < stops.length - 2) bends.push({ x: stops[i + 1].x, y: stops[i + 1].y });
+    }
+    return bends;
+  }
+
+  // legPolyline returns one leg's grid-point polyline for the preview: the routed
+  // corners (endpoints forced to the leg's grid points) or the straight fallback.
+  function legPolyline(srcSpec, dstSpec) {
+    const from = routerEndpoint(srcSpec);
+    const to = routerEndpoint(dstSpec);
+    const route = from && to ? proposeRoute(store.design, from, to) : null;
+    if (route) {
+      route[0] = { x: from.x, y: from.y };
+      route[route.length - 1] = { x: to.x, y: to.y };
+      return route;
+    }
+    return [{ x: from.x, y: from.y }, { x: to.x, y: to.y }];
+  }
+
+  // concatDedup appends b to a, dropping b's first point when it coincides with
+  // a's last (legs share their waypoint endpoint).
+  function concatDedup(a, b) {
+    if (!a.length) return [...b];
+    const last = a[a.length - 1];
+    const start = b[0] && Math.abs(b[0].x - last.x) < 1e-9 && Math.abs(b[0].y - last.y) < 1e-9 ? 1 : 0;
+    return [...a, ...b.slice(start)];
+  }
+
+  // lockedLegPoints returns the fixed polyline through source→waypoint₁→…→last
+  // waypoint (FR-027e), the first point drawn from the visual anchor (FR-013d).
+  // With no waypoints it is just [anchor], so the live leg supplies the whole
+  // preview.
+  function lockedLegPoints(anchor) {
+    const stops = [wireSource, ...waypointSpecs()];
+    if (stops.length === 1) return [anchor];
+    let pts = [];
+    for (let i = 0; i < stops.length - 1; i++) {
+      const seg = legPolyline(stops[i], stops[i + 1]);
+      if (i === 0) seg[0] = anchor;
+      pts = concatDedup(pts, seg);
+    }
+    return pts;
+  }
+
+  // updateWirePreview renders the in-progress conductor (FR-027a/FR-027e): the
+  // fixed locked legs followed by the live leg from the last waypoint (or the
+  // source) to the cursor — or to a hovered pin / pin-group brace. Called on
+  // mousemove and again after a Backspace pop so the picture refreshes at once.
+  function updateWirePreview(e) {
+    const anchor = previewAnchorWorld(wireSource);
+    if (!anchor) return;
+    const locked = lockedLegPoints(anchor);
+    const specs = waypointSpecs();
+    const liveSrc = specs.length ? specs[specs.length - 1] : wireSource;
+    const liveAnchor = locked[locked.length - 1];
+    const gp = busGroupHoverPreview(liveSrc, liveAnchor, e);
+    const live = gp ? gp.points : previewRoute(liveSrc, liveAnchor, gridOf(e), worldOf(e));
+    const points = concatDedup(locked, live);
+    renderer.setPreview(gp ? { points, brace: gp.brace } : { points });
   }
 
   // select replaces the selection with a single object (plain click), or —
@@ -499,7 +576,9 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
         if (apex) specs[end] = { kind: "free", x: apex.x, y: apex.y };
       }
     }
-    store.dispatch(addBusCmd(specs.a, specs.b, width, snaps, routeBends(specs.a, specs.b)));
+    store.dispatch(
+      addBusCmd(specs.a, specs.b, width, snaps, legBends([specs.a, ...waypointSpecs(), specs.b])),
+    );
   }
 
   // busApex returns the group-snap brace apex (FR-042a) for a component's pin
@@ -515,17 +594,20 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
   // bus is already in progress (`anchor` set) — the in-progress bus routed to the
   // brace apex. Returns null when not near any group (caller falls back to the
   // normal route preview, or clears the preview before the first click).
-  function busGroupHoverPreview(anchor, e) {
+  // The live leg routes from `srcSpec`/`anchor` (the in-progress bus's source or
+  // its last locked waypoint, FR-027e) to the apex; the caller prepends any
+  // locked legs.
+  function busGroupHoverPreview(srcSpec, anchor, e) {
     if (store.state.tool !== "bus") return null;
     const width = wireSource?.busWidth ?? DEFAULT_BUS_WIDTH;
     const near = busGroupAt(worldOf(e), width);
     if (!near) return null;
     const apex = near.brace.apex;
     if (!anchor) return { brace: near.brace }; // before the first click: brace only
-    const from = routerEndpoint(wireSource);
+    const from = routerEndpoint(srcSpec);
     const route = from ? proposeRoute(store.design, from, apex) : null;
     const points = route ? [...route] : [anchor, apex];
-    points[0] = anchor; // draw from the visual anchor (FR-013d)
+    points[0] = anchor; // draw from the live leg's (visual) anchor (FR-013d)
     points[points.length - 1] = apex; // terminate exactly at the apex
     return { points, brace: near.brace };
   }
@@ -666,7 +748,14 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
         return;
       }
       const target = wireTargetAt(e);
-      if (!target) return; // ignore empty-space clicks (no partial wire)
+      if (!target) {
+        // Empty-canvas click → lock an intermediate waypoint (FR-027e); the
+        // router re-inits from it for the live leg. A wire completes only on a
+        // real target, so empty space never ends the wire.
+        const g = gridOf(e);
+        wireWaypoints.push({ x: g.x, y: g.y });
+        return;
+      }
       // Ignore a destination identical to the source (same pin clicked twice):
       // a zero-length self-wire is rejected by the model (§6.6); keep waiting
       // for a real destination instead of erroring.
@@ -678,7 +767,9 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
       ) {
         return;
       }
-      store.dispatch(addWireCmd(wireSource, target, routeBends(wireSource, target)));
+      store.dispatch(
+        addWireCmd(wireSource, target, legBends([wireSource, ...waypointSpecs(), target])),
+      );
       setTool("select"); // one-shot (FR-028)
       return;
     }
@@ -690,6 +781,14 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
       const target = busTargetAt(e, width);
       if (!wireSource) {
         wireSource = target;
+        return;
+      }
+      // Empty-canvas click → lock an intermediate waypoint (FR-027e). A bus now
+      // completes only on a real target (pin group, bus segment, or component),
+      // so an empty click no longer ends it at a free point. (It may still start
+      // free, handled above.)
+      if (target.kind === "free") {
+        wireWaypoints.push({ x: target.x, y: target.y });
         return;
       }
       // Reject joining two buses of unequal width (FR-039a).
@@ -900,15 +999,8 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
       return;
     }
     if (wireSource) {
-      const anchor = previewAnchorWorld(wireSource);
-      if (anchor) {
-        // Near a width-matching pin group, preview its group-snap brace and route
-        // the in-progress bus to the apex (FR-042a); else the normal route preview.
-        const groupPreview = busGroupHoverPreview(anchor, e);
-        renderer.setPreview(
-          groupPreview ?? { points: previewRoute(anchor, gridOf(e), worldOf(e)) },
-        );
-      }
+      lastMove = e; // remember the pointer so Backspace can refresh the preview
+      updateWirePreview(e);
       return;
     }
     if (!drag) {
@@ -922,7 +1014,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
       } else if (store.state.tool === "bus") {
         // Before the first click, still preview a group's brace when near it, so
         // the user can see (and click to start the bus at) a termination point.
-        const gp = busGroupHoverPreview(null, e);
+        const gp = busGroupHoverPreview(null, null, e);
         renderer.setPreview(gp ?? null);
       }
       return;
@@ -1135,6 +1227,19 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     // Simulation lock (FR-087): Space (pan) and Escape stay; every shortcut
     // below mutates the design or arms a mutating tool.
     if (store.state.simulating) return;
+
+    // Backspace while drawing pops the most-recent locked waypoint (FR-027e),
+    // re-routing the live leg; Esc (above) cancels the whole conductor. Swallow
+    // it whether or not a waypoint remains, so it never deletes the lingering
+    // selection mid-draw.
+    if (e.key === "Backspace" && wireSource) {
+      if (wireWaypoints.length) {
+        wireWaypoints.pop();
+        if (lastMove) updateWirePreview(lastMove);
+      }
+      e.preventDefault();
+      return;
+    }
 
     // Undo/redo: Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z or Ctrl/Cmd+Y (FR-024).
     const mod = e.metaKey || e.ctrlKey;

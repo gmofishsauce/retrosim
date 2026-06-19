@@ -914,8 +914,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | (palette) | drag tile→canvas drop | `PlaceComponent(t,@grid)` (FR-008) | SELECT |
   | WIRE | click pin | begin wire at pin | WIRE_AWAIT_DEST |
   | WIRE | click existing segment | begin **branch**: create/reuse a `junction` vertex at the nearest grid pt, splitting that point of the host path into a `node` (FR-034) | WIRE_AWAIT_DEST |
-  | WIRE_AWAIT_DEST | click pin/segment | `AddWire(a,b,bends)` — `bends` = the current route proposal's corners (FR-027/FR-027c, FR-034a/b) | SELECT (FR-028) |
-  | BUS | (same as WIRE) | `AddBus(...)` | SELECT (FR-040, A6) |
+  | WIRE_AWAIT_DEST | click pin/segment (real target) | `AddWire(a,b,bends)` — `bends` = the concatenated per-leg route corners with the locked waypoints between legs (`legBends`, FR-027/FR-027c/FR-027e, FR-034a/b) | SELECT (FR-028) |
+  | WIRE_AWAIT_DEST | click bare canvas | lock a **waypoint** at the nearest grid pt; the router re-inits from it for the live leg (FR-027e) | WIRE_AWAIT_DEST |
+  | WIRE_AWAIT_DEST | Backspace | pop the most-recent locked waypoint (FR-027e) | WIRE_AWAIT_DEST |
+  | WIRE_AWAIT_DEST | Esc | cancel the in-progress conductor (`setTool("select")`) | SELECT |
+  | BUS | (same as WIRE; an empty-canvas click locks a waypoint and no longer ends the bus at a free point — FR-027e) | `AddBus(...)` | SELECT (FR-040, A6) |
   | BUS | drag endpoint onto component | snap-connect (FR-041–043, §below) | SELECT |
   | BUS | drag endpoint onto another bus | join if equal width; else **reject** (FR-039a) | SELECT |
   | WIRE | click a bus segment | **breakout**: prompt/derive bit index, create `junction` vertex with `bit` set, begin 1-bit wire (FR-043a) | WIRE_AWAIT_DEST |
@@ -965,6 +968,20 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   FR-027a behavior. The destination click passes the *current* proposal's
   interior corners to `AddWire`/`AddBus` as initial bend points — thereafter
   they are indistinguishable from manually inserted bends (FR-031–FR-033).
+- **Locked waypoints (FR-027e):** the FSM holds `wireWaypoints` (an array of
+  grid points) alongside `wireSource`, cleared by `resetInteraction`. While a
+  conductor is in progress, an empty-canvas click (`wireTargetAt` → `null` for
+  wires; `busTargetAt` → `kind:"free"` for buses) pushes a waypoint instead of
+  completing; Backspace pops the last one; Esc clears all. The preview is the
+  **locked legs** (`source→waypoint₁→…→last`, recomputed but visually fixed) plus
+  the **live leg** from the last waypoint to the cursor — each leg routed
+  independently by `proposeRoute` (a free waypoint carries no escape), assembled
+  by `legPolyline`/`lockedLegPoints`/`concatDedup`. On commit, `legBends` returns
+  the concatenation of every leg's interior corners with the waypoint coordinates
+  inserted between legs, so the waypoints land as ordinary bend points. A
+  conductor completes only on a real target; a bus can no longer end at a free
+  point on an empty click (it may still *start* free). The commands and save
+  format are unchanged — waypoints are just additional interior bends.
   Breakout taps (FR-043a) are excluded: they keep the straight preview and the
   two-point commit (`breakoutBitCmd` carries no bends), so their preview never
   promises a route the commit won't produce. (Reworked 2026-06-12; supersedes
