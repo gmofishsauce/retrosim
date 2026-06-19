@@ -133,6 +133,12 @@ pins 12/24 are ground/power) and collects only what varies between parts:
   **reg out** (registered output, clocked by pin 1), or **input**.
 - **Behavior** — the logic as GALasm sum-of-products equations (the same dialect
   used by the 74-series behavior blocks).
+- **Pin groups** — optionally bundle pins into named groups so a bus can
+  snap-connect to all of them at once (see [Buses](#7-buses)). Click
+  **Pin groups…**, type a name, and check the member pins. A group's pins must
+  all be on the **same side** of the part and **contiguous** (no non-member pin
+  between them); the dialog refuses a group that breaks either rule and tells you
+  why.
 
 As you type, the behavior is **validated live against the real GAL22V10**: the
 status line shows a green check when it is acceptable, or the specific problem
@@ -271,6 +277,11 @@ with a `/N` width annotation.
     enclosing the group and opening toward its pins, with the bus running to the
     brace's **point** (the connection point). Click while the brace is showing to
     start or finish the bus there. The same works at both ends.
+  - **A fresh bus takes its width from the group you start on.** Before you place
+    the first end a new bus has no fixed width, so the brace appears for a group
+    of **any** width — start on a 4-bit group (e.g. a `74157` input) and the bus
+    becomes 4 bits wide. Once the first end is placed the width is fixed, so the
+    **other** end only snaps to groups of that same width.
   - If several groups are in range (e.g. the 574's `D` inputs and `Q` outputs) the
     brace snaps to the group **nearest the cursor**. (Clicking the part body still
     works too: one matching group connects automatically; several prompt you to
