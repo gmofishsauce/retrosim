@@ -343,7 +343,7 @@ YAML.
 | **Power-on reset** | two outputs (`R` active-high, `/R` active-low, right) | Asserts reset (`R`=1, `/R`=0) for the first `cycles` clock periods of a run, then releases (inverse afterward). Property: `cycles` (default 3). |
 | **Input switch** | one output (`OUT`, right) | A user-set logic source with two states, **1** and **0**, drawn like the state indicator — a round value bubble (white **1** / black **0**) — with a small arrow toward its output pin. A **strong** driver: it overrides pull-ups/pull-downs on its net. Set its state in the properties panel while editing, or **click it during a simulation** to toggle **0 ↔ 1**. The state is saved with the design (a new switch starts at **0**). |
 | **State indicator (8-wide)** | eight inputs (`D0`–`D7`, left) | An 8-bit display, drawn as an LED **bar-graph** (eight stripes). Display only — drives nothing. The eight pins form one pin group, so an 8-wide bus snap-connects to all bits at once (see [Buses](#7-buses)); each stripe shows its bit's value (white **1** / black **0** / gray **?**) during and after a run. |
-| **Port / off-sheet connector (8 wide)** | eight pins (`P0`–`P7`, left) | An 8-bit off-sheet connector, drawn as a stacked column of pentagons. The eight pins form one pin group so an 8-wide bus snap-connects to all bits at once (see [Buses](#7-buses)). It is a bus terminal for now: it drives nothing and does not yet join to same-label or cross-file ports (that's the 1-wide [port](#12-sub-designs-and-ports)'s job today). |
+| **Port / off-sheet connector (8 wide)** | eight pins (`P0`–`P7`, left) | An 8-bit off-sheet connector, drawn as eight narrow pentagons — one roughly aligned with each pin, each pointing off-sheet away from the pins. The eight pins form one pin group so an 8-wide bus snap-connects to all bits at once (see [Buses](#7-buses)). It is a bus terminal for now: it drives nothing and does not yet join to same-label or cross-file ports (that's the 1-wide [port](#12-sub-designs-and-ports)'s job today). |
 
 You can override a built-in's properties per instance via the properties panel
 (e.g. give one clock a different `period`). The input switch is set the same way:
@@ -364,9 +364,12 @@ A saved design can be **embedded** in a larger design as a single component (a
 the two is defined by **ports**.
 
 **Ports.** A port is a built-in object (lower palette region, the flag glyph)
-that marks a net as part of the design's external interface. Place it like any
-built-in and wire its single connection point into your circuit. Select a port to
-edit its three fields in the properties panel:
+that marks a net as part of the design's external interface. It is drawn as a
+**pentagon**: the body carries the label, the flat back edge holds the
+connection pin (facing into the sheet), and the apex points off-sheet. The apex
+keeps its relationship to the pin as you rotate the part, while the label stays
+upright. Place it like any built-in and wire its single connection point into
+your circuit. Select a port to edit its three fields in the properties panel:
 
 - **label** — the signal name. Within one design, **all ports with the same label
   are the same net**, so an interface signal can appear at several points on the
