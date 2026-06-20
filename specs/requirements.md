@@ -7,7 +7,7 @@
 
 ## 1. Overview
 
-A localhost-only digital circuit design editor for retro computing hobbyists who design CPUs and other digital hardware using classic TTL components. The system consists of a JavaScript web application running in the browser and a small Go server running on the same machine. The browser application provides a schematic-style canvas on which the user places and wires TTL components. The server stores and retrieves designs and hosts the component library. Of the two simulation engines described in the vision statement (`sim-vision.md`), the slow ("debug") simulator is now in scope (§3.19); the fast engine — a generator producing a standalone C simulation program — remains out of scope. (Supersedes the original "simulation out of scope for this phase".)
+A localhost-only digital circuit design editor for retro computing hobbyists who design CPUs and other digital hardware using classic TTL components. The system consists of a JavaScript web application running in the browser and a small Go server running on the same machine. The browser application provides a schematic-style canvas on which the user places and wires TTL components. The server stores and retrieves designs and hosts the component library. Both simulation engines described in the vision statement (`sim-vision.md`) are now in scope: the slow ("debug") simulator (§3.19) and the fast engine — a code generator that produces a standalone C simulation program (§3.23). (Supersedes the original "simulation out of scope for this phase" and the later "fast engine out of scope".)
 
 ---
 
@@ -287,6 +287,16 @@ This group adds hierarchical design: a separately-saved design may be embedded i
 - FR-102a: The simulator (and the embed dialog, FR-097a) shall detect cycles in the sub-design embedding graph and in the off-sheet connector graph (FR-101); on a cycle it shall refuse to run/embed with a clear message via the message tray (FR-074) rather than recursing without bound.
 - FR-103: When a design uses off-sheet connectors (FR-101), the simulator shall load the connected peer sheets (following targets transitively, subject to FR-102a) and union nets across files by their declared connector links (FR-101a), so a circuit spread across peer sheets simulates as one. Reference designators across distinct peer sheets are made unique by prefixing with a per-sheet identifier.
 
+### 3.23 Fast (Generated C) Simulator
+
+The "fast" engine of the vision statement (`sim-vision.md`), complementary to the slow simulator (§3.19). It is a **code generator** rather than a second interpreter: it emits a standalone C program that, when compiled, simulates the one design it was generated from. (Supersedes the earlier "fast engine out of scope"; see §1, §7.)
+
+- FR-106: The application shall provide a fast simulator in the form of a code generator that produces, from the current design, a self-contained C program implementing the simulation of that design. The C program is a standalone simulator for that one design; generating it does not require or run the slow simulator (§3.19).
+- FR-107: The generated C simulator shall represent exactly the same four signal values as the slow simulator (FR-077) — logic 0, logic 1, U (undefined), Z (high impedance) — using the same selectively-pessimistic combination rules, so that for any given design the two engines agree on every net's value. The fast engine is an optimization of the slow engine, not a different semantics.
+- FR-108: The generated C simulator shall evaluate every driver of every net — including every driver of a tristate net — and detect bus conflicts exactly as the slow simulator does (FR-081/FR-082): two or more enabled drivers disagreeing 0-versus-1 set the net to U, and the conflict shall be reported, naming the conflicting drivers (e.g. "U3.Q0 vs U7.B2") consistent with FR-082. (The concrete reporting channel of the standalone program — see OQ-011 — is a design detail; that conflicts are detected and reported is the requirement.)
+- FR-109: The code generator shall be implemented in JavaScript and run **in the browser front end**, reachable from the editor (e.g. a toolbar action), not in the Go server. It shall **reuse** the slow simulator's existing JavaScript modules — the single GALasm behavior compiler (FR-079) and the netlist/connectivity builder (FR-034b/FR-059a) — rather than reimplementing them, so the system has exactly one GALasm compiler and one connectivity extractor shared by both engines. This is a deliberate deviation from `sim-vision.md`'s standalone-Go, server-side transpiler: building the generator in JS eliminates a duplicate GALasm compiler and the correctness risk of keeping two compilers in agreement; the vision permits a non-Go choice for a strong engineering reason, and DRY reuse of the slow simulator's parser and netlist code is that reason.
+- FR-110: The generated C simulator shall preserve the slow simulator's timing model: unit-delay, double-buffered evaluation with 1 unit = 1 simulated nanosecond (FR-078), so outputs respond exactly one unit after inputs and the two engines settle in the same deterministic sequence. (How the standalone program is driven and bounded for a batch run — run length, termination, and stimulus — is open; see OQ-011, OQ-012.)
+
 ---
 
 ## 4. Non-Functional Requirements
@@ -331,7 +341,7 @@ This group adds hierarchical design: a separately-saved design may be embedded i
 - The server must be implemented in Go.
 - The system is single-user and localhost-only; no authentication or TLS is required.
 - Copy/paste of components is out of scope for this phase.
-- The fast simulation engine (C-code transpiler) is out of scope; the slow debug simulator is in scope (§3.19).
+- Both simulation engines are in scope: the slow debug simulator (§3.19) and the fast engine — a JavaScript, in-browser code generator that emits a standalone C simulator (§3.23, FR-109). (Supersedes the earlier "fast engine out of scope".)
 
 **Assumptions:**
 - The user runs a modern desktop browser (Chrome or Firefox); mobile browser support is not required.
@@ -371,6 +381,8 @@ The minimum set of requirements needed for a usable first release:
 - OQ-008: RESOLVED. The pin-direction set is exactly input/output/bidirectional/tristate (FR-062a). Power and ground are not represented anywhere, so no power/ground direction is required; the four directions map cleanly to the future four-level logic model.
 - OQ-009: The UI for viewing and editing per-instance overrides (FR-020a) is not yet specified (e.g., a properties panel vs. a dialog).
 - OQ-010: Two minor sub-design rendering choices are assumed pending confirmation: (a) the `connector` render style ranks all interface pins along a single long edge ordered by label, rather than splitting them across both long edges; (b) a width>1 port presents as a single bus interface pin that a matching-width bus snap-connects to, rather than expanding into N single-bit pins. The default embed rendering for a design that never set one is `ic` (FR-096).
+- OQ-011: The output mechanism of the generated C simulator (FR-106/FR-108) is not yet settled. Candidates discussed: a four-state **VCD** waveform dump (whose `0`/`1`/`x`/`z` map directly onto the four states of FR-077), a command-line **textual transcript** of observable points, and **bus-conflict reports to stderr** (FR-108). The set of observable points is likewise open — the natural candidates are the indicator (FR-068/FR-071d) and port (FR-094) instances already placed in the design, optionally plus user-tagged nets.
+- OQ-012: Batch **stimulus** for the generated simulator (FR-106/FR-110) is open. The intended direction is to avoid a separate test-vector format and instead drive a design — a CPU in particular — from **file-backed memory components** (the program in ROM/RAM acts as the stimulus). Memory components do not yet exist in the editor and are a separate feature to be specified: open sub-questions include ROM-first vs ROM-plus-RAM, the contents-file format, async vs synchronous read, and whether the generated C reads memory contents at runtime (so a program can be swapped without regenerating) or bakes them into the emitted source. Clock and power-on-reset stimulus are already provided by built-ins (FR-071/FR-071b).
 
 ---
 

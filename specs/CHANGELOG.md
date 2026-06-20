@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-20 — Fast (generated C) simulator brought into scope
+What: Specified the fast engine as a JavaScript, in-browser code generator that emits a standalone C simulator, reusing the slow simulator's GALasm compiler and netlist builder (DRY). Recorded four-state and tristate-conflict parity with the slow sim, and the deliberate deviation from sim-vision.md's standalone-Go server-side transpiler. Output format and batch stimulus (the latter via planned file-backed memory components) left as open questions.
+Why: Design discussion settled the implementation language/location and the DRY reuse decision; capturing it as requirements before any code.
+Touches: §1, §3.23 (new: FR-106–FR-110), §7 Constraints, OQ-011, OQ-012; design §6.13 (slow-sim modules reused) — design.md fast-sim section deferred.
+
 ## 2026-06-20 — Narrow bus may connect to a free sub-block of a wider pin group
 What: A bus narrower than a pin group connects when the group has a contiguous run of unconnected pins ≥ the bus width, claiming the lowest such block (pack-low). E.g. two 4-bit buses share one 8-pin group; an 8-bit bus is refused once any pin is taken. Brace now spans the claimed block, not the whole group.
 Why: Allow multiple narrower buses to share a wide pin group (e.g. an 8-pin group) without forcing exact-width matching.
