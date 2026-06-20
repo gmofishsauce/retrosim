@@ -8,7 +8,8 @@ import {
   addBus,
   addWire,
   pinWorldPos,
-  matchingGroups,
+  groupFreeBlock,
+  groupsAcceptingBus,
   snapBusGroup,
   setBusBitNames,
   breakoutBit,
@@ -126,7 +127,7 @@ test("busGroupBrace tips touch the outer pins; apex juts outward (FR-042a)", () 
   };
   const d = createDesign("t");
   const inst = addInstance(d, ty, 0, 0, 0);
-  const br = busGroupBrace(inst, inst.typeData.pinGroups[0]);
+  const br = busGroupBrace(inst, inst.typeData.pinGroups[0].pins);
 
   assert.deepEqual(br.out, { x: -1, y: 0 }); // left side, no rotation
   // tips at the outermost pins (P0 at y=1, P7 at y=8); order along the span is
@@ -313,6 +314,21 @@ function typeALU() {
   };
 }
 
+// matchingGroups / groupBitWidth: the old exact-width group match, superseded in
+// app code by the design-aware groupsAcceptingBus (FR-041c) but kept here as a
+// reference check on the width arithmetic.
+function groupBitWidth(type, group) {
+  for (const name of group.pins) {
+    if (!type.pins.some((p) => p.name === name)) {
+      throw new Error(`group ${group.name}: unknown pin ${name}`);
+    }
+  }
+  return group.pins.length;
+}
+function matchingGroups(type, busWidth) {
+  return (type.pinGroups ?? []).filter((g) => groupBitWidth(type, g) === busWidth);
+}
+
 test("matchingGroups returns groups whose member pin count equals the bus width", () => {
   const t = typeALU();
   assert.deepEqual(
@@ -384,11 +400,59 @@ test("snapBusGroup maps a 4-pin group across bus bits (FR-042)", () => {
   assert.deepEqual(bus.groupConnections[0].bitMap, ["Y0", "Y1", "Y2", "Y3"]);
 });
 
-test("snapBusGroup throws on a group/bus width mismatch", () => {
+test("snapBusGroup claims the pack-low free block for a narrower bus (FR-041c)", () => {
   const d = createDesign("t");
-  addInstance(d, type74138Grp(), 10, 20, 0);
+  addInstance(d, typeALU(), 10, 20, 0); // Y is a 4-pin group
   const bus = freeBus(d, 2);
-  assert.throws(() => snapBusGroup(d, bus.id, bus.path[1].v, "U1", "A"));
+  snapBusGroup(d, bus.id, bus.path[1].v, "U1", "Y");
+  assert.deepEqual(bus.groupConnections[0].bitMap, ["Y0", "Y1"]);
+  assert.deepEqual(bus.bitNames, ["Y0", "Y1"]);
+});
+
+test("two narrower buses pack into disjoint blocks of one group (FR-041c)", () => {
+  const d = createDesign("t");
+  addInstance(d, typeALU(), 10, 20, 0);
+  const b1 = freeBus(d, 2);
+  snapBusGroup(d, b1.id, b1.path[1].v, "U1", "Y");
+  const b2 = freeBus(d, 2);
+  snapBusGroup(d, b2.id, b2.path[1].v, "U1", "Y");
+  assert.deepEqual(b1.groupConnections[0].bitMap, ["Y0", "Y1"]);
+  assert.deepEqual(b2.groupConnections[0].bitMap, ["Y2", "Y3"]);
+});
+
+test("snapBusGroup throws when no free block of the bus width remains (FR-041c/043)", () => {
+  const d = createDesign("t");
+  addInstance(d, typeALU(), 10, 20, 0);
+  const b1 = freeBus(d, 2);
+  snapBusGroup(d, b1.id, b1.path[1].v, "U1", "Y"); // claims Y0,Y1
+  const b2 = freeBus(d, 4); // needs 4 contiguous free; only Y2,Y3 remain
+  assert.throws(() => snapBusGroup(d, b2.id, b2.path[1].v, "U1", "Y"));
+});
+
+test("groupFreeBlock: pack-low, whole run for width=null, null when full (FR-041c)", () => {
+  const d = createDesign("t");
+  addInstance(d, typeALU(), 10, 20, 0);
+  const g = d.components[0].typeData.pinGroups.find((x) => x.name === "Y");
+  assert.deepEqual(groupFreeBlock(d, "U1", g, 2), ["Y0", "Y1"]);
+  assert.deepEqual(groupFreeBlock(d, "U1", g, null), ["Y0", "Y1", "Y2", "Y3"]);
+  const b = freeBus(d, 2);
+  snapBusGroup(d, b.id, b.path[1].v, "U1", "Y"); // claims Y0,Y1
+  assert.deepEqual(groupFreeBlock(d, "U1", g, 2), ["Y2", "Y3"]);
+  assert.equal(groupFreeBlock(d, "U1", g, 4), null);
+  assert.deepEqual(groupFreeBlock(d, "U1", g, null), ["Y2", "Y3"]);
+});
+
+test("groupsAcceptingBus lists fitting groups with their pack-low blocks (FR-041)", () => {
+  const d = createDesign("t");
+  addInstance(d, typeALU(), 10, 20, 0);
+  assert.deepEqual(
+    groupsAcceptingBus(d, d.components[0], 2).map((x) => [x.group.name, x.block]),
+    [
+      ["A", ["A0", "A1"]],
+      ["B", ["B0", "B1"]],
+      ["Y", ["Y0", "Y1"]],
+    ],
+  );
 });
 
 test("setBusBitNames sets and clears names with a length check (FR-037b)", () => {

@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-20 — Narrow bus may connect to a free sub-block of a wider pin group
+What: A bus narrower than a pin group connects when the group has a contiguous run of unconnected pins ≥ the bus width, claiming the lowest such block (pack-low). E.g. two 4-bit buses share one 8-pin group; an 8-bit bus is refused once any pin is taken. Brace now spans the claimed block, not the whole group.
+Why: Allow multiple narrower buses to share a wide pin group (e.g. an 8-pin group) without forcing exact-width matching.
+Touches: FR-041 (reworked), FR-041a/b (reworked), FR-041c (new), FR-042/FR-042a/FR-042b/FR-042c (amended), FR-043 (amended); design §6.8, §6.9, §7 (Bus/GroupConnection)
+
 ## 2026-06-19 — First-click bus width adapts to nearby pin group
 What: Before a bus's first endpoint is placed (no committed width), group-proximity feedback/snap now matches a group of any width and the bus adopts that group's width; strict width-matching resumes for the second endpoint.
 Why: A bus started near a non-default-width group (e.g. a 4-wide 74157 group) showed no snap feedback because the first endpoint probed only at the default width (8).

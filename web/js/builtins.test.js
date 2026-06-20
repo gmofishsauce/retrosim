@@ -2,7 +2,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { BUILTINS, BEHAVIORS } from "./builtins.js";
-import { matchingGroups } from "./model/design.js";
 
 function find(name) {
   const t = BUILTINS.find((b) => b.name === name);
@@ -11,8 +10,8 @@ function find(name) {
 }
 
 // The 8-wide built-ins (FR-071d/FR-071e) each expose eight left-edge bit pins in
-// one pin group, so an 8-bit bus snap-connects to all of them at once and nothing
-// narrower matches.
+// one pin group, so an 8-bit bus snap-connects to all of them at once (and, per
+// FR-041c, a narrower bus may take a free sub-block of the group).
 test("8-wide built-ins expose eight grouped bits for an 8-bit bus snap (FR-071d/e)", () => {
   for (const { name, prefix, dir } of [
     { name: "indicator8", prefix: "D", dir: "in" },
@@ -32,12 +31,12 @@ test("8-wide built-ins expose eight grouped bits for an 8-bit bus snap (FR-071d/
       t.pins.map((p) => p.position),
       [1, 2, 3, 4, 5, 6, 7, 8],
     );
-    // Exactly one width-8 group matches an 8-bit bus; a 4-bit bus matches none.
+    // Exactly one pin group, named `prefix`, holding all eight bits.
     assert.deepEqual(
-      matchingGroups(t, 8).map((g) => g.name),
+      t.pinGroups.map((g) => g.name),
       [prefix],
     );
-    assert.deepEqual(matchingGroups(t, 4), []);
+    assert.equal(t.pinGroups[0].pins.length, 8);
   }
 });
 

@@ -247,23 +247,24 @@ export function pinVisualPos(instance, pinName) {
 // the group's pins (FR-042a). Integer so the apex stays on the grid.
 export const BUS_BRACE_DEPTH = 2;
 
-// busGroupBrace computes the curly-brace geometry for a bus group-snapped to
-// `group` on instance `inst` (FR-042a): `a` and `b` are the visual attachment
-// points of the group's two outermost pins (the brace tips), `apex` is the brace's
+// busGroupBrace computes the curly-brace geometry for a bus snapped to the pins
+// `pinNames` (a connection's claimed block, FR-041c — a sub-range of a group or a
+// whole group) on instance `inst` (FR-042a): `a` and `b` are the visual attachment
+// points of the block's two outermost pins (the brace tips), `apex` is the brace's
 // point where the bus terminates, and `out` is the outward unit normal (rotation-
-// aware). The apex's position along the pin row is taken from the group's **middle
-// pin** (`floor(n/2)`), not the tip midpoint, so it lands on a grid point even when
-// the group has an even pin count — the brace halves are then slightly asymmetric.
+// aware). The apex's position along the pin row is taken from the block's **middle
+// pin** (`floor(k/2)`), not the tip midpoint, so it lands on a grid point even when
+// the block has an even pin count — the brace halves are then slightly asymmetric.
 // Combined with the integer BUS_BRACE_DEPTH (and components always being on grid),
 // the apex is a grid intersection. Pure geometry; used by the renderer and to place
-// the snapped bus endpoint. The group's pins are assumed colinear along one edge.
-export function busGroupBrace(inst, group) {
-  const first = inst.typeData.pins.find((p) => p.name === group.pins[0]);
+// the snapped bus endpoint. The block's pins are assumed colinear along one edge.
+export function busGroupBrace(inst, pinNames) {
+  const first = inst.typeData.pins.find((p) => p.name === pinNames[0]);
   const o = sideOutward(first?.side);
   const out = rotateOffset(o.x, o.y, inst.rotation);
   // Rank the pins along the pin row (tangent, perpendicular to outward).
   const t = { x: -out.y, y: out.x };
-  const named = group.pins.map((name) => ({ name, v: pinVisualPos(inst, name) }));
+  const named = pinNames.map((name) => ({ name, v: pinVisualPos(inst, name) }));
   named.sort((m, n) => m.v.x * t.x + m.v.y * t.y - (n.v.x * t.x + n.v.y * t.y));
   const a = named[0].v;
   const b = named[named.length - 1].v;
@@ -415,24 +416,6 @@ export function addBus(design, a, b, width, bends = []) {
   return bus;
 }
 
-// groupBitWidth returns a pin group's width: its member pin count, since every
-// pin is one bit (§7.1, A3). Throws if the group names a pin the type lacks.
-function groupBitWidth(type, group) {
-  for (const name of group.pins) {
-    if (!type.pins.some((p) => p.name === name)) {
-      throw new Error(`group ${group.name}: unknown pin ${name}`);
-    }
-  }
-  return group.pins.length;
-}
-
-// matchingGroups returns the component type's pin groups whose width equals
-// busWidth (FR-041). Zero matches → nearest-pin fallback (FR-043); one →
-// auto-snap (FR-041a); more than one → user disambiguation (FR-041b).
-export function matchingGroups(type, busWidth) {
-  return (type.pinGroups ?? []).filter((g) => groupBitWidth(type, g) === busWidth);
-}
-
 // setBusWidth changes a bus's width (FR-038). Per-bit names that no longer match
 // the new width are dropped (they will be re-adopted on a later snap, FR-037b).
 export function setBusWidth(design, busId, width) {
@@ -442,23 +425,71 @@ export function setBusWidth(design, busId, width) {
   if (bus.bitNames && bus.bitNames.length !== width) bus.bitNames = null;
 }
 
-// expandGroupBitMap returns the per-bus-bit pin-name list for a group: one entry
-// per member pin in declared order, since every pin is one bit (FR-042). Length
-// equals the group's width (member pin count).
-function expandGroupBitMap(type, group) {
+// usedGroupPins returns the set of `groupName` member-pin names on instance
+// `refdes` already claimed by some bus's group connection (FR-041c): a pin is
+// "used" if it appears in any groupConnection bitMap for that instance+group,
+// across every bus.
+function usedGroupPins(design, refdes, groupName) {
+  const used = new Set();
+  for (const b of design.buses) {
+    for (const gc of b.groupConnections ?? []) {
+      if (gc.instance === refdes && gc.group === groupName) {
+        for (const name of gc.bitMap) used.add(name);
+      }
+    }
+  }
+  return used;
+}
+
+// groupFreeBlock returns the pack-low pin block a width-`width` bus would claim on
+// `group` of instance `refdes` (FR-041c), or null if none fits. Scanning the
+// group's pins in declared bit order and skipping pins already claimed
+// (usedGroupPins), it returns the first `width` pins of the lowest contiguous run
+// of unconnected pins that is at least `width` long. `width == null` (a fresh
+// width-less bus, FR-042c) returns the lowest non-empty free run entire, whatever
+// its size. Pure given the design snapshot. Throws if the group names a pin the
+// type lacks.
+export function groupFreeBlock(design, refdes, group, width) {
+  const inst = design.components.find((c) => c.refdes === refdes);
   for (const name of group.pins) {
-    if (!type.pins.some((p) => p.name === name)) {
+    if (!inst?.typeData.pins.some((p) => p.name === name)) {
       throw new Error(`group ${group.name}: unknown pin ${name}`);
     }
   }
-  return [...group.pins];
+  const used = usedGroupPins(design, refdes, group.name);
+  let run = [];
+  for (const name of group.pins) {
+    if (used.has(name)) {
+      if (width == null && run.length) return run; // lowest free run, any size
+      run = [];
+      continue;
+    }
+    run.push(name);
+    if (width != null && run.length === width) return run; // pack-low claim
+  }
+  if (width == null) return run.length ? run : null;
+  return null;
+}
+
+// groupsAcceptingBus returns the pin groups of `inst` that can accept a width-
+// `width` bus, each paired with its pack-low claimed block: [{ group, block }]
+// (FR-041/FR-041c). `width == null` (fresh bus, FR-042c) matches any group with a
+// free run. Order follows the type's declared groups.
+export function groupsAcceptingBus(design, inst, width) {
+  const out = [];
+  for (const group of inst.typeData.pinGroups ?? []) {
+    const block = groupFreeBlock(design, inst.refdes, group, width);
+    if (block) out.push({ group, block });
+  }
+  return out;
 }
 
 // snapBusGroup connects a bus endpoint to a component's pin group (FR-042): it
-// records a GroupConnection binding bus bit i to bitMap[i]. On the first snap of
-// an as-yet-unnamed bus, the bus adopts the group's pin names in bit order
-// (FR-037b). The group's bit-width must equal the bus width (the caller ensures
-// this via matchingGroups, FR-041).
+// claims the pack-low free block for the bus width (groupFreeBlock, FR-041c) and
+// records a GroupConnection binding bus bit i to block[i]. The block is recomputed
+// from current design state, so sequential snaps in one commit pack correctly. On
+// the first snap of an as-yet-unnamed bus, the bus adopts the block's pin names in
+// bit order (FR-037b).
 export function snapBusGroup(design, busId, vertexId, instanceRefdes, groupName) {
   const bus = design.buses.find((b) => b.id === busId);
   if (!bus) throw new Error(`no such bus ${busId}`);
@@ -466,19 +497,19 @@ export function snapBusGroup(design, busId, vertexId, instanceRefdes, groupName)
   if (!inst) throw new Error(`no such component ${instanceRefdes}`);
   const group = (inst.typeData.pinGroups ?? []).find((g) => g.name === groupName);
   if (!group) throw new Error(`${instanceRefdes} has no pin group ${groupName}`);
-  const bitMap = expandGroupBitMap(inst.typeData, group);
-  if (bitMap.length !== bus.width) {
+  const block = groupFreeBlock(design, instanceRefdes, group, bus.width);
+  if (!block) {
     throw new Error(
-      `group ${groupName} width ${bitMap.length} != bus width ${bus.width}`,
+      `group ${groupName} has no free ${bus.width}-pin block for the bus`,
     );
   }
   bus.groupConnections.push({
     vertex: vertexId,
     instance: instanceRefdes,
     group: groupName,
-    bitMap,
+    bitMap: block,
   });
-  if (!bus.bitNames) bus.bitNames = [...bitMap];
+  if (!bus.bitNames) bus.bitNames = [...block];
   return bus;
 }
 

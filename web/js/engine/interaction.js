@@ -45,7 +45,8 @@ import {
   insertBend,
   moveBend,
   moveVertex,
-  matchingGroups,
+  groupFreeBlock,
+  groupsAcceptingBus,
   pinVisualPos,
   pinWorldPos,
   sideOutward,
@@ -90,12 +91,12 @@ const WIRE_CURSOR =
   "') 10 10, crosshair";
 
 // planBusEndpoint converts a bus endpoint target into an addBus endpoint spec, an
-// optional snap directive, and the list of width-matching pin groups. A component
-// target with exactly one match auto-snaps (FR-041a); with zero it is left
-// unconnected (FR-043); with two-or-more it stays free here and the caller opens
-// the disambiguation dialog (FR-041b). Non-component
-// targets pass through unchanged. Exported for testing.
-export function planBusEndpoint(target, width) {
+// optional snap directive, and the list of accepting pin groups (FR-041/FR-041c).
+// A component target with exactly one accepting group auto-snaps (FR-041a); with
+// zero it is left unconnected (FR-043); with two-or-more it stays free here and the
+// caller opens the disambiguation dialog (FR-041b). Non-component targets pass
+// through unchanged. Exported for testing.
+export function planBusEndpoint(design, target, width) {
   if (target.kind === "group") {
     // Proximity (FR-042a) already picked the specific group; snap directly with
     // the endpoint at the brace apex — no disambiguation needed.
@@ -108,7 +109,9 @@ export function planBusEndpoint(target, width) {
   }
   if (target.kind === "component") {
     const spec = { kind: "free", x: target.x, y: target.y };
-    const groups = matchingGroups(target.type, width);
+    const inst = design.components.find((c) => c.refdes === target.refdes);
+    const accepting = inst ? groupsAcceptingBus(design, inst, width) : [];
+    const groups = accepting.map((a) => a.group);
     const snap =
       groups.length === 1 ? { refdes: target.refdes, group: groups[0].name } : null;
     return { spec, snap, groups, refdes: target.refdes };
@@ -501,17 +504,15 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     let best = null;
     let bestD = GROUP_SNAP_RANGE;
     for (const inst of store.design.components) {
-      const groups =
-        width == null ? inst.typeData.pinGroups ?? [] : matchingGroups(inst.typeData, width);
-      for (const group of groups) {
-        const brace = busGroupBrace(inst, group);
+      for (const { group, block } of groupsAcceptingBus(store.design, inst, width)) {
+        const brace = busGroupBrace(inst, block);
         const d = Math.min(
           distToSegment(world, brace.a, brace.b),
           Math.hypot(brace.apex.x - world.x, brace.apex.y - world.y),
         );
         if (d < bestD) {
           bestD = d;
-          best = { inst, group, brace };
+          best = { inst, group, block, brace };
         }
       }
     }
@@ -538,14 +539,15 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     }
     const near = busGroupAt(world, width);
     if (near) {
-      // Proximity already chose the specific group; the endpoint is the apex.
+      // Proximity already chose the group and its pack-low block; the endpoint is
+      // the block's apex and the bus takes the block's width (FR-041c/FR-042c).
       return {
         kind: "group",
         refdes: near.inst.refdes,
         group: near.group.name,
         x: near.brace.apex.x,
         y: near.brace.apex.y,
-        busWidth: near.group.pins.length,
+        busWidth: near.block.length,
       };
     }
     const comp = hitComponent(store.design, world);
@@ -560,8 +562,8 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
   // disambiguation dialog (FR-041b); the bus is still created with that endpoint
   // unconnected if the user cancels. Async because the dialog is awaited.
   async function commitBus(srcTarget, dstTarget, width) {
-    const a = planBusEndpoint(srcTarget, width);
-    const b = planBusEndpoint(dstTarget, width);
+    const a = planBusEndpoint(store.design, srcTarget, width);
+    const b = planBusEndpoint(store.design, dstTarget, width);
     const specs = { a: a.spec, b: b.spec };
     const snaps = [];
     for (const [end, plan] of [
@@ -577,7 +579,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
         snaps.push({ end, ...snap });
         // Place the snapped endpoint at the brace apex (FR-042a) so the bus
         // terminates there; the connection itself is the recorded group binding.
-        const apex = busApex(snap.refdes, snap.group);
+        const apex = busApex(snap.refdes, snap.group, width);
         if (apex) specs[end] = { kind: "free", x: apex.x, y: apex.y };
       }
     }
@@ -586,12 +588,16 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     );
   }
 
-  // busApex returns the group-snap brace apex (FR-042a) for a component's pin
-  // group — the canonical attachment point a snapped bus endpoint is placed at.
-  function busApex(refdes, groupName) {
+  // busApex returns the brace apex (FR-042a) of the pack-low block a width-`width`
+  // bus would claim on a component's pin group — the attachment point the snapped
+  // bus endpoint is placed at. Recomputed from current design state to match the
+  // block snapBusGroup will claim (FR-041c).
+  function busApex(refdes, groupName, width) {
     const inst = store.design.components.find((c) => c.refdes === refdes);
     const group = inst && (inst.typeData.pinGroups ?? []).find((g) => g.name === groupName);
-    return group ? busGroupBrace(inst, group).apex : null;
+    if (!group) return null;
+    const block = groupFreeBlock(store.design, refdes, group, width);
+    return block ? busGroupBrace(inst, block).apex : null;
   }
 
   // busGroupHoverPreview returns the bus-drag feedback when the cursor nears a

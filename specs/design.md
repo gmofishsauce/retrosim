@@ -804,16 +804,18 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   it must not show the dangling mark. The group-snapped set is built the same way
   the §6.6 cleanup sweep builds its `snapped` set.
 - **Group-snap braces (`drawBusBraces`, FR-042a):** for each bus `groupConnection`
-  the renderer recomputes the brace from the bound instance + group via
-  `busGroupBrace(inst, group)` — the two tips at the group's outermost pins' visual
-  positions and the apex anchored at the **middle pin's grid point** (`floor(n/2)`),
-  `BUS_BRACE_DEPTH` (integer) grid units outward — and strokes it as two cubic
+  the renderer recomputes the brace from the bound instance + the connection's
+  **claimed pins** via `busGroupBrace(inst, gc.bitMap)` — a sub-range of the group
+  for a partial connection, the whole group for an equal-width one (FR-041c). The
+  two tips sit at the claimed block's outermost pins' visual positions and the apex
+  is anchored at the **block's middle pin's grid point** (`floor(k/2)`, `k` = block
+  size), `BUS_BRACE_DEPTH` (integer) grid units outward — strokes it as two cubic
   Béziers meeting at the apex in a point (`strokeBrace`). Anchoring on a real middle
   pin keeps the apex on a grid intersection for an even pin count (the halves are
   then asymmetric), so the bus endpoint placed there is on-grid too. Because that
   endpoint follows the component (FR-018c), the bus terminates exactly at the brace
-  point. The live bus-drag preview reuses the same helper for the width-matching
-  group nearest the cursor (§6.9).
+  point. The live bus-drag preview reuses the same helper for the pack-low block of
+  the accepting group nearest the cursor (§6.9).
 - **Component drawing dispatches on `renderType`:** a `unit` instance draws the
   rectangle path as today; a `subunit` instance draws its schematic symbol via the
   symbol module (§6.8a) — the gate/mux outline path plus an upright refdes (e.g.
@@ -991,25 +993,37 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   the straight-line-only preview and two-point commit.)
 - **Bus snap-connect (FR-041–FR-043a, A3/A7):** an endpoint targets a pin group
   one of two ways (`busTargetAt`, priority: bus segment > nearby group > body):
-  - **Proximity (FR-042b):** `busGroupAt(world, width)` returns the width-matching
-    group nearest the cursor within `GROUP_SNAP_RANGE` of its pins or brace apex —
-    no body click required. This yields a `kind:"group"` target naming that exact
-    group, so it snaps directly (no dialog) with the endpoint at the brace apex.
-    The same helper drives the live brace feedback, so a click wherever the brace
-    shows starts/ends the bus there. `width == null` means **any width** (every
-    group is a candidate): the first-endpoint feedback and click pass `null` (the
-    bus has no committed width yet, FR-042c), so a fresh bus shows feedback for —
-    and adopts the width of — the nearest group regardless of width. Once the
-    first endpoint fixes the width, the second endpoint passes that width and
-    matching is strict again (FR-041).
+  Group **acceptance** is design-aware (FR-041/FR-041c): for an instance + group,
+  `groupFreeBlock(design, refdes, group, width)` scans the group's pins in declared
+  order, excludes pins already claimed by existing `groupConnections` on that
+  instance+group (across all buses), and returns the **pack-low** block — the first
+  `width` pins of the lowest contiguous free run of length ≥ `width` — or `null` if
+  none fits. `groupsAcceptingBus(design, inst, width)` returns `[{group, block}]`
+  for the groups that fit. Both the proximity and body paths key off these.
+  - **Proximity (FR-042b):** `busGroupAt(world, width)` returns the accepting group
+    nearest the cursor within `GROUP_SNAP_RANGE` of its **block's** pins or brace
+    apex — no body click required. This yields a `kind:"group"` target naming that
+    group **and its claimed block**, so it snaps directly (no dialog) with the
+    endpoint at the block's brace apex. The same helper drives the live brace
+    feedback, so a click wherever the brace shows starts/ends the bus there.
+    `width == null` means **any width** (the block is the group's whole pack-low
+    free run): the first-endpoint feedback and click pass `null` (the bus has no
+    committed width yet, FR-042c), so a fresh bus shows feedback for — and adopts
+    the free-block width of — the nearest group. Once the first endpoint fixes the
+    width, the second endpoint passes that width and acceptance is by free block of
+    that exact size (FR-041c).
   - **Body click (FR-041):** falling back to the component body, compute the
-    candidate groups whose **member pin count == bus width**: **0** → leave the
-    endpoint **unconnected** (FR-043); **1** → snap automatically; **≥2** → open the
-    **disambiguation dialog** (§6.11), choose by name (cancel → unconnected,
-    FR-041b).
-  A snap stores a `groupConnection` mapping bit *i* → `group.pins[i]` (FR-042) and,
-  if the bus has no `bitNames`, adopts the group's member pin names (FR-037b). The
-  snapped endpoint is placed at the brace apex (`busGroupBrace`, §6.8/FR-042a).
+    accepting groups via `groupsAcceptingBus`: **0** → leave the endpoint
+    **unconnected** (FR-043); **1** → snap automatically to its block; **≥2** → open
+    the **disambiguation dialog** (§6.11), choose by name (cancel → unconnected,
+    FR-041b). Within one group the pack-low block is the single placement, so the
+    dialog never disambiguates positions.
+  A snap stores a `groupConnection` whose `bitMap` is the claimed block (bit *i* →
+  `block[i]`, FR-042) and, if the bus has no `bitNames`, adopts that block's pin
+  names (FR-037b). The snapped endpoint is placed at the block's brace apex
+  (`busGroupBrace`, §6.8/FR-042a). `snapBusGroup` recomputes the pack-low block from
+  current design state, so it matches what the feedback showed and sequential snaps
+  in one commit pack correctly.
 - **Breakout (FR-043a):** in WIRE mode, clicking a **bus** segment creates a
   `junction` vertex on that bus with `bit` = the chosen lane (defaulting to the
   bus's nearest bit; if the bus has `bitNames`, a small picker offers them) and
@@ -1734,7 +1748,11 @@ another wire (FR-034b).
 
 `GroupConnection` anchors to the endpoint **vertex** rather than `"a"|"b"`:
 `{ "vertex": "v31", "instance": "U3", "group": "A", "bitMap": ["A0","A1","A2"] }`.
-Bit *i* of the bus ↔ `bitMap[i]` (FR-042). Breakout taps are **not** group
+Bit *i* of the bus ↔ `bitMap[i]` (FR-042). `bitMap` is the connection's **claimed
+block** (FR-041c): the whole group for an equal-width snap, or a contiguous
+sub-range of the group's pins for a partial (narrower-bus) snap. Because the
+mapping is already pin-name-explicit, partial connections need no new field — two
+buses may hold disjoint sub-ranges of one group. Breakout taps are **not** group
 connections — they are wires whose endpoint vertex is a `junction` on the bus with
 `bit` set (§7.1a, FR-043a).
 

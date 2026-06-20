@@ -267,11 +267,12 @@ with a `/N` width annotation.
 - **Right-click a bus** for: **Set width…**, **Edit bit names…**, and
   **Delete bus**. (With exactly one bus selected you can also press `+` / `-` to
   change its width.)
-- **Snap-connect to a pin group:** the editor connects a whole bus to a matching
-  **pin group** — a set of pins whose count equals the bus width (e.g. the 8 `D`
-  inputs of a `74574`, or the 8 bits of an 8-wide port/indicator) — wiring each bus
-  bit to the corresponding pin in declared bit order, so you don't wire bits one at
-  a time.
+- **Snap-connect to a pin group:** the editor connects a bus to a **pin group** —
+  a set of related pins (e.g. the 8 `D` inputs of a `74574`, or the 8 bits of an
+  8-wide port/indicator) — wiring each bus bit to the corresponding pin in declared
+  bit order, so you don't wire bits one at a time. A bus connects when the group has
+  a run of unconnected pins at least as long as the bus is wide (so a bus may be
+  *narrower* than the group — see *Filling part of a group* below).
   - With the **Bus** tool active, move the cursor **near a group's pins** — you do
     **not** need to click on the part body. A large **curly brace** appears,
     enclosing the group and opening toward its pins, with the bus running to the
@@ -280,11 +281,18 @@ with a `/N` width annotation.
   - **A fresh bus takes its width from the group you start on.** Before you place
     the first end a new bus has no fixed width, so the brace appears for a group
     of **any** width — start on a 4-bit group (e.g. a `74157` input) and the bus
-    becomes 4 bits wide. Once the first end is placed the width is fixed, so the
-    **other** end only snaps to groups of that same width.
+    becomes 4 bits wide. Once the first end is placed the width is fixed; the
+    **other** end then snaps to any group with a free block of that width.
+  - **Filling part of a group (narrower buses):** a bus narrower than a group can
+    connect to a contiguous block of the group's still-unconnected pins, provided
+    that many pins are free in a row. The bus packs into the **lowest** free pins,
+    so two 4-bit buses fill one 8-pin group: the first takes the top four pins, the
+    second the bottom four. The brace previews exactly which pins the bus will
+    claim. Once some pins are taken, a bus that no longer fits is refused — e.g. an
+    8-bit bus won't connect to an 8-pin group after a 4-bit bus has claimed half.
   - If several groups are in range (e.g. the 574's `D` inputs and `Q` outputs) the
     brace snaps to the group **nearest the cursor**. (Clicking the part body still
-    works too: one matching group connects automatically; several prompt you to
+    works too: one accepting group connects automatically; several prompt you to
     choose; none connects nothing.) Joining two buses of unequal width is prevented.
   - A **connected** bus end is always drawn with its curly brace; a **red square**
     marks an end that is still **dangling** (unconnected). The brace tracks the part

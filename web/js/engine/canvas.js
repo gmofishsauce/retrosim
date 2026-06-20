@@ -377,9 +377,7 @@ function drawBusBraces(ctx, design, vp) {
     for (const gc of b.groupConnections ?? []) {
       const inst = design.components.find((c) => c.refdes === gc.instance);
       if (!inst) continue;
-      const group = (inst.typeData.pinGroups ?? []).find((g) => g.name === gc.group);
-      if (!group) continue;
-      const br = busGroupBrace(inst, group);
+      const br = busGroupBrace(inst, gc.bitMap);
       strokeBrace(ctx, br.a, br.b, br.apex, vp, "#1565c0", 2);
     }
   }
