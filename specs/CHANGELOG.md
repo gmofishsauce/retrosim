@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-21 — Flat toolbar replaced by a combined menu/tool bar
+What: Replaced the row-of-buttons toolbar with a single bar carrying File/Edit/View pull-down menus on the left (File: New, Open, Save, Save As, Refresh Types; Edit: Undo, Redo; View: Zoom In, Zoom Out) and the modal tool buttons Select/Wire/Bus plus Run/Stop on the right. Modal tools and Run stay buttons (they need an always-visible active/running state); everything else moved into menus.
+Why: The growing command set no longer fit as a row of buttons; menus make room for upcoming commands (e.g. Edit Copy/Paste). Spec-only slice; code change follows.
+Touches: FR-004a (new), FR-026 (reworked), FR-076/FR-088 (toolbar→bar wording); design §6.11
+
 ## 2026-06-20 — Fast (generated C) simulator brought into scope
 What: Specified the fast engine as a JavaScript, in-browser code generator that emits a standalone C simulator, reusing the slow simulator's GALasm compiler and netlist builder (DRY). Recorded four-state and tristate-conflict parity with the slow sim, and the deliberate deviation from sim-vision.md's standalone-Go server-side transpiler. Output format and batch stimulus (the latter via planned file-backed memory components) left as open questions.
 Why: Design discussion settled the implementation language/location and the DRY reuse decision; capturing it as requirements before any code.

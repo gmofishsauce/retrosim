@@ -39,6 +39,49 @@ body {
 
 .tool-sep { width: 1px; height: 1.2rem; background: #555; margin: 0 0.35rem; }
 
+/* Pull-down menu widget (FR-004a). A .menu holds a .menu-trigger button and a
+   .menu-panel that drops below it; the panel is shown by toggling [hidden]. */
+.menu { position: relative; display: inline-block; }
+.menu-trigger {
+  padding: 0.25rem 0.6rem;
+  background: transparent;
+  color: #eee;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.menu-trigger:hover { background: #444; }
+.menu.open > .menu-trigger { background: #555; border-color: #555; }
+
+.menu-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  min-width: 10rem;
+  margin-top: 2px;
+  padding: 0.25rem 0;
+  background: #3a3a3a;
+  border: 1px solid #555;
+  border-radius: 3px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+}
+.menu-item {
+  display: block;
+  width: 100%;
+  padding: 0.3rem 1rem;
+  background: transparent;
+  color: #eee;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.menu-item:hover:not(:disabled) { background: #4a90d9; color: #fff; }
+.menu-item:disabled { opacity: 0.4; cursor: default; }
+
 #design-name { font-weight: 600; margin-left: 0.5rem; }
 
 #tool-mode {

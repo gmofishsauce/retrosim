@@ -62,7 +62,7 @@ forwarding any extra flags:
 - `--data-dir` — designs root (default: the documents folder above).
 
 The component library is read once at startup. If you edit a component YAML file,
-you must restart the server and reload the page for the change to be loaded.  You must use the refresh button to update a design from the catalog (see
+you must restart the server and reload the page for the change to be loaded.  You must use **File ▸ Refresh Types** to update a design from the catalog (see
 [Refreshing type data](#9-refreshing-type-data)). The one exception is creating a
 GAL part in-app (see [Creating a custom GAL part](#creating-a-custom-gal-part-22v10)),
 which is added to the running library and palette without a restart.
@@ -73,9 +73,12 @@ which is added to the running library and palette without a restart.
 
 The window has four regions plus a status bar:
 
-- **Toolbar** (top): `Select`, `Wire`, `Bus`, zoom `−` / `+`, `Undo`, `Redo`,
-  `New`, `Open`, `Save`, `Save As`, `Refresh`, `Run`. The current design name and
-  tool mode are shown next to the buttons; an asterisk marks unsaved changes.
+- **Menu bar** (top): the **File** menu (`New`, `Open`, `Save`, `Save As`,
+  `Refresh Types`), the **Edit** menu (`Undo`, `Redo`), and the **View** menu
+  (`Zoom In`, `Zoom Out`), followed by the tool buttons `Select`, `Wire`, `Bus`
+  and the `Run` button. Click a menu to open it; click an item to run it, or
+  press `Esc` / click elsewhere to dismiss it. The current design name and tool
+  mode are shown next to the buttons; an asterisk marks unsaved changes.
 - **Palette** (left): split into two scrolling regions. The **upper** region
   holds the loaded parts — 74-series parts plus any custom GAL parts you author
   (see [Creating a custom GAL part](#creating-a-custom-gal-part-22v10)), including
@@ -155,8 +158,8 @@ discards it.)
 
 ## 4. Navigating the canvas
 
-- **Zoom:** mouse wheel (zooms toward the cursor), or the toolbar `−` / `+`
-  buttons (zoom about the canvas center).
+- **Zoom:** mouse wheel (zooms toward the cursor), or the **View** menu's
+  `Zoom In` / `Zoom Out` items (zoom about the canvas center).
 - **Pan:** drag with the **middle** mouse button, or hold **Space** and drag with
   the left button.
 - **Recenter:** **right-click on empty canvas** — the clicked point becomes the
@@ -216,7 +219,7 @@ The **properties panel** is shown only when exactly one component is selected.
 
 Wires are single-bit nets, drawn as thin black lines.
 
-- Activate the **Wire** tool (toolbar or press **`w`**). Click a **source pin**,
+- Activate the **Wire** tool (the `Wire` button or press **`w`**). Click a **source pin**,
   then a **destination pin**. As you move the cursor a rubber-band preview shows
   the proposed **Manhattan route**, which avoids passing under component bodies,
   avoids lying on top of existing wires and buses, and prefers few corners; the
@@ -321,7 +324,7 @@ into the instance and keeps that copy with the design forever (so opening an old
 design always reproduces the parts it was built with). If you later edit a
 component definition, existing instances keep their old copy.
 
-The **Refresh** button ("Refresh Types") re-copies type data from the **currently
+The **File ▸ Refresh Types** menu item re-copies type data from the **currently
 loaded** component library into every placed instance whose type still exists —
 74-series parts from the library, built-ins from the app's registry. For each
 refreshed instance it preserves position, rotation, reference designator, wiring,
@@ -431,7 +434,7 @@ the message tray — opening still succeeds.
 
 **Moving between sheets.** **Double-click** a sub-design instance (or right-click
 it and choose **Open sub-design**) to descend into the child design — it replaces
-the editing canvas. A **← back** button appears in the toolbar; click it to return
+the editing canvas. A **← back** button appears in the top bar; click it to return
 to the parent. Descending and going back are each treated as closing the current
 design, so the usual unsaved-changes prompt applies — save or discard before the
 canvas changes. A plain New or Open leaves the hierarchy and clears the back path.

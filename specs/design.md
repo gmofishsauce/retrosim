@@ -1170,20 +1170,28 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Dependencies:** model.
 
 ### 6.11 JS: chrome widgets (`web/js/chrome/*.js`)
-- **Toolbar (`toolbar.js`)** — Satisfies FR-026, FR-035, FR-022, FR-023, FR-024,
-  FR-044, FR-046, FR-049, FR-052, FR-076, FR-087. Buttons: Select, Wire, Bus,
-  Zoom +/−, Pan (via space-drag or middle-drag, or right-click-to-recenter on
-  bare canvas — FR-023a/FR-023b; left-drag on bare canvas is rubber-band select,
-  FR-016b), Undo, Redo, New, Open, Save, Save As, **Run/Stop**.
+- **Menu/tool bar (`toolbar.js`)** — Satisfies FR-004a, FR-026, FR-035, FR-022,
+  FR-023, FR-024, FR-044, FR-046, FR-049, FR-052, FR-076, FR-087, FR-088. A
+  single horizontal bar with pull-down menus on the left and always-visible
+  buttons on the right (FR-004a). **Menus:** **File** — New, Open, Save, Save As,
+  Refresh Types; **Edit** — Undo, Redo; **View** — Zoom In, Zoom Out. **Buttons:**
+  Select, Wire, Bus (modal tools), then **Run/Stop**. (Pan has no control; it is
+  space-drag/middle-drag or right-click-to-recenter on bare canvas —
+  FR-023a/FR-023b; left-drag on bare canvas is rubber-band select, FR-016b.)
+  A menu opens on click, closes on item choice / outside click / Escape, and is
+  built so future commands (Edit Copy/Paste, etc.) drop in as additional items.
   The Wire button shows the wire-cursor icon (the lower-right→upper-left
   diagonal line, inline SVG) instead of a text label (FR-025), keeping a
   `Wire tool` tooltip/aria-label. The active tool is highlighted; clicking a
   tool sets `store.tool`. The Run button calls the sim engine's `run()` and
-  relabels to "Stop" (FR-076); while `simulating`, the design-modifying buttons
-  (Wire, Bus, Undo, Redo, New, Open, Refresh) are disabled — Save, zoom, and
-  Run/Stop stay enabled (FR-087). A **Refresh** button (FR-088, tooltip
-  "Re-copy type data from the loaded library into placed components")
-  dispatches `RefreshTypes` with the library the app loaded at startup.
+  relabels to "Stop" (FR-076); while `simulating`, the design-modifying commands
+  (Wire, Bus buttons; Undo, Redo, New, Open, Refresh Types items) are disabled —
+  Save, the zoom items, Select, and Run/Stop stay enabled (FR-087). The **Refresh
+  Types** item (FR-088, tooltip "Re-copy type data from the loaded library into
+  placed components") dispatches `RefreshTypes` with the library the app loaded
+  at startup. (Reworked 2026-06-21; supersedes the former flat toolbar — a row of
+  text/icon buttons — whose File ops and Undo/Redo/zoom moved into menus while the
+  modal tools and Run stayed as buttons. The filename is retained for now.)
 - **Palette (`palette.js`)** — Satisfies FR-003, FR-005, FR-006, FR-008, FR-009,
   FR-009a. Renders one fixed-size tile per `ComponentType` in a 3-column CSS grid,
   sorted ascending by the numeric abbreviated part number (`Number(name.slice(2))`).
