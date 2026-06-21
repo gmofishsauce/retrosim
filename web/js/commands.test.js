@@ -15,7 +15,9 @@ import {
   refreshTypesCmd,
   composite,
   translateWiring,
+  pasteFragmentCmd,
 } from "./commands.js";
+import { extractFragment } from "./model/clipboard.js";
 
 function ty(name = "74138") {
   return { name, width: 6, height: 12, pins: [] };
@@ -424,4 +426,35 @@ test("placeSubDesign embeds a child as an X-series instance; undo/redo round-tri
   assert.equal(store.design.components.length, 0);
   store.redo();
   assert.equal(store.design.components[0].refdes, "X1"); // same refdes on redo
+});
+
+test("pasteFragmentCmd places a fragment with fresh refdes; undo/redo are exact (FR-112)", () => {
+  const store = newStore();
+  addInstance(store.design, tyPins(), 0, 0, 0); // U1
+  addInstance(store.design, tyPins(), 10, 0, 0); // U2
+  addWire(
+    store.design,
+    { kind: "pin", refdes: "U1", pin: "/Y0" },
+    { kind: "pin", refdes: "U2", pin: "A0" },
+  );
+  const frag = extractFragment(store.design, ["U1", "U2"]);
+
+  const cmd = pasteFragmentCmd(frag, 100, 100);
+  store.dispatch(cmd);
+  assert.deepEqual(cmd.created, ["U3", "U4"]); // exposed for selection
+  assert.equal(store.design.components.length, 4);
+  assert.equal(store.design.wires.length, 2);
+  assert.deepEqual(
+    { x: find(store.design, "U3").x, y: find(store.design, "U3").y },
+    { x: 100, y: 100 },
+  );
+
+  store.undo(); // snapshot restore removes everything pasted
+  assert.equal(store.design.components.length, 2);
+  assert.equal(store.design.wires.length, 1);
+
+  store.redo(); // deterministic: same designators and wire count
+  assert.deepEqual(cmd.created, ["U3", "U4"]);
+  assert.equal(store.design.components.length, 4);
+  assert.equal(store.design.wires.length, 2);
 });

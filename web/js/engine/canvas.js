@@ -37,6 +37,7 @@ export function initCanvas(canvasEl, store) {
   let frame = null;
   let preview = null; // transient {points: [{x,y}, …]} in world coords
   let marquee = null; // transient rubber-band {a, b (world), mode} (FR-016b)
+  let ghost = null; // transient paste ghost {fragment, dx, dy} (FR-113)
   let lastW = 0; // last applied CSS size / DPR, so resize() is idempotent and a
   let lastH = 0; // ResizeObserver tick that didn't change the box is a no-op.
   let lastDpr = 0;
@@ -94,6 +95,8 @@ export function initCanvas(canvasEl, store) {
     drawVertices(ctx, store.design, vp);
     drawBusBraces(ctx, store.design, vp);
     if (preview) drawPreview(ctx, preview, vp);
+    // Paste ghost above the design, below the marquee (FR-113).
+    if (ghost) drawGhost(ctx, ghost.fragment, ghost.dx, ghost.dy, vp);
     if (marquee) drawMarquee(ctx, marquee, vp);
     ctx.restore();
   }
@@ -116,6 +119,10 @@ export function initCanvas(canvasEl, store) {
     },
     setMarquee(m) {
       marquee = m;
+      requestRender();
+    },
+    setGhost(g) {
+      ghost = g;
       requestRender();
     },
     setViewport(viewport) {
@@ -161,6 +168,53 @@ function drawComponents(ctx, design, vp, selection, hover, sim) {
     const hovered = hover === inst.refdes;
     drawComponent(ctx, inst, vp, selected, hovered, sim);
   }
+}
+
+// GHOST_ALPHA dims the paste ghost so it reads as a preview, not placed (FR-113).
+const GHOST_ALPHA = 0.5;
+
+// drawGhost renders a translucent preview of a clipboard fragment offset by
+// (dx,dy) while paste placement is pending (FR-113, §6.15). It is self-contained
+// over the fragment — the pasted objects are not yet in the design — resolving
+// each conductor path point from the fragment's own vertices/components, and
+// reusing drawComponent for the bodies. Read-only; never hit-tested.
+function drawGhost(ctx, fragment, dx, dy, vp) {
+  const vById = new Map(fragment.vertices.map((v) => [v.id, v]));
+  const cByRef = new Map(fragment.components.map((c) => [c.refdes, c]));
+
+  const pointWorld = (p) => {
+    let w;
+    if (p.t === "bend") {
+      w = { x: p.x, y: p.y };
+    } else {
+      const v = vById.get(p.v);
+      const inst = v && (v.kind === "pin" || v.kind === "connector") ? cByRef.get(v.ref) : null;
+      w = inst ? pinWorldPos(inst, v.pin) : { x: v.x, y: v.y };
+    }
+    return { x: w.x + dx, y: w.y + dy };
+  };
+
+  ctx.save();
+  ctx.globalAlpha = GHOST_ALPHA;
+  for (const [list, width, color] of [
+    [fragment.buses, 3, "#1565c0"],
+    [fragment.wires, 1, "#000"],
+  ]) {
+    for (const c of list) {
+      if (c.path.length < 2) continue;
+      const pts = c.path.map((p) => worldToScreen(pointWorld(p), vp));
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.lineWidth = width;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+    }
+  }
+  for (const inst of fragment.components) {
+    drawComponent(ctx, { ...inst, x: inst.x + dx, y: inst.y + dy }, vp, false, false, null);
+  }
+  ctx.restore();
 }
 
 // pathPointWorld returns a wire path point's world coordinate (node via vertex,

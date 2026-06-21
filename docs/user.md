@@ -74,7 +74,7 @@ which is added to the running library and palette without a restart.
 The window has four regions plus a status bar:
 
 - **Menu bar** (top): the **File** menu (`New`, `Open`, `Save`, `Save As`,
-  `Refresh Types`), the **Edit** menu (`Undo`, `Redo`), and the **View** menu
+  `Refresh Types`), the **Edit** menu (`Undo`, `Redo`, `Copy`, `Paste`), and the **View** menu
   (`Zoom In`, `Zoom Out`), followed by the tool buttons `Select`, `Wire`, `Bus`
   and the `Run` button. Click a menu to open it; click an item to run it, or
   press `Esc` / click elsewhere to dismiss it. The current design name and tool
@@ -208,8 +208,18 @@ This is the heart of the editor and follows KiCad's conventions.
   in place about its own origin; a multi-component selection turns about the
   centre of its bounding box.
 - **Delete:** press **Delete** or **Backspace** to remove every selected object.
+- **Copy / Paste:** **Copy** (Edit ▸ Copy or **Ctrl/Cmd+C**) puts the selected
+  components — and the wiring *interior* to them (the same rule as Move) — onto a
+  clipboard. **Paste** (Edit ▸ Paste or **Ctrl/Cmd+V**) drops a copy: a translucent
+  ghost follows the cursor, and the next click places it, snapped to grid. The
+  pasted parts get fresh reference designators (new `U`/`A` numbers; a multi-unit
+  package takes one new `U` number), keep their interior wiring, overrides, and
+  switch states, and become the new selection. Press **Esc** (or pick another tool)
+  to cancel a pending paste. Copy selecting a single subunit copies its whole
+  package. The clipboard lasts for the session (it survives New/Open) and is not
+  the operating-system clipboard.
 
-Move, rotate, and delete each apply as a single undo step.
+Move, rotate, delete, and paste each apply as a single undo step.
 
 The **properties panel** is shown only when exactly one component is selected.
 
@@ -526,5 +536,7 @@ clear message until then, without losing your work.
 | `+` / `-` | Change width of the one selected bus |
 | `Ctrl/Cmd+Z` | Undo |
 | `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` | Redo |
+| `Ctrl/Cmd+C` | Copy selection to the clipboard |
+| `Ctrl/Cmd+V` | Paste (ghost follows the cursor; click to drop) |
 | `Space` (hold) | Pan with left-drag |
-| `Esc` | Cancel the current gesture / tool / selection |
+| `Esc` | Cancel the current gesture / tool / selection / pending paste |

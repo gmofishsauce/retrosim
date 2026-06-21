@@ -40,7 +40,9 @@ import {
   deleteBendCmd,
   composite,
   translateWiring,
+  pasteFragmentCmd,
 } from "../commands.js";
+import { extractFragment } from "../model/clipboard.js";
 import {
   insertBend,
   moveBend,
@@ -141,6 +143,10 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
   let drag = null; // transient drag state for SELECT gestures
   let pan = null; // transient pan state { sx, sy, pan0 }
   let spaceDown = false; // space held -> left-drag pans
+  let clipboard = null; // session copy fragment (FR-111); survives New/Open
+  let pasteFrag = null; // fragment armed for placement while tool === "paste"
+  let pasteAnchor = null; // {x,y} fragment anchor that tracks the cursor (FR-113)
+  let lastPointer = null; // last mousemove event, to seat the ghost on paste start
 
   const findType = (id) => library.find((c) => typeIdentity(c) === id);
   // Resolves a wire or bus id: bend drags apply to both (FR-039).
@@ -152,6 +158,12 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     placeType = type;
     wireSource = null;
     wireWaypoints = []; // discard any in-progress waypoints (FR-027e)
+    // Leaving paste mode cancels a pending paste (FR-113); entering it keeps it.
+    if (tool !== "paste") {
+      pasteFrag = null;
+      pasteAnchor = null;
+      renderer.setGhost?.(null);
+    }
     const label = document.getElementById("tool-mode");
     if (label) label.textContent = tool === "place" ? `place ${typeIdentity(type)}` : tool;
     canvas.style.cursor =
@@ -462,6 +474,73 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     select({ kind: "component", refdes: placed.refdes });
   }
 
+  // copySelection captures the selected components and their interior wiring into
+  // the session clipboard (FR-111). Read-only: no design mutation, allowed even
+  // while simulating. A selection with no components is a no-op.
+  function copySelection() {
+    const refdeses = store.state.selection
+      .filter((r) => r.kind === "component")
+      .map((r) => r.refdes);
+    if (refdeses.length === 0) return;
+    const frag = extractFragment(store.design, refdeses);
+    if (frag.components.length > 0) clipboard = frag;
+  }
+
+  // fragmentAnchor is the grid point the cursor tracks during paste placement
+  // (FR-113): the top-left of the fragment components' origins (all on grid).
+  function fragmentAnchor(frag) {
+    let x = Infinity;
+    let y = Infinity;
+    for (const c of frag.components) {
+      x = Math.min(x, c.x);
+      y = Math.min(y, c.y);
+    }
+    return { x, y };
+  }
+
+  // ghostOffset is the (dx,dy) that maps the fragment anchor to grid point g.
+  function ghostOffset(g) {
+    return { dx: g.x - pasteAnchor.x, dy: g.y - pasteAnchor.y };
+  }
+
+  // startPaste arms the clipboard fragment for at-cursor placement (FR-113): a
+  // floating ghost follows the pointer until a click drops it. Disabled while
+  // simulating (FR-087); a no-op when the clipboard is empty.
+  function startPaste() {
+    if (store.state.simulating) return;
+    if (!clipboard) return;
+    pasteFrag = clipboard;
+    pasteAnchor = fragmentAnchor(pasteFrag);
+    setTool("paste");
+    // Seat the ghost at the last known pointer, else the canvas center until the
+    // pointer enters (FR-113).
+    const g = lastPointer
+      ? gridOf(lastPointer)
+      : snapToGrid(
+          { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 },
+          store.state.viewport,
+        );
+    const { dx, dy } = ghostOffset(g);
+    renderer.setGhost?.({ fragment: pasteFrag, dx, dy });
+  }
+
+  // updatePasteGhost re-seats the ghost as the cursor moves (FR-113).
+  function updatePasteGhost(e) {
+    const { dx, dy } = ghostOffset(gridOf(e));
+    renderer.setGhost?.({ fragment: pasteFrag, dx, dy });
+  }
+
+  // commitPaste drops the fragment at the cursor (FR-112/FR-113): one undoable
+  // paste, then return to select with the pasted objects selected.
+  function commitPaste(e) {
+    const { dx, dy } = ghostOffset(gridOf(e));
+    const cmd = pasteFragmentCmd(pasteFrag, dx, dy);
+    store.dispatch(cmd);
+    const created = cmd.created.map((refdes) => ({ kind: "component", refdes }));
+    setTool("select"); // clears the ghost and disarms paste
+    store.setSelection(created);
+  }
+
   // wireTargetAt returns a wire endpoint spec for a click: a pin, or a branch on
   // an existing segment, or null (empty space — ignored).
   function wireTargetAt(e) {
@@ -715,6 +794,11 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
         hitSegment(store.design, world, segTol()) ||
         hitBusSegment(store.design, world, segTol());
       if (onItem) postMessage(LOCKED_MSG);
+      return;
+    }
+
+    if (store.state.tool === "paste" && pasteFrag) {
+      commitPaste(e);
       return;
     }
 
@@ -1000,6 +1084,11 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
   });
 
   window.addEventListener("mousemove", (e) => {
+    lastPointer = e; // remembered so a menu-invoked paste can seat its ghost
+    if (store.state.tool === "paste" && pasteFrag) {
+      updatePasteGhost(e);
+      return;
+    }
     if (pan) {
       const scale = scaleFor(store.state.viewport);
       renderer.setViewport({
@@ -1237,6 +1326,14 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
       return;
     }
 
+    // Copy (Ctrl/Cmd+C) is read-only, so it is allowed even while simulating
+    // (FR-111) — handled above the simulation lock below.
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c") {
+      e.preventDefault();
+      copySelection();
+      return;
+    }
+
     // Simulation lock (FR-087): Space (pan) and Escape stay; every shortcut
     // below mutates the design or arms a mutating tool.
     if (store.state.simulating) return;
@@ -1265,6 +1362,12 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     if (mod && e.key.toLowerCase() === "y") {
       e.preventDefault();
       store.redo();
+      return;
+    }
+    // Paste (Ctrl/Cmd+V): arm at-cursor placement (FR-112/FR-113).
+    if (mod && e.key.toLowerCase() === "v") {
+      e.preventDefault();
+      startPaste();
       return;
     }
 
@@ -1313,5 +1416,5 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     );
   }
 
-  return { setTool, zoomBy };
+  return { setTool, zoomBy, copySelection, startPaste, hasClipboard: () => !!clipboard };
 }

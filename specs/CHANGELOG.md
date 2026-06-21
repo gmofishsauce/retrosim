@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-21 — Copy and paste
+What: Added Copy (Edit menu / Ctrl-Cmd+C) and Paste (Edit menu / Ctrl-Cmd+V). Copy captures the selected components plus the wiring interior to the selection (the FR-018c rule) into a session clipboard; whole subunit packages copy together. Paste instantiates the fragment with fresh U-/A-/X- refdes and fresh vertex/wire/bus ids, preserving interior connectivity, overrides, and switch state, and places it at the cursor via a floating ghost dropped on click (Esc cancels). One undoable action; pasted objects become the selection.
+Why: Requested feature; the new Edit menu (FR-004a) was built to host it.
+Touches: FR-111/FR-112/FR-113 (new, §3.5a), FR-004a (Edit menu gains Copy/Paste); design §6.15 (new), §6.11/§6.9/§6.10 references, file plan, traceability.
+
 ## 2026-06-21 — Flat toolbar replaced by a combined menu/tool bar
 What: Replaced the row-of-buttons toolbar with a single bar carrying File/Edit/View pull-down menus on the left (File: New, Open, Save, Save As, Refresh Types; Edit: Undo, Redo; View: Zoom In, Zoom Out) and the modal tool buttons Select/Wire/Bus plus Run/Stop on the right. Modal tools and Run stay buttons (they need an always-visible active/running state); everything else moved into menus.
 Why: The growing command set no longer fit as a row of buttons; menus make room for upcoming commands (e.g. Edit Copy/Paste). Spec-only slice; code change follows.

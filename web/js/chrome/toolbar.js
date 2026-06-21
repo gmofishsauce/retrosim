@@ -53,6 +53,10 @@ export function initToolbar({ container, store, interaction, fileops, sim, libra
     store.undo());
   const redoItem = addItem(editMenu.panel, "Redo", "Redo (Shift+Ctrl/Cmd+Z)", () =>
     store.redo());
+  const copyItem = addItem(editMenu.panel, "Copy", "Copy selection (Ctrl/Cmd+C)", () =>
+    interaction.copySelection());
+  const pasteItem = addItem(editMenu.panel, "Paste", "Paste (Ctrl/Cmd+V)", () =>
+    interaction.startPaste());
   container.appendChild(editMenu.menu);
 
   // Zoom stays enabled while simulating (FR-087).
@@ -110,6 +114,9 @@ export function initToolbar({ container, store, interaction, fileops, sim, libra
       const wasOpen = !panel.hidden;
       closeMenus();
       if (!wasOpen) {
+        // Re-evaluate item enablement at open time: Paste tracks the clipboard,
+        // which is not store state and so does not drive the store subscription.
+        refresh();
         panel.hidden = false;
         menu.classList.add("open");
       }
@@ -165,6 +172,10 @@ export function initToolbar({ container, store, interaction, fileops, sim, libra
     }
     undoItem.disabled = simming || !store.canUndo();
     redoItem.disabled = simming || !store.canRedo();
+    // Copy is read-only (allowed while simulating, FR-111); enabled when a
+    // component is selected. Paste needs a non-empty clipboard and no run.
+    copyItem.disabled = !store.state.selection.some((r) => r.kind === "component");
+    pasteItem.disabled = simming || !interaction.hasClipboard();
     newItem.disabled = simming;
     openItem.disabled = simming;
     refreshItem.disabled = simming;

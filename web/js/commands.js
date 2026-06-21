@@ -28,6 +28,7 @@ import {
   typeIdentity,
 } from "./model/design.js";
 import { addSubDesignInstance } from "./model/subdesign.js";
+import { pasteFragment } from "./model/clipboard.js";
 import { componentBBox } from "./engine/hittest.js";
 import { rotateOffset } from "./geometry.js";
 
@@ -196,6 +197,31 @@ export function placeSubDesign(opts, x, y) {
       if (i >= 0) design.components.splice(i, 1);
     },
   };
+}
+
+// pasteFragmentCmd instantiates a clipboard fragment into the design, offset by
+// (dx,dy) (FR-112/FR-113, §6.15). Like the other connectivity cascades it is
+// snapshot-based: paste touches components/wires/buses/vertices and the id
+// counters — exactly the snapshot set — so apply captures a snapshot on first
+// run and revert restores it; redo re-runs pasteFragment against the restored
+// counters, reproducing the same designators and ids deterministically. The
+// command exposes the pasted components' refdeses (`created`, set on apply) so
+// the caller can select them (FR-112).
+export function pasteFragmentCmd(fragment, dx, dy) {
+  let snap = null;
+  const cmd = {
+    label: "Paste",
+    created: [],
+    apply(design) {
+      if (snap === null) snap = snapshotConnectivity(design);
+      const made = pasteFragment(design, fragment, dx, dy);
+      cmd.created = made.components.map((c) => c.refdes);
+    },
+    revert(design) {
+      restoreConnectivity(design, snap);
+    },
+  };
+  return cmd;
 }
 
 // moveComponent repositions an instance (FR-017). The old position is captured

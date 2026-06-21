@@ -1174,7 +1174,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   FR-023, FR-024, FR-044, FR-046, FR-049, FR-052, FR-076, FR-087, FR-088. A
   single horizontal bar with pull-down menus on the left and always-visible
   buttons on the right (FR-004a). **Menus:** **File** — New, Open, Save, Save As,
-  Refresh Types; **Edit** — Undo, Redo; **View** — Zoom In, Zoom Out. **Buttons:**
+  Refresh Types; **Edit** — Undo, Redo, Copy, Paste (FR-111/FR-112, §6.15);
+  **View** — Zoom In, Zoom Out. **Buttons:**
   Select, Wire, Bus (modal tools), then **Run/Stop**. (Pan has no control; it is
   space-drag/middle-drag or right-click-to-recenter on bare canvas —
   FR-023a/FR-023b; left-drag on bare canvas is rubber-band select, FR-016b.)
@@ -1591,6 +1592,31 @@ no sequential part could ever leave U.)
 - **Loading (FR-098/099a):** on opening a design, `app.js`/`fileops` resolve its sub-design `childPath`s (relative to its save dir) and load each child far enough to resolve the interface for rendering; failures yield broken-link placeholders, never aborting the open. Deep child contents load lazily — only `flatten` (at Run) needs them.
 - **Persistence:** no Go change is needed — the server already stores designs as an opaque `json.RawMessage` (§6.5), so the new instance fields (`kind`/`childPath`/`render`/`label`/`portDir`/`width`/`target`), the design-level `defaultRender`, and the `connector` vertex kind round-trip untouched. Only the client model (`model/design.js`, `model/persist.js`) is typed; `persist.js`'s structural sanity pass (§7.4) validates a `connector` vertex's `ref`/`pin` exactly as it does a `pin` vertex. Child files are read through the existing `/api/v1/design/load` with client-resolved absolute paths — relative→absolute resolution is client-side (parent `savePath` dir + stored relative path).
 - **Dependencies:** `model/design.js`, `model/netlist.js`, `api.js`, store, `chrome/dialogs.js`, `engine/canvas.js`, `engine/sim.js`.
+
+### 6.15 JS: clipboard — copy & paste (`web/js/model/clipboard.js` + interaction/canvas/chrome)
+
+- **Purpose:** duplicate a sub-circuit (components + their interior wiring) within a design. Implements requirements §3.5a (FR-111–FR-113).
+- **Satisfies:** FR-111, FR-112, FR-113; extends FR-004a (Edit menu), FR-016a (selection), FR-024 (undo).
+
+**The fragment (FR-111).** A new pure module `model/clipboard.js` defines a self-contained, plain-data **fragment** `{ components, wires, buses, vertices }` — deep clones detached from any live design. `extractFragment(design, refdeses) → fragment` collects:
+  - the **components**: the selected components, each expanded to its whole subunit package via `packageSiblings` (§6.6, FR-018b), de-duplicated;
+  - the **interior conductors**: every wire/bus network all of whose component connections are to copied components (the FR-018c interior test). This reuses the union-find network walk already written for `rigidWiring` (§6.6); a sibling helper `interiorConductors(design, refdesSet) → { wires, buses }` returns the whole conductors (not just their bends), and a network with any connection to a non-copied component, or no component connection at all, is excluded;
+  - the **vertices** those conductors reference (pin/connector vertices keyed by `ref`+`pin`; junction/free vertices with their coordinates).
+  Bus `groupConnections` and `bitNames` (§7.2) ride along inside the cloned buses. Copy performs no design mutation, so it is **not** a command and creates no undo entry; it just stores the fragment in the session clipboard (below).
+
+**Pasting the fragment (FR-112).** `pasteFragment(design, fragment, dx, dy) → { components, wires, buses }` instantiates the fragment into `design`:
+  - **Refdes remap.** Group fragment components by physical package: a subunit package (shared `U<n>` stem) gets **one** new U-number (via `nextRefNum`, §6.6) with its sibling letters preserved (`U7A…`); a single IC gets a new `U<n>`; a built-in gets a new `A-<n>`; a sub-design instance a new `X-<n>`. Build an `oldRefdes → newRefdes` map and rewrite each component's `refdes` (and its derived per-pin vertex `ref`).
+  - **Id remap.** Allocate fresh `v…/w…/b…` ids from the design counters; rewrite every path `node.v`, each bus `groupConnections[].vertex`/`.instance`, and junction/free vertex ids through `old→new` maps.
+  - **Translate.** Add `(dx,dy)` (whole grid units) to every component `x/y`, every junction/free vertex `x/y`, and every bend. Pin/connector vertices need no shift — their position is derived from the (already-translated) instance (§7.1a).
+  - **Port labels (FR-112).** A pasted port whose `label === oldRefdes` (the default, §6.14) is reset to its `newRefdes`; a custom label is kept verbatim.
+  Per-instance `typeData`, `overrides`, and `switchState` clone verbatim (FR-057/FR-058/FR-071c). The pasted objects are returned so the caller can select them.
+
+  The **command** `pasteFragmentCmd(fragment, dx, dy)` (§6.10) is snapshot-based — it touches `components/wires/buses/vertices` plus the id counters, exactly the `snapshotConnectivity` set — so it reuses the existing `snapshotCommand` machinery (capture on first apply, restore on revert; redo re-runs `pasteFragment` deterministically against the restored counters, yielding the same new ids). It exposes the created components' refdeses (captured on apply) so the FSM can set the post-paste selection.
+
+**Paste-at-cursor FSM (FR-113).** `interaction.js` (§6.9) gains a `paste` placement mode paralleling `place`: `startPaste()` checks the clipboard is non-empty and not simulating (FR-087), sets `tool === "paste"`, and arms a floating ghost. `mousemove` computes `(dx,dy)` so the fragment's anchor — the grid-snapped top-left of its components' bounding box — tracks the cursor grid point, and calls a new renderer hook `renderer.setGhost(fragment, dx, dy)`. A left-click commits `store.dispatch(pasteFragmentCmd(fragment, dx, dy))`, selects the created components, clears the ghost, and returns to select-tool (one-shot, FR-010). Escape or any `setTool` clears the ghost and cancels (no mutation). The **ghost** is a new translucent-draw path in `canvas.js` (§6.8): with `ctx.globalAlpha` lowered it draws the fragment's components through the existing `drawComponent` (offset by `dx,dy`) and its conductors as plain polylines — read-only, never hit-tested, drawn above the design and below the marquee.
+
+**Session clipboard & chrome wiring.** The clipboard is a single module-level fragment variable owned by `interaction.js` (session-scoped, not persisted, not on the undo stack, surviving New/Open — FR-111). `initInteraction` returns `copySelection()` and `startPaste()` alongside `setTool`/`zoomBy`. The keydown handler (§6.9) adds Ctrl/Cmd+C → `copySelection()` and Ctrl/Cmd+V → `startPaste()` (both gated by the simulation lock for paste; copy is always allowed). The **Edit menu** (`toolbar.js`, §6.11/FR-004a) gains **Copy** and **Paste** items invoking the same two entry points; `refresh()` disables Paste when the clipboard is empty or simulating and Copy when the selection has no components.
+- **Dependencies:** `model/design.js` (`packageSiblings`, `nextRefNum`, union-find network walk), `store.js`, `commands.js` (`snapshotCommand`), `engine/canvas.js`, `engine/interaction.js`, `chrome/toolbar.js`.
 
 ---
 
@@ -2018,6 +2044,7 @@ sim/
     js/backup.js            CREATE  localStorage snapshot + recovery (§6.12a)
     js/geometry.js          CREATE  grid/viewport/rotation math (§6.7)
     js/model/design.js      CREATE  design ops (§6.6)
+    js/model/clipboard.js   CREATE  copy/paste fragment extract + instantiate (§6.15)
     js/model/netlist.js     CREATE  buildNets union-find (§6.6)
     js/model/subdesign.js   CREATE  interface resolution, synthetic type, flatten/cycle (§6.14)
     js/engine/canvas.js     CREATE  renderer + render loop (§6.8)
@@ -2126,6 +2153,7 @@ No files are modified (greenfield).
 | FR-060c | §7.2, §7.4 | `model/persist.js`, `chrome/fileops.js` |
 | FR-104 | §6.3, §7.1, §7.6 | `yamlparse.go`, `types.go`, `srv/components/*.yaml` |
 | FR-105 | §6.11, §7.1 | `properties.js`, `style.css` |
+| FR-111, FR-112, FR-113 | §6.15, §6.9, §6.10, §6.11 | `clipboard.js`, `interaction.js`, `commands.js`, `canvas.js`, `toolbar.js` |
 | NFR-001 | §6.1 | `main.go` |
 | NFR-002 | §6.12 | `api.js` |
 | NFR-003 | all | server `*.go`, `web/js/*` |
