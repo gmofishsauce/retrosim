@@ -304,7 +304,15 @@ const OLMC_DIRS = [
 // scalars use JSON.stringify (valid YAML 1.2 double-quoted form); the behavior is
 // emitted as a literal block scalar with each line indented two spaces.
 export function galPartYaml({ partnumber, description, inputs, olmcs, groups, behavior }) {
-  const lines = [`type: "22V10"`, `gal: GAL22V10`, `partnumber: ${JSON.stringify(partnumber)}`];
+  // Emit an explicit, immutable id (FR-066e) so the created part keys stably even
+  // if its part-number display name is later edited; matches the library files
+  // and the server's derive-when-absent rule (deriveComponentID).
+  const lines = [
+    `id: ${JSON.stringify("type-" + partnumber)}`,
+    `type: "22V10"`,
+    `gal: GAL22V10`,
+    `partnumber: ${JSON.stringify(partnumber)}`,
+  ];
   if (description) lines.push(`description: ${JSON.stringify(description)}`);
   if (olmcs.some((o) => o.kind === "reg")) {
     lines.push(`clock: ${JSON.stringify(inputs[0].name)}`); // pin-1 clock

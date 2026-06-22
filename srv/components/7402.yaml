@@ -2,6 +2,7 @@
 # Source: Nexperia, "74HC02; 74HCT02 Quad 2-input NOR gate", product data
 # sheet Rev. 9 — 15 February 2024.
 # https://assets.nexperia.com/documents/data-sheet/74HC_HCT02.pdf
+id: "type-7402"
 type: "7402"
 rendertype: subunit
 numunits: 4

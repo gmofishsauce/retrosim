@@ -4,7 +4,7 @@
 // dispatch setOverrideCmd through the store; the panel re-renders on every
 // store notification.
 
-import { setOverrideCmd, setSwitchStateCmd, setPortPropsCmd } from "../commands.js";
+import { setOverrideCmd, setSwitchStateCmd, setPortPropsCmd, setLabelCmd } from "../commands.js";
 
 function el(tag, className, text) {
   const e = document.createElement(tag);
@@ -82,9 +82,11 @@ export function initProperties({ container, store }) {
     }
 
     const td = inst.typeData;
-    container.appendChild(el("div", "prop-title", inst.refdes));
+    container.appendChild(el("div", "prop-title", inst.label ?? inst.refdes));
     container.append(
-      infoRow("Type", inst.type),
+      // Display name from typeData (FR-005/FR-005b), not inst.type — the latter
+      // is the internal library id (FR-066e).
+      infoRow("Type", td.partnumber || td.name),
       infoRow("Size", `${td.width} × ${td.height}`),
       infoRow("Pins", String(td.pins.length)),
     );
@@ -96,6 +98,25 @@ export function initProperties({ container, store }) {
 
     // The panel is read-only while a simulation runs (FR-087).
     const locked = store.state.simulating;
+
+    // Editable designator label (FR-011b): free-form, duplicate-allowed text for
+    // the displayed designator, defaulting to the refdes. Display-only — identity
+    // stays the refdes — so no validation; a blank value clears it back to the
+    // default. The text note shows no designator and so no field. Disabled while
+    // simulating (FR-087), like the other edits.
+    if (td.renderType !== "note") {
+      const desRow = el("div", "prop-row");
+      desRow.appendChild(el("label", "prop-label", "designator"));
+      const desInput = el("input", "prop-input");
+      desInput.type = "text";
+      desInput.value = inst.label ?? inst.refdes;
+      desInput.disabled = locked;
+      desInput.addEventListener("change", () => {
+        store.dispatch(setLabelCmd(inst.refdes, desInput.value));
+      });
+      desRow.appendChild(desInput);
+      container.appendChild(desRow);
+    }
 
     // Input switch state (FR-020c): a 1 / 0 selector for the switch's
     // per-instance state (inst.switchState), not an override. While simulating

@@ -2,6 +2,7 @@
 # Source: Nexperia, "74HC174; 74HCT174 Hex D-type flip-flop with reset;
 # positive-edge trigger", product data sheet Rev. 7 — 14 March 2024.
 # https://assets.nexperia.com/documents/data-sheet/74HC_HCT174.pdf
+id: "type-74174"
 type: "74174"
 outline: [6, 14]
 clock: CP # clocks the .R registered outputs in the behavior block (FR-062d)

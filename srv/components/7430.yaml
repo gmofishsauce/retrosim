@@ -2,6 +2,7 @@
 # Source: Nexperia, "74HC30; 74HCT30 8-input NAND gate", product data sheet
 # Rev. 10 — 13 March 2024.
 # https://assets.nexperia.com/documents/data-sheet/74HC_HCT30.pdf
+id: "type-7430"
 type: "7430"
 rendertype: subunit
 numunits: 1

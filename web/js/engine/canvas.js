@@ -578,15 +578,18 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
   ctx.fillStyle = "#111";
   ctx.font = LABEL_FONT;
   if (td.renderType === "subunit") {
-    ctx.fillText(inst.refdes, center.x, center.y);
+    ctx.fillText(inst.label ?? inst.refdes, center.x, center.y);
   } else if (td.builtin) {
-    // Refdes above the symbol so it clears the glyph; the upper bound on any
-    // 90°-rotation's vertical extent is max(width,height).
+    // Designator label above the symbol so it clears the glyph; the upper bound
+    // on any 90°-rotation's vertical extent is max(width,height).
     const off = (Math.max(td.width, td.height) / 2) * scaleFor(vp) + 7;
-    ctx.fillText(inst.refdes, center.x, center.y - off);
+    ctx.fillText(inst.label ?? inst.refdes, center.x, center.y - off);
   } else {
-    ctx.fillText(inst.refdes, center.x, center.y - 6);
-    ctx.fillText(inst.type, center.x, center.y + 6);
+    // Designator (the editable label, falling back to the refdes) above the
+    // type's display name (FR-012). The type name comes from typeData — not
+    // inst.type, which is the internal library id (FR-066e).
+    ctx.fillText(inst.label ?? inst.refdes, center.x, center.y - 6);
+    ctx.fillText(td.partnumber || td.name, center.x, center.y + 6);
   }
 }
 

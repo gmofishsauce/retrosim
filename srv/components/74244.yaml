@@ -2,6 +2,7 @@
 # Source: Nexperia, "74HC244; 74HCT244 Octal buffer/line driver; 3-state",
 # product data sheet Rev. 8 — 5 August 2024.
 # https://assets.nexperia.com/documents/data-sheet/74HC_HCT244.pdf
+id: "type-74244"
 type: "74244"
 outline: [8, 12]
 

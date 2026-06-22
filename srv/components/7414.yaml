@@ -2,6 +2,7 @@
 # Source: Nexperia, "74HC14; 74HCT14 Hex inverting Schmitt trigger", product
 # data sheet Rev. 10 — 29 February 2024.
 # https://assets.nexperia.com/documents/data-sheet/74HC_HCT14.pdf
+id: "type-7414"
 type: "7414"
 rendertype: subunit
 numunits: 6

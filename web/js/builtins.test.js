@@ -43,8 +43,9 @@ test("8-wide built-ins expose eight grouped bits for an 8-bit bus snap (FR-071d/
 // Both are passive: a grouped bus terminal (port8) and a display-only indicator
 // (indicator8) drive nothing (FR-071d/e).
 test("8-wide built-ins drive nothing", () => {
-  assert.deepEqual(BEHAVIORS.indicator8({}), []);
-  assert.deepEqual(BEHAVIORS.port8({}), []);
+  // BEHAVIORS is keyed by type id (FR-066e), e.g. "type-indicator8".
+  assert.deepEqual(BEHAVIORS["type-indicator8"]({}), []);
+  assert.deepEqual(BEHAVIORS["type-port8"]({}), []);
 });
 
 // The text note (FR-071f) is a pure annotation: a built-in with no pins, no
@@ -57,6 +58,7 @@ test("text note is a pinless, behaviorless built-in (FR-071f)", () => {
   assert.ok(!t.pinGroups);
   assert.ok(!t.properties);
   // No simulation behavior and no interactive handler — sim.js skips it.
-  assert.ok(!("note" in BEHAVIORS));
-  assert.ok(!("note" in INTERACTIONS));
+  // (registries are keyed by type id, FR-066e.)
+  assert.ok(!("type-note" in BEHAVIORS));
+  assert.ok(!("type-note" in INTERACTIONS));
 });

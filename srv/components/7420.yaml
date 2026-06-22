@@ -2,6 +2,7 @@
 # Source: Nexperia, "74HC20 Dual 4-input NAND gate", product data sheet
 # Rev. 7 — 14 March 2024.
 # https://assets.nexperia.com/documents/data-sheet/74HC20.pdf
+id: "type-7420"
 type: "7420"
 rendertype: subunit
 numunits: 2

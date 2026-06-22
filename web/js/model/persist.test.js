@@ -36,7 +36,7 @@ function sampleDesign() {
 
 test("serializeDesign emits the documented shape with derived nets", () => {
   const out = serializeDesign(sampleDesign());
-  assert.equal(out.formatVersion, 1);
+  assert.equal(out.formatVersion, 2);
   assert.equal(out.name, "my schematic");
   assert.ok(Array.isArray(out.components));
   assert.ok(Array.isArray(out.wires));
@@ -116,8 +116,32 @@ test("migrate rejects a file when an upgrade step is missing", () => {
 });
 
 test("migrate leaves a current-or-newer file unchanged (forward-compat)", () => {
-  // Default target is FORMAT_VERSION (1): a current file is a no-op.
-  assert.equal(migrate({ formatVersion: 1, name: "x" }).formatVersion, 1);
+  // Default target is FORMAT_VERSION (2): a current file is a no-op.
+  assert.equal(migrate({ formatVersion: 2, name: "x" }).formatVersion, 2);
   // A newer-than-understood file passes through untouched (the load flow warns).
   assert.equal(migrate({ formatVersion: 99, name: "y" }).formatVersion, 99);
+});
+
+// The real 1→2 step (FR-066e) re-keys each instance's `type` to the type id,
+// derived from its own typeData, and stamps typeData.id. Sub-designs are left
+// alone, and the refdes (identity) is untouched.
+test("migrate 1→2 re-keys instance type to the type id", () => {
+  const out = migrate({
+    formatVersion: 1,
+    name: "old",
+    components: [
+      { refdes: "U1", type: "74138", typeData: { name: "74138" } },
+      { refdes: "A-1", type: "indicator", typeData: { name: "indicator" } },
+      { refdes: "U2", type: "22V574", typeData: { name: "22V10", partnumber: "22V574" } },
+      { refdes: "X1", type: "child", kind: "subdesign", childPath: "c.json" },
+    ],
+  });
+  assert.equal(out.formatVersion, 2);
+  const [ic, ind, gal, sub] = out.components;
+  assert.equal(ic.type, "type-74138");
+  assert.equal(ic.typeData.id, "type-74138");
+  assert.equal(ic.refdes, "U1"); // identity untouched
+  assert.equal(ind.type, "type-indicator");
+  assert.equal(gal.type, "type-22V574"); // GAL keys by part number
+  assert.equal(sub.type, "child"); // sub-design path-derived type unchanged
 });

@@ -2,6 +2,7 @@
 # Source: Nexperia, "74HC138; 74HCT138 3-to-8 line decoder/demultiplexer;
 # inverting", product data sheet Rev. 10 — 26 February 2024.
 # https://assets.nexperia.com/documents/data-sheet/74HC_HCT138.pdf
+id: "type-74138"
 type: "74138"
 outline: [6, 12]
 

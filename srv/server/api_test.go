@@ -12,8 +12,8 @@ import (
 
 func testLibrary() *Library {
 	lib := newLibrary()
-	lib.add(ComponentType{Name: "7400"})
-	lib.add(ComponentType{Name: "74138"})
+	lib.add(ComponentType{ID: "type-7400", Name: "7400"})
+	lib.add(ComponentType{ID: "type-74138", Name: "74138"})
 	return lib
 }
 
@@ -161,7 +161,7 @@ func TestCreateComponent(t *testing.T) {
 		t.Fatalf("component.partnumber = %q, want PC-DECODE-A", created.Component.PartNumber)
 	}
 
-	if _, err := os.Stat(filepath.Join(compDir, "PC-DECODE-A.yaml")); err != nil {
+	if _, err := os.Stat(filepath.Join(compDir, "type-PC-DECODE-A.yaml")); err != nil {
 		t.Fatalf("expected written YAML: %v", err)
 	}
 
@@ -176,7 +176,7 @@ func TestCreateComponent(t *testing.T) {
 	if err := json.NewDecoder(got.Body).Decode(&list); err != nil {
 		t.Fatal(err)
 	}
-	if len(list.Components) != 1 || list.Components[0].Key() != "PC-DECODE-A" {
+	if len(list.Components) != 1 || list.Components[0].Key() != "type-PC-DECODE-A" {
 		t.Fatalf("created part not in library listing: %+v", list.Components)
 	}
 }

@@ -31,6 +31,7 @@ function typeNote() {
 // A representative component type (stub-shaped, see server stubComponents).
 function type74138() {
   return {
+    id: "type-74138",
     name: "74138",
     width: 6,
     height: 12,
@@ -166,9 +167,11 @@ test("addInstance assigns sequential refdes from U1", () => {
   assert.equal(d.components.length, 2);
 });
 
-// A GAL part is identified by its part number, not the device family (FR-066b).
+// A GAL part is keyed by its immutable id, divorced from the device family and
+// the part-number display name (FR-066e).
 function galPart(partnumber) {
   return {
+    id: "type-" + partnumber,
     name: "22V10",
     gal: "GAL22V10",
     partnumber,
@@ -178,18 +181,19 @@ function galPart(partnumber) {
   };
 }
 
-test("typeIdentity is the part number for a GAL, the name otherwise (FR-066b)", () => {
-  assert.equal(typeIdentity(type74138()), "74138");
-  assert.equal(typeIdentity(galPart("PC-DECODE-A")), "PC-DECODE-A");
+test("typeIdentity is the type id, divorced from the display name (FR-066e)", () => {
+  assert.equal(typeIdentity(type74138()), "type-74138");
+  assert.equal(typeIdentity(galPart("PC-DECODE-A")), "type-PC-DECODE-A");
 });
 
-test("addInstance records a GAL instance's type as its part number (§7.2)", () => {
+test("addInstance records a GAL instance's type as its id (§7.2)", () => {
   const d = createDesign("t");
   const a = addInstance(d, galPart("PC-DECODE-A"), 0, 0, 0);
   const b = addInstance(d, galPart("PC-DECODE-B"), 5, 0, 0);
-  assert.equal(a.type, "PC-DECODE-A");
-  assert.equal(b.type, "PC-DECODE-B");
-  // The device family is still reachable for display.
+  assert.equal(a.type, "type-PC-DECODE-A");
+  assert.equal(b.type, "type-PC-DECODE-B");
+  // The part-number display name and device family are still reachable.
+  assert.equal(a.typeData.partnumber, "PC-DECODE-A");
   assert.equal(a.typeData.name, "22V10");
 });
 
@@ -256,10 +260,10 @@ test("addInstance increments past gaps (FR-011)", () => {
   assert.equal(next.refdes, "U4");
 });
 
-test("addInstance records type name, position, rotation, empty overrides", () => {
+test("addInstance records type id, position, rotation, empty overrides", () => {
   const d = createDesign("t");
   const inst = addInstance(d, type74138(), 10, 20, 90);
-  assert.equal(inst.type, "74138");
+  assert.equal(inst.type, "type-74138");
   assert.equal(inst.x, 10);
   assert.equal(inst.y, 20);
   assert.equal(inst.rotation, 90);

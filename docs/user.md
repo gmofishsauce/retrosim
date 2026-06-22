@@ -118,11 +118,14 @@ The app opens with an empty, unsaved design named `unnamed schematic <date time>
 
 ## 3. Placing components
 
-Palette tiles are labeled by part number with the leading `74` removed (so `74138`
-shows as `138`, `7400` as `00`); the full name is the tile's tooltip. Built-in
-tiles show an icon instead. A **custom GAL part** tile shows its device family
-(`22V10`) and uses its **part number** as the tooltip, so several GAL parts of the
-same family stay distinguishable on hover.
+Palette tiles are labeled with the part's full name — `74138`, `7400`, etc. — in a
+small font so a five-character name still fits; the tooltip repeats the name and
+adds the one-line description when the part has one. Built-in tiles show an icon
+instead. A **custom GAL part** tile shows its **part number** (e.g. `PC-DECODE-A`),
+with the part number and description in the tooltip, so several GAL parts of the
+same device family stay distinguishable. The displayed name is just a label —
+internally each type has a fixed identifier — so you can rename a part freely (by
+editing its YAML) without breaking designs that already use it.
 
 To place a part, either:
 
@@ -130,7 +133,11 @@ To place a part, either:
 - **Drag** a tile onto the canvas and drop it.
 
 After a single placement the tool returns to Select. 74-series parts are numbered
-`U1`, `U2`, …; built-in objects are numbered `A-1`, `A-2`, ….
+`U1`, `U2`, …; built-in objects are numbered `A-1`, `A-2`, …. This number is the
+component's **designator**; you can change the displayed designator to anything you
+like in the properties panel (see [§8](#8-per-instance-overrides)) — including a
+duplicate — without affecting wiring, since the editor tracks each component by a
+stable internal identity, not by the text you see.
 
 Some 74-series parts (e.g. `7400`, `7402`, `7404`, `7432`, `7486`) are **multi-unit
 packages**: they are drawn as separate gate symbols, one per unit, and all units
@@ -147,9 +154,10 @@ part** dialog. It presents the chip's fixed 24-pin skeleton (pin 1 is the
 clock/input, pins 2–11 and 13 are inputs, pins 14–23 are the ten I/O "OLMC" pins,
 pins 12/24 are ground/power) and collects only what varies between parts:
 
-- **Part number** — a required, unique name for this specific programmed part
-  (e.g. `PC-DECODE-A`). Since every 22V10 tile is labeled `22V10`, the part number
-  is how you tell them apart; it is also the chip's on-canvas label.
+- **Part number** — a required name for this specific programmed part
+  (e.g. `PC-DECODE-A`). It is the part's display name: the palette tile's label,
+  the tooltip, and the chip's on-canvas label, and is how you tell several parts of
+  the same device family apart.
 - **Description** — an optional one-line summary (shown in the tile's tooltip).
 - **Pin labels** — a name for each input and I/O pin.
 - **Per-I/O direction** — for each OLMC pin: **comb out** (combinational output),
@@ -340,10 +348,20 @@ with a `/N` width annotation.
 ## 8. Per-instance overrides
 
 Select a single component to view its type data in the properties panel. The
-read-only fields show the part's size and pin count; editable fields let you
-override numeric values — such as propagation delays, or a built-in's declared
-properties (e.g. a clock's `period`) — **for that instance only**. Overrides do
-not affect other instances or the underlying YAML, and are saved with the design.
+read-only fields show the part's type (its display name), size, and pin count;
+editable fields let you override numeric values — such as propagation delays, or a
+built-in's declared properties (e.g. a clock's `period`) — **for that instance
+only**. Overrides do not affect other instances or the underlying YAML, and are
+saved with the design.
+
+The panel also has an editable **designator** field — the `U`/`A` number drawn on
+the canvas. You may set it to any text, with no restrictions: it need not follow
+the `U`/`A` numbering and may even duplicate another component's designator. The
+designator is only a label; the editor identifies each component internally by a
+fixed, hidden identity, so renaming or duplicating it never changes wiring,
+connectivity, or the netlist. Clear the field to restore the default (the original
+auto-assigned number). Edits are undoable. (Text notes have no designator, so the
+field is absent for them.)
 
 ---
 

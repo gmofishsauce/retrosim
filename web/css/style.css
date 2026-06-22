@@ -135,8 +135,13 @@ body {
   box-shadow: 1px 2px 3px rgba(0, 0, 0, 0.35);
   cursor: grab;
   user-select: none;
-  font-size: 0.95rem;
+  /* Small enough that a five-character display name (e.g. "74125") fits the
+     fixed tile width (FR-005); the full name is always in the tooltip. */
+  font-size: 0.8rem;
   font-weight: 600;
+  padding: 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .palette-tile:hover { border-color: #4a90d9; }

@@ -14,7 +14,9 @@ function mkDesign() {
 function place(d, refdes, type, overrides = {}) {
   d.components.push({
     refdes,
-    type: type.name,
+    // An instance records its type's id (FR-066e); ad-hoc galasm fixtures here
+    // carry no id and fall back to name (typeIdentity), while built-ins use id.
+    type: type.id ?? type.name,
     x: 0,
     y: 0,
     rotation: 0,

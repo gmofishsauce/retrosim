@@ -1,5 +1,6 @@
 # 7404 — hex inverter
 # hand edited by pdxjjb
+id: "type-7404"
 type: "7404"
 rendertype: subunit
 numunits: 6

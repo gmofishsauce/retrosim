@@ -62,13 +62,14 @@ export function nextRefNum(components, re) {
   return max + 1;
 }
 
-// typeIdentity is a component type's library identity (FR-066b, §7.2): the part
-// number for a GAL part (whose name is only the device family), else the type
-// name. This is what an instance records as its `type` and what keys the palette,
-// placement lookup, simulator behavior cache, and Refresh Types — so two GAL
-// parts of one family stay distinct everywhere.
+// typeIdentity is a component type's immutable library identity (FR-066e, §7.2):
+// its `id`, divorced from the free-form display name (`partnumber`/`name`). This
+// is what an instance records as its `type` and what keys the palette, placement
+// lookup, simulator behavior cache, and Refresh Types. Synthetic, id-less types
+// (the ADD sentinel and sub-design interface types, §6.14) fall back to `name`,
+// which is their identity.
 export function typeIdentity(type) {
-  return type.partnumber || type.name;
+  return type.id ?? type.name;
 }
 
 // addInstance places a component instance, assigning it a unique reference

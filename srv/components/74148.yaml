@@ -4,6 +4,7 @@
 # https://www.ti.com/lit/ds/symlink/sn74hc148.pdf
 # (Nexperia no longer publishes a 74HC148 data sheet; TI's SN74HC148 is the
 # cited source and its signal names are used.)
+id: "type-74148"
 type: "74148"
 outline: [6, 12]
 

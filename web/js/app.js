@@ -27,30 +27,31 @@ function defaultDesignName(now = new Date()) {
   return `unnamed schematic ${date} ${time}`;
 }
 
-// label drops the leading "74" family prefix, leaving a 2-3 digit label (FR-005).
-const paletteLabel = (name) => name.slice(2);
-
-// isGal marks a GAL part (FR-066b): identified by part number, labeled by its
-// device family rather than the abbreviated 74-series number (FR-005b).
+// isGal marks a GAL part (FR-066b): its display name is its part number (FR-005b).
 const isGal = (type) => Boolean(type.partnumber);
 
-// partTileText is the tile's visible label: the device family for a GAL part
-// (FR-005b), else the abbreviated 74-series number (FR-005).
-const partTileText = (type) => (isGal(type) ? type.name : paletteLabel(type.name));
+// displayName is a part's full, free-form external name shown on its tile and in
+// its tooltip (FR-005/FR-005b): the part number for a GAL part, else the type
+// name. It is divorced from the library id (typeIdentity).
+const displayName = (type) => (isGal(type) ? type.partnumber : type.name);
 
-// partTileTip is the hover tooltip: a GAL leads with its part number then the
-// description (FR-005b); a 74-series part shows its full name then description
-// (FR-005, FR-005a).
+// partTileText is the tile's visible label: the full display name, unabbreviated
+// (FR-005). The CSS shrinks the font so a five-character name fits the tile.
+const partTileText = (type) => displayName(type);
+
+// partTileTip is the hover tooltip: the display name, then the description when
+// present (FR-005a/FR-005b).
 function partTileTip(type) {
-  const head = isGal(type) ? type.partnumber : type.name;
+  const head = displayName(type);
   return type.description ? `${head} — ${type.description}` : head;
 }
 
-// partOrder packs the upper region: 74-series ascending by abbreviated number,
-// then GAL parts (FR-005b), each group then ordered by library identity.
+// partOrder packs the upper region: 74-series ascending by their numeric part
+// number, then GAL parts (FR-005b), each group then ordered by library id. The
+// numeric key drops the "74" family prefix so the sort matches FR-006.
 function partOrder(a, b) {
-  const an = isGal(a) ? Infinity : Number(paletteLabel(a.name));
-  const bn = isGal(b) ? Infinity : Number(paletteLabel(b.name));
+  const an = isGal(a) ? Infinity : Number(a.name.slice(2));
+  const bn = isGal(b) ? Infinity : Number(b.name.slice(2));
   if (an !== bn) return an - bn;
   const ai = typeIdentity(a), bi = typeIdentity(b);
   return ai < bi ? -1 : ai > bi ? 1 : 0;
@@ -83,7 +84,7 @@ function makeTile(type, content, title, tiles) {
   if (content.html) tile.innerHTML = content.html;
   else tile.textContent = content.text;
   tile.title = title;
-  tile.dataset.type = id; // library identity; placement looks up by this (FR-066b)
+  tile.dataset.type = id; // library id; placement looks up by this (FR-066e)
   tile.draggable = true;
   tiles[id] = tile;
   return tile;

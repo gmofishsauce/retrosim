@@ -2,6 +2,7 @@
 # Source: Nexperia, "74HC74; 74HCT74 Dual D-type flip-flop with set and reset;
 # positive edge-trigger", product data sheet Rev. 9 — 2 April 2024.
 # https://assets.nexperia.com/documents/data-sheet/74HC_HCT74.pdf
+id: "type-7474"
 type: "7474"
 outline: [6, 13]
 

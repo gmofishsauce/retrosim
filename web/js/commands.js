@@ -407,6 +407,35 @@ export function setSwitchStateCmd(refdes, value) {
   };
 }
 
+// setLabelCmd sets an instance's free-form display designator label (inst.label,
+// FR-011b). The label is display-only — the instance is identified by its
+// immutable `refdes` (FR-011), so a duplicate or blank value never affects wiring.
+// A blank value clears the label (so the canvas/properties fall back to the
+// refdes default). Per-instance state, not an override; the prior label is
+// captured once so undo restores it.
+export function setLabelCmd(refdes, label) {
+  const next = label.trim() === "" ? undefined : label;
+  let captured = false;
+  let old; // prior inst.label (may be undefined)
+  return {
+    label: "Set designator",
+    apply(design) {
+      const inst = findInstance(design, refdes);
+      if (!captured) {
+        old = inst.label;
+        captured = true;
+      }
+      if (next === undefined) delete inst.label;
+      else inst.label = next;
+    },
+    revert(design) {
+      const inst = findInstance(design, refdes);
+      if (old === undefined) delete inst.label;
+      else inst.label = old;
+    },
+  };
+}
+
 // setNoteTextCmd sets a text note's content (inst.text, FR-071f) and recomputes
 // its auto-sized footprint (noteSize). Per-instance state, not an override; the
 // prior text and footprint are captured once so undo restores them.
@@ -485,13 +514,15 @@ export function refreshTypesCmd(library, onReport = () => {}) {
           refreshed++;
           if (first) prior.push(before);
         } else if (!skipped.has(inst.type)) {
-          skipped.set(inst.type, r.skip);
+          // Keyed by type id to report once per type (FR-088), but carry the
+          // display name so the message shows "74138", not the id "type-74138".
+          skipped.set(inst.type, { name: libType.partnumber || libType.name, reason: r.skip });
         }
       }
       if (first) {
         captured = true;
-        for (const [type, reason] of skipped) {
-          onReport(`${type}: not refreshed — ${reason}`);
+        for (const [, info] of skipped) {
+          onReport(`${info.name}: not refreshed — ${info.reason}`);
         }
         onReport(
           `refreshed ${refreshed} instance(s)` +

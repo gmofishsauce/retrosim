@@ -2,6 +2,7 @@
 # Source: Nexperia, "74HC164; 74HCT164 8-bit serial-in, parallel-out shift
 # register", product data sheet Rev. 11 — 28 May 2024.
 # https://assets.nexperia.com/documents/data-sheet/74HC_HCT164.pdf
+id: "type-74164"
 type: "74164"
 outline: [6, 12]
 clock: CP # clocks the .R registered outputs in the behavior block (FR-062d)

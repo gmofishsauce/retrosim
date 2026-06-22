@@ -65,13 +65,17 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-009** — Place by clicking a tile, then clicking a canvas point.
 - **FR-009a** — An armed click-to-place tile shows a pressed-in (inset) look.
 - **FR-010** — Placement is **one-shot**: after placing, return to select mode.
-- **FR-011** — On placement assign a unique reference designator `U1, U2, …`,
-  incremented from the highest existing designator in the design.
-- **FR-011a** — Built-in objects (FR-067) use a separate `A-1, A-2, …` series so
-  they don't consume IC U-numbers.
-- **FR-012** — Each instance displays its refdes (e.g., `U3`) and type name
-  (e.g., `74138`) as canvas labels, **always rendered upright** regardless of
-  rotation.
+- **FR-011** — On placement assign a `refdes` `U1, U2, …` (incremented from the
+  highest existing U-designator). The `refdes` is the immutable internal identity
+  (the foreign key for wiring/selection/persistence), auto-allocated, never edited.
+- **FR-011a** — Built-in objects (FR-067) use a separate `A-1, A-2, …` refdes
+  series so they don't consume IC U-numbers.
+- **FR-011b** — A separate, free-form `label` (defaulting to the `refdes`) carries
+  the *displayed* designator; it is user-editable with no uniqueness/format checks
+  and does not affect identity (the `refdes` does, FR-011).
+- **FR-012** — Each instance displays its designator label (e.g., `U3`) and type
+  display name (e.g., `74138`) as canvas labels, **always rendered upright**
+  regardless of rotation.
 
 **Component Appearance**
 - **FR-013** — Each component is a rectangular outline with a small connection
@@ -116,7 +120,8 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
   rest just the text). A **pure annotation** — no pins, not
   wired, absent from the netlist/sim, no behavior, no properties, and **no
   visible designator or type label** (exempt from FR-011a/FR-012; it carries an
-  internal-only `N-<n>` id, never drawn, so the editor can still track it). The box **auto-sizes**
+  internal-only `N-<n>` `refdes` as its identity, FR-011, never drawn, and has no
+  editable label, so the editor can still track it). The box **auto-sizes**
   to its text (whole grid units, small minimum). Text entry begins on placement
   and re-opens on double-click; **Enter** commits, **Shift+Enter** inserts a
   newline. Selectable/movable/deletable/**rotatable** like other objects (incl.
@@ -522,10 +527,10 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Interface:**
   - `LoadLibrary(dir string) (*Library, error)` — read every `*.yaml` in `dir`
     (non-recursive), parse each (§6.3), collect into a `Library` keyed by type
-    name. Loaded **once** (FR-007).
+    `id` (FR-066e). Loaded **once** (FR-007).
   - `(*Library) List() []ComponentType` — stable, deterministic order (sorted by
-    type name) for the palette.
-- **Behavior:** for each file, call `ParseComponent`. Duplicate type names →
+    `id`) for the palette.
+- **Behavior:** for each file, call `ParseComponent`. Duplicate `id`s →
   last-wins with a logged warning. The library is immutable after load.
 - **Error handling:** a single file's parse error does **not** abort startup; the
   bad file is skipped and logged (file + line + reason). `LoadLibrary` returns an
@@ -545,8 +550,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     `KnownFields(true)`.
 - **Behavior:** decode the file with `gopkg.in/yaml.v3` (YAML 1.2 core schema, so
   single-letter scalars like `N`/`Y` stay strings) into an intermediate struct,
-  then build and validate the `ComponentType`. The parser validates: `type`
-  present (a non-empty string); every pin has a valid `side` ∈
+  then build and validate the `ComponentType`. The parser validates `type` present
+  (a non-empty string, the display name) and resolves the library key `id`
+  (FR-066e): the explicit `id:` if given, else derived as `type-` + (`partnumber`
+  ‖ `type`) via `deriveComponentID`, so the format stays additive (FR-066) and a
+  file without `id:` still loads. Then: every pin has a valid `side` ∈
   {left,right,top,bottom}, integer `pos ≥ 0`, `dir` ∈ {in,out,bidir,tristate};
   pin names are **unique** within the file (duplicates would make saved endpoint
   references like `U3.A0` ambiguous); group names are unique; every pin-group
@@ -621,9 +629,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Behavior:** decode JSON, delegate to `storage.go`/`components.go`, encode
   JSON. All responses `Content-Type: application/json`. `POST /api/v1/components`
   (FR-007a) parses the submitted YAML through the same `yamlparse.go` path as a
-  startup load, requires a non-empty library-unique `partnumber` (FR-066b),
-  writes `<partnumber>.yaml` into the library dir (filename sanitized from the
-  part number; reject on collision → 409), appends the parsed `ComponentType` to
+  startup load, requires a non-empty `partnumber` (FR-066b) and an immutable
+  library-unique `id` (FR-066e), writes `<id>.yaml` into the library dir (filename
+  sanitized from the `id`; reject on `id` collision → 409), appends the parsed `ComponentType` to
   the in-memory library, and returns it so the client can add the tile live. Static handler serves
   `web/` for any non-`/api/` path; unknown SPA routes fall back to `index.html`.
   Static responses carry `Cache-Control: no-store` so a plain browser reload
@@ -663,9 +671,15 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   (§7.1a), and pure helper functions. Mutations are performed **only** by Command
   objects (§6.10), but the low-level operations live here so they are
   unit-testable in isolation:
-  - `addInstance(design, type, x, y, rotation) → instance` — assigns refdes
-    `U<n>` where `n = 1 + max(existing numeric suffixes)` (FR-011); the
+  - `addInstance(design, type, x, y, rotation) → instance` — assigns the
+    `refdes` `U<n>` where `n = 1 + max(existing numeric suffixes)` (FR-011); the
     numeric-suffix scan ignores any trailing unit letter so `U5A` counts as 5.
+    The `refdes` is the instance's immutable internal identity — the foreign key
+    used by vertices (`ref`, §7.1a), bus group-snaps, selection, and persistence
+    — and is auto-allocated, never user-edited. The displayed designator is a
+    separate, free-form `label` (FR-011b) defaulting to the `refdes`; it is not
+    set here (left absent so it lazily falls back to `refdes` on draw) and is
+    edited only via `setLabelCmd` (§6.10).
   - `addSubunitPackage(design, type, x, y) → instance[]` (FR-013a/FR-011) —
     allocates **one** U-number and creates `type.numUnits` sibling instances
     `U<n>A`, `U<n>B`, … Each sibling gets a per-unit `typeData` holding only that
@@ -1248,14 +1262,18 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Palette (`palette.js`)** — Satisfies FR-003, FR-005, FR-006, FR-008, FR-009,
   FR-009a. Renders one fixed-size tile per `ComponentType` in a 3-column CSS grid,
   sorted ascending by the numeric abbreviated part number (`Number(name.slice(2))`).
-  Each tile is labeled `name.slice(2)` (the `74` prefix dropped) with the full
-  `name` as its `title`/tooltip; `dataset.type` keeps the full name so placement is
-  unaffected. A **GAL part** (a type carrying `partnumber`, FR-005b/FR-066b) is the
-  exception: its tile is labeled with the unabbreviated `name` (the device family,
-  e.g. "22V10"), and its `title` leads with `partnumber` then the `description`
-  (FR-005a) — the part number is what disambiguates same-family tiles on hover;
-  the library keys and `dataset.type` use `partnumber` so each authored part
-  places distinctly. An authored part created in-app (FR-066c/FR-007a) is appended
+  Each tile is labeled with the type's full external **display name** —
+  `displayName(type)` = `partnumber` for a GAL part else `name` (FR-005, no longer
+  abbreviated) — with that same name leading its `title`/tooltip; `dataset.type`
+  carries the type's immutable `id` (FR-066e), and the library is keyed by `id`, so
+  placement, behavior lookup, and Refresh Types are unaffected by display-name
+  edits. The label is sized by a small CSS font (`.palette-tile` font-size) chosen
+  so a five-character name (e.g. "74125") fits the fixed tile (FR-005). A **GAL
+  part** (a type carrying `partnumber`, FR-005b/FR-066b) labels its tile with the
+  `partnumber` and leads its `title` with `partnumber` then the `description`
+  (FR-005a) — the part number is what disambiguates same-family tiles. Two GAL
+  parts of one family stay distinct because their `id`s differ, not their display
+  names. An authored part created in-app (FR-066c/FR-007a) is appended
   to the upper region live (no reload), keeping the FR-006 sort. Tiles are raised (drop shadow); a tile is `draggable` (HTML5 DnD →
   drop on canvas, FR-008) and click-selectable (sets `PLACE(type)`, FR-009). The
   armed tile shows a pressed-in (inset) look (FR-009a) by subscribing to the store
@@ -1288,8 +1306,10 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `type.builtin`. Each entry may declare `properties` (FR-020b): the clock
   declares `period` (ns, default 100) and `speed` (Hz, default 1) per FR-071a;
   the reset declares `cycles` (clock cycles, default 3) per FR-071b;
-  the other built-ins declare none. The module also exports a `BEHAVIORS`
-  registry (FR-067a) mapping type name → behavior function — one stub per
+  the other built-ins declare none. Each built-in type carries an `id` (FR-066e)
+  of the form `"type-"+name` (e.g. `"type-indicator"`), the value its instances
+  record as `type` and the key for the registry below. The module also exports a `BEHAVIORS`
+  registry (FR-067a) mapping type **id** → behavior function — one stub per
   built-in until the simulator design defines the call interface; functions stay
   out of the type objects so `typeData` copies remain pure JSON (§7.1).
   `drawComponent` has a render branch per built-in renderType: the
@@ -1308,10 +1328,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   drawn above the symbol. The **text note** (`note`) is the lone exception that
   draws neither pins nor refdes (FR-071f): `drawNote` (§6.8) draws only `inst.text`
   (plus a dotted blue outline box when selected). While a note is being edited the
-  renderer skips it entirely — a DOM `<textarea>` overlay covers it (§6.9). Because it has no `pins`, `addInstance` assigns it an
-  internal-only `N-<n>` refdes — a separate series, special-cased ahead of the
-  `A-<n>` path (FR-011a) — that is never drawn but keeps the instance selectable,
-  movable, and persistable on the usual refdes-keyed machinery. It is invisible to
+  renderer skips it entirely — a DOM `<textarea>` overlay covers it (§6.9). Because it has no `pins`, `addInstance` assigns it
+  an internal-only `N-<n>` `refdes` — a separate series, special-cased ahead of the
+  `A-<n>` path (FR-011a) — that is its identity (FR-011) but is never drawn and has
+  no editable label, keeping it selectable, movable, and persistable on the usual
+  refdes-keyed machinery. It is invisible to
   `buildNets` (no `pin` vertices), and it has **no `BEHAVIORS` entry** (FR-067a),
   so `sim.js` must skip a behaviorless note rather than flagging it an unknown
   built-in. It is a normal selection member, so move and rotate (FR-019, including
@@ -1365,9 +1386,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     promise the interaction FSM awaits before dispatching `snapBusGroup`. Does
     **not** filter by pin direction (electrical-rule checking is out of scope this
     phase — see §4.1, OQ-008/D2).
-- **Properties panel (`properties.js`)** — Satisfies FR-020a, FR-020b, FR-105. A docked
-  right-edge panel showing the selected instance's copied type data (refdes,
-  type, size, pin count) read-only, plus one numeric field per `delays` entry
+- **Properties panel (`properties.js`)** — Satisfies FR-011b, FR-020a, FR-020b, FR-105. A docked
+  right-edge panel showing the selected instance's type **display name**
+  (`typeData.partnumber || typeData.name`, not the id `inst.type`), size, and pin
+  count read-only, an **editable, free-form designator field** (FR-011b — its value
+  dispatches an undoable `setLabelCmd(refdes, label)`, §6.10, with no uniqueness or
+  format validation; a blank value clears the label back to the `refdes` default;
+  the note built-in shows no designator and so no field), plus one numeric field per `delays` entry
   for per-instance propagation-delay overrides and — when the type declares
   `properties` (FR-020b) — a "Properties" section with one numeric field per
   declared property, labeled with its unit (e.g. `period (ns)`), prefilled with
@@ -1647,7 +1672,7 @@ no sequential part could ever leave U.)
 
 **The ADD flow (FR-097/097a/097b).** `builtins.js` exposes a single non-placeable lower-palette entry **ADD**. Arming it and clicking (or dropping it on) the canvas opens the **Add sub-component dialog** (`dialogs.js`) at the grid point instead of creating an object. The dialog: (1) navigates/loads a child via `/api/v1/files`+`/design/load` (§6.4); (2) shows the child's `defaultRender` (§7.2) and resolved interface; (3) offers an `ic`/`connector` choice defaulting to `defaultRender`. OK → dispatch `PlaceSubDesign(childPath, render, @grid)`; Cancel → nothing; both return to SELECT (one-shot, FR-010). `childPath` is stored **relative to the parent's save dir**, so an unsaved parent first routes through Save (FR-047/FR-097b) and declining cancels. The dialog rejects an interface-less file, and a self/cyclic embed (`wouldCycle`), with a message.
 
-**The New GAL part flow (FR-066b/066c/007a).** `builtins.js` exposes a non-placeable upper-palette action **New GAL part** (a tile that opens a dialog rather than arming placement). The **New GAL part dialog** (`dialogs.js`) renders the device's fixed skeleton — for the GAL22V10, the 24-pin map (pin 1 clock/in, 2–11 + 13 in, 14–23 OLMC I/O, 12 GND, 24 VCC) — and collects only the per-part data: `partnumber`, optional `description`, a label per I/O pin, a per-OLMC direction (in / comb-out / reg-out), optional named pin groups (FR-066d, below), and the `behavior` block. As the user types, the dialog assembles a candidate `typeData` (`type:"22V10"`, `gal:"GAL22V10"`, the chosen `pins`, the `behavior`) and runs `galasm.js` `compileBehavior`+`validateStrict` (§6.13) **live**, surfacing the same accept/reject diagnostics Run would (FR-079b) — the dialog reuses that one gate, adding no second validator. OK serializes the `typeData` to YAML client-side and `POST`s it to `/api/v1/components` (§6.4); on success it dispatches the live palette add (above) and returns to SELECT (one-shot, FR-010). A duplicate-partnumber 409 or validation error is shown in the dialog; Cancel discards. Placement of the resulting tile is then ordinary FR-008/FR-009.
+**The New GAL part flow (FR-066b/066c/007a).** `builtins.js` exposes a non-placeable upper-palette action **New GAL part** (a tile that opens a dialog rather than arming placement). The **New GAL part dialog** (`dialogs.js`) renders the device's fixed skeleton — for the GAL22V10, the 24-pin map (pin 1 clock/in, 2–11 + 13 in, 14–23 OLMC I/O, 12 GND, 24 VCC) — and collects only the per-part data: `partnumber`, optional `description`, a label per I/O pin, a per-OLMC direction (in / comb-out / reg-out), optional named pin groups (FR-066d, below), and the `behavior` block. As the user types, the dialog assembles a candidate `typeData` (`type:"22V10"`, `gal:"GAL22V10"`, an immutable `id` generated from the `partnumber` (FR-066e), the chosen `pins`, the `behavior`) and runs `galasm.js` `compileBehavior`+`validateStrict` (§6.13) **live**, surfacing the same accept/reject diagnostics Run would (FR-079b) — the dialog reuses that one gate, adding no second validator. OK serializes the `typeData` to YAML client-side and `POST`s it to `/api/v1/components` (§6.4); on success it dispatches the live palette add (above) and returns to SELECT (one-shot, FR-010). A duplicate-`id` 409 or validation error is shown in the dialog; Cancel discards. Placement of the resulting tile is then ordinary FR-008/FR-009.
 
 **Pin-groups sub-dialog (FR-066d).** A "Pin groups…" button opens a modal sub-dialog (`dialogs.js`) that edits the part's named pin groups (FR-063). It lists the groups defined so far (each with a remove control) and offers a name field plus a checkbox per pin (labeled with the pin's *current* label) to define one more; "Add group" appends it to the working list, and the sub-dialog returns the updated list to the parent on close. Membership is stored by the **skeleton pin** (its stable DIP `number`), not the label string, so a later rename does not break a group; `galPartYaml` resolves each member to its current label and emits members in **pin-layout order** (the part's pin order, top-to-bottom) so the bus bit order is deterministic (FR-066d). The parent dialog folds the groups into the candidate `typeData` only for the YAML write (a `groups:` block, §7.3) — groups do not enter `compileBehavior`/`validateStrict`. Client checks: non-empty unique name, ≥1 member, and the **geometry rule** (FR-063a) — the checked pins must share one side and form a contiguous run (no non-member pin between them); the sub-dialog rejects an "Add group" that straddles sides or is interrupted, so it can only build groups the brace can render. Membership is by skeleton DIP number, but the side/contiguity test resolves each member to its skeleton pin's side/`pos`.
 
@@ -1658,7 +1683,7 @@ no sequential part could ever leave U.)
 **Connectivity (FR-094a/FR-101a).** Within one open design `buildNets` (§6.6, step 6) unions lanes of `connector` vertices whose port shares a `label` (per bit for `width>1`), so same-label ports are one net with no drawn wire. Cross-file continuation is **not** applied in single-design `buildNets` (the editor edits one sheet at a time); it is composed only when the simulator assembles the sheet graph (below), and only across the **explicit** `target` links — never by coincidental label equality between unrelated files.
 
 **Flattening for the simulator (FR-102/102a/103).** Before evaluation `sim.js` builds a flattened design via `subdesign.js`:
-  - `flatten(rootDesign, loadDesign) → FlatDesign` walks sub-design instances depth-first; each instance is replaced by a fresh copy of its child's components/wires/buses with every refdes **prefixed** by the instance path (`X1/`, `X1/X2/`, …) for uniqueness (FR-102), and the child's interface ports **bound** to the parent nets wired to the matching instance pins (synthetic interface pin ↔ the child's same-label ports become one net).
+  - `flatten(rootDesign, loadDesign) → FlatDesign` walks sub-design instances depth-first; each instance is replaced by a fresh copy of its child's components/wires/buses with every `refdes` **prefixed** by the instance path (`X1/`, `X1/X2/`, …) for uniqueness (FR-102; `refdes` is the stable identity, so prefixing it keeps connectivity intact), and the child's interface ports **bound** to the parent nets wired to the matching instance pins (synthetic interface pin ↔ the child's same-label ports become one net).
   - Off-sheet connectors (FR-101/103): the loader follows each `target` to peer sheets, loads them (de-duplicating already-loaded files), prefixes each distinct sheet's refdes with a per-sheet tag, and unions nets across files by the declared `target` label links (FR-101a).
   - A visited-set along the current path detects a repeat of an already-open file in **both** graphs; on a cycle `flatten` throws and `sim.run()` (and the ADD dialog) refuses with a message-tray report rather than recursing (FR-102a).
   - The flattened design feeds the existing `buildNets`+evaluation pipeline (§6.13) unchanged; bus-conflict/indicator messages use the hierarchical names.
@@ -1699,8 +1724,9 @@ no sequential part could ever leave U.)
 
 | Field | Type | Notes |
 |---|---|---|
-| `name` | string | unique type name, e.g. `"74138"` (FR-062); for a GAL part the device family, e.g. `"22V10"` (FR-066b), and not unique on its own |
-| `partnumber` | string? | GAL parts only (FR-066b): library-unique part identity, e.g. `"PC-DECODE-A"`; the library key and YAML filename stem for GAL parts. Absent on 74-series types |
+| `id` | string | immutable, **library-unique** internal identity (FR-066e), e.g. `"type-74138"`, `"type-22V574"`; the sole library key, the value an instance records as its `type` (§7.2), and the YAML filename stem. Divorced from the display name, so editing `name`/`partnumber` never changes it |
+| `name` | string | the type's free-form **display name** for a 74-series part, e.g. `"74138"` (FR-005/FR-062); for a GAL part this is the device family, e.g. `"22V10"` (FR-066b), and the `partnumber` is the display name instead. Not a key (see `id`) |
+| `partnumber` | string? | GAL parts only (FR-066b): the part's free-form display name, e.g. `"PC-DECODE-A"` (shown as the tile/canvas label, FR-005b). Not a key and need not be unique. Absent on 74-series types |
 | `renderType` | enum | `unit` (default) \| `subunit` (FR-062c) |
 | `numUnits` | int | subunit packages only: number of functional units (FR-062c); 0/omitted for `unit` |
 | `renderAs` | string | subunit packages only: schematic symbol — `nand`\|`and`\|`or`\|`nor`\|`xor`\|`xnor`\|`not`\|`mux2`\|`mux4`\|`mux8` (FR-013b) |
@@ -1716,10 +1742,10 @@ no sequential part could ever leave U.)
 | `datasheet` | `Datasheet?` | optional provenance (FR-104): `{vendor, title, rev, url}`, all strings; the panel renders `url` as a link |
 
 Built-in types additionally have a **behavior** (FR-067a): a client-JS function
-held in a registry in `builtins.js` keyed by type name — deliberately **not** a
+held in a registry in `builtins.js` keyed by type `id` (FR-066e) — deliberately **not** a
 `ComponentType` field, because `typeData` is deep-copied into instances and
 saved as JSON (FR-057), which would drop or corrupt a function value. The
-simulator resolves a behavior from the registry by `inst.type` at run time; its
+simulator resolves a behavior from the registry by `inst.type` (the type id) at run time; its
 signature is specified in the simulator design pass.
 
 Note: for `unit` components `width`/`height` are always **concrete in the parsed
@@ -1776,7 +1802,7 @@ connect **iff** they reference the same vertex id.
 | `id` | string | e.g. `"v17"`; stable; referenced by wire/bus `path` node-points |
 | `x`, `y` | int | grid coords of the node |
 | `kind` | enum | `pin` \| `junction` \| `free` \| `connector` (FR-094, §6.14) |
-| `ref` | string? | `kind=pin`/`connector` only: instance refdes, e.g. `"U3"` (for `connector`, the port instance, §6.14) |
+| `ref` | string? | `kind=pin`/`connector` only: the host instance's `refdes` (its immutable identity, FR-011/§7.2), e.g. `"U3"` (for `connector`, the port instance, §6.14). The editable display label (§7.2) is never used here |
 | `pin` | string? | `kind=pin` only: pin name, e.g. `"Y0"` |
 | `bit` | int? | `kind=junction` on a **bus** only: the bit-lane this junction taps (FR-043a breakout). Absent/`null` = full join of all lanes (bus↔bus, FR-039a) |
 
@@ -1794,7 +1820,7 @@ branch wire that meet at it share one position and cannot drift apart (A1).
 
 ```jsonc
 {
-  "formatVersion": 1,                  // migration anchor (NFR-004-style)
+  "formatVersion": 2,                  // migration anchor (NFR-004-style); v2 re-keyed instance `type` to the type id (FR-066e)
   "name": "unnamed schematic 2026-06-01 14:03",
   "defaultRender": "ic",               // FR-096: render style when THIS design is embedded (ic|connector)
   "components": [ ComponentInstance, … ],   // (a) FR-056 (includes built-in ports and sub-design instances)
@@ -1809,8 +1835,9 @@ branch wire that meet at it share one position and cannot drift apart (A1).
 
 | Field | Type | Notes |
 |---|---|---|
-| `refdes` | string | `"U3"` — unique id within the design; used by wire endpoints |
-| `type` | string | the placed type's **library identity** (ComponentType.Key, FR-066b): the type name for 74-series/built-ins, the **part number** for a GAL instance (e.g. `"PC-DECODE-A"`, not the family `"22V10"`). Unique per design's needs — it keys the simulator's per-type behavior cache and Refresh Types matching, and labels the chip on canvas. The device family for a GAL is still available as `typeData.name` |
+| `refdes` | string | the instance's reference designator, e.g. `"U3"` — its **immutable internal identity** (FR-011): unique within the design and the foreign key referenced by vertex `ref` (§7.1a), bus group-snaps, selection, and persistence. Auto-allocated (U/A/N/X series), never user-edited |
+| `label` | string? | optional free-form, user-editable display designator (FR-011b); when absent the canvas/properties show the `refdes`. Editing it (a `setLabelCmd`) never affects identity or wiring; duplicates allowed. Absent for the text note (no designator shown) |
+| `type` | string | the placed type's immutable **library id** (`ComponentType.id`, FR-066e), e.g. `"type-74138"` for a 74-series part, `"type-22V574"` for a GAL part, `"type-indicator"` for a built-in. It keys the simulator's per-type behavior cache and Refresh Types matching. The display name shown as the canvas label comes from `typeData` (`partnumber` or `name`), not this field |
 | `x`, `y` | int | grid coordinates of unrotated origin (FR-021) |
 | `rotation` | int | `0`\|`90`\|`180`\|`270` |
 | `typeData` | `ComponentType` | full copy at save time (FR-057) |
@@ -1893,7 +1920,8 @@ bus yields up to *w* nets:
 
 ### 7.4 Persistence & migration (FR-060c)
 Files are JSON written atomically (§6.5). `formatVersion` is the migration anchor;
-this phase writes/reads version `1`. The **vertex/graph model (§7.1a) is the
+the client writes/reads version `2` (FR-066e re-keyed instance `type` to the type
+id). The **vertex/graph model (§7.1a) is the
 version-`1` format from the outset** (nothing older shipped). For the record, the
 conceptual map from the earlier endpoint-union sketch is: old `pin` endpoint → a
 `pin` vertex; old `free` → a `free` vertex; old `junction{target,x,y}` → a
@@ -1904,9 +1932,15 @@ conceptual map from the earlier endpoint-union sketch is: old `pin` endpoint →
 in place from version 1 so future format changes slot in without touching callers:
 
 - `MIGRATIONS` maps a version *n* to a pure function upgrading a parsed save
-  object from version *n* to *n+1*. It is empty while only version 1 exists; each
-  format change bumps `FORMAT_VERSION` and adds the one step keyed by the version
-  it upgrades *from*.
+  object from version *n* to *n+1*; each format change bumps `FORMAT_VERSION` and
+  adds the one step keyed by the version it upgrades *from*. The **1→2** step
+  (FR-066e) is a pure textual transform needing no library access: for each
+  component instance it re-keys `type` to the type id by setting `type := "type-" +
+  (typeData.partnumber || typeData.name)` (and stamps `typeData.id` to match) — the
+  same deterministic id rule the library and built-ins use, so an old instance
+  re-matches its type. `refdes` (the identity) and all `v.ref`/group-snap references
+  are unchanged; the editable `label` (§7.2) needs no migration (absent ⇒ defaults
+  to `refdes`). Sub-design instances (no `typeData`) keep their path-derived `type`.
 - `migrate(obj, {target = FORMAT_VERSION, migrations = MIGRATIONS})` normalizes a
   parsed object to the target version: it reads `obj.formatVersion ?? 1` (absent =
   oldest understood) and, while below the target, applies each step in turn,
@@ -1942,7 +1976,8 @@ The parser maps each document onto the `ComponentType` of §7.1.
 
 ```yaml
 # 74138 — 3-to-8 line decoder
-type: "74138"            # REQUIRED string. Quote it: bare 74138 is a YAML integer.
+id: "type-74138"         # immutable library-unique key (FR-066e); optional — derived from the display name if omitted, but stated in every library file
+type: "74138"            # REQUIRED string: free-form display name. Quote it: bare 74138 is a YAML integer.
 outline: [6, 12]         # optional [width, height] in grid units; omit to derive from pins
 
 pins:                    # one flow-mapping per line: name, side, pos, dir [, number]
@@ -1979,6 +2014,7 @@ and the unit each pin belongs to; list order within a unit sets slot order:
 
 ```yaml
 # 7400 — quad 2-input NAND
+id: "type-7400"
 type: "7400"
 rendertype: subunit
 numunits: 4
@@ -1998,7 +2034,8 @@ pins:                    # unit + dir; pos is not used (FR-014a)
 
 | Key | Required | Maps to | Notes |
 |---|---|---|---|
-| `type` | yes | `ComponentType.name` | quote if all-digits (`"74138"`) |
+| `id` | no | `ComponentType.id` | immutable, library-unique internal key (FR-066e), e.g. `"type-74138"`, `"type-22V574"`; the library key and `<id>.yaml` filename stem. Divorced from the display name. Optional — derived as `type-`+(`partnumber`‖`type`) when omitted; stated explicitly in every library file |
+| `type` | yes | `ComponentType.name` | free-form **display name** (FR-005); quote if all-digits (`"74138"`). For a GAL part this is the device family; the `partnumber` is the display name instead |
 | `rendertype` | no | `renderType` | `unit` (default) \| `subunit` (FR-062c) |
 | `numunits` | subunit | `numUnits` | unit count; required for `subunit` (FR-062c) |
 | `renderas` | subunit | `renderAs` | symbol name (FR-013b); required for `subunit` |
@@ -2015,7 +2052,7 @@ pins:                    # unit + dir; pos is not used (FR-014a)
 | `behavior` | no | `behavior` | literal block scalar; verbatim (FR-066); evaluated by the slow simulator (FR-079) |
 | `clock` | iff `.R` | `clock` | names the global clock input pin for `.R` registered outputs (FR-062d); must exist with `dir: in`. E.g. `clock: CP` in 74574.yaml. A `.R` output that gives its own `.CLK` (extended, FR-079a) needs no global `clock:` |
 | `gal` | no | `gal` | optional GAL device name selecting **strict** dialect (FR-066a): one of `GAL16V8`/`GAL20V8`/`GAL22V10`/`GAL20RA10`. Omit ⇒ **extended** dialect (default; FR-079a). Server validates the name only |
-| `partnumber` | iff `gal` | `partnumber` | GAL parts only (FR-066b): non-empty, library-unique part identity; the library key and `<partnumber>.yaml` filename stem. Server rejects empty/duplicate on create (FR-007a). Absent on 74-series types |
+| `partnumber` | iff `gal` | `partnumber` | GAL parts only (FR-066b): non-empty free-form **display name** (FR-005b), e.g. `"PC-DECODE-A"`; not a key and need not be unique (the library key is `id`). Absent on 74-series types |
 | `description` | no | `description` | optional one-line function summary (FR-104); presentation-only. For a GAL part it is authored in the New GAL part dialog (FR-066c) since the part has no datasheet of its own |
 | `datasheet` | no | `datasheet` | optional mapping `{vendor, title, rev, url}` (FR-104) |
 | `pins[].desc` | no | `Pin.desc` | optional pin role text (FR-104) |

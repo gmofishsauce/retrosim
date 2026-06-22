@@ -2,6 +2,7 @@
 # Source: Nexperia, "74HC10; 74HCT10 Triple 3-input NAND gate", product data
 # sheet Rev. 5 — 20 February 2024.
 # https://assets.nexperia.com/documents/data-sheet/74HC_HCT10.pdf
+id: "type-7410"
 type: "7410"
 rendertype: subunit
 numunits: 3

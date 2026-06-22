@@ -45,6 +45,7 @@ behavior: |
 
 	two := 2
 	want := ComponentType{
+		ID:         "type-74138",
 		Name:       "74138",
 		RenderType: "unit",
 		Width:      6,
@@ -86,6 +87,7 @@ pins:
 	}
 
 	want := ComponentType{
+		ID:         "type-7400",
 		Name:       "7400",
 		RenderType: "subunit",
 		NumUnits:   2,
@@ -221,7 +223,8 @@ pins:
 // A valid gal: device name lands in Gal (FR-066a); the dialect it selects is
 // enforced client-side, so the server only checks the name. A gal part also
 // carries a partnumber (FR-066b): type names the device family, partnumber the
-// unique part, and Key() is the part number.
+// display name. With no explicit id the key is derived as "type-"+partnumber
+// (FR-066e).
 func TestParseComponentGal(t *testing.T) {
 	got, err := ParseComponent(writeYAML(t, `
 type: "22V10"
@@ -242,8 +245,28 @@ pins:
 	if got.PartNumber != "PC-DECODE-A" {
 		t.Fatalf("PartNumber = %q, want %q", got.PartNumber, "PC-DECODE-A")
 	}
-	if got.Key() != "PC-DECODE-A" {
-		t.Fatalf("Key() = %q, want the part number", got.Key())
+	if got.Key() != "type-PC-DECODE-A" {
+		t.Fatalf("Key() = %q, want the derived id type-PC-DECODE-A", got.Key())
+	}
+}
+
+// An explicit id: in the YAML is honored verbatim and is divorced from the
+// display name, so editing type/partnumber never moves the key (FR-066e).
+func TestParseComponentExplicitID(t *testing.T) {
+	got, err := ParseComponent(writeYAML(t, `
+id: "type-stable-key"
+type: "74138"
+pins:
+  - { name: A0, side: left, pos: 1, dir: in }
+`))
+	if err != nil {
+		t.Fatalf("ParseComponent: %v", err)
+	}
+	if got.ID != "type-stable-key" || got.Key() != "type-stable-key" {
+		t.Fatalf("ID/Key() = %q/%q, want explicit type-stable-key", got.ID, got.Key())
+	}
+	if got.Name != "74138" {
+		t.Fatalf("Name = %q, want the free-form display name 74138", got.Name)
 	}
 }
 

@@ -4,6 +4,7 @@
 # https://www.ti.com/lit/ds/symlink/sn74f163a.pdf
 # (Stakeholder-specified datasheet: the F163A is the adjusted post-release
 # design. TI signal names are used to match the cited document.)
+id: "type-74163"
 type: "74163"
 outline: [6, 12]
 clock: CLK # clocks the .R registered outputs in the behavior block (FR-062d)

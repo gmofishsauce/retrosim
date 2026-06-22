@@ -5,6 +5,7 @@
 # Rendered as a single unit (one rectangle): two independent decoders share
 # one package; like the 74153 there is no decoder symbol so it is drawn as
 # one rectangle.
+id: "type-74139"
 type: "74139"
 outline: [6, 12]
 

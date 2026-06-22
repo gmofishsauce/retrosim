@@ -3,6 +3,7 @@
 # High-Speed CMOS Logic 4-Bit Binary Full Adder with Fast Carry",
 # SCHS176E — November 1997, revised July 2022.
 # https://www.ti.com/lit/ds/symlink/cd74hc283.pdf
+id: "type-74283"
 type: "74283"
 outline: [6, 15]
 

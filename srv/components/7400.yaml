@@ -2,6 +2,7 @@
 # Source: Nexperia, "74HC00; 74HCT00 Quad 2-input NAND gate", product data
 # sheet Rev. 11 — 29 April 2025.
 # https://assets.nexperia.com/documents/data-sheet/74HC_HCT00.pdf
+id: "type-7400"
 type: "7400"
 rendertype: subunit
 numunits: 4

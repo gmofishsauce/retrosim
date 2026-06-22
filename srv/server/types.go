@@ -11,19 +11,20 @@ package server
 // components (FR-062c) width/height are unused — the client symbol module owns
 // geometry (§6.8a).
 type ComponentType struct {
-	Name       string             `json:"name"`                // unique type name, e.g. "74138"
-	RenderType string             `json:"renderType"`          // "unit" (default) | "subunit" (FR-062c)
-	NumUnits   int                `json:"numUnits,omitempty"`  // subunit: number of functional units (FR-062c)
-	RenderAs   string             `json:"renderAs,omitempty"`  // subunit: schematic symbol (FR-013b)
-	Width      int                `json:"width"`               // unit only: outline width in grid units (>0)
-	Height     int                `json:"height"`              // unit only: outline height in grid units (>0)
-	Pins       []Pin              `json:"pins"`                // FR-062, FR-062a
-	PinGroups  []PinGroup         `json:"pinGroups,omitempty"` // optional (FR-063)
-	Delays     map[string]float64 `json:"delays,omitempty"`    // optional propagation delays, ns (FR-064)
-	Behavior   string             `json:"behavior,omitempty"`  // GALasm text, captured verbatim (FR-066); evaluated client-side (FR-079)
-	Clock      string             `json:"clock,omitempty"`     // optional clock input pin for .R behavior outputs (FR-062d)
-	Gal        string             `json:"gal,omitempty"`       // optional GAL device selecting strict dialect (FR-066a); "" = extended (FR-079a)
-	PartNumber string             `json:"partnumber,omitempty"` // GAL parts only: unique part identity & library key (FR-066b); "" for 74-series
+	ID         string             `json:"id"`                   // immutable, library-unique key (FR-066e), e.g. "type-74138"; divorced from the display name
+	Name       string             `json:"name"`                 // free-form display name, e.g. "74138" (FR-005); the device family for a GAL part
+	RenderType string             `json:"renderType"`           // "unit" (default) | "subunit" (FR-062c)
+	NumUnits   int                `json:"numUnits,omitempty"`   // subunit: number of functional units (FR-062c)
+	RenderAs   string             `json:"renderAs,omitempty"`   // subunit: schematic symbol (FR-013b)
+	Width      int                `json:"width"`                // unit only: outline width in grid units (>0)
+	Height     int                `json:"height"`               // unit only: outline height in grid units (>0)
+	Pins       []Pin              `json:"pins"`                 // FR-062, FR-062a
+	PinGroups  []PinGroup         `json:"pinGroups,omitempty"`  // optional (FR-063)
+	Delays     map[string]float64 `json:"delays,omitempty"`     // optional propagation delays, ns (FR-064)
+	Behavior   string             `json:"behavior,omitempty"`   // GALasm text, captured verbatim (FR-066); evaluated client-side (FR-079)
+	Clock      string             `json:"clock,omitempty"`      // optional clock input pin for .R behavior outputs (FR-062d)
+	Gal        string             `json:"gal,omitempty"`        // optional GAL device selecting strict dialect (FR-066a); "" = extended (FR-079a)
+	PartNumber string             `json:"partnumber,omitempty"` // GAL parts only: free-form display name (FR-066b/FR-005b); not a key; "" for 74-series
 
 	// Documentation (FR-104): optional, presentation-only. Copied through to the
 	// properties panel (FR-105); never affects geometry, pins, or simulation.
@@ -31,14 +32,13 @@ type ComponentType struct {
 	Datasheet   *Datasheet `json:"datasheet,omitempty"`   // datasheet provenance + link
 }
 
-// Key is a component's library identity (§6.2): the part number for a GAL part
-// (whose Name is only the device family, FR-066b), else the unique type name
-// (FR-005). Distinct GAL parts of the same family thus coexist in the library.
+// Key is a component's library identity (§6.2): its immutable internal id
+// (FR-066e), divorced from the free-form display name (Name/PartNumber). The
+// parser populates ID for every type (explicit, or derived from the display
+// name when the YAML omits it — deriveID), so distinct GAL parts of one family
+// coexist by distinct ids.
 func (t ComponentType) Key() string {
-	if t.PartNumber != "" {
-		return t.PartNumber
-	}
-	return t.Name
+	return t.ID
 }
 
 // Datasheet is the optional documentation provenance for a component (FR-104).

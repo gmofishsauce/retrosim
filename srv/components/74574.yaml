@@ -2,6 +2,7 @@
 # Source: Nexperia, "74HC574; 74HCT574 Octal D-type flip-flop; positive
 # edge-trigger; 3-state", product data sheet Rev. 10 — 5 August 2024.
 # https://assets.nexperia.com/documents/data-sheet/74HC_HCT574.pdf
+id: "type-74574"
 type: "74574"
 outline: [8, 12]
 clock: CP # clocks the .R registered outputs in the behavior block (FR-062d)

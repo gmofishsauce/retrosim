@@ -118,7 +118,12 @@ const BIT_NAMES = (prefix) => Array.from({ length: 8 }, (_, i) => `${prefix}${i}
 const BIT_PINS = (prefix, side, direction) =>
   BIT_NAMES(prefix).map((name, i) => ({ name, side, position: i + 1, direction }));
 
-export const BUILTINS = [
+// builtinId is the immutable library id of a built-in type (FR-066e): the same
+// "type-"+name rule the YAML library and the save-format migration use, so a
+// built-in instance's `type` (its id) resolves uniformly with loaded parts.
+const builtinId = (name) => "type-" + name;
+
+const BUILTIN_DEFS = [
   {
     name: "indicator",
     builtin: true,
@@ -255,6 +260,10 @@ export const BUILTINS = [
   },
 ];
 
+// BUILTINS stamps each definition with its immutable id (FR-066e); placement and
+// the simulator key off `id` (typeIdentity, §6.6), divorced from the name.
+export const BUILTINS = BUILTIN_DEFS.map((t) => ({ id: builtinId(t.name), ...t }));
+
 // BEHAVIORS maps built-in type name → behavior function (FR-067a). Behaviors
 // are code, not data: they live here — not on the ComponentType — because
 // typeData is deep-copied into instances and saved as JSON (FR-057, §7.1),
@@ -262,7 +271,9 @@ export const BUILTINS = [
 // `inst.type` at run time and calls it each unit step with
 // `{props, simTime}` (effective property values per FR-020b; simulated ns);
 // it returns this step's driver contributions `[{pin, value, weak?}]` (§6.13).
-export const BEHAVIORS = {
+// Defined keyed by readable name, then exported keyed by id (FR-066e) so the
+// simulator's `BEHAVIORS[inst.type]` lookup matches the instance's id `type`.
+const BEHAVIOR_DEFS = {
   // Display only: the indicator drives nothing (FR-068).
   indicator() {
     return [];
@@ -316,17 +327,27 @@ export const BEHAVIORS = {
   },
 };
 
-// INTERACTIONS maps built-in type name → an interaction handler (inst) => void
+// BEHAVIORS is BEHAVIOR_DEFS re-keyed by type id (FR-066e/FR-067a).
+export const BEHAVIORS = Object.fromEntries(
+  Object.entries(BEHAVIOR_DEFS).map(([name, fn]) => [builtinId(name), fn]),
+);
+
+// INTERACTIONS maps built-in type id → an interaction handler (inst) => void
 // that mutates the instance's interactive state in place (FR-087b). It is the
 // input-side analogue of BEHAVIORS (output side): a type with an entry here is
 // interactive and accepts a sim-time click, routed through store.applyLive by
 // the interaction FSM (§6.9), which wakes the simulator to re-evaluate (§6.13).
 // A new interactive input is added by registering a handler here plus a render
-// branch — no scheduler or FSM change.
-export const INTERACTIONS = {
+// branch — no scheduler or FSM change. Defined by name, exported keyed by id
+// (FR-066e) so `INTERACTIONS[inst.type]` matches the instance's id `type`.
+const INTERACTION_DEFS = {
   // Toggle the switch between its two states 0↔1 (FR-087a). Anything that is
   // not "1" (including a legacy "U") toggles to "1".
   switch(inst) {
     inst.switchState = inst.switchState === "1" ? "0" : "1";
   },
 };
+
+export const INTERACTIONS = Object.fromEntries(
+  Object.entries(INTERACTION_DEFS).map(([name, fn]) => [builtinId(name), fn]),
+);

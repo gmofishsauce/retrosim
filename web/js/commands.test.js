@@ -13,6 +13,7 @@ import {
   setOverrideCmd,
   setPortPropsCmd,
   setNoteTextCmd,
+  setLabelCmd,
   refreshTypesCmd,
   composite,
   translateWiring,
@@ -483,4 +484,34 @@ test("setNoteTextCmd sets text, resizes, and undoes both (FR-071f)", () => {
   assert.equal(reverted.text, "");
   assert.equal(reverted.typeData.width, w0);
   assert.equal(reverted.typeData.height, h0);
+});
+
+// setLabelCmd sets the editable display designator (FR-011b) without touching the
+// refdes identity; undo restores the prior label; a blank value clears it.
+test("setLabelCmd edits the display label, leaving the refdes identity intact", () => {
+  const store = newStore();
+  store.dispatch(placeComponent(ty(), 0, 0, 0)); // U1, no label
+  assert.equal(find(store.design, "U1").label, undefined);
+
+  store.dispatch(setLabelCmd("U1", "FOO"));
+  let u1 = find(store.design, "U1");
+  assert.equal(u1.refdes, "U1"); // identity unchanged
+  assert.equal(u1.label, "FOO");
+
+  store.undo();
+  assert.equal(find(store.design, "U1").label, undefined);
+
+  store.redo();
+  assert.equal(find(store.design, "U1").label, "FOO");
+
+  // A blank value clears the label back to the default (absent).
+  store.dispatch(setLabelCmd("U1", "   "));
+  assert.equal(find(store.design, "U1").label, undefined);
+
+  // Duplicates are allowed: a second instance may carry the same label.
+  store.dispatch(placeComponent(ty(), 5, 0, 0)); // U2
+  store.dispatch(setLabelCmd("U1", "DUP"));
+  store.dispatch(setLabelCmd("U2", "DUP"));
+  assert.equal(find(store.design, "U1").label, "DUP");
+  assert.equal(find(store.design, "U2").label, "DUP");
 });

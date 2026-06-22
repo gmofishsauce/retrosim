@@ -5,6 +5,7 @@
 # Rendered as a single unit (one rectangle): the select lines S0/S1 are common
 # to both halves of the chip, so it cannot be split into independent mux
 # subunits (KiCAD renders it as one symbol for the same reason).
+id: "type-74153"
 type: "74153"
 outline: [6, 12]
 

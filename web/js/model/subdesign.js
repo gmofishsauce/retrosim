@@ -17,7 +17,9 @@ import { nextRefNum } from "./design.js";
 export function designInterface(childDesign) {
   const byLabel = new Map();
   for (const c of childDesign.components ?? []) {
-    if (c.type !== "port") continue;
+    // Identify ports by renderType, not the `type` field — the latter is now the
+    // library id (FR-066e), e.g. "type-port", not the bare "port".
+    if (c.typeData?.renderType !== "port") continue;
     const label = c.label;
     if (label == null || label === "") continue;
     if (!byLabel.has(label)) {

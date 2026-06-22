@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-22 — Divorce internal identity from display names (type id + editable designator label)
+What: Introduced an immutable, library-unique type `id` (e.g. `type-74138`, `type-22V574`) as the sole library key — for the palette, placed instances' `type`, the behavior cache, and Refresh Types — divorced from the now free-form, editable display name (`type` for 74-series, `partnumber` for GAL). The palette tile shows the full display name as button text (no more "74" stripping or GAL family label), at a font small enough for five characters; the tooltip is retained. For instances, the existing `refdes` (U/A/N/X) stays the immutable internal identity (foreign key for vertices/group-snaps/selection/persistence); a new optional, free-form `label` carries the *displayed* designator, defaulting to the `refdes` and user-editable in the properties panel with no uniqueness/format checks. Save format bumped 1→2 with a pure textual migration re-keying each instance's `type` to the type id (`type := "type-"+(partnumber||name)`); the `label` is lazy (needs no migration). YAML gains an `id` key (optional, derived when absent); all 25 library files set it explicitly.
+Why: Requested — allow flexible labeling of parts and instances without the labels being load-bearing identifiers.
+Touches: FR-005, FR-005b, FR-011, FR-011a, FR-011b (new), FR-012, FR-020a, FR-057, FR-066b, FR-066e (new), FR-007a, FR-088, FR-112; design §6.2, §6.3, §6.4, §6.6, §6.11, §6.14, §7.1, §7.1a, §7.2, §7.4, §7.6.
+
 ## 2026-06-22 — Note editing via DOM textarea overlay
 What: Replaced the note's canvas keystroke-capture text entry with a real DOM <textarea> overlaid over the note while editing, giving native caret/selection/clipboard. The canvas hides the note while editing; on commit (Enter/Escape/blur/tool-switch) the textarea value writes back via setNoteText. Overlay is drawn unrotated regardless of note rotation (deferred). Resolves OQ-011.
 Touches: design §6.8 (drawNote skips edited note), §6.9 (textarea overlay), §6.11, OQ-011 (resolved).

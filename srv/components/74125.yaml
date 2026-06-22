@@ -2,6 +2,7 @@
 # Source: Nexperia, "74HC125; 74HCT125 Quad buffer/line driver; 3-state",
 # product data sheet Rev. 8 — 22 February 2024.
 # https://assets.nexperia.com/documents/data-sheet/74HC_HCT125.pdf
+id: "type-74125"
 type: "74125"
 outline: [6, 13]
 

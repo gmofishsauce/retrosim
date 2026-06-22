@@ -2,6 +2,7 @@
 # Source: Nexperia, "74HC157; 74HCT157 Quad 2-input multiplexer", product
 # data sheet Rev. 10 — 28 May 2024.
 # https://assets.nexperia.com/documents/data-sheet/74HC_HCT157.pdf
+id: "type-74157"
 type: "74157"
 outline: [6, 13]
 

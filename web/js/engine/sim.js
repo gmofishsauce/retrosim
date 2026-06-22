@@ -152,6 +152,9 @@ export function buildSimulation(design, { onMessage = () => {} } = {}) {
         kind: "builtin",
         refdes: inst.refdes,
         type: inst.type,
+        // renderType (e.g. "clock") for built-in identification independent of
+        // the now-id-valued `type` (FR-066e).
+        renderType: inst.typeData.renderType,
         behave,
         props: effectiveProps(inst),
         // Retain the live instance so behaviors can read mutable interactive
@@ -256,7 +259,7 @@ export function buildSimulation(design, { onMessage = () => {} } = {}) {
     lastStepChanged = changed;
   }
 
-  const clocks = entities.filter((e) => e.kind === "builtin" && e.type === "clock");
+  const clocks = entities.filter((e) => e.kind === "builtin" && e.renderType === "clock");
   // clockPeriod (FR-071b): the effective period of the design's clock when
   // exactly one is placed, else the 100 ns FR-071a default (no clock, or
   // several). Resolved once; consumed by the reset built-in's behavior ctx.

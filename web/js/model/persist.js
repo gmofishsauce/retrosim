@@ -13,7 +13,7 @@ import { placeholderTypeFromWiring } from "./subdesign.js";
 // newer version is loaded best-effort and the load flow warns (forward-compat,
 // fileops.js). Bump this whenever the save shape changes and add the matching
 // MIGRATIONS step.
-export const FORMAT_VERSION = 1;
+export const FORMAT_VERSION = 2;
 
 // MIGRATIONS upgrades a parsed save object across a single format version:
 // MIGRATIONS[n] takes a version-n object and returns a version-(n+1) object
@@ -21,7 +21,21 @@ export const FORMAT_VERSION = 1;
 // FORMAT_VERSION. It is empty while only version 1 exists; each future format
 // change adds one entry keyed by the version it upgrades *from*.
 const MIGRATIONS = {
-  // 1: (obj) => ({ ...obj, /* …shape changes that define version 2… */ }),
+  // 1→2 (FR-066e): re-key each instance's `type` from the old display name to the
+  // type id. Pure textual transform (no library access): the id is derived from
+  // the instance's own `typeData` with the same rule the library/built-ins use
+  // (deriveComponentID / builtinId), so an old instance re-matches its type after
+  // load. `refdes` (the identity) and all wiring references are untouched; the
+  // editable `label` (§7.2) is lazy and needs no migration. Sub-design instances
+  // carry a path-derived `type` and no `typeData`, so they are left unchanged.
+  1: (obj) => ({
+    ...obj,
+    components: (obj.components ?? []).map((c) => {
+      if (c.kind === "subdesign" || !c.typeData) return c;
+      const id = "type-" + (c.typeData.partnumber || c.typeData.name);
+      return { ...c, type: id, typeData: { ...c.typeData, id } };
+    }),
+  }),
 };
 
 // migrate normalizes a parsed save object to the current format version (§7.4).
@@ -65,8 +79,8 @@ export function serializeDesign(design) {
 // stripSubDesign persists only a sub-design's live link and placement, never its
 // synthetic interface typeData (re-derived on load by resolveSubDesigns, FR-098).
 function stripSubDesign(c) {
-  const { refdes, type, kind, childPath, render, x, y, rotation } = c;
-  return { refdes, type, kind, childPath, render, x, y, rotation };
+  const { refdes, label, type, kind, childPath, render, x, y, rotation } = c;
+  return { refdes, label, type, kind, childPath, render, x, y, rotation };
 }
 
 // maxIdNum returns the highest numeric suffix among ids of the form `<prefix><n>`.

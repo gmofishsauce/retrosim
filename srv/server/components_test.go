@@ -8,9 +8,9 @@ import (
 // List returns component types sorted by name (FR-005/FR-006 palette order, §6.2).
 func TestLibraryListSortedByName(t *testing.T) {
 	lib := newLibrary()
-	lib.add(ComponentType{Name: "74138"})
-	lib.add(ComponentType{Name: "7400"})
-	lib.add(ComponentType{Name: "74244"})
+	lib.add(ComponentType{ID: "type-74138", Name: "74138"})
+	lib.add(ComponentType{ID: "type-7400", Name: "7400"})
+	lib.add(ComponentType{ID: "type-74244", Name: "74244"})
 
 	got := names(lib.List())
 	want := []string{"7400", "74138", "74244"}
@@ -22,8 +22,8 @@ func TestLibraryListSortedByName(t *testing.T) {
 // A duplicate type name keeps the last one added (last-wins, §6.2).
 func TestLibraryDuplicateLastWins(t *testing.T) {
 	lib := newLibrary()
-	lib.add(ComponentType{Name: "7400", Width: 1})
-	lib.add(ComponentType{Name: "7400", Width: 9})
+	lib.add(ComponentType{ID: "type-7400", Name: "7400", Width: 1})
+	lib.add(ComponentType{ID: "type-7400", Name: "7400", Width: 9})
 
 	got := lib.List()
 	if len(got) != 1 {
@@ -34,23 +34,22 @@ func TestLibraryDuplicateLastWins(t *testing.T) {
 	}
 }
 
-// Two GAL parts of the same device family coexist, keyed by part number, not by
-// the shared type name (FR-066b). has() recognizes the key for duplicate
-// rejection (FR-007a).
-func TestLibraryKeysGalByPartNumber(t *testing.T) {
+// Two GAL parts of the same device family coexist, keyed by id, not by the shared
+// type name (FR-066e). has() recognizes the key for duplicate rejection (FR-007a).
+func TestLibraryKeysGalByID(t *testing.T) {
 	lib := newLibrary()
-	lib.add(ComponentType{Name: "22V10", Gal: "GAL22V10", PartNumber: "PC-DECODE-A"})
-	lib.add(ComponentType{Name: "22V10", Gal: "GAL22V10", PartNumber: "PC-DECODE-B"})
+	lib.add(ComponentType{ID: "type-PC-DECODE-A", Name: "22V10", Gal: "GAL22V10", PartNumber: "PC-DECODE-A"})
+	lib.add(ComponentType{ID: "type-PC-DECODE-B", Name: "22V10", Gal: "GAL22V10", PartNumber: "PC-DECODE-B"})
 
 	got := lib.List()
 	if len(got) != 2 {
-		t.Fatalf("List() len = %d, want 2 (same family, distinct part numbers)", len(got))
+		t.Fatalf("List() len = %d, want 2 (same family, distinct ids)", len(got))
 	}
-	if !lib.has("PC-DECODE-A") || !lib.has("PC-DECODE-B") {
-		t.Fatalf("has() missing one of the part numbers")
+	if !lib.has("type-PC-DECODE-A") || !lib.has("type-PC-DECODE-B") {
+		t.Fatalf("has() missing one of the ids")
 	}
-	if lib.has("22V10") {
-		t.Fatalf("has() matched the shared family name; GAL parts key by part number")
+	if lib.has("type-22V10") {
+		t.Fatalf("has() matched the shared family name; GAL parts key by id")
 	}
 }
 

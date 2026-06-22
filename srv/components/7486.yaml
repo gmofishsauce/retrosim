@@ -2,6 +2,7 @@
 # Source: Nexperia, "74HC86; 74HCT86 Quad 2-input EXCLUSIVE-OR gate", product
 # data sheet Rev. 7 — 2 April 2024.
 # https://assets.nexperia.com/documents/data-sheet/74HC_HCT86.pdf
+id: "type-7486"
 type: "7486"
 rendertype: subunit
 numunits: 4

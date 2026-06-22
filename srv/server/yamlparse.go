@@ -47,6 +47,7 @@ var muxArity = map[string]struct{ data, sel int }{
 // ComponentType. pos is a pointer so an omitted (required) pos is distinguishable
 // from a legitimate 0.
 type yamlComponent struct {
+	ID         string             `yaml:"id"`
 	Type       string             `yaml:"type"`
 	RenderType string             `yaml:"rendertype"`
 	NumUnits   int                `yaml:"numunits"`
@@ -202,6 +203,13 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		return ComponentType{}, fmt.Errorf("%s: 'partnumber' is only valid on a gal part (set 'gal:')", path)
 	}
 
+	// id (FR-066e) is the immutable library key, divorced from the free-form
+	// display name. It is optional in the YAML — when omitted it is derived from
+	// the display name so the format stays additive (FR-066) and pre-existing
+	// files keep parsing; the library files set it explicitly so renaming the
+	// display name never moves the key.
+	id := deriveComponentID(doc.ID, doc.PartNumber, doc.Type)
+
 	pinByName := make(map[string]Pin, len(pins))
 	for _, p := range pins {
 		pinByName[p.Name] = p
@@ -237,6 +245,7 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		// Outline/width/height are unused for subunits; the client symbol module
 		// (§6.8a) owns each unit's footprint and pin positions.
 		return ComponentType{
+			ID:          id,
 			Name:        doc.Type,
 			RenderType:  "subunit",
 			NumUnits:    doc.NumUnits,
@@ -275,6 +284,7 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 	}
 
 	return ComponentType{
+		ID:          id,
 		Name:        doc.Type,
 		RenderType:  "unit",
 		Width:       width,
@@ -289,6 +299,23 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		Description: doc.Description,
 		Datasheet:   datasheet,
 	}, nil
+}
+
+// deriveComponentID returns the type's immutable library id (FR-066e): the
+// explicit `id:` from the YAML if present, else `type-` + the display name (the
+// part number for a GAL part, else the type name) — the same rule the client and
+// the save-format migration use, so an explicit and a derived id agree for a
+// given part. The display name has already been validated non-empty by the time
+// this is called, so the derived id is never the bare prefix.
+func deriveComponentID(explicit, partNumber, typeName string) string {
+	if explicit != "" {
+		return explicit
+	}
+	stem := partNumber
+	if stem == "" {
+		stem = typeName
+	}
+	return "type-" + stem
 }
 
 // validateGroupGeometry enforces the pin-group geometry rule (FR-063a): a group's
