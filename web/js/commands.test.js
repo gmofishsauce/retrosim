@@ -12,6 +12,7 @@ import {
   deleteComponent,
   setOverrideCmd,
   setPortPropsCmd,
+  setNoteTextCmd,
   refreshTypesCmd,
   composite,
   translateWiring,
@@ -21,6 +22,10 @@ import { extractFragment } from "./model/clipboard.js";
 
 function ty(name = "74138") {
   return { name, width: 6, height: 12, pins: [] };
+}
+
+function tyNote() {
+  return { name: "note", builtin: true, renderType: "note", width: 4, height: 2, pins: [] };
 }
 
 function ty7400() {
@@ -457,4 +462,25 @@ test("pasteFragmentCmd places a fragment with fresh refdes; undo/redo are exact 
   assert.deepEqual(cmd.created, ["U3", "U4"]);
   assert.equal(store.design.components.length, 4);
   assert.equal(store.design.wires.length, 2);
+});
+
+// setNoteTextCmd (FR-071f) sets a note's text, recomputes its auto-sized
+// footprint, and is one undoable action restoring the prior text and size.
+test("setNoteTextCmd sets text, resizes, and undoes both (FR-071f)", () => {
+  const store = newStore();
+  store.dispatch(placeComponent(tyNote(), 3, 3, 0));
+  const note = store.design.components.find((c) => c.refdes === "N-1");
+  assert.equal(note.text, "");
+  const { width: w0, height: h0 } = note.typeData;
+
+  store.dispatch(setNoteTextCmd("N-1", "line one\nline two\nline three"));
+  const edited = store.design.components.find((c) => c.refdes === "N-1");
+  assert.equal(edited.text, "line one\nline two\nline three");
+  assert.ok(edited.typeData.height > h0); // grew to fit three lines
+
+  store.undo();
+  const reverted = store.design.components.find((c) => c.refdes === "N-1");
+  assert.equal(reverted.text, "");
+  assert.equal(reverted.typeData.width, w0);
+  assert.equal(reverted.typeData.height, h0);
 });

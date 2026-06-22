@@ -22,6 +22,7 @@ import {
   breakoutBit,
   setBusBitNames,
   setOverride,
+  noteSize,
   refreshInstance,
   shiftWiring,
   rigidWiring,
@@ -402,6 +403,34 @@ export function setSwitchStateCmd(refdes, value) {
     },
     revert(design) {
       findInstance(design, refdes).switchState = old;
+    },
+  };
+}
+
+// setNoteTextCmd sets a text note's content (inst.text, FR-071f) and recomputes
+// its auto-sized footprint (noteSize). Per-instance state, not an override; the
+// prior text and footprint are captured once so undo restores them.
+export function setNoteTextCmd(refdes, text) {
+  let captured = false;
+  let old = null; // { text, width, height }
+  return {
+    label: "Edit note",
+    apply(design) {
+      const inst = findInstance(design, refdes);
+      if (!captured) {
+        old = { text: inst.text ?? "", width: inst.typeData.width, height: inst.typeData.height };
+        captured = true;
+      }
+      inst.text = text;
+      const sz = noteSize(text);
+      inst.typeData.width = sz.width;
+      inst.typeData.height = sz.height;
+    },
+    revert(design) {
+      const inst = findInstance(design, refdes);
+      inst.text = old.text;
+      inst.typeData.width = old.width;
+      inst.typeData.height = old.height;
     },
   };
 }

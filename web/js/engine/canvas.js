@@ -16,6 +16,9 @@ import {
   vertexWorld,
   busGroupBrace,
   PIN_RADIUS,
+  NOTE_PAD,
+  NOTE_LINE,
+  NOTE_FONT,
 } from "../model/design.js";
 import { drawSymbol, pinHasOwnBubble, pinLabelEdge } from "./symbols.js";
 import { V0, V1 } from "./galasm.js";
@@ -29,6 +32,12 @@ const LABEL_FONT = "bold 11px system-ui, sans-serif";
 // Conflicted nets stroke red while the conflict persists (FR-082).
 const CONFLICT_COLOR = "#b00020";
 
+// Text-note dotted-outline color (FR-071f), matching the palette tile. The
+// note's layout constants (NOTE_PAD/NOTE_LINE/NOTE_FONT) are imported from the
+// model so the drawn text matches the auto-sized box; text scales with the grid
+// (font size ∝ scale) so the box tracks it at every zoom.
+const NOTE_BLUE = "#1565c0";
+
 // initCanvas attaches a renderer to a <canvas> bound to a store. Returns a small
 // controller (§6.8 interface).
 export function initCanvas(canvasEl, store) {
@@ -38,6 +47,7 @@ export function initCanvas(canvasEl, store) {
   let preview = null; // transient {points: [{x,y}, …]} in world coords
   let marquee = null; // transient rubber-band {a, b (world), mode} (FR-016b)
   let ghost = null; // transient paste ghost {fragment, dx, dy} (FR-113)
+  let editing = null; // transient note text-entry {refdes, text} (FR-071f)
   let lastW = 0; // last applied CSS size / DPR, so resize() is idempotent and a
   let lastH = 0; // ResizeObserver tick that didn't change the box is a no-op.
   let lastDpr = 0;
@@ -89,7 +99,7 @@ export function initCanvas(canvasEl, store) {
     drawGrid(ctx, w, h, vp);
     drawBuses(ctx, store.design, vp, store.state.selection, conflicts);
     drawWires(ctx, store.design, vp, store.state.selection, conflicts);
-    drawComponents(ctx, store.design, vp, store.state.selection, store.state.hover, sim);
+    drawComponents(ctx, store.design, vp, store.state.selection, store.state.hover, sim, editing);
     // Vertex marks and group-snap braces last, so a component body never hides a
     // connection/dangling indicator that sits on or under it (§6.8).
     drawVertices(ctx, store.design, vp);
@@ -123,6 +133,10 @@ export function initCanvas(canvasEl, store) {
     },
     setGhost(g) {
       ghost = g;
+      requestRender();
+    },
+    setEditingNote(e) {
+      editing = e;
       requestRender();
     },
     setViewport(viewport) {
@@ -159,14 +173,17 @@ function drawGrid(ctx, w, h, vp) {
   }
 }
 
-function drawComponents(ctx, design, vp, selection, hover, sim) {
+function drawComponents(ctx, design, vp, selection, hover, sim, editing) {
   if (!design) return;
   for (const inst of design.components) {
     const selected = selection.some((s) =>
       sameRef(s, { kind: "component", refdes: inst.refdes }),
     );
     const hovered = hover === inst.refdes;
-    drawComponent(ctx, inst, vp, selected, hovered, sim);
+    // While a note is being typed (FR-071f), draw the live working text with a
+    // caret instead of the committed inst.text.
+    const editText = editing && editing.refdes === inst.refdes ? editing.text : null;
+    drawComponent(ctx, inst, vp, selected, hovered, sim, editText);
   }
 }
 
@@ -437,9 +454,17 @@ function drawBusBraces(ctx, design, vp) {
   }
 }
 
-function drawComponent(ctx, inst, vp, selected, hovered, sim) {
+function drawComponent(ctx, inst, vp, selected, hovered, sim, editText = null) {
   const td = inst.typeData;
   if (!td) return;
+
+  // A text note (FR-071f) owns its whole rendering: a dotted blue box with text
+  // that rotates with it, and no pins or refdes/type label. When being typed,
+  // editText is the live working string (drawn with a caret). Drawn and done.
+  if (td.renderType === "note") {
+    drawNote(ctx, inst, vp, selected, editText);
+    return;
+  }
 
   // Body: a schematic symbol for subunit components (§6.8a), else the outline
   // rectangle. Both rotate about the instance origin and share the pin path below.
@@ -774,6 +799,63 @@ function drawLabelBox(ctx, inst, vp, selected, label) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(label, center.x, center.y);
+}
+
+// drawNote renders a text note (FR-071f): a blue dotted box holding multi-line
+// text. Box and text rotate together as a rigid body (the text reads at the
+// rotated angle, not re-uprighted), so we set up a translate+rotate frame at the
+// instance origin and draw the footprint and glyphs in local grid-scaled pixels.
+function drawNote(ctx, inst, vp, selected, editText = null) {
+  const td = inst.typeData;
+  const editing = editText !== null;
+  const text = editing ? editText : inst.text || "";
+  const scale = scaleFor(vp);
+  const origin = worldToScreen({ x: inst.x, y: inst.y }, vp);
+
+  ctx.save();
+  ctx.translate(origin.x, origin.y);
+  ctx.rotate((inst.rotation * Math.PI) / 180); // CW, matching rotateOffset
+
+  // Outline box only when selected or editing (FR-071f): a white-filled box with
+  // a dotted blue border at rest-selected, solid while editing to signal text
+  // entry. Unselected and not editing, only the text is drawn (no box).
+  if (selected || editing) {
+    ctx.beginPath();
+    ctx.rect(0, 0, td.width * scale, td.height * scale);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
+    ctx.setLineDash(editing ? [] : [4, 3]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = editing ? "#4a90d9" : NOTE_BLUE;
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Text, one line per embedded newline, top-left anchored inside the padding.
+  ctx.fillStyle = "#111";
+  ctx.font = Math.round(NOTE_FONT * scale) + "px system-ui, sans-serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], NOTE_PAD * scale, (NOTE_PAD + i * NOTE_LINE) * scale);
+  }
+
+  // Caret at the end of the last line while editing (no mid-text navigation).
+  // Use real glyph metrics so it sits exactly past the typed text.
+  if (editing) {
+    const last = lines[lines.length - 1];
+    const cx = NOTE_PAD * scale + ctx.measureText(last).width;
+    const cy = (NOTE_PAD + (lines.length - 1) * NOTE_LINE) * scale;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx, cy + NOTE_FONT * scale);
+    ctx.strokeStyle = "#111";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  ctx.restore();
 }
 
 // drawBrokenBox renders a sub-design whose child file could not be loaded

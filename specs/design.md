@@ -111,6 +111,19 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
   (FR-020c) or by clicking it while simulating, which toggles 0↔1 (FR-087a).
   Tooltip "input switch". (Reworked 2026-06-17; supersedes the 1/0/? rotary dial
   with a U state.)
+- **FR-071f** — Text note: a `NOTE`-labeled palette tile; on the canvas, free-form
+  text with a **blue-dotted outline box shown only when selected or editing** (at
+  rest just the text). A **pure annotation** — no pins, not
+  wired, absent from the netlist/sim, no behavior, no properties, and **no
+  visible designator or type label** (exempt from FR-011a/FR-012; it carries an
+  internal-only `N-<n>` id, never drawn, so the editor can still track it). The box **auto-sizes**
+  to its text (whole grid units, small minimum). Text entry begins on placement
+  and re-opens on double-click; **Enter** commits, **Shift+Enter** inserts a
+  newline. Selectable/movable/deletable/**rotatable** like other objects (incl.
+  multi-select); rotation turns the box **and its text** together (the text reads
+  at the rotated angle — a deliberate exception to the upright-label rule of
+  FR-012/FR-015/FR-020). Per-instance `text` (default empty) round-trips with the
+  instance. (Added 2026-06-22.)
 
 **Component Selection and Movement**
 - **FR-016** — In select mode, click a component to select it.
@@ -829,6 +842,20 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   there. For subunit symbols the common path anchors each pin's
   upright name label to the body outline (`pinLabelEdge`, §6.8a) rather than the
   pin point, so stubs never bisect labels.
+- **Text note (`note` renderType, FR-071f):** `drawComponent` gains a `note`
+  branch (`drawNote`) drawing the note's `inst.text` line-broken on its embedded
+  newlines. An outline box over the instance's auto-sized footprint —
+  `width`/`height` recomputed in whole grid units from the wrapped text (a small
+  minimum when empty) — is drawn **only when the note is selected or being edited**
+  (dashed **blue** at rest-selected, solid when editing); at rest, unselected, only
+  the text is drawn, with no box. Unlike every other instance the note draws **no
+  refdes/type label and no pins/bubbles** (FR-011a/FR-012 exemptions). The text
+  (and the box when shown) is emitted in the instance's local grid frame and
+  projected through `rotateOffset`, so it turns with the instance (FR-071f rotation
+  exception); the text is **not** re-uprighted the way pin/refdes labels are. While
+  the note is the active text-entry target (§6.9) the branch also draws the caret;
+  the actual keystroke capture is the interaction layer's (§6.9), not the
+  renderer's.
 - **Wire attachment drawing (FR-013d):** wire/bus *endpoint* segments and the
   rubber-band preview draw to the pin's visual attachment point —
   `pinVisualPos` (model/design.js): the bubble center (grid point + one bubble
@@ -1047,6 +1074,19 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   that marks the design modified and wakes the simulator (§6.10) — instead of
   reporting the lock. The switch's handler toggles `switchState` 0↔1 (FR-087a).
   (Reworked 2026-06-17; supersedes selection remaining available during a run.)
+- **Note text-entry mode (FR-071f):** a new SELECT-mode sub-state, `editingNote`,
+  holds the note instance being typed into and a working string. It is entered two
+  ways: automatically when a `note` built-in is placed (the one-shot placement
+  ends in this mode rather than plain SELECT), and by a **double-click** whose
+  hit-test lands on a placed note. While active, the FSM captures keystrokes:
+  printable keys and Backspace edit the working string, **Shift+Enter** inserts a
+  newline, **Enter** commits, and Escape or a click outside the note also commits;
+  the canvas renderer draws the live string and a caret (§6.8). Commit dispatches
+  a `setNoteText` command (§6.10) only when the text changed (recomputing the
+  auto-sized footprint, FR-071f) and returns to plain SELECT. Text-entry mode is
+  unavailable while a simulation runs (the editor is locked, above), consistent
+  with other design edits. This is the editor's first in-canvas text capture; no
+  hidden DOM `<input>` is required — the FSM owns the keystrokes directly.
 - **Error handling:** clicks on empty space in WIRE/BUS state are ignored (no
   partial wire). A gesture that would create a zero-endpoint wire is discarded
   (FR-030). Pressing `Esc` cancels an in-progress gesture, restoring SELECT.
@@ -1225,7 +1265,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `R` and `/R`, FR-071b); **input switch** (`"switch"`, 2×2, one right-center
   `out` pin, FR-071c); **8-wide indicator** (`"indicator8"`, 3×9, eight left-edge
   `in` pins `D0`–`D7` in one pin group `D`, FR-071d); **8-wide port** (`"port8"`,
-  3×9, eight left-edge `bidir` pins `P0`–`P7` in one pin group `P`, FR-071e). The
+  3×9, eight left-edge `bidir` pins `P0`–`P7` in one pin group `P`, FR-071e);
+  **text note** (`"note"`, a `NOTE`-labeled tile, **no `pins`**, FR-071f). The
   two 8-wide entries declare `pinGroups` so an 8-bit bus snap-connects to all eight
   bits at once (FR-041/FR-042, `matchingGroups`); `port8` is a grouped bus terminal
   only for now (drives nothing, no off-sheet net joining yet — FR-071e). On
@@ -1252,7 +1293,26 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   pin's row (FR-071e). The shared
   pin loop draws the eight connection bubbles down the left edge for both. Pin
   name labels are suppressed for built-ins (the glyph owns the body); the refdes is
-  drawn above the symbol.
+  drawn above the symbol. The **text note** (`note`) is the lone exception that
+  draws neither pins nor refdes (FR-071f): `drawNote` (§6.8) draws only `inst.text`
+  (plus a dotted blue outline box when selected or editing). Because it has no `pins`, `addInstance` assigns it an
+  internal-only `N-<n>` refdes — a separate series, special-cased ahead of the
+  `A-<n>` path (FR-011a) — that is never drawn but keeps the instance selectable,
+  movable, and persistable on the usual refdes-keyed machinery. It is invisible to
+  `buildNets` (no `pin` vertices), and it has **no `BEHAVIORS` entry** (FR-067a),
+  so `sim.js` must skip a behaviorless note rather than flagging it an unknown
+  built-in. It is a normal selection member, so move and rotate (FR-019, including
+  the text turning with the box) flow through the existing commands unchanged.
+- **Note text state (FR-071f)** — the note carries one per-instance field,
+  `inst.text` (string, default `""`), set on the instance directly rather than
+  through `overrides`, round-tripping through save/load for free like
+  `switchState` (§7.2). It is edited by an in-canvas **text-entry mode** owned by
+  the interaction FSM (§6.9): entered automatically on placement and re-entered by
+  double-clicking the note; **Enter** commits and exits, **Shift+Enter** inserts a
+  newline, and a click elsewhere or Escape also commits. Each commit that changes
+  the text is one undoable `setNoteText` command (§6.10); the auto-sized
+  `width`/`height` (whole grid units) are recomputed from the wrapped text on
+  commit.
 - **Switch interactive state (FR-071c)** — the input switch carries one
   per-instance field, `inst.switchState` (`"0"` | `"1"`, default `"0"`),
   set on the instance directly rather than through `overrides`. It round-trips
@@ -2347,6 +2407,23 @@ only the noted slices.
   tristate}`. Power and ground are not represented anywhere (file, editor, or
   simulation), so no `pwr`/`power` direction is needed; the four directions map
   cleanly to the future four-level model.
+- **OQ-011 — Text selection inside a note while editing (FR-071f).** The note's
+  text-entry mode (§6.9) captures keystrokes directly in the FSM with **no DOM
+  text field**: the working value is an append-only string and the caret is
+  cosmetic (a bar after the last glyph) — there is no caret *index*, no
+  click-to-position, and no selection range. Supporting in-box text selection
+  (click-to-place caret, drag/Shift-arrow to select, highlight rendering, native
+  clipboard) is therefore **not a tweak** on the current path: it needs a
+  caret-index model, point→character hit-testing under rotation and grid scale,
+  selection highlight rendering, and a decision on how note clipboard ops
+  interleave with the app's own Copy/Paste (FR-111/FR-112). The cheaper
+  alternative is to overlay a real DOM `<textarea>` over the note while editing
+  (native caret/selection/clipboard for free), writing its value back to
+  `inst.text` on commit — trading away the "no hidden DOM input" choice and
+  needing a CSS transform to line the overlay up with a rotated note and to match
+  the canvas font metrics. **Open:** whether note selection is wanted, and if so
+  which approach — both are an architecture decision to settle before building
+  further text-editing features on the keystroke-capture path. (Raised 2026-06-22.)
 
 None of the above prevent starting the server skeleton, the canvas engine, the
 store/undo pipeline, or the chrome. Only the YAML **parser body** and the **bus

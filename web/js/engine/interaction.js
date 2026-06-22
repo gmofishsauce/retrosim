@@ -41,6 +41,7 @@ import {
   composite,
   translateWiring,
   pasteFragmentCmd,
+  setNoteTextCmd,
 } from "../commands.js";
 import { extractFragment } from "../model/clipboard.js";
 import {
@@ -147,6 +148,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
   let pasteFrag = null; // fragment armed for placement while tool === "paste"
   let pasteAnchor = null; // {x,y} fragment anchor that tracks the cursor (FR-113)
   let lastPointer = null; // last mousemove event, to seat the ghost on paste start
+  let editingNote = null; // active note text-entry { refdes, text } (FR-071f)
 
   const findType = (id) => library.find((c) => typeIdentity(c) === id);
   // Resolves a wire or bus id: bend drags apply to both (FR-039).
@@ -155,6 +157,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     store.design.buses.find((b) => b.id === id);
 
   function setTool(tool, type = null) {
+    commitNoteEdit(); // leaving for any tool commits an in-progress note (FR-071f)
     placeType = type;
     wireSource = null;
     wireWaypoints = []; // discard any in-progress waypoints (FR-027e)
@@ -472,6 +475,57 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     const placed = store.design.components[store.design.components.length - 1];
     setTool("select");
     select({ kind: "component", refdes: placed.refdes });
+    // A freshly placed note opens straight into text-entry (FR-071f).
+    if (placed.typeData.renderType === "note") startNoteEdit(placed);
+  }
+
+  // startNoteEdit puts a note into in-canvas text-entry mode (FR-071f): the
+  // working string lives here and is mirrored to the renderer (which draws it
+  // with a caret) until commit. The note is also selected so the gesture reads.
+  function startNoteEdit(inst) {
+    if (store.state.simulating) return; // editing is locked during a run (FR-087)
+    editingNote = { refdes: inst.refdes, text: inst.text || "" };
+    select({ kind: "component", refdes: inst.refdes });
+    renderer.setEditingNote?.(editingNote);
+  }
+
+  // commitNoteEdit ends text-entry, dispatching one undoable setNoteText command
+  // only when the text actually changed (FR-071f); the auto-sized footprint is
+  // recomputed by the command. A no-op when not editing.
+  function commitNoteEdit() {
+    if (!editingNote) return;
+    const { refdes, text } = editingNote;
+    editingNote = null;
+    renderer.setEditingNote?.(null);
+    const inst = store.design.components.find((c) => c.refdes === refdes);
+    if (inst && text !== (inst.text ?? "")) store.dispatch(setNoteTextCmd(refdes, text));
+  }
+
+  // handleNoteKeydown captures keystrokes while a note is being typed (FR-071f):
+  // Enter commits, Shift+Enter inserts a newline, Backspace deletes, Escape
+  // commits, and any printable key is appended. Text-entry is modal — every other
+  // key is swallowed so editor shortcuts (rotate, delete, undo) don't fire mid-
+  // edit. Returns true when it consumed the event.
+  function handleNoteKeydown(e) {
+    if (!editingNote) return false;
+    if (e.key === "Enter") {
+      if (e.shiftKey) {
+        editingNote.text += "\n";
+        renderer.setEditingNote?.(editingNote);
+      } else {
+        commitNoteEdit();
+      }
+    } else if (e.key === "Escape") {
+      commitNoteEdit();
+    } else if (e.key === "Backspace") {
+      editingNote.text = editingNote.text.slice(0, -1);
+      renderer.setEditingNote?.(editingNote);
+    } else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      editingNote.text += e.key;
+      renderer.setEditingNote?.(editingNote);
+    }
+    e.preventDefault();
+    return true; // modal: swallow everything while editing
   }
 
   // copySelection captures the selected components and their interior wiring into
@@ -797,6 +851,10 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
       return;
     }
 
+    // A left click anywhere commits an in-progress note edit first (FR-071f); the
+    // click then proceeds with its normal select/draw meaning.
+    if (editingNote) commitNoteEdit();
+
     if (store.state.tool === "paste" && pasteFrag) {
       commitPaste(e);
       return;
@@ -1004,8 +1062,16 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
   // sim would be jarring; consistent with the menu actions below).
   canvas.addEventListener("dblclick", (e) => {
     if (store.state.simulating) return;
-    const inst = subDesignAt(worldOf(e));
-    if (inst && onOpenSubDesign) onOpenSubDesign(inst.childPath);
+    const world = worldOf(e);
+    const sub = subDesignAt(world);
+    if (sub && onOpenSubDesign) {
+      onOpenSubDesign(sub.childPath);
+      return;
+    }
+    // Double-clicking a text note re-opens text-entry mode (FR-071f).
+    const comp = hitComponent(store.design, world);
+    const inst = comp && store.design.components.find((c) => c.refdes === comp.refdes);
+    if (inst?.typeData.renderType === "note") startNoteEdit(inst);
   });
 
   // Right-click context menu (FR-033b): hit-test the cursor and offer the actions
@@ -1306,6 +1372,9 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
   window.addEventListener("keydown", (e) => {
     // Ignore shortcuts while typing in a field (e.g., the save dialog).
     if (e.target instanceof HTMLInputElement || e.target.isContentEditable) return;
+
+    // While a note is being typed, capture keys modally before any shortcut.
+    if (handleNoteKeydown(e)) return;
 
     if (e.code === "Space") {
       spaceDown = true;

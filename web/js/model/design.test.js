@@ -20,7 +20,13 @@ import {
   busGroupBrace,
   BUS_BRACE_DEPTH,
   typeIdentity,
+  noteSize,
 } from "./design.js";
+
+// A text-note built-in type (FR-071f): pinless, auto-sized.
+function typeNote() {
+  return { name: "note", builtin: true, renderType: "note", width: 4, height: 2, pins: [] };
+}
 
 // A representative component type (stub-shaped, see server stubComponents).
 function type74138() {
@@ -600,4 +606,32 @@ test("refreshInstance rebuilds a subunit sibling's per-unit typeData (FR-088)", 
   moved.pins.find((p) => p.name === "2Y").unit = "A";
   assert.equal(refreshInstance(d, b, moved).skip.includes("2Y"), true);
   void a;
+});
+
+// A text note (FR-071f) is keyed from the internal N-<n> series — neither a U-
+// nor an A-number — and starts with empty text. Placing other built-ins/ICs
+// alongside it does not perturb that numbering.
+test("addInstance keys a note from the N-series with empty text (FR-071f/FR-011a)", () => {
+  const d = createDesign("t");
+  addInstance(d, type74138(), 0, 0, 0); // U1
+  const n1 = addInstance(d, typeNote(), 2, 2, 0);
+  const n2 = addInstance(d, typeNote(), 4, 4, 0);
+  assert.equal(n1.refdes, "N-1");
+  assert.equal(n2.refdes, "N-2");
+  assert.equal(n1.text, "");
+  // The note consumes no U- or A-number: the next IC is still U2.
+  assert.equal(addInstance(d, type74138(), 6, 6, 0).refdes, "U2");
+});
+
+// noteSize auto-sizes to whole grid units (FR-071f): the empty-note minimum, and
+// growth driven by the longest line (width) and line count (height).
+test("noteSize returns the minimum for empty text and grows with content (FR-071f)", () => {
+  const min = noteSize("");
+  assert.deepEqual(min, { width: 4, height: 2 });
+  // A single short line stays at the minimum; both dims are whole integers.
+  const oneLine = noteSize("hi");
+  assert.ok(Number.isInteger(oneLine.width) && Number.isInteger(oneLine.height));
+  // More lines make it taller; a long line makes it wider than the minimum.
+  assert.ok(noteSize("a\nb\nc\nd").height > min.height);
+  assert.ok(noteSize("a very long single line of note text").width > min.width);
 });

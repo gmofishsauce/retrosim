@@ -140,6 +140,9 @@ export function buildSimulation(design, { onMessage = () => {} } = {}) {
 
   for (const inst of design.components) {
     if (inst.typeData.builtin) {
+      // A text note (FR-071f) is a pure annotation with no pins and no behavior;
+      // it is not a simulation entity, so skip it rather than flagging it unknown.
+      if (inst.typeData.renderType === "note") continue;
       const behave = BEHAVIORS[inst.type];
       if (!behave) {
         errors.push(`${inst.refdes}: unknown built-in type ${inst.type}`);

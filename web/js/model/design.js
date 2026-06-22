@@ -10,6 +10,30 @@ import {
   pinSlotOffset,
 } from "../engine/symbols.js";
 
+// Text-note layout (FR-071f), in grid units. NOTE_PAD/NOTE_LINE/NOTE_FONT are
+// shared with the renderer (canvas.js) so the auto-sized box matches the drawn
+// text. NOTE_CHAR is an approximate average glyph advance used only for sizing
+// (the proportional font is not measured in the DOM-free model); it is generous
+// so typical text does not overflow the box.
+export const NOTE_PAD = 0.3; // inner margin per side
+export const NOTE_LINE = 1.1; // line height
+export const NOTE_FONT = 0.85; // glyph height
+const NOTE_CHAR = 0.5; // average glyph advance (sizing only)
+const NOTE_MIN_W = 4; // empty-note minimum footprint
+const NOTE_MIN_H = 2;
+
+// noteSize returns a note's auto-sized footprint in whole grid units (FR-071f):
+// wide enough for its longest line and tall enough for its line count, never
+// below the minimum.
+export function noteSize(text) {
+  const lines = (text || "").split("\n");
+  const cols = lines.reduce((m, l) => Math.max(m, l.length), 0);
+  return {
+    width: Math.max(NOTE_MIN_W, Math.ceil(2 * NOTE_PAD + cols * NOTE_CHAR)),
+    height: Math.max(NOTE_MIN_H, Math.ceil(2 * NOTE_PAD + lines.length * NOTE_LINE)),
+  };
+}
+
 // createDesign returns an empty design (FR-004/FR-045). It mirrors the save
 // shape (§7.2) plus non-persisted id counters.
 export function createDesign(name) {
@@ -52,9 +76,15 @@ export function typeIdentity(type) {
 // objects (FR-067) use a separate A-<n> series (FR-011a); ICs use U<n>, ignoring
 // any trailing subunit letter so "U5A" counts as 5.
 export function addInstance(design, type, x, y, rotation) {
-  const refdes = type.builtin
-    ? "A-" + nextRefNum(design.components, /^A-(\d+)$/)
-    : "U" + nextRefNum(design.components, /^U(\d+)[A-Z]*$/);
+  // A text note (FR-071f) is a pure annotation: it consumes neither a U- nor an
+  // A-number and shows no designator, but still needs a unique internal key for
+  // selection/move/persist, drawn from a separate N-<n> series (FR-011a).
+  const refdes =
+    type.renderType === "note"
+      ? "N-" + nextRefNum(design.components, /^N-(\d+)$/)
+      : type.builtin
+        ? "A-" + nextRefNum(design.components, /^A-(\d+)$/)
+        : "U" + nextRefNum(design.components, /^U(\d+)[A-Z]*$/);
   const inst = {
     refdes,
     type: typeIdentity(type),
@@ -67,6 +97,8 @@ export function addInstance(design, type, x, y, rotation) {
   // The input switch carries per-instance state (FR-071c), defaulting to 0 on
   // placement (two states only, 0 and 1).
   if (type.renderType === "switch") inst.switchState = "0";
+  // A text note carries its per-instance text (FR-071f), empty on placement.
+  if (type.renderType === "note") inst.text = "";
   // A port carries its interface fields (FR-094, §7.2): a label defaulting to the
   // refdes (so a fresh port is its own net until the user names it), direction,
   // and bit width. The optional off-sheet target (FR-101) is added in phase 4.

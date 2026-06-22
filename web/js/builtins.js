@@ -61,6 +61,17 @@ const SWITCH_ICON =
   '<line x1="27" y1="18" x2="31" y2="18" stroke="#333" stroke-width="2"/>' +
   '<path d="M29 14 L35 18 L29 22 Z" fill="#333"/></svg>';
 
+// NOTE_ICON: a box reading "NOTE" with a blue dotted outline (FR-071f), echoing
+// the dotted box drawn on the canvas. Like the CLK/RST tiles it is just a labeled
+// box; the dashed blue stroke marks it as the annotation note rather than a part.
+const NOTE_ICON =
+  '<svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true">' +
+  '<rect x="3" y="11" width="30" height="14" fill="#fff" stroke="#1565c0"' +
+  ' stroke-dasharray="3 2"/>' +
+  '<text x="18" y="18" text-anchor="middle" dominant-baseline="central"' +
+  ' font-family="system-ui,sans-serif" font-weight="bold" font-size="9" fill="#000">NOTE</text>' +
+  "</svg>";
+
 // PORT_ICON: a pentagon "flag" whose apex points off-sheet, away from its
 // connection point (FR-094/FR-094b) — matching the placed object, where the flat
 // back edge carries the pin (into the sheet) and the apex is the front. The port
@@ -227,6 +238,20 @@ export const BUILTINS = [
     // external/off-sheet side stays virtual.
     pins: BIT_PINS("P", "left", "bidir"),
     pinGroups: [{ name: "P", pins: BIT_NAMES("P") }],
+  },
+  {
+    name: "note",
+    builtin: true,
+    title: "text note", // FR-071f palette tooltip
+    icon: NOTE_ICON,
+    renderType: "note",
+    // Auto-sizes to its text (FR-071f); these are the empty-note minimum, in grid
+    // units, recomputed on each text commit.
+    width: 4,
+    height: 2,
+    // Pure annotation: no pins, no pinGroups, no properties, and no entry in
+    // BEHAVIORS/INTERACTIONS below. Per-instance text lives in inst.text.
+    pins: [],
   },
 ];
 

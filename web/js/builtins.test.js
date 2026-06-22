@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { BUILTINS, BEHAVIORS } from "./builtins.js";
+import { BUILTINS, BEHAVIORS, INTERACTIONS } from "./builtins.js";
 
 function find(name) {
   const t = BUILTINS.find((b) => b.name === name);
@@ -45,4 +45,18 @@ test("8-wide built-ins expose eight grouped bits for an 8-bit bus snap (FR-071d/
 test("8-wide built-ins drive nothing", () => {
   assert.deepEqual(BEHAVIORS.indicator8({}), []);
   assert.deepEqual(BEHAVIORS.port8({}), []);
+});
+
+// The text note (FR-071f) is a pure annotation: a built-in with no pins, no
+// pin groups, no properties, and no behavior or interaction entry.
+test("text note is a pinless, behaviorless built-in (FR-071f)", () => {
+  const t = find("note");
+  assert.equal(t.builtin, true);
+  assert.equal(t.renderType, "note");
+  assert.deepEqual(t.pins, []);
+  assert.ok(!t.pinGroups);
+  assert.ok(!t.properties);
+  // No simulation behavior and no interactive handler — sim.js skips it.
+  assert.ok(!("note" in BEHAVIORS));
+  assert.ok(!("note" in INTERACTIONS));
 });

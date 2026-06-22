@@ -19,6 +19,15 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-22 — Note outline only when selected
+What: A text note (FR-071f) now draws its blue dotted outline box only while selected or editing; at rest only the text shows.
+Touches: FR-071f, FR-012 (§3.4a); design §2.1 built-ins list, §6.8 (`drawNote`), §6.11.
+
+## 2026-06-22 — Text note built-in
+What: Added a built-in text note object: a `NOTE` palette tile placing a blue-dotted box that holds free-form, multi-line text. It is a pure annotation — no pins, no netlist/sim participation, no designator or type label. Text entry begins on placement and re-opens on double-click; Enter commits, Shift+Enter inserts a newline. The box auto-sizes (whole grid units) to its text. Selectable/movable/deletable/rotatable like other objects; rotation turns the box and its text together (text reads at the rotated angle). Per-instance `text` round-trips with the design.
+Why: Requested feature — annotate schematics with explanatory text.
+Touches: FR-071f (new, §3.4a); FR-011a/FR-012/FR-020/FR-067a (note carve-outs); design §2.1 built-ins list, §6.8 (`drawNote`), §6.9 (note text-entry mode), §6.11 (`note` entry + `inst.text`).
+
 ## 2026-06-21 — Copy and paste
 What: Added Copy (Edit menu / Ctrl-Cmd+C) and Paste (Edit menu / Ctrl-Cmd+V). Copy captures the selected components plus the wiring interior to the selection (the FR-018c rule) into a session clipboard; whole subunit packages copy together. Paste instantiates the fragment with fresh U-/A-/X- refdes and fresh vertex/wire/bus ids, preserving interior connectivity, overrides, and switch state, and places it at the cursor via a floating ghost dropped on click (Esc cancels). One undoable action; pasted objects become the selection.
 Why: Requested feature; the new Edit menu (FR-004a) was built to host it.
