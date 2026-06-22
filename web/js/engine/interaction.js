@@ -6,6 +6,7 @@
 import {
   snapToGrid,
   screenToWorld,
+  worldToScreen,
   scaleFor,
   zoomAbout,
   centerViewportOn,
@@ -58,6 +59,9 @@ import {
   getVertex,
   busGroupBrace,
   typeIdentity,
+  NOTE_PAD,
+  NOTE_LINE,
+  NOTE_FONT,
 } from "../model/design.js";
 import {
   chooseGroupDialog,
@@ -148,7 +152,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
   let pasteFrag = null; // fragment armed for placement while tool === "paste"
   let pasteAnchor = null; // {x,y} fragment anchor that tracks the cursor (FR-113)
   let lastPointer = null; // last mousemove event, to seat the ghost on paste start
-  let editingNote = null; // active note text-entry { refdes, text } (FR-071f)
+  let editingNote = null; // active note text-entry { refdes, el (textarea) } (FR-071f)
 
   const findType = (id) => library.find((c) => typeIdentity(c) === id);
   // Resolves a wire or bus id: bend drags apply to both (FR-039).
@@ -479,53 +483,100 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     if (placed.typeData.renderType === "note") startNoteEdit(placed);
   }
 
-  // startNoteEdit puts a note into in-canvas text-entry mode (FR-071f): the
-  // working string lives here and is mirrored to the renderer (which draws it
-  // with a caret) until commit. The note is also selected so the gesture reads.
+  // startNoteEdit opens text-entry on a note by overlaying a real DOM <textarea>
+  // over it (FR-071f, OQ-011): the browser owns the caret, selection, and
+  // clipboard. The canvas note is hidden (renderer.setEditingNote) so only the
+  // overlay shows. The overlay is unrotated regardless of the note's rotation.
   function startNoteEdit(inst) {
     if (store.state.simulating) return; // editing is locked during a run (FR-087)
-    editingNote = { refdes: inst.refdes, text: inst.text || "" };
+    commitNoteEdit(); // close any prior edit first
     select({ kind: "component", refdes: inst.refdes });
-    renderer.setEditingNote?.(editingNote);
+
+    const ta = document.createElement("textarea");
+    ta.className = "note-editor";
+    ta.value = inst.text || "";
+    ta.wrap = "off";
+    ta.spellcheck = false;
+    positionNoteEditor(ta, inst);
+
+    ta.addEventListener("keydown", (e) => {
+      // Enter commits (Shift+Enter falls through to insert a newline natively);
+      // Escape commits. Both are swallowed so they don't bubble to the canvas.
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        commitNoteEdit();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        commitNoteEdit();
+      }
+      e.stopPropagation();
+    });
+    ta.addEventListener("blur", () => commitNoteEdit());
+    // Grow the box to fit as the user types (approximate, unrotated).
+    ta.addEventListener("input", () => sizeNoteEditor(ta));
+
+    document.body.appendChild(ta);
+    editingNote = { refdes: inst.refdes, el: ta };
+    renderer.setEditingNote?.(inst.refdes); // hide the canvas note while editing
+    // Defer focus to the next frame so the placing/double-click mousedown's own
+    // default focus handling can't steal it back.
+    requestAnimationFrame(() => {
+      if (editingNote?.el !== ta) return; // edit already ended
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length); // caret at end
+    });
   }
 
-  // commitNoteEdit ends text-entry, dispatching one undoable setNoteText command
-  // only when the text actually changed (FR-071f); the auto-sized footprint is
-  // recomputed by the command. A no-op when not editing.
+  // positionNoteEditor places and styles the overlay over the note, approximating
+  // the canvas text metrics (NOTE_* constants × scale). Position is viewport-fixed
+  // from the note's screen point plus the canvas's client rect.
+  function positionNoteEditor(ta, inst) {
+    const vp = store.state.viewport;
+    const scale = scaleFor(vp);
+    const rect = canvas.getBoundingClientRect();
+    const s = worldToScreen({ x: inst.x, y: inst.y }, vp);
+    const pad = NOTE_PAD * scale;
+    Object.assign(ta.style, {
+      position: "fixed",
+      left: rect.left + s.x + "px",
+      top: rect.top + s.y + "px",
+      font: Math.round(NOTE_FONT * scale) + "px system-ui, sans-serif",
+      lineHeight: NOTE_LINE * scale + "px",
+      padding: pad + "px",
+      margin: "0",
+      boxSizing: "border-box",
+      border: "2px solid #4a90d9",
+      background: "#fff",
+      resize: "none",
+      overflow: "hidden",
+      whiteSpace: "pre",
+      zIndex: "1000",
+    });
+    sizeNoteEditor(ta);
+  }
+
+  // sizeNoteEditor grows the overlay to fit its content (approximate).
+  function sizeNoteEditor(ta) {
+    const scale = scaleFor(store.state.viewport);
+    ta.style.width = "auto";
+    ta.style.height = "auto";
+    ta.style.width = Math.max(ta.scrollWidth, 4 * scale) + "px";
+    ta.style.height = Math.max(ta.scrollHeight, 2 * scale) + "px";
+  }
+
+  // commitNoteEdit ends text-entry: it removes the overlay, un-hides the canvas
+  // note, and dispatches one undoable setNoteText command only when the text
+  // actually changed (FR-071f). Idempotent — a no-op when not editing — so blur,
+  // Enter, and an outside click can all call it safely.
   function commitNoteEdit() {
     if (!editingNote) return;
-    const { refdes, text } = editingNote;
+    const { refdes, el } = editingNote;
+    const text = el.value;
     editingNote = null;
+    el.remove();
     renderer.setEditingNote?.(null);
     const inst = store.design.components.find((c) => c.refdes === refdes);
     if (inst && text !== (inst.text ?? "")) store.dispatch(setNoteTextCmd(refdes, text));
-  }
-
-  // handleNoteKeydown captures keystrokes while a note is being typed (FR-071f):
-  // Enter commits, Shift+Enter inserts a newline, Backspace deletes, Escape
-  // commits, and any printable key is appended. Text-entry is modal — every other
-  // key is swallowed so editor shortcuts (rotate, delete, undo) don't fire mid-
-  // edit. Returns true when it consumed the event.
-  function handleNoteKeydown(e) {
-    if (!editingNote) return false;
-    if (e.key === "Enter") {
-      if (e.shiftKey) {
-        editingNote.text += "\n";
-        renderer.setEditingNote?.(editingNote);
-      } else {
-        commitNoteEdit();
-      }
-    } else if (e.key === "Escape") {
-      commitNoteEdit();
-    } else if (e.key === "Backspace") {
-      editingNote.text = editingNote.text.slice(0, -1);
-      renderer.setEditingNote?.(editingNote);
-    } else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
-      editingNote.text += e.key;
-      renderer.setEditingNote?.(editingNote);
-    }
-    e.preventDefault();
-    return true; // modal: swallow everything while editing
   }
 
   // copySelection captures the selected components and their interior wiring into
@@ -1370,11 +1421,14 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
   });
 
   window.addEventListener("keydown", (e) => {
-    // Ignore shortcuts while typing in a field (e.g., the save dialog).
-    if (e.target instanceof HTMLInputElement || e.target.isContentEditable) return;
-
-    // While a note is being typed, capture keys modally before any shortcut.
-    if (handleNoteKeydown(e)) return;
+    // Ignore shortcuts while typing in a field (e.g., the save dialog or the note
+    // text-entry overlay, FR-071f), so editor shortcuts never fire mid-edit.
+    if (
+      e.target instanceof HTMLInputElement ||
+      e.target instanceof HTMLTextAreaElement ||
+      e.target.isContentEditable
+    )
+      return;
 
     if (e.code === "Space") {
       spaceDown = true;

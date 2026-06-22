@@ -47,7 +47,7 @@ export function initCanvas(canvasEl, store) {
   let preview = null; // transient {points: [{x,y}, …]} in world coords
   let marquee = null; // transient rubber-band {a, b (world), mode} (FR-016b)
   let ghost = null; // transient paste ghost {fragment, dx, dy} (FR-113)
-  let editing = null; // transient note text-entry {refdes, text} (FR-071f)
+  let editing = null; // refdes of the note being edited; hidden so the textarea overlay shows (FR-071f)
   let lastW = 0; // last applied CSS size / DPR, so resize() is idempotent and a
   let lastH = 0; // ResizeObserver tick that didn't change the box is a no-op.
   let lastDpr = 0;
@@ -176,14 +176,13 @@ function drawGrid(ctx, w, h, vp) {
 function drawComponents(ctx, design, vp, selection, hover, sim, editing) {
   if (!design) return;
   for (const inst of design.components) {
+    // The note being edited is hidden — a DOM <textarea> overlay covers it (§6.9).
+    if (editing && inst.refdes === editing) continue;
     const selected = selection.some((s) =>
       sameRef(s, { kind: "component", refdes: inst.refdes }),
     );
     const hovered = hover === inst.refdes;
-    // While a note is being typed (FR-071f), draw the live working text with a
-    // caret instead of the committed inst.text.
-    const editText = editing && editing.refdes === inst.refdes ? editing.text : null;
-    drawComponent(ctx, inst, vp, selected, hovered, sim, editText);
+    drawComponent(ctx, inst, vp, selected, hovered, sim);
   }
 }
 
@@ -454,15 +453,14 @@ function drawBusBraces(ctx, design, vp) {
   }
 }
 
-function drawComponent(ctx, inst, vp, selected, hovered, sim, editText = null) {
+function drawComponent(ctx, inst, vp, selected, hovered, sim) {
   const td = inst.typeData;
   if (!td) return;
 
-  // A text note (FR-071f) owns its whole rendering: a dotted blue box with text
-  // that rotates with it, and no pins or refdes/type label. When being typed,
-  // editText is the live working string (drawn with a caret). Drawn and done.
+  // A text note (FR-071f) owns its whole rendering: text that rotates with it,
+  // a dotted box when selected, and no pins or refdes/type label. Drawn and done.
   if (td.renderType === "note") {
-    drawNote(ctx, inst, vp, selected, editText);
+    drawNote(ctx, inst, vp, selected);
     return;
   }
 
@@ -805,10 +803,8 @@ function drawLabelBox(ctx, inst, vp, selected, label) {
 // text. Box and text rotate together as a rigid body (the text reads at the
 // rotated angle, not re-uprighted), so we set up a translate+rotate frame at the
 // instance origin and draw the footprint and glyphs in local grid-scaled pixels.
-function drawNote(ctx, inst, vp, selected, editText = null) {
+function drawNote(ctx, inst, vp, selected) {
   const td = inst.typeData;
-  const editing = editText !== null;
-  const text = editing ? editText : inst.text || "";
   const scale = scaleFor(vp);
   const origin = worldToScreen({ x: inst.x, y: inst.y }, vp);
 
@@ -816,17 +812,17 @@ function drawNote(ctx, inst, vp, selected, editText = null) {
   ctx.translate(origin.x, origin.y);
   ctx.rotate((inst.rotation * Math.PI) / 180); // CW, matching rotateOffset
 
-  // Outline box only when selected or editing (FR-071f): a white-filled box with
-  // a dotted blue border at rest-selected, solid while editing to signal text
-  // entry. Unselected and not editing, only the text is drawn (no box).
-  if (selected || editing) {
+  // Dotted blue outline box (white fill) only when selected (FR-071f); at rest,
+  // unselected, only the text is drawn with no box. While editing the note is not
+  // drawn at all — the textarea overlay (§6.9) covers it.
+  if (selected) {
     ctx.beginPath();
     ctx.rect(0, 0, td.width * scale, td.height * scale);
     ctx.fillStyle = "#fff";
     ctx.fill();
-    ctx.setLineDash(editing ? [] : [4, 3]);
+    ctx.setLineDash([4, 3]);
     ctx.lineWidth = 2;
-    ctx.strokeStyle = editing ? "#4a90d9" : NOTE_BLUE;
+    ctx.strokeStyle = NOTE_BLUE;
     ctx.stroke();
     ctx.setLineDash([]);
   }
@@ -836,23 +832,9 @@ function drawNote(ctx, inst, vp, selected, editText = null) {
   ctx.font = Math.round(NOTE_FONT * scale) + "px system-ui, sans-serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  const lines = text.split("\n");
+  const lines = (inst.text || "").split("\n");
   for (let i = 0; i < lines.length; i++) {
     ctx.fillText(lines[i], NOTE_PAD * scale, (NOTE_PAD + i * NOTE_LINE) * scale);
-  }
-
-  // Caret at the end of the last line while editing (no mid-text navigation).
-  // Use real glyph metrics so it sits exactly past the typed text.
-  if (editing) {
-    const last = lines[lines.length - 1];
-    const cx = NOTE_PAD * scale + ctx.measureText(last).width;
-    const cy = (NOTE_PAD + (lines.length - 1) * NOTE_LINE) * scale;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx, cy + NOTE_FONT * scale);
-    ctx.strokeStyle = "#111";
-    ctx.lineWidth = 1;
-    ctx.stroke();
   }
 
   ctx.restore();

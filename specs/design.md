@@ -852,10 +852,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   refdes/type label and no pins/bubbles** (FR-011a/FR-012 exemptions). The text
   (and the box when shown) is emitted in the instance's local grid frame and
   projected through `rotateOffset`, so it turns with the instance (FR-071f rotation
-  exception); the text is **not** re-uprighted the way pin/refdes labels are. While
-  the note is the active text-entry target (§6.9) the branch also draws the caret;
-  the actual keystroke capture is the interaction layer's (§6.9), not the
-  renderer's.
+  exception); the text is **not** re-uprighted the way pin/refdes labels are.
+  While the note is the active text-entry target, the renderer **skips it
+  entirely** — a DOM `<textarea>` overlay (§6.9) covers it — so the canvas never
+  draws the note that is being edited; on commit the overlay is removed and the
+  note draws normally again. The renderer knows the editing note from a transient
+  `editing` refdes set via `setEditingNote` (§6.9).
 - **Wire attachment drawing (FR-013d):** wire/bus *endpoint* segments and the
   rubber-band preview draw to the pin's visual attachment point —
   `pinVisualPos` (model/design.js): the bubble center (grid point + one bubble
@@ -1074,19 +1076,29 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   that marks the design modified and wakes the simulator (§6.10) — instead of
   reporting the lock. The switch's handler toggles `switchState` 0↔1 (FR-087a).
   (Reworked 2026-06-17; supersedes selection remaining available during a run.)
-- **Note text-entry mode (FR-071f):** a new SELECT-mode sub-state, `editingNote`,
-  holds the note instance being typed into and a working string. It is entered two
-  ways: automatically when a `note` built-in is placed (the one-shot placement
-  ends in this mode rather than plain SELECT), and by a **double-click** whose
-  hit-test lands on a placed note. While active, the FSM captures keystrokes:
-  printable keys and Backspace edit the working string, **Shift+Enter** inserts a
-  newline, **Enter** commits, and Escape or a click outside the note also commits;
-  the canvas renderer draws the live string and a caret (§6.8). Commit dispatches
-  a `setNoteText` command (§6.10) only when the text changed (recomputing the
-  auto-sized footprint, FR-071f) and returns to plain SELECT. Text-entry mode is
-  unavailable while a simulation runs (the editor is locked, above), consistent
-  with other design edits. This is the editor's first in-canvas text capture; no
-  hidden DOM `<input>` is required — the FSM owns the keystrokes directly.
+- **Note text-entry mode (FR-071f):** editing a note overlays a real DOM
+  `<textarea>` on the page, positioned over the note, and lets the browser handle
+  the caret, text selection, and clipboard natively (OQ-011). A SELECT-mode
+  sub-state, `editingNote`, holds the note's refdes and the live textarea element.
+  It is entered two ways: automatically when a `note` built-in is placed (the
+  one-shot placement ends in this mode rather than plain SELECT), and by a
+  **double-click** whose hit-test lands on a placed note. On entry the FSM creates
+  the textarea (value = `inst.text`, caret at end), focuses it, and tells the
+  renderer to **hide the canvas note** while editing (§6.8) so only the overlay
+  shows; the overlay is placed at the note's screen position (`worldToScreen` +
+  the canvas's client rect) and sized/styled from the note layout constants
+  (`NOTE_PAD/NOTE_LINE/NOTE_FONT × scale`) to approximate the canvas text. The
+  overlay is drawn **unrotated regardless of the note's rotation** — rotation of
+  the editing overlay is deliberately out of scope (OQ-011); the committed note
+  still rotates normally (§6.8). The textarea owns keystrokes: **Shift+Enter**
+  inserts a newline (native), **Enter** (no shift) commits, **Escape** commits,
+  and a blur (click outside) or any tool switch commits. Commit reads the
+  textarea value, removes the overlay, un-hides the canvas note, and dispatches a
+  `setNoteText` command (§6.10) only when the text changed (recomputing the
+  auto-sized footprint, FR-071f). The global keydown handler ignores events whose
+  target is the textarea (as it already does for input fields), so editor
+  shortcuts never fire mid-edit. Text-entry mode is unavailable while a simulation
+  runs (the editor is locked, above), consistent with other design edits.
 - **Error handling:** clicks on empty space in WIRE/BUS state are ignored (no
   partial wire). A gesture that would create a zero-endpoint wire is discarded
   (FR-030). Pressing `Esc` cancels an in-progress gesture, restoring SELECT.
@@ -1295,7 +1307,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   name labels are suppressed for built-ins (the glyph owns the body); the refdes is
   drawn above the symbol. The **text note** (`note`) is the lone exception that
   draws neither pins nor refdes (FR-071f): `drawNote` (§6.8) draws only `inst.text`
-  (plus a dotted blue outline box when selected or editing). Because it has no `pins`, `addInstance` assigns it an
+  (plus a dotted blue outline box when selected). While a note is being edited the
+  renderer skips it entirely — a DOM `<textarea>` overlay covers it (§6.9). Because it has no `pins`, `addInstance` assigns it an
   internal-only `N-<n>` refdes — a separate series, special-cased ahead of the
   `A-<n>` path (FR-011a) — that is never drawn but keeps the instance selectable,
   movable, and persistable on the usual refdes-keyed machinery. It is invisible to
@@ -1306,10 +1319,10 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Note text state (FR-071f)** — the note carries one per-instance field,
   `inst.text` (string, default `""`), set on the instance directly rather than
   through `overrides`, round-tripping through save/load for free like
-  `switchState` (§7.2). It is edited by an in-canvas **text-entry mode** owned by
-  the interaction FSM (§6.9): entered automatically on placement and re-entered by
-  double-clicking the note; **Enter** commits and exits, **Shift+Enter** inserts a
-  newline, and a click elsewhere or Escape also commits. Each commit that changes
+  `switchState` (§7.2). It is edited through a DOM `<textarea>` **overlay** managed
+  by the interaction FSM (§6.9): entered automatically on placement and re-entered
+  by double-clicking the note; **Enter** commits and exits, **Shift+Enter** inserts
+  a newline, and a click elsewhere (blur) or Escape also commits. Each commit that changes
   the text is one undoable `setNoteText` command (§6.10); the auto-sized
   `width`/`height` (whole grid units) are recomputed from the wrapped text on
   commit.
@@ -2407,23 +2420,16 @@ only the noted slices.
   tristate}`. Power and ground are not represented anywhere (file, editor, or
   simulation), so no `pwr`/`power` direction is needed; the four directions map
   cleanly to the future four-level model.
-- **OQ-011 — Text selection inside a note while editing (FR-071f).** The note's
-  text-entry mode (§6.9) captures keystrokes directly in the FSM with **no DOM
-  text field**: the working value is an append-only string and the caret is
-  cosmetic (a bar after the last glyph) — there is no caret *index*, no
-  click-to-position, and no selection range. Supporting in-box text selection
-  (click-to-place caret, drag/Shift-arrow to select, highlight rendering, native
-  clipboard) is therefore **not a tweak** on the current path: it needs a
-  caret-index model, point→character hit-testing under rotation and grid scale,
-  selection highlight rendering, and a decision on how note clipboard ops
-  interleave with the app's own Copy/Paste (FR-111/FR-112). The cheaper
-  alternative is to overlay a real DOM `<textarea>` over the note while editing
-  (native caret/selection/clipboard for free), writing its value back to
-  `inst.text` on commit — trading away the "no hidden DOM input" choice and
-  needing a CSS transform to line the overlay up with a rotated note and to match
-  the canvas font metrics. **Open:** whether note selection is wanted, and if so
-  which approach — both are an architecture decision to settle before building
-  further text-editing features on the keystroke-capture path. (Raised 2026-06-22.)
+- **OQ-011 — Text selection inside a note while editing (FR-071f) — RESOLVED.**
+  Adopted the **DOM `<textarea>` overlay**: editing a note hides the canvas note
+  and overlays a real textarea over it (§6.9), so caret placement, text selection,
+  and clipboard are the browser's native behavior. This supersedes the original
+  keystroke-capture / cosmetic-caret approach (no caret index, no selection). The
+  remaining simplification is **rotation**: the overlay is drawn **unrotated**
+  regardless of the note's rotation (no CSS transform to align it with a rotated
+  note), and the overlay font only **approximates** the canvas metrics. Aligning
+  the overlay with a rotated note is intentionally deferred and not currently
+  planned. (Raised 2026-06-22; resolved 2026-06-22.)
 
 None of the above prevent starting the server skeleton, the canvas engine, the
 store/undo pipeline, or the chrome. Only the YAML **parser body** and the **bus

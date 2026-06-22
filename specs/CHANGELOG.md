@@ -19,6 +19,10 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-22 — Note editing via DOM textarea overlay
+What: Replaced the note's canvas keystroke-capture text entry with a real DOM <textarea> overlaid over the note while editing, giving native caret/selection/clipboard. The canvas hides the note while editing; on commit (Enter/Escape/blur/tool-switch) the textarea value writes back via setNoteText. Overlay is drawn unrotated regardless of note rotation (deferred). Resolves OQ-011.
+Touches: design §6.8 (drawNote skips edited note), §6.9 (textarea overlay), §6.11, OQ-011 (resolved).
+
 ## 2026-06-22 — Note outline only when selected
 What: A text note (FR-071f) now draws its blue dotted outline box only while selected or editing; at rest only the text shows.
 Touches: FR-071f, FR-012 (§3.4a); design §2.1 built-ins list, §6.8 (`drawNote`), §6.11.

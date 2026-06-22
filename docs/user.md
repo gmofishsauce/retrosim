@@ -11,6 +11,26 @@ KiCad-like.
 
 ---
 
+## Contents
+
+1. [Building and running](#1-building-and-running)
+2. [The workspace](#2-the-workspace)
+3. [Placing components](#3-placing-components)
+4. [Navigating the canvas](#4-navigating-the-canvas)
+5. [The selection model](#5-the-selection-model)
+6. [Wiring](#6-wiring)
+7. [Buses](#7-buses)
+8. [Per-instance overrides](#8-per-instance-overrides)
+9. [Refreshing type data](#9-refreshing-type-data)
+10. [Files](#10-files)
+11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
+12. [Sub-designs and ports](#12-sub-designs-and-ports)
+13. [Simulation](#13-simulation)
+14. [If the server disconnects](#14-if-the-server-disconnects)
+15. [Keyboard and mouse reference](#15-keyboard-and-mouse-reference)
+
+---
+
 ## 1. Building and running
 
 There is no binary distribution; you build and run the server yourself. The
@@ -376,7 +396,8 @@ simulating.
 Built-in objects live in the lower palette region. Once placed they behave like
 ordinary component instances (selectable, movable, rotatable, deletable, wireable)
 and are designated `A-1`, `A-2`, …. Their behavior is defined by the app, not by
-YAML.
+YAML. (The **text note** is the exception: it is a pure annotation with no pins,
+no behavior, and no designator — see below.)
 
 | Object | Pins | Behavior |
 |---|---|---|
@@ -388,6 +409,7 @@ YAML.
 | **Input switch** | one output (`OUT`, right) | A user-set logic source with two states, **1** and **0**, drawn like the state indicator — a round value bubble (white **1** / black **0**) — with a small arrow toward its output pin. A **strong** driver: it overrides pull-ups/pull-downs on its net. Set its state in the properties panel while editing, or **click it during a simulation** to toggle **0 ↔ 1**. The state is saved with the design (a new switch starts at **0**). |
 | **State indicator (8-wide)** | eight inputs (`D0`–`D7`, left) | An 8-bit display, drawn as an LED **bar-graph** (eight stripes). Display only — drives nothing. The eight pins form one pin group, so an 8-wide bus snap-connects to all bits at once (see [Buses](#7-buses)); each stripe shows its bit's value (white **1** / black **0** / gray **?**) during and after a run. |
 | **Port / off-sheet connector (8 wide)** | eight pins (`P0`–`P7`, left) | An 8-bit off-sheet connector, drawn as eight narrow pentagons — one roughly aligned with each pin, each pointing off-sheet away from the pins. The eight pins form one pin group so an 8-wide bus snap-connects to all bits at once (see [Buses](#7-buses)). It is a bus terminal for now: it drives nothing and does not yet join to same-label or cross-file ports (that's the 1-wide [port](#12-sub-designs-and-ports)'s job today). |
+| **Text note** (`NOTE` tile) | none | A free-form text annotation — pure documentation, with no pins, no wiring, and no part in simulation. See **[Text notes](#text-notes)** below for how to type and edit one. |
 
 You can override a built-in's properties per instance via the properties panel
 (e.g. give one clock a different `period`). The input switch is set the same way:
@@ -398,6 +420,27 @@ you can change by hand **while a simulation is running**: click its body and the
 simulation immediately re-evaluates from the new value (see
 [Simulation](#13-simulation)). This is the one kind of design change allowed
 during a run.
+
+### Text notes
+
+A **text note** lets you annotate a schematic with free-form text. Place the
+`NOTE` tile like any other built-in. It is purely decorative — it has no pins,
+carries no signal, and is ignored by the netlist and the simulator — so it never
+affects how a design behaves. At rest it shows just its text; a dotted blue box
+appears around it only while it is selected or being edited.
+
+- **Typing:** a note opens for editing the moment you place it, and you can
+  re-open it any time by **double-clicking** it. While editing, a text box
+  appears over the note where you can type, select text, and cut/copy/paste with
+  the usual shortcuts.
+- **Finishing:** press **Enter** (or click elsewhere) to commit the text;
+  press **Esc** to commit and leave editing.
+- **Line breaks:** press **Shift+Enter** to start a new line within the note.
+- The box **grows to fit** what you type. Notes **rotate** with the rest of a
+  selection (the text turns with the box), can be moved and deleted like anything
+  else, and their text is saved with the design.
+
+Notes carry no `A-` number and show no type label — only your text on the canvas.
 
 ---
 
@@ -522,6 +565,7 @@ clear message until then, without losing your work.
 | Right-click empty | Recenter view on the cursor |
 | Right-click object | Context menu |
 | Double-click a sub-design | Open it (descend); **← back** returns to the parent |
+| Double-click a text note | Edit its text |
 | Left-click input switch (while simulating) | Toggle its state `0 ↔ 1` |
 | Left-click any other item (while simulating) | Selection is locked — status bar shows "Editor is locked while the simulator is running" |
 
@@ -539,4 +583,5 @@ clear message until then, without losing your work.
 | `Ctrl/Cmd+C` | Copy selection to the clipboard |
 | `Ctrl/Cmd+V` | Paste (ghost follows the cursor; click to drop) |
 | `Space` (hold) | Pan with left-drag |
-| `Esc` | Cancel the current gesture / tool / selection / pending paste |
+| `Enter` / `Shift+Enter` (editing a text note) | Commit the note / insert a line break |
+| `Esc` | Cancel the current gesture / tool / selection / pending paste (or commit a text note being edited) |
