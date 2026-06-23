@@ -19,6 +19,10 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-23 — Clarify FR-083: a strong U suppresses weak drivers (net resolution)
+What: Tightened FR-083 (and the §6.13 net-resolution description) to state explicitly that "enabled strong driver" means any strong driver contributing a non-Z value (0, 1, or U) — so a strong U (e.g. an uncertain tristate enable) suppresses pull-ups/pull-downs and forces the net to U, and weak drivers decide only when every strong driver is Z. Documentation of the existing resolveNet behavior; no code change. Prompted by fast/C-generator planning (FR-107/FR-108) needing the strength-tier semantics pinned down. Net values remain four (FR-077); strength is a driver attribute, not a fifth value.
+Touches: FR-083; design §6.13.
+
 ## 2026-06-23 — Tap a bus bit by terminating a wire on it (reverse breakout)
 What: Drawing a wire from a pin and clicking onto a bus now pops the same bit-choice dialog as starting a breakout from the bus, and creates the single-bit breakout connection — previously the terminating click landed on no target and was swallowed as a waypoint. The committed wire follows the route already drawn (a breakout *started* on a bus still commits straight). breakoutBit/breakoutBitCmd gained an optional bends arg; breakoutBitCmd resolves a branch far-endpoint via resolveSpec.
 Touches: FR-043b (new); design §6.9 (breakout, WIRE state table), traceability.

@@ -1625,13 +1625,20 @@ no sequential part could ever leave U.)
   into its register. (2) Evaluate every driver against `curr`. (3) Resolve every
   net into `next` (below). (4) Swap buffers, `simTime++`. Double-buffering makes
   the step order-independent: outputs respond exactly one unit after inputs.
-- **Net resolution (FR-081–FR-083):** gather the net's enabled (non-Z) strong
-  contributions. Both 0 and 1 present → **conflict**: value U, conductor flagged
-  for red rendering (§6.8), reported on onset via the message tray naming two
-  conflicting drivers, e.g. `bus conflict: U3.Q0 vs U7.B2` (FR-082); any U
-  present → U; all agree → that value; none enabled → the weak value if pull-ups
-  xor pull-downs are attached (1/0), a conflict if both kinds are, else Z
-  (FR-083).
+- **Net resolution (FR-081–FR-083):** a **strength-priority** reduction
+  (`resolveNet`). Each contribution is `{v∈{0,1,U}, weak}`; a Z driver contributes
+  nothing (it is dropped before resolution). Choose the deciding **tier**: the
+  strong (non-weak) contributions if any are present, else the weak ones — i.e.
+  the *presence* of a non-Z strong driver, **regardless of its value**, suppresses
+  all weak drivers (a strong U, e.g. a tristate output with an uncertain enable
+  evaluated pessimistically to U per FR-081, still counts as strong and forces the
+  net to U, not to the weak pull value, FR-083). Then resolve **within** that tier:
+  both 0 and 1 present → **conflict**: value U, conductor flagged for red rendering
+  (§6.8), reported on onset via the message tray naming two conflicting drivers,
+  e.g. `bus conflict: U3.Q0 vs U7.B2` (FR-082); any U present → U; all agree → that
+  value. Empty pool (no driver, or every driver Z) → Z. Thus a weak pull decides a
+  net only when every strong driver is Z, and a pull-up xor pull-down gives 1/0
+  while both kinds together (still weak tier) is a conflict (FR-083).
 - **Built-in behaviors (FR-067a):** the `BEHAVIORS` registry entries (§6.11)
   take the uniform signature `behave(ctx) → [{pin, value, weak?}]` with `ctx =
   {props, simTime, clockPeriod, state}`: **clock** returns its FR-084 waveform —
