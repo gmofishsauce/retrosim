@@ -336,10 +336,10 @@ function drawPreview(ctx, preview, vp) {
     ctx.restore();
   }
   // Prospective group-snap brace while dragging a bus near a matching group
-  // (FR-042a): solid bus-color so it previews how the connection will look.
-  if (preview.brace) {
-    const br = preview.brace;
-    strokeBrace(ctx, br.a, br.b, br.apex, vp, "#1565c0", 2);
+  // (FR-042a), and the source group's brace when the bus started on a snap
+  // (FR-042b): solid bus-color so they preview how the connection will look.
+  for (const br of [preview.sourceBrace, preview.brace]) {
+    if (br) strokeBrace(ctx, br.a, br.b, br.apex, vp, "#1565c0", 2);
   }
 }
 

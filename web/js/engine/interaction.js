@@ -325,7 +325,13 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     const gp = busGroupHoverPreview(liveSrc, liveAnchor, e);
     const live = gp ? gp.points : previewRoute(liveSrc, liveAnchor, gridOf(e), worldOf(e));
     const points = concatDedup(locked, live);
-    renderer.setPreview(gp ? { points, brace: gp.brace } : { points });
+    // A bus started on a pin-group snap keeps that source brace shown for the whole
+    // drag, regardless of where the cursor is (FR-042b).
+    const sourceBrace =
+      wireSource && wireSource.kind === "group"
+        ? busBrace(wireSource.refdes, wireSource.group, wireSource.busWidth)
+        : null;
+    renderer.setPreview({ points, brace: gp ? gp.brace : null, sourceBrace });
   }
 
   // select replaces the selection with a single object (plain click), or —
@@ -777,11 +783,20 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
   // bus endpoint is placed at. Recomputed from current design state to match the
   // block snapBusGroup will claim (FR-041c).
   function busApex(refdes, groupName, width) {
+    const brace = busBrace(refdes, groupName, width);
+    return brace ? brace.apex : null;
+  }
+
+  // busBrace returns the full group-snap brace ({a, b, apex}, FR-042a) of the
+  // pack-low block a width-`width` bus would claim on a component's pin group, or
+  // null if the group is gone or has no free block. Recomputed from current design
+  // state. Drives both busApex and the in-progress source-brace preview (FR-042b).
+  function busBrace(refdes, groupName, width) {
     const inst = store.design.components.find((c) => c.refdes === refdes);
     const group = inst && (inst.typeData.pinGroups ?? []).find((g) => g.name === groupName);
     if (!group) return null;
     const block = groupFreeBlock(store.design, refdes, group, width);
-    return block ? busGroupBrace(inst, block).apex : null;
+    return block ? busGroupBrace(inst, block) : null;
   }
 
   // busGroupHoverPreview returns the bus-drag feedback when the cursor nears a

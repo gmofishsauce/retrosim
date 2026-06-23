@@ -19,6 +19,10 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-23 — Keep the source group's bus brace shown while dragging
+What: Fixed a bug where a bus started on a pin-group snap lost its source brace as soon as the cursor dragged out of that group's snap range (the brace only reappeared once the bus was committed). The in-progress source group's brace now stays drawn for the whole drag, alongside any prospective destination brace.
+Touches: FR-042b; design §6.9.
+
 ## 2026-06-22 — Divorce internal identity from display names (type id + editable designator label)
 What: Introduced an immutable, library-unique type `id` (e.g. `type-74138`, `type-22V574`) as the sole library key — for the palette, placed instances' `type`, the behavior cache, and Refresh Types — divorced from the now free-form, editable display name (`type` for 74-series, `partnumber` for GAL). The palette tile shows the full display name as button text (no more "74" stripping or GAL family label), at a font small enough for five characters; the tooltip is retained. For instances, the existing `refdes` (U/A/N/X) stays the immutable internal identity (foreign key for vertices/group-snaps/selection/persistence); a new optional, free-form `label` carries the *displayed* designator, defaulting to the `refdes` and user-editable in the properties panel with no uniqueness/format checks. Save format bumped 1→2 with a pure textual migration re-keying each instance's `type` to the type id (`type := "type-"+(partnumber||name)`); the `label` is lazy (needs no migration). YAML gains an `id` key (optional, derived when absent); all 25 library files set it explicitly.
 Why: Requested — allow flexible labeling of parts and instances without the labels being load-bearing identifiers.

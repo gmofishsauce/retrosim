@@ -1054,7 +1054,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     committed width yet, FR-042c), so a fresh bus shows feedback for — and adopts
     the free-block width of — the nearest group. Once the first endpoint fixes the
     width, the second endpoint passes that width and acceptance is by free block of
-    that exact size (FR-041c).
+    that exact size (FR-041c). When the in-progress bus's source endpoint is a group
+    snap (`wireSource.kind === "group"`), `updateWirePreview` also recomputes that
+    source group's brace each frame and includes it in the preview so the
+    originating connection stays drawn for the whole drag, independent of the
+    cursor-near destination brace (FR-042b); `drawPreview` strokes both.
   - **Body click (FR-041):** falling back to the component body, compute the
     accepting groups via `groupsAcceptingBus`: **0** → leave the endpoint
     **unconnected** (FR-043); **1** → snap automatically to its block; **≥2** → open
