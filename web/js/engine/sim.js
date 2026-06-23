@@ -16,6 +16,8 @@ import {
 } from "./galasm.js";
 import { buildNets } from "../model/netlist.js";
 import { BEHAVIORS } from "../builtins.js";
+import { createMemoryCore, parseRomBytes } from "./memory.js";
+import { readRomFile } from "../api.js";
 import { setAppState, postMessage, clearMessage } from "../chrome/statusbar.js";
 
 // SETTLE_BOUND is the combinational settling bound (FR-085).
@@ -44,7 +46,7 @@ function effectiveProps(inst) {
 //   conflictedConductors()   Set of wire/bus ids on conflicted nets (FR-082)
 //   hasClocks()              sequential (FR-086) vs combinational (FR-085)
 //   unitsPerSecond()         pacing rate: max period × speed over clocks (FR-084)
-export function buildSimulation(design, { onMessage = () => {} } = {}) {
+export function buildSimulation(design, { onMessage = () => {}, romContent = null } = {}) {
   const nets = buildNets(design, onMessage);
 
   // (refdes, pin) → net index.
@@ -138,8 +140,38 @@ export function buildSimulation(design, { onMessage = () => {} } = {}) {
     entities.push(e);
   }
 
+  // makeMemoryEntity wraps a generated RAM/ROM (FR-114c/FR-114d) over its pure
+  // behavior core (memory.js). The core reads input pins via `read`, which —
+  // like the galasm readNet — returns the previous step's net value (curr), so
+  // outputs follow inputs by one unit (FR-078). `w` is cached for the drive loop.
+  function makeMemoryEntity(inst) {
+    const refdes = inst.refdes;
+    const mem = inst.typeData.mem;
+    const read = (pinName) => {
+      const n = netOfPin.get(`${refdes}.${pinName}`);
+      return n === undefined ? VZ : curr[n];
+    };
+    const core = createMemoryCore(mem);
+    // Seed a ROM's content from the bytes loaded at Run (FR-114e); a RAM and an
+    // unloaded ROM start all-U.
+    if (mem.kind === "rom" && mem.romFile && romContent && romContent.has(mem.romFile)) {
+      const info = core.loadBytes(romContent.get(mem.romFile));
+      if (info.truncated) {
+        onMessage(
+          `${refdes}: ROM file has ${info.fileWords} words, exceeding the device's ${info.capacity}; extra ignored`,
+        );
+      }
+    }
+    return { kind: "memory", refdes, w: mem.dataWidth, core, read };
+  }
+
   for (const inst of design.components) {
-    if (inst.typeData.builtin) {
+    if (inst.typeData.mem) {
+      // A generated memory device (FR-114c) is not a `builtin` (so it keeps a
+      // U-series refdes and the IC render), but its behavior is built-in, not
+      // GALasm: route it to a dedicated memory entity rather than the galasm path.
+      entities.push(makeMemoryEntity(inst));
+    } else if (inst.typeData.builtin) {
       // A text note (FR-071f) is a pure annotation with no pins and no behavior;
       // it is not a simulation entity, so skip it rather than flagging it unknown.
       if (inst.typeData.renderType === "note") continue;
@@ -227,6 +259,11 @@ export function buildSimulation(design, { onMessage = () => {} } = {}) {
       updateRegisters(e.compiled, e.readNet, e.registers, globalRose, e.clockPrev);
       e.prevClock = cur;
     }
+    // Memory writes (RAM WE/ rising edge, FR-114d) latch from curr too, alongside
+    // register latching, before any contribution is evaluated.
+    for (const e of entities) {
+      if (e.kind === "memory") e.core.writeStep(e.read);
+    }
 
     const contribs = nets.map(() => []);
     const add = (netKey, v, weak, label) => {
@@ -238,6 +275,15 @@ export function buildSimulation(design, { onMessage = () => {} } = {}) {
         const ctx = { props: e.props, simTime, clockPeriod, state: e.inst.switchState };
         for (const c of e.behave(ctx)) {
           add(`${e.refdes}.${c.pin}`, c.value, !!c.weak, `${e.refdes}.${c.pin}`);
+        }
+      } else if (e.kind === "memory") {
+        // Drive the data bus per the read/enable logic (FR-114d): a w-length
+        // array of values, or null for high-impedance (drive nothing).
+        const drive = e.core.dataDrive(e.read);
+        if (drive) {
+          for (let i = 0; i < e.w; i++) {
+            add(`${e.refdes}.D${i}`, drive[i], false, `${e.refdes}.D${i}`);
+          }
         }
       } else if (e.compiled) {
         for (const out of e.compiled.outputs) {
@@ -309,14 +355,47 @@ export function createSim({ store, renderer }) {
   let timeoutId = null;
   let unsubLive = null; // live-input channel subscription during a run (FR-087b)
   let settling = false; // a combinational settling episode is in flight
+  let starting = false; // a run is awaiting its async ROM preload (FR-114e)
 
-  function run() {
-    if (sim) return;
+  // loadRomContents fetches and parses every distinct ROM content file referenced
+  // by the design (FR-114e), returning a Map<path, byte stream> the build seeds
+  // into ROM cores. A file that is missing, the wrong type, or malformed is
+  // reported (FR-074) and skipped — that ROM then reads U — rather than aborting
+  // the run. Never throws.
+  async function loadRomContents(design) {
+    const content = new Map();
+    const seen = new Set();
+    for (const inst of design.components) {
+      const mem = inst.typeData?.mem;
+      if (!mem || mem.kind !== "rom" || !mem.romFile || seen.has(mem.romFile)) continue;
+      seen.add(mem.romFile);
+      const lower = mem.romFile.toLowerCase();
+      const format = lower.endsWith(".hex") ? "hex" : lower.endsWith(".bin") ? "bin" : null;
+      if (!format) {
+        postMessage(`${inst.refdes}: ROM file must be .bin or .hex: ${mem.romFile}`);
+        continue;
+      }
+      try {
+        content.set(mem.romFile, parseRomBytes(await readRomFile(mem.romFile), format));
+      } catch (e) {
+        postMessage(`${inst.refdes}: cannot load ROM ${mem.romFile}: ${e.message}`);
+      }
+    }
+    return content;
+  }
+
+  async function run() {
+    if (sim || starting) return;
+    starting = true;
     // Clear any stale editing-time message before the run; compile/start-up
     // reports (FR-080, conflicts) posted below then survive into the run (FR-074).
     clearMessage();
+    // Load ROM contents from the server first (FR-114e); the build is sync.
+    const romContent = await loadRomContents(store.design);
+    if (!starting) return; // Stop() was hit during the async load — abort the start
+    starting = false;
     try {
-      sim = buildSimulation(store.design, { onMessage: postMessage });
+      sim = buildSimulation(store.design, { onMessage: postMessage, romContent });
     } catch (err) {
       postMessage(`cannot simulate: ${err.message}`);
       return;
@@ -335,6 +414,7 @@ export function createSim({ store, renderer }) {
   }
 
   function stop() {
+    starting = false; // cancel a run still awaiting its ROM preload (FR-114e)
     if (!sim) return;
     sim = null;
     if (rafId !== null) cancelAnimationFrame(rafId);

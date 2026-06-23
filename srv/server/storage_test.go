@@ -121,6 +121,49 @@ func TestListDirNotADir(t *testing.T) {
 	}
 }
 
+func TestListDirCustomExtensions(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "rom.bin"), "x")
+	mustWrite(t, filepath.Join(dir, "font.HEX"), "x")
+	mustWrite(t, filepath.Join(dir, "design.json"), "{}")
+
+	// The ROM picker passes bin/hex (no leading dot, mixed case) — JSON omitted.
+	listing, err := ListDir(dir, "bin", "hex")
+	if err != nil {
+		t.Fatalf("ListDir: %v", err)
+	}
+	got := map[string]bool{}
+	for _, e := range listing.Entries {
+		got[e.Name] = true
+	}
+	if !got["rom.bin"] || !got["font.HEX"] {
+		t.Fatalf("bin/hex files missing: %v", got)
+	}
+	if got["design.json"] {
+		t.Fatalf("design.json should be filtered out with bin/hex filter: %v", got)
+	}
+}
+
+func TestReadFileBytes(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "rom.bin")
+	mustWrite(t, path, "\x01\x02\x03")
+	data, err := ReadFileBytes(path)
+	if err != nil {
+		t.Fatalf("ReadFileBytes: %v", err)
+	}
+	if string(data) != "\x01\x02\x03" {
+		t.Fatalf("bytes = %v, want 01 02 03", data)
+	}
+	// A relative path is rejected; a missing file surfaces os.IsNotExist (→ 404).
+	if _, err := ReadFileBytes("rom.bin"); !errors.Is(err, ErrInvalidPath) {
+		t.Fatalf("relative path err = %v, want ErrInvalidPath", err)
+	}
+	if _, err := ReadFileBytes(filepath.Join(dir, "nope.bin")); !os.IsNotExist(err) {
+		t.Fatalf("missing file err = %v, want IsNotExist", err)
+	}
+}
+
 func jsonEqual(t *testing.T, a, b []byte) bool {
 	t.Helper()
 	var x, y any

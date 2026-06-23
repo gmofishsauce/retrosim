@@ -92,6 +92,12 @@ test("validateMemSpec requires a content file for ROM (FR-114a)", () => {
   assert.equal(validateMemSpec(memSpec({ kind: "ram" })), null);
 });
 
+test("validateMemSpec requires a .bin/.hex ROM file (FR-114e)", () => {
+  assert.equal(validateMemSpec(memSpec({ kind: "rom", romFile: "/r/x.bin" })), null);
+  assert.equal(validateMemSpec(memSpec({ kind: "rom", romFile: "/r/x.HEX" })), null);
+  assert.match(validateMemSpec(memSpec({ kind: "rom", romFile: "/r/x.txt" })), /\.bin or \.hex/);
+});
+
 test("validateMemSpec rejects out-of-range address bits (FR-114a)", () => {
   assert.match(validateMemSpec(memSpec({ addressBits: 0 })), /positive/);
   assert.match(

@@ -31,10 +31,26 @@ type DirListing struct {
 	Entries []DirEntry `json:"entries"`
 }
 
-// ListDir lists a directory's subdirectories and *.json files (FR-053). Only
-// designs and navigable folders are returned; other files are omitted. The
-// .json match is case-insensitive.
-func ListDir(path string) (DirListing, error) {
+// MaxRomBytes caps a ROM content file the server will read (FR-114e): a
+// 2^24-location × 32-bit device is 64 MiB, the largest a generated ROM can use.
+const MaxRomBytes = 64 << 20
+
+// ListDir lists a directory's subdirectories and the files whose extension is in
+// `exts` (FR-053); with no `exts` it defaults to *.json (designs). The ROM-file
+// picker (FR-114e) passes .bin/.hex. Matches are case-insensitive; each ext may
+// be given with or without its leading dot.
+func ListDir(path string, exts ...string) (DirListing, error) {
+	if len(exts) == 0 {
+		exts = []string{".json"}
+	}
+	allow := make(map[string]bool, len(exts))
+	for _, e := range exts {
+		if e != "" && e[0] != '.' {
+			e = "." + e
+		}
+		allow[strings.ToLower(e)] = true
+	}
+
 	info, err := os.Stat(path)
 	if err != nil {
 		return DirListing{}, err
@@ -54,12 +70,32 @@ func ListDir(path string) (DirListing, error) {
 			entries = append(entries, DirEntry{Name: it.Name(), IsDir: true})
 			continue
 		}
-		if strings.EqualFold(filepath.Ext(it.Name()), ".json") {
+		if allow[strings.ToLower(filepath.Ext(it.Name()))] {
 			entries = append(entries, DirEntry{Name: it.Name(), IsDir: false})
 		}
 	}
 
 	return DirListing{Path: path, Parent: filepath.Dir(path), Entries: entries}, nil
+}
+
+// ReadFileBytes reads a file's raw bytes for the ROM loader (FR-114e), capped at
+// MaxRomBytes. path must be absolute. A missing file is returned unwrapped so
+// os.IsNotExist maps to 404; an over-size file is a plain error (500).
+func ReadFileBytes(path string) ([]byte, error) {
+	if path == "" || !filepath.IsAbs(path) {
+		return nil, fmt.Errorf("%q: %w", path, ErrInvalidPath)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if info.IsDir() {
+		return nil, fmt.Errorf("%s: %w", path, ErrNotDir)
+	}
+	if info.Size() > MaxRomBytes {
+		return nil, fmt.Errorf("%s: file too large (%d bytes, max %d)", path, info.Size(), MaxRomBytes)
+	}
+	return os.ReadFile(path)
 }
 
 // LoadDesign reads and validates a design file (FR-052, FR-055). The raw JSON is

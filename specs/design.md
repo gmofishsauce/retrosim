@@ -464,7 +464,8 @@ as authoritative and raise it — do not silently diverge.
 ┌────────────────────────────────────────────────┴─────────────────── Go server ───────────┐
 │  api.go (router /api/v1/*)                                                                 │
 │   ├─ GET  /components   ─▶ components.go  ─▶ yamlparse.go  (load library at startup)      │
-│   ├─ GET  /files        ─▶ storage.go (list directory)                                     │
+│   ├─ GET  /files        ─▶ storage.go (list directory; ext filter, FR-114e)               │
+│   ├─ GET  /romfile      ─▶ storage.go (read ROM .bin/.hex bytes, FR-114e)                  │
 │   ├─ GET  /design/load  ─▶ storage.go (read JSON)                                          │
 │   ├─ POST /design/save  ─▶ storage.go (write JSON)                                         │
 │   └─ GET  /defaults     ─▶ paths.go    (platform app-data dir)                             │
@@ -619,13 +620,15 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | `GET /api/v1/components` | – | `{"components":[ComponentType,…]}` | 500 on internal error |
   | `POST /api/v1/components` | `{"yaml":"<authored YAML>"}` | `{"component":ComponentType}` | 400 bad body / invalid YAML, 409 duplicate part number, 500 write failure |
   | `GET /api/v1/defaults` | – | `{"dataDir":"<abs path>"}` | – |
-  | `GET /api/v1/files?path=<p>` | query `path` (abs; empty = data dir) | `{"path","parent","entries":[{"name","isDir"}]}` | 400 bad path, 404 missing, 403 not a dir |
+  | `GET /api/v1/files?path=<p>&exts=<e>` | query `path` (abs; empty = data dir), optional `exts` (csv, default `json`) | `{"path","parent","entries":[{"name","isDir"}]}` | 400 bad path, 404 missing, 403 not a dir |
+  | `GET /api/v1/romfile?path=<p>` | query `path` (abs, `.bin`/`.hex`) | raw bytes (`application/octet-stream`), capped at `MaxRomBytes` 64 MiB | 400 bad/!bin·hex, 404 missing, 500 too large |
   | `GET /api/v1/design/load?path=<p>` | query `path` | `{"design":Design}` | 400, 404, 422 malformed JSON |
   | `POST /api/v1/design/save` | `{"path":"<abs>","design":Design}` | `{"path":"<abs>"}` | 400 bad body, 409/500 write failure |
   | `GET /api/v1/ping` | – | `{"ok":true}` | – (FR-089 heartbeat; no side effects) |
 
-  Directory entries: only `.json` files and subdirectories are returned for
-  navigation; the response includes `parent` so the dialog can offer "up".
+  Directory entries: subdirectories plus the files whose extension is in `exts`
+  (default `.json`; the ROM picker passes `bin,hex`, FR-114e); the response
+  includes `parent` so the dialog can offer "up".
 - **Behavior:** decode JSON, delegate to `storage.go`/`components.go`, encode
   JSON. All responses `Content-Type: application/json`. `POST /api/v1/components`
   (FR-007a) parses the submitted YAML through the same `yamlparse.go` path as a
@@ -1654,6 +1657,35 @@ no sequential part could ever leave U.)
   source `inst` reference for built-ins. `clockPeriod` is resolved once at Run:
   the effective `period` of the design's clock instance when exactly one is
   placed, else the 100 ns FR-071a default (no clock, or several — FR-071b).
+- **Memory entities (FR-114d):** a generated RAM/ROM (`inst.typeData.mem`, §6.11)
+  is neither a `builtin` nor a GALasm part, so the entity loop routes it to a
+  third `kind:"memory"` entity (`makeMemoryEntity`) wrapping the pure
+  `createMemoryCore` (`engine/memory.js`) — the **first** built-in behavior that
+  reads input nets, which the source-only `BEHAVIORS` signature can't do. The
+  entity injects a `read(pinName)` returning the **previous** step's net value
+  (`curr`, exactly like the galasm `readNet`), so the device follows its inputs by
+  one unit (FR-078). `step()` calls each memory's `core.writeStep(read)` in the
+  same pre-phase as register latching (a RAM latches the addressed cell on the
+  WE/ 0→1 edge, sampling `curr` address+data), then in the contribution phase a
+  `kind:"memory"` branch adds the `core.dataDrive(read)` values onto `D0..D(w-1)`
+  (or nothing, for high-impedance). The core is the FR-114d truth table over the
+  four-state values (`norm` maps a read Z→U); cells default undefined (read U) at
+  Run — RAM contents reset each Run, and a ROM is seeded from its content file
+  (FR-114e, below). Memory does not use or require the global clock (`hasClocks`
+  ignores it); its writes are driven by the design's own `WE/` signal.
+- **ROM content loading (FR-114e):** `createSim.run()` is **async**: before
+  building, `loadRomContents(design)` collects each distinct `kind:"rom"` instance's
+  `romFile`, fetches its bytes from the server (`api.readRomFile` → `GET /romfile`),
+  and parses them by extension (`parseRomBytes`: `.bin` verbatim; `.hex` via
+  `parseHexBytes` — whitespace-separated hex byte tokens) into a `Map<path,bytes>`
+  passed to `buildSimulation` as `romContent`. `makeMemoryEntity` seeds a ROM core
+  with `core.loadBytes(bytes)`, which packs the byte stream **little-endian** into
+  `ceil(w/8)`-byte words (width 4 = low nibble) masked to `w` bits. A missing /
+  wrong-type / malformed file is reported (FR-074) and that ROM reads U; over-capacity
+  content is truncated with a report. A `starting` flag guards the async window
+  (re-entrant `run()` is a no-op; `stop()` clears it to cancel a pending start).
+  Only the **path** is saved with the design — editing the file and re-running
+  reloads it.
 - **Scheduler (FR-084–FR-086):** both kinds run until `stop()`; neither
   auto-terminates. No clock instance placed → combinational: a *settling
   episode* runs steps unpaced (batched, with periodic yields to keep the tab
@@ -1701,11 +1733,11 @@ no sequential part could ever leave U.)
 
 **Pin-groups sub-dialog (FR-066d).** A "Pin groups…" button opens a modal sub-dialog (`dialogs.js`) that edits the part's named pin groups (FR-063). It lists the groups defined so far (each with a remove control) and offers a name field plus a checkbox per pin (labeled with the pin's *current* label) to define one more; "Add group" appends it to the working list, and the sub-dialog returns the updated list to the parent on close. Membership is stored by the **skeleton pin** (its stable DIP `number`), not the label string, so a later rename does not break a group; `galPartYaml` resolves each member to its current label and emits members in **pin-layout order** (the part's pin order, top-to-bottom) so the bus bit order is deterministic (FR-066d). The parent dialog folds the groups into the candidate `typeData` only for the YAML write (a `groups:` block, §7.3) — groups do not enter `compileBehavior`/`validateStrict`. Client checks: non-empty unique name, ≥1 member, and the **geometry rule** (FR-063a) — the checked pins must share one side and form a contiguous run (no non-member pin between them); the sub-dialog rejects an "Add group" that straddles sides or is interrupted, so it can only build groups the brace can render. Membership is by skeleton DIP number, but the side/contiguity test resolves each member to its skeleton pin's side/`pos`.
 
-**The memory-device generator (FR-114/FR-114a/FR-114b).** A second non-placeable **upper-palette** action tile, **MEM** (built beside the New GAL part tile in `app.js`, routed through interaction's palette-click handler to an `onNewMemDevice` callback exactly as `newgal` routes to `onNewGalPart`). Its callback opens the **New memory device dialog** (`memDeviceDialog`, `dialogs.js`). The dialog's top control is a **RAM/ROM** radio (default RAM); below it a common **name** field and a **dynamic region** holding the class-specific controls, fully rebuilt whenever the radio changes (FR-114 "completely re-initializes"): for both classes an **address-bits** number field *n* (1–24) with a live "= 2ⁿ locations" readout and a **data-width** select {4,8,16,32} (default 8); for ROM only, a **content-file** row — a "Choose file…" button that opens the server-side file browser (`openFileDialog`, FR-053, reused with a custom title) and a label showing the chosen path. The **name** field (FR-114a) is common (it survives a class switch); it is pre-seeded with a size-based suggestion (`suggestName`, e.g. "RAM 256×8") that keeps tracking the class/size/width until the user types into it (a `nameEdited` flag then freezes it). `gather()` returns `{ name, kind:"ram"|"rom", addressBits, locations:2**n, dataWidth, romFile? }`; a pure `validateMemSpec(spec)` helper (testable, no DOM) gates **Create** — name non-empty, *n* in range, width in the set, and a ROM file chosen for ROM. The radio, fields, name, and file selection re-run validation live. OK resolves the gathered+validated spec to `app.js`, whose `onNewMemDevice` builds the type with `memDeviceType(spec)` (below) and registers it live via the GAL flow's `addCreatedPart` (library push + sorted upper-palette tile, FR-007a); if the name's derived `id` collides with an existing type (`typeIdentity`), `onNewMemDevice` **throws**, which `memDeviceDialog` surfaces inline (the dialog stays open) — the in-session analogue of the server's FR-007a duplicate-id 409. **Still deferred (FR-114b/OQ-013): the built-in behavior, ROM-content reading, and cross-session persistence** — so a generated type is **in-session only** (it does not survive reload, though a *placed* instance round-trips via its embedded `typeData`, FR-057) and a placed device does not yet simulate (it is behavior-less, driving U on its outputs per FR-080 until FR-114d lands). Note the file browser currently lists only `.json` files (server `ListDir`, FR-053), so broadening it to ROM image types travels with the FR-114b ROM-content work.
+**The memory-device generator (FR-114/FR-114a/FR-114b).** A second non-placeable **upper-palette** action tile, **MEM** (built beside the New GAL part tile in `app.js`, routed through interaction's palette-click handler to an `onNewMemDevice` callback exactly as `newgal` routes to `onNewGalPart`). Its callback opens the **New memory device dialog** (`memDeviceDialog`, `dialogs.js`). The dialog's top control is a **RAM/ROM** radio (default RAM); below it a common **name** field and a **dynamic region** holding the class-specific controls, fully rebuilt whenever the radio changes (FR-114 "completely re-initializes"): for both classes an **address-bits** number field *n* (1–24) with a live "= 2ⁿ locations" readout and a **data-width** select {4,8,16,32} (default 8); for ROM only, a **content-file** row — a "Choose file…" button that opens the server-side file browser (`openFileDialog`, FR-053, reused with a custom title) and a label showing the chosen path. The **name** field (FR-114a) is common (it survives a class switch); it is pre-seeded with a size-based suggestion (`suggestName`, e.g. "RAM 256×8") that keeps tracking the class/size/width until the user types into it (a `nameEdited` flag then freezes it). `gather()` returns `{ name, kind:"ram"|"rom", addressBits, locations:2**n, dataWidth, romFile? }`; a pure `validateMemSpec(spec)` helper (testable, no DOM) gates **Create** — name non-empty, *n* in range, width in the set, and a ROM file chosen for ROM. The radio, fields, name, and file selection re-run validation live. OK resolves the gathered+validated spec to `app.js`, whose `onNewMemDevice` builds the type with `memDeviceType(spec)` (below) and registers it live via the GAL flow's `addCreatedPart` (library push + sorted upper-palette tile, FR-007a); if the name's derived `id` collides with an existing type (`typeIdentity`), `onNewMemDevice` **throws**, which `memDeviceDialog` surfaces inline (the dialog stays open) — the in-session analogue of the server's FR-007a duplicate-id 409. A placed device **simulates** via the built-in memory behavior (FR-114d, §6.13), and a ROM's content is loaded from its file at Run (FR-114e). The ROM picker calls `openFileDialog` with `exts:["bin","hex"]`, so the server file browser lists those (and dirs) rather than designs. **Still deferred (FR-114b/OQ-013): cross-session metatype persistence** — a generated type is **in-session only** (it does not survive reload, though a *placed* instance round-trips via its embedded `typeData`, FR-057).
 
 *Generated pinout (FR-114c, `memDeviceType` in `builtins.js`).* From `{name, kind, addressBits:n, dataWidth:w, locations}` it synthesizes a `ComponentType` rendered as an ordinary IC rectangle (§6.8): **left** edge top-to-bottom = `A0…A(n-1)` (an `ADDR` pin group, FR-063) followed by `CE/`, `OE/`, and — for RAM — `WE/` (the controls trail the address run so they don't break its contiguity, FR-063a); **right** edge = `D0…D(w-1)` (a `DATA` group). Address and control pins are `in`; data pins are `bidir` for RAM and `tristate` for ROM (FR-062a). The outline mirrors the server's `resolveOutline` (§6.3) — width 4 (no top/bottom pins), height = max-edge-position + 2. The type is **not** `builtin` (so it gets a U-series refdes and the default labelled-rectangle render with pin names, §6.8), takes the free-form `name` as its display name with the derived `id` `type-<name>` (FR-066e, the same rule loaded/GAL parts use — so the caller's `id`-collision check rejects a duplicate name), and carries a `mem:{kind,addressBits,dataWidth,locations,romFile?}` block for the deferred behavior. Pure, no DOM.
 
-*Generated behavior (FR-114d), still planned (FR-114b).* The future built-in **behavior** (`BEHAVIORS`, §6.11/§6.13) will read `CE/`/`OE/`/`WE/`/address and drive the `D` lanes: `CE/=1` → all data Z; else read (`OE/=0`, and RAM `WE/=1`) drives `mem[addr]`; RAM write latches the data lanes into `mem[addr]` on the rising edge of `WE/` (data lanes forced Z while `WE/=0`); an unwritten RAM cell reads U (FR-077). It needs per-instance state (the `mem` array, like `switchState`, §6.11) and edge tracking (the register-clock precedent, FR-079); until it lands a placed device is behavior-less (drives U, FR-080). RAM power-up fill and the exact unit-delay edge/stability handling are open (FR-114b/OQ-013).
+*Generated behavior (FR-114d), implemented in `engine/memory.js` + `sim.js` (§6.13).* Memory is the first built-in whose behavior **reads** its input nets and keeps per-instance state, which the source-only `BEHAVIORS` signature (§6.11) can't express — so it lives in a dedicated `createMemoryCore({kind,addressBits,dataWidth})` and a `kind:"memory"` simulator entity rather than the `BEHAVIORS` registry. ROM content loading from the chosen file and cross-session persistence remain open (FR-114b/OQ-013); a ROM therefore reads U everywhere for now.
 
 **Sub-design instance (FR-098/098a/099).** An entry in `design.components` with `kind:"subdesign"`, `childPath`, `render`, `x`, `y`, `rotation`, and an `X-<n>` refdes — a third series beside U and A (`addInstance` scans X-suffixes, FR-098a); a child may be embedded repeatedly as independent X-instances. It stores **no** `typeData` (supersedes FR-057 for it); its in-memory `typeData` is the synthetic interface type, recomputed on load and whenever the child changes (FR-099b). Rendering (`canvas.js`, §6.8 dispatch on `kind`): `ic` — the existing rectangle over the synthetic type (inputs left, outputs right, pins labelled by port label, `X1` + child base name upright); `connector` — a tall narrow rectangle with all interface pins ranked along **one** long edge in label order (OQ-010). Both are purely cosmetic (same interface, same connectivity, FR-099); a `width>1` interface pin is a single bus-capable pin (bus snap, FR-041/FR-039a). A child that fails to load renders as a **broken-link placeholder** (a red box naming the missing relative path), reported once via the message tray (FR-099a), reusing §6.8's unknown-type placeholder.
 
@@ -2275,7 +2307,8 @@ No files are modified (greenfield).
 | FR-066 | §6.3, §7.1 | `yamlparse.go` |
 | FR-114, FR-114a | §6.11 | `dialogs.js`, `app.js`, `interaction.js` |
 | FR-114c | §6.11 | `builtins.js` (`memDeviceType`), `app.js` |
-| FR-114d | §6.11 | (planned) `builtins.js`, `sim.js` |
+| FR-114d | §6.11, §6.13 | `engine/memory.js`, `sim.js` |
+| FR-114e | §6.4, §6.13 | `engine/memory.js`, `sim.js`, `api.js`, `storage.go`, `api.go`, `dialogs.js` |
 | FR-072, FR-073, FR-074 | §6.11 | `statusbar.js`, `index.html`, `style.css` |
 | FR-089, FR-090, FR-091 | §6.4, §6.11, §6.12a | `api.go`, `connection.js`, `statusbar.js`, `api.js` |
 | FR-092, FR-093 | §6.12, §6.12a | `backup.js`, `app.js`, `model/persist.js` |

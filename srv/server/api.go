@@ -22,6 +22,7 @@ func NewRouter(lib *Library, dataDir, componentsDir, webDir string) http.Handler
 	api.HandleFunc("/api/v1/components", handleComponents(lib, componentsDir))
 	api.HandleFunc("/api/v1/defaults", handleDefaults(dataDir))
 	api.HandleFunc("/api/v1/files", handleFiles(dataDir))
+	api.HandleFunc("/api/v1/romfile", handleRomFile())
 	api.HandleFunc("/api/v1/design/load", handleDesignLoad())
 	api.HandleFunc("/api/v1/design/save", handleDesignSave())
 	api.HandleFunc("/api/v1/ping", handlePing())
@@ -120,12 +121,49 @@ func handleFiles(dataDir string) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "path must be absolute")
 			return
 		}
-		listing, err := ListDir(path)
+		// Optional comma-separated extension filter (FR-114e ROM picker passes
+		// "bin,hex"); absent → ListDir's default *.json (designs).
+		var exts []string
+		if q := r.URL.Query().Get("exts"); q != "" {
+			exts = strings.Split(q, ",")
+		}
+		listing, err := ListDir(path, exts...)
 		if err != nil {
 			writeStorageError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, listing)
+	}
+}
+
+// handleRomFile serves a ROM content file's raw bytes for the simulator's
+// Run-time loader (FR-114e). The path must be absolute and end in .bin or .hex;
+// the client parses the bytes per the extension. Capped at MaxRomBytes by
+// ReadFileBytes.
+func handleRomFile() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !requireMethod(w, r, http.MethodGet) {
+			return
+		}
+		path := r.URL.Query().Get("path")
+		if path == "" || !filepath.IsAbs(path) {
+			writeError(w, http.StatusBadRequest, "path must be a non-empty absolute path")
+			return
+		}
+		switch strings.ToLower(filepath.Ext(path)) {
+		case ".bin", ".hex":
+		default:
+			writeError(w, http.StatusBadRequest, "ROM file must be .bin or .hex")
+			return
+		}
+		data, err := ReadFileBytes(path)
+		if err != nil {
+			writeStorageError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.WriteHeader(http.StatusOK)
+		w.Write(data)
 	}
 }
 

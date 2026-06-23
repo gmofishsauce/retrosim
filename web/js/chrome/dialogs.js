@@ -721,7 +721,10 @@ export function validateMemSpec(spec) {
   if (!MEM_WIDTHS.includes(spec.dataWidth)) {
     return `data width must be one of ${MEM_WIDTHS.join(", ")}`;
   }
-  if (spec.kind === "rom" && !spec.romFile) return "choose a ROM content file";
+  if (spec.kind === "rom") {
+    if (!spec.romFile) return "choose a ROM content file";
+    if (!/\.(bin|hex)$/i.test(spec.romFile)) return "ROM file must be .bin or .hex";
+  }
   return null;
 }
 
@@ -857,7 +860,8 @@ export function memDeviceDialog({ submit, startPath = "" }) {
           const res = await openFileDialog({
             mode: "open",
             startPath,
-            title: "Choose ROM content file",
+            title: "Choose ROM content file (.bin / .hex)",
+            exts: ["bin", "hex"],
           });
           if (res) {
             romFile = res.path;
@@ -927,7 +931,7 @@ export function memDeviceDialog({ submit, startPath = "" }) {
 // openFileDialog resolves to { path } on confirm, or null on cancel. `title`
 // overrides the default heading (e.g. the ROM-content picker, FR-114a) — the
 // browser itself is unchanged (it lists dirs + the server's filtered files).
-export function openFileDialog({ mode, startPath, defaultName = "", title } = {}) {
+export function openFileDialog({ mode, startPath, defaultName = "", title, exts = null } = {}) {
   return new Promise((resolve) => {
     const overlay = el("div", "dialog-overlay");
     const box = el("div", "dialog");
@@ -974,7 +978,7 @@ export function openFileDialog({ mode, startPath, defaultName = "", title } = {}
     async function navigate(path) {
       let listing;
       try {
-        listing = await listDir(path);
+        listing = await listDir(path, exts);
       } catch (e) {
         pathLabel.textContent = "error: " + e.message;
         return;

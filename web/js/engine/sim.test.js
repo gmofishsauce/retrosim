@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { buildSimulation } from "./sim.js";
 import { V0, V1, VU, VZ } from "./galasm.js";
-import { BUILTINS } from "../builtins.js";
+import { BUILTINS, memDeviceType } from "../builtins.js";
 
 // --- design fixtures (literal model shapes per §7.1a/§7.2) ---
 
@@ -363,4 +363,69 @@ test("unconnected pins read Z (treated as U by behaviors)", () => {
   sim.step();
   assert.equal(sim.valueOfPin("U1", "A"), VZ); // not part of any net
   assert.equal(sim.valueOfPin("U1", "Y"), VZ); // output unconnected too
+});
+
+// --- generated memory devices (FR-114c/FR-114d) ---
+
+const RAM4 = () => memDeviceType({ name: "TESTRAM", kind: "ram", addressBits: 2, dataWidth: 4, locations: 4 });
+
+test("a deselected RAM (CE/ high) tristates its data bus (FR-114d)", () => {
+  const d = mkDesign();
+  place(d, "U1", RAM4());
+  place(d, "U2", CONST1); // drives CE/ high → deselected
+  place(d, "U3", NOT); // gives D0 an observable net
+  connect(d, ["U2", "Y"], ["U1", "CE/"]);
+  connect(d, ["U1", "D0"], ["U3", "A"]);
+
+  const sim = buildSimulation(d);
+  settle(sim);
+  // Deselected → the memory drives nothing, so D0's net is high-impedance (Z),
+  // not U — proving the memory entity path (a behavior-less type would instead
+  // drive U on its non-input pins, FR-080).
+  assert.equal(sim.valueOfPin("U1", "D0"), VZ);
+});
+
+test("a selected RAM read of an unwritten cell drives U (FR-114d)", () => {
+  const d = mkDesign();
+  place(d, "U1", RAM4());
+  place(d, "Z1", CONST0); // CE/=0 selected
+  place(d, "Z2", CONST0); // OE/=0 output enabled
+  place(d, "O1", CONST1); // WE/=1 (reading, not writing)
+  place(d, "Z3", CONST0); // A0=0
+  place(d, "Z4", CONST0); // A1=0
+  place(d, "U2", NOT); // observe D0
+  connect(d, ["Z1", "Y"], ["U1", "CE/"]);
+  connect(d, ["Z2", "Y"], ["U1", "OE/"]);
+  connect(d, ["O1", "Y"], ["U1", "WE/"]);
+  connect(d, ["Z3", "Y"], ["U1", "A0"]);
+  connect(d, ["Z4", "Y"], ["U1", "A1"]);
+  connect(d, ["U1", "D0"], ["U2", "A"]);
+
+  const sim = buildSimulation(d);
+  settle(sim);
+  assert.equal(sim.valueOfPin("U1", "D0"), VU); // address 0 unwritten → U
+});
+
+const ROM4 = () =>
+  memDeviceType({ name: "TESTROM", kind: "rom", addressBits: 2, dataWidth: 4, locations: 4, romFile: "/x/y.bin" });
+
+test("a ROM seeded with content drives the loaded word on read (FR-114e)", () => {
+  const d = mkDesign();
+  place(d, "U1", ROM4());
+  place(d, "Z1", CONST0); // CE/=0 selected
+  place(d, "Z2", CONST0); // OE/=0 output enabled
+  place(d, "Z3", CONST0); // A0=0
+  place(d, "Z4", CONST0); // A1=0
+  place(d, "U2", NOT); // observe D0
+  connect(d, ["Z1", "Y"], ["U1", "CE/"]);
+  connect(d, ["Z2", "Y"], ["U1", "OE/"]);
+  connect(d, ["Z3", "Y"], ["U1", "A0"]);
+  connect(d, ["Z4", "Y"], ["U1", "A1"]);
+  connect(d, ["U1", "D0"], ["U2", "A"]);
+
+  // loc0 = low nibble of 0x05 = 0b0101 → D0=1, D1=0, D2=1, D3=0.
+  const romContent = new Map([["/x/y.bin", Uint8Array.from([0x05])]]);
+  const sim = buildSimulation(d, { romContent });
+  settle(sim);
+  assert.equal(sim.valueOfPin("U1", "D0"), V1);
 });

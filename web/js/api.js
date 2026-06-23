@@ -45,10 +45,31 @@ export async function getDefaults() {
 }
 
 // listDir lists a directory for the file-navigation dialog (FR-053). An empty
-// path defaults to the designs root.
-export async function listDir(path = "") {
-  const q = path ? `?path=${encodeURIComponent(path)}` : "";
-  return request("/files" + q);
+// path defaults to the designs root. `exts` overrides the default *.json filter
+// (the ROM picker passes ["bin","hex"], FR-114e).
+export async function listDir(path = "", exts = null) {
+  const params = [];
+  if (path) params.push(`path=${encodeURIComponent(path)}`);
+  if (exts && exts.length) params.push(`exts=${encodeURIComponent(exts.join(","))}`);
+  return request("/files" + (params.length ? "?" + params.join("&") : ""));
+}
+
+// readRomFile fetches a ROM content file's raw bytes (FR-114e), as a Uint8Array.
+// Used by the simulator's Run-time ROM loader. Rejects with the server's message
+// (e.g. a missing file or a non-.bin/.hex path).
+export async function readRomFile(path) {
+  const resp = await fetch(BASE + "/romfile?path=" + encodeURIComponent(path));
+  if (!resp.ok) {
+    let message = `${resp.status} ${resp.statusText}`;
+    try {
+      const body = await resp.json();
+      if (body && body.error) message = body.error;
+    } catch (_) {
+      // non-JSON error body; keep the status line
+    }
+    throw new Error(message);
+  }
+  return new Uint8Array(await resp.arrayBuffer());
 }
 
 // loadDesign reads a design file, returning the parsed design object (FR-052).
