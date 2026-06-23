@@ -264,6 +264,58 @@ const BUILTIN_DEFS = [
 // the simulator key off `id` (typeIdentity, §6.6), divorced from the name.
 export const BUILTINS = BUILTIN_DEFS.map((t) => ({ id: builtinId(t.name), ...t }));
 
+// memDeviceType synthesizes the ComponentType for a generator-defined memory
+// device (FR-114c) from a validated dialog spec {name, kind, addressBits,
+// dataWidth, locations, romFile?}. Its free-form `name` is the display name and
+// also derives the immutable library id `type-<name>` (the same rule loaded parts
+// and GAL parts use, FR-066e), so two devices with different names are distinct
+// types and a name colliding with any existing type is rejected by the caller. It
+// is an ordinary IC-style type — deliberately **not** `builtin`, so it gets a
+// U-series refdes (FR-011) and the default labelled-rectangle render (§6.8) —
+// with n address inputs A0..A(n-1) plus CE//OE/ (and WE/ for RAM) down the left
+// edge, and w data pins D0..D(w-1) down the right, exposed as the snap-connectable
+// groups ADDR and DATA (FR-063). Data pins are bidirectional on a RAM and tristate
+// on a ROM (FR-062a). The built-in behavior (FR-114d) and cross-session
+// persistence are deferred (FR-114b/OQ-013); the `mem` field carries the spec for
+// that later work and round-trips with a placed instance (FR-057). Pure — no DOM,
+// no behavior yet. Outline mirrors the server's resolveOutline (§6.3): width
+// floors at 4 (no top/bottom pins), height fits the taller edge plus a 2-unit
+// margin.
+export function memDeviceType(spec) {
+  const { name, kind, addressBits: n, dataWidth: w, locations } = spec;
+  const isRam = kind === "ram";
+  const pins = [];
+  const addrNames = [];
+  for (let i = 0; i < n; i++) {
+    addrNames.push(`A${i}`);
+    pins.push({ name: `A${i}`, side: "left", position: i + 1, direction: "in" });
+  }
+  const ctrl = isRam ? ["CE/", "OE/", "WE/"] : ["CE/", "OE/"];
+  ctrl.forEach((name, i) =>
+    pins.push({ name, side: "left", position: n + 1 + i, direction: "in" }),
+  );
+  const dataDir = isRam ? "bidir" : "tristate";
+  const dataNames = [];
+  for (let i = 0; i < w; i++) {
+    dataNames.push(`D${i}`);
+    pins.push({ name: `D${i}`, side: "right", position: i + 1, direction: dataDir });
+  }
+  const maxLeftRight = Math.max(n + ctrl.length, w);
+  return {
+    id: `type-${name}`,
+    name,
+    description: `${locations}×${w} ${kind.toUpperCase()} (generated)`,
+    mem: { kind, addressBits: n, dataWidth: w, locations, ...(spec.romFile ? { romFile: spec.romFile } : {}) },
+    width: 4,
+    height: Math.max(maxLeftRight + 2, 4),
+    pins,
+    pinGroups: [
+      { name: "ADDR", pins: addrNames },
+      { name: "DATA", pins: dataNames },
+    ],
+  };
+}
+
 // BEHAVIORS maps built-in type name → behavior function (FR-067a). Behaviors
 // are code, not data: they live here — not on the ComponentType — because
 // typeData is deep-copied into instances and saved as JSON (FR-057, §7.1),

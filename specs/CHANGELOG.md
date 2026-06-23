@@ -19,6 +19,22 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-23 — Memory device generator: name field + duplicate-name rejection
+What: Added a required free-form Name field to the New memory device dialog; it sets the type's display name and derives its library id (type-<name>), so two devices with different names are distinct types. The field is pre-seeded with a size-based suggestion (e.g. "RAM 256×8") that auto-tracks class/size/width until the user edits it. memDeviceType now takes the name (id/name no longer derived from kind/size). On Create, a name whose derived id collides with any existing type (loaded part, GAL part, built-in, or earlier memory device) is rejected inline (the in-session analogue of the server's FR-007a duplicate-id 409), replacing the previous "identical pinout reuses the id" behavior.
+Touches: FR-114, FR-114a, FR-114c; design §6.11.
+
+## 2026-06-23 — Memory device generator: generate the placeable type (pinout)
+What: Made the New memory device dialog's Create real — `memDeviceType(spec)` (builtins.js) synthesizes the IC-style ComponentType per FR-114c (A0..A(n-1)+CE//OE/[/WE/] left, D0..D(w-1) right, ADDR/DATA snap groups, bidir data for RAM / tristate for ROM, U-series refdes), and app.js registers it live in the upper palette via addCreatedPart (dedupe by derived id). In-session only: no behavior yet (placed device is behavior-less, drives U), no ROM-content read, no cross-session metatype persistence (placed instances still round-trip via embedded typeData). Fixed partOrder so memory devices (free-form names) sort into the trailing upper-region group instead of NaN.
+Touches: FR-114b (narrowed to in-session/no-behavior), FR-114c (implemented); design §6.11, traceability.
+
+## 2026-06-23 — Memory device generator: pinout and core RAM/ROM behavior
+What: Nailed down the generated-device pinout and the core read/write behavior (spec only; the generator still stubs Create). Common pins: n address inputs A0..A(n-1) as a snap group ADDR, w data pins D0..D(w-1) as group DATA, active-low CE/ and OE/. RAM adds active-low WE/ and has bidirectional data; ROM data is tristate output. Layout (user choice): all inputs on the left (address then CE/,OE/,WE/), data on the right. Behavior: CE/=1 → data Z; read when CE/=0 & OE/=0 (RAM also WE/=1); RAM write latches on WE/ rising edge with address held stable while WE/ low and data forced Z while WE/ low; unwritten RAM reads U. ROM file format, RAM power-up init + exact unit-delay edge semantics, and persistence remain deferred.
+Touches: FR-114b (narrowed), FR-114c, FR-114d (new), OQ-013 (narrowed); design §6.11, traceability.
+
+## 2026-06-23 — Memory device generator: New memory device dialog (RAM/ROM)
+What: First chunk of a memory-device generator, modeled on the GAL generator. A new upper-palette "MEM" action tile opens a New memory device dialog with a RAM/ROM radio (default RAM, re-initializes the dialog on change), a size control entered as address bits n (→ 2ⁿ locations, 1≤n≤24), a data-width select {4,8,16,32} (default 8), and — ROM only — a content-file picker reusing the server-side file browser (FR-053). Pinouts, built-in behaviors, ROM file format, and persistence are deferred (FR-114b/OQ-013); for now Create validates+gathers the spec and is wired to a submit stub (toast only — no component created yet). The address-bits-vs-capacity input, the server-side file picker, and the stub-Create scope were chosen with the user.
+Touches: FR-114, FR-114a, FR-114b (new), OQ-013 (new); design §6.11, traceability.
+
 ## 2026-06-23 — Clarify FR-083: a strong U suppresses weak drivers (net resolution)
 What: Tightened FR-083 (and the §6.13 net-resolution description) to state explicitly that "enabled strong driver" means any strong driver contributing a non-Z value (0, 1, or U) — so a strong U (e.g. an uncertain tristate enable) suppresses pull-ups/pull-downs and forces the net to U, and weak drivers decide only when every strong driver is Z. Documentation of the existing resolveNet behavior; no code change. Prompted by fast/C-generator planning (FR-107/FR-108) needing the strength-tier semantics pinned down. Net values remain four (FR-077); strength is a driver attribute, not a fifth value.
 Touches: FR-083; design §6.13.

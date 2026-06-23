@@ -4,8 +4,8 @@
 // the library is ready (FR-003).
 
 import { getComponents, getDefaults, createComponent } from "./api.js";
-import { newGalPartDialog } from "./chrome/dialogs.js";
-import { BUILTINS } from "./builtins.js";
+import { newGalPartDialog, memDeviceDialog } from "./chrome/dialogs.js";
+import { BUILTINS, memDeviceType } from "./builtins.js";
 import { createDesign, typeIdentity } from "./model/design.js";
 import { createStore } from "./store.js";
 import { initCanvas } from "./engine/canvas.js";
@@ -30,6 +30,11 @@ function defaultDesignName(now = new Date()) {
 // isGal marks a GAL part (FR-066b): its display name is its part number (FR-005b).
 const isGal = (type) => Boolean(type.partnumber);
 
+// isMem marks a generator-defined memory device (FR-114c): a free-form display
+// name like a GAL part (so it sorts into the trailing upper-region group), tagged
+// by its `mem` spec block.
+const isMem = (type) => Boolean(type.mem);
+
 // displayName is a part's full, free-form external name shown on its tile and in
 // its tooltip (FR-005/FR-005b): the part number for a GAL part, else the type
 // name. It is divorced from the library id (typeIdentity).
@@ -50,8 +55,11 @@ function partTileTip(type) {
 // number, then GAL parts (FR-005b), each group then ordered by library id. The
 // numeric key drops the "74" family prefix so the sort matches FR-006.
 function partOrder(a, b) {
-  const an = isGal(a) ? Infinity : Number(a.name.slice(2));
-  const bn = isGal(b) ? Infinity : Number(b.name.slice(2));
+  // 74-series sort by their numeric part number; GAL parts and memory devices
+  // (free-form names) fall after them (Infinity), then by library id.
+  const sortNum = (t) => (isGal(t) || isMem(t) ? Infinity : Number(t.name.slice(2)));
+  const an = sortNum(a);
+  const bn = sortNum(b);
   if (an !== bn) return an - bn;
   const ai = typeIdentity(a), bi = typeIdentity(b);
   return ai < bi ? -1 : ai > bi ? 1 : 0;
@@ -115,6 +123,16 @@ function renderPalette({ partsEl, builtinsEl, components, builtins, store }) {
   newGalTile.dataset.type = "newgal";
   newGalTile.title = "New GAL part (GAL22V10)";
   partsEl.appendChild(newGalTile);
+
+  // Action tile that opens the New memory device dialog (FR-114); like the GAL
+  // tile it is not placeable, so it is not draggable or registered in `tiles`,
+  // and stays after the part tiles so addPart's index math holds.
+  const newMemTile = document.createElement("div");
+  newMemTile.className = "palette-tile galdlg-newtile";
+  newMemTile.textContent = "MEM";
+  newMemTile.dataset.type = "mem";
+  newMemTile.title = "New memory device (RAM/ROM)";
+  partsEl.appendChild(newMemTile);
 
   // Built-ins: icon + descriptive tooltip per object (FR-067).
   for (const type of builtins) {
@@ -211,6 +229,29 @@ async function main() {
         toast(`Added GAL part ${created.partnumber}`);
       }
     };
+    // Open the New memory device dialog (FR-114) and register the generated type
+    // (FR-114c) live, like a new GAL part. Its built-in behavior, ROM-content
+    // reading, and cross-session persistence are still deferred (FR-114b/OQ-013):
+    // the type is in-session only (placed instances still round-trip via their
+    // embedded typeData, FR-057), and a placed device does not yet simulate.
+    const onNewMemDevice = async () => {
+      await memDeviceDialog({
+        startPath: defaults.dataDir,
+        submit: (spec) => {
+          const type = memDeviceType(spec);
+          // The name derives the library id (FR-066e); reject a name that
+          // collides with any existing type — loaded parts, GAL parts, built-ins,
+          // or an earlier memory device (FR-007a). Thrown errors surface inline in
+          // the dialog, which stays open.
+          if (library.some((t) => typeIdentity(t) === type.id)) {
+            throw new Error(`A component named "${type.name}" already exists.`);
+          }
+          addCreatedPart(type);
+          toast(`Added memory device ${type.name}`);
+          return type;
+        },
+      });
+    };
     // fileops is built before interaction so the ADD tile can route through it.
     // Breadcrumb back control (FR-100a): shown only while the back-stack is
     // non-empty, i.e. after descending into a sub-design.
@@ -233,6 +274,7 @@ async function main() {
       onAddSubDesign: (x, y) => fileops.addSubDesign(x, y), // §6.14
       onOpenSubDesign: (childPath) => fileops.descend(childPath), // FR-100
       onNewGalPart, // FR-066c: upper-palette action tile
+      onNewMemDevice, // FR-114: upper-palette action tile
     });
     // Heartbeat + reconnect (FR-089–FR-091, §6.12a): on recovery a dirty
     // design saves through the same path the toolbar Save uses.

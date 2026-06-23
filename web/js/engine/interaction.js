@@ -140,7 +140,7 @@ function showToast(msg) {
 // `name` matches the ADD tile so the armed-tile highlight (FR-009a) still works.
 const ADD_TYPE = { name: "add", isAdd: true };
 
-export function initInteraction({ canvas, palette, store, renderer, library, onAddSubDesign, onOpenSubDesign, onNewGalPart }) {
+export function initInteraction({ canvas, palette, store, renderer, library, onAddSubDesign, onOpenSubDesign, onNewGalPart, onNewMemDevice }) {
   let placeType = null; // ComponentType when tool === "place"
   let wireSource = null; // pending WIRE source spec
   let wireWaypoints = []; // locked intermediate waypoints for the in-progress wire/bus (FR-027e)
@@ -873,6 +873,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     if (!tile) return;
     if (tile.dataset.type === "add") return setTool("place", ADD_TYPE); // §6.14
     if (tile.dataset.type === "newgal") return void onNewGalPart?.(); // FR-066c
+    if (tile.dataset.type === "mem") return void onNewMemDevice?.(); // FR-114
     const type = findType(tile.dataset.type);
     if (type) setTool("place", type);
   });

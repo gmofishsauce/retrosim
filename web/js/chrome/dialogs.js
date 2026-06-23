@@ -699,14 +699,243 @@ export function newGalPartDialog({ submit }) {
   });
 }
 
-// openFileDialog resolves to { path } on confirm, or null on cancel.
-export function openFileDialog({ mode, startPath, defaultName = "" }) {
+// MEM_WIDTHS are the data widths a generated memory device may have (FR-114).
+export const MEM_WIDTHS = [4, 8, 16, 32];
+// MEM_MAX_ADDR_BITS bounds the address-bit count (FR-114a): 2^24 = 16,777,216
+// locations.
+export const MEM_MAX_ADDR_BITS = 24;
+
+// validateMemSpec checks a gathered memory-device spec (FR-114a) and returns
+// null when valid, else a short reason string. Pure (no DOM) so it is unit-
+// testable and shared by the dialog's live Create gate. `spec` is the shape
+// memDeviceDialog.gather() produces.
+export function validateMemSpec(spec) {
+  if (!spec.name || !spec.name.trim()) return "a name is required";
+  if (spec.kind !== "ram" && spec.kind !== "rom") return "choose RAM or ROM";
+  if (!Number.isInteger(spec.addressBits) || spec.addressBits < 1) {
+    return "address bits must be a positive integer";
+  }
+  if (spec.addressBits > MEM_MAX_ADDR_BITS) {
+    return `address bits must be ≤ ${MEM_MAX_ADDR_BITS}`;
+  }
+  if (!MEM_WIDTHS.includes(spec.dataWidth)) {
+    return `data width must be one of ${MEM_WIDTHS.join(", ")}`;
+  }
+  if (spec.kind === "rom" && !spec.romFile) return "choose a ROM content file";
+  return null;
+}
+
+// memDeviceDialog authors a new memory device (RAM or ROM, FR-114/FR-114a). It
+// collects the class, size (address bits → 2^n locations), data width, and — for
+// ROM — a content file, validates them, and calls submit(spec). The pinout,
+// behavior, file format, and persistence are deferred (FR-114b/OQ-013), so the
+// caller's submit is presently a stub. `startPath` seats the ROM file browser.
+// Resolves to submit's result, or null on cancel.
+export function memDeviceDialog({ submit, startPath = "" }) {
+  return new Promise((resolve) => {
+    const overlay = el("div", "dialog-overlay");
+    const box = el("div", "dialog");
+    overlay.appendChild(box);
+    box.appendChild(el("div", "dialog-title", "New memory device"));
+
+    // Shared field state (preserved across class-driven rebuilds so a RAM/ROM
+    // switch keeps the size/width the user already set).
+    let kind = "ram";
+    let addressBits = 8;
+    let dataWidth = 8;
+    let romFile = null;
+    let nameEdited = false; // once the user types a name, stop auto-suggesting it
+
+    // RAM/ROM radio (default RAM); changing it rebuilds the dynamic region.
+    const classRow = el("div", "dialog-row");
+    classRow.appendChild(el("label", "dialog-label", "Type:"));
+    const radios = {};
+    for (const k of ["ram", "rom"]) {
+      const lbl = el("label", "memdlg-radio");
+      const r = el("input");
+      r.type = "radio";
+      r.name = "mem-kind";
+      r.value = k;
+      r.checked = k === kind;
+      r.addEventListener("change", () => {
+        if (!r.checked) return;
+        kind = k;
+        romFile = null; // re-initialize: a class switch discards the chosen file
+        syncName();
+        rebuild();
+      });
+      radios[k] = r;
+      lbl.append(r, document.createTextNode(k.toUpperCase()));
+      classRow.appendChild(lbl);
+    }
+    box.appendChild(classRow);
+
+    // Name (FR-114c): the free-form display name, which also derives the type's
+    // library id. Pre-filled with a size-based suggestion that keeps tracking the
+    // class/size/width until the user edits it, after which it is left alone.
+    const suggestName = () => `${kind.toUpperCase()} ${2 ** addressBits}×${dataWidth}`;
+    const nameInput = el("input", "dialog-name");
+    nameInput.type = "text";
+    nameInput.value = suggestName();
+    nameInput.addEventListener("input", () => {
+      nameEdited = true;
+      validate();
+    });
+    const syncName = () => {
+      if (!nameEdited) nameInput.value = suggestName();
+    };
+    const nameRow = el("div", "dialog-row");
+    nameRow.append(el("label", "dialog-label", "Name:"), nameInput);
+    box.appendChild(nameRow);
+
+    // Dynamic region — fully rebuilt on a class change (FR-114).
+    const dyn = el("div", "memdlg-dyn");
+    box.appendChild(dyn);
+
+    const errEl = el("div", "galdlg-error");
+    errEl.hidden = true;
+    box.appendChild(errEl);
+
+    const createBtn = button("Create", onOk);
+    const buttons = el("div", "dialog-buttons");
+    buttons.append(button("Cancel", () => done(null)), createBtn);
+    box.appendChild(buttons);
+
+    // rebuild renders the class-specific controls into `dyn` (FR-114a).
+    function rebuild() {
+      dyn.replaceChildren();
+      radios[kind].checked = true;
+
+      // Address bits → locations.
+      const addrRow = el("div", "dialog-row");
+      const addrInput = el("input", "memdlg-num");
+      addrInput.type = "number";
+      addrInput.min = "1";
+      addrInput.max = String(MEM_MAX_ADDR_BITS);
+      addrInput.step = "1";
+      addrInput.value = String(addressBits);
+      const locLabel = el("span", "memdlg-hint");
+      const refreshLoc = () => {
+        const n = Number(addrInput.value);
+        locLabel.textContent =
+          Number.isInteger(n) && n >= 1 && n <= MEM_MAX_ADDR_BITS
+            ? `= ${2 ** n} locations`
+            : "—";
+      };
+      addrInput.addEventListener("input", () => {
+        addressBits = Number(addrInput.value);
+        refreshLoc();
+        syncName();
+        validate();
+      });
+      refreshLoc();
+      addrRow.append(el("label", "dialog-label", "Address bits:"), addrInput, locLabel);
+      dyn.appendChild(addrRow);
+
+      // Data width.
+      const widthRow = el("div", "dialog-row");
+      const widthSel = el("select", "memdlg-sel");
+      for (const w of MEM_WIDTHS) {
+        const opt = el("option", null, String(w));
+        opt.value = String(w);
+        widthSel.appendChild(opt);
+      }
+      widthSel.value = String(dataWidth);
+      widthSel.addEventListener("change", () => {
+        dataWidth = Number(widthSel.value);
+        syncName();
+        validate();
+      });
+      widthRow.append(el("label", "dialog-label", "Data width (bits):"), widthSel);
+      dyn.appendChild(widthRow);
+
+      // ROM-only content file (FR-114a), chosen via the server-side browser.
+      if (kind === "rom") {
+        const fileRow = el("div", "dialog-row");
+        const fileLabel = el("span", "memdlg-file", romFile || "no file chosen");
+        const chooseBtn = button("Choose file…", async () => {
+          const res = await openFileDialog({
+            mode: "open",
+            startPath,
+            title: "Choose ROM content file",
+          });
+          if (res) {
+            romFile = res.path;
+            fileLabel.textContent = romFile;
+            validate();
+          }
+        });
+        fileRow.append(el("label", "dialog-label", "ROM file:"), chooseBtn, fileLabel);
+        dyn.appendChild(fileRow);
+      }
+
+      validate();
+    }
+
+    // gather reads the current field state into a spec (FR-114a/FR-114c).
+    function gather() {
+      return {
+        name: nameInput.value.trim(),
+        kind,
+        addressBits,
+        locations: 2 ** addressBits,
+        dataWidth,
+        ...(kind === "rom" ? { romFile } : {}),
+      };
+    }
+
+    // validate gates Create on the pure validator (FR-114a).
+    function validate() {
+      errEl.hidden = true;
+      createBtn.disabled = validateMemSpec(gather()) !== null;
+      return !createBtn.disabled;
+    }
+
+    async function onOk() {
+      const spec = gather();
+      const reason = validateMemSpec(spec);
+      if (reason) return showError(reason);
+      createBtn.disabled = true;
+      try {
+        done(await submit(spec));
+      } catch (e) {
+        createBtn.disabled = false;
+        showError(e.message);
+      }
+    }
+    function showError(msg) {
+      errEl.textContent = msg;
+      errEl.hidden = false;
+    }
+    function done(result) {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(null);
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+    rebuild();
+  });
+}
+
+// openFileDialog resolves to { path } on confirm, or null on cancel. `title`
+// overrides the default heading (e.g. the ROM-content picker, FR-114a) — the
+// browser itself is unchanged (it lists dirs + the server's filtered files).
+export function openFileDialog({ mode, startPath, defaultName = "", title } = {}) {
   return new Promise((resolve) => {
     const overlay = el("div", "dialog-overlay");
     const box = el("div", "dialog");
     overlay.appendChild(box);
 
-    box.appendChild(el("div", "dialog-title", mode === "save" ? "Save design" : "Open design"));
+    box.appendChild(
+      el("div", "dialog-title", title ?? (mode === "save" ? "Save design" : "Open design")),
+    );
     const pathLabel = el("div", "dialog-path");
     const listEl = el("ul", "dialog-list");
     box.append(pathLabel, listEl);
