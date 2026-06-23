@@ -840,6 +840,22 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     };
   }
 
+  // finishWireOnBus terminates an in-progress wire on a bus as a single-bit
+  // breakout (FR-043b): it pops the same bit-choice dialog as startBreakout, then
+  // commits a breakout whose far endpoint is the wire's source and whose junction
+  // is at the clicked bus point. The wire follows the route already drawn — its
+  // bends are legBends in source→bus order, reversed because breakoutBit builds
+  // the path junction→dest. Cancelling the dialog leaves the wire in progress.
+  async function finishWireOnBus(busHit, e) {
+    const g = gridOf(e);
+    const bit = await chooseBitDialog(busHit.bus);
+    if (bit === null) return; // cancelled — keep drawing the wire
+    const busPoint = { kind: "free", x: g.x, y: g.y };
+    const bends = legBends([wireSource, ...waypointSpecs(), busPoint]).reverse();
+    store.dispatch(breakoutBitCmd(busHit.bus.id, busHit.segIndex, g.x, g.y, bit, wireSource, bends));
+    setTool("select"); // one-shot (FR-028)
+  }
+
   // breakoutDestAt returns the destination spec for a breakout wire's second
   // click: a component pin, or a free grid point (a dangling end is allowed,
   // FR-029). Branching onto another wire is not a breakout destination.
@@ -968,6 +984,19 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
         return;
       }
       const target = wireTargetAt(e);
+      // Terminating the wire on a bus taps a single bit (FR-043b) — the same
+      // dialog as a breakout started on a bus (FR-043a). A pin still wins over a
+      // bus; a bus wins over a wire-branch and over empty space (which would
+      // otherwise lock a waypoint), so this runs before those cases. wireTargetAt
+      // never returns a pin that is also on a bus, so guarding on a non-pin target
+      // preserves the pin > bus priority.
+      if (!target || target.kind === "branch") {
+        const bh = hitBusSegment(store.design, worldOf(e), segTol());
+        if (bh) {
+          finishWireOnBus(bh, e); // async: pick bit, then commit the breakout
+          return;
+        }
+      }
       if (!target) {
         // Empty-canvas click → lock an intermediate waypoint (FR-027e); the
         // router re-inits from it for the live leg. A wire completes only on a

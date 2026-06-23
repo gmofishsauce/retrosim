@@ -558,11 +558,14 @@ export function setBusBitNames(design, busId, names) {
 }
 
 // breakoutBit taps a single bit of a bus and routes it on as an ordinary
-// single-bit wire (FR-043a). It inserts a junction vertex at (x,y) on segment
-// segIndex of the bus with `bit` set to the tapped lane, then starts a wire from
-// that junction to dest. The wire becomes electrically part of that bus bit's net
-// (FR-037a), derived by buildNets. Returns the new wire.
-export function breakoutBit(design, busId, segIndex, x, y, bit, dest) {
+// single-bit wire (FR-043a/FR-043b). It inserts a junction vertex at (x,y) on
+// segment segIndex of the bus with `bit` set to the tapped lane, then starts a
+// wire from that junction to dest, with any `bends` as its interior corners. The
+// wire becomes electrically part of that bus bit's net (FR-037a), derived by
+// buildNets. Returns the new wire. (A breakout *started* on a bus passes no
+// bends — straight, FR-043a; a wire *terminated* on a bus passes the drawn
+// route's corners, FR-043b, ordered junction→dest.)
+export function breakoutBit(design, busId, segIndex, x, y, bit, dest, bends = []) {
   const bus = design.buses.find((b) => b.id === busId);
   if (!bus) throw new Error(`no such bus ${busId}`);
   if (bit < 0 || bit >= bus.width) {
@@ -570,7 +573,7 @@ export function breakoutBit(design, busId, segIndex, x, y, bit, dest) {
   }
   const j = branchWire(design, bus, segIndex, x, y);
   j.bit = bit;
-  return addWire(design, { kind: "vertex", id: j.id }, dest);
+  return addWire(design, { kind: "vertex", id: j.id }, dest, bends);
 }
 
 // deleteBus removes a bus and runs the connectivity cleanup (FR-033a).

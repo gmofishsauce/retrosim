@@ -19,6 +19,10 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-23 — Tap a bus bit by terminating a wire on it (reverse breakout)
+What: Drawing a wire from a pin and clicking onto a bus now pops the same bit-choice dialog as starting a breakout from the bus, and creates the single-bit breakout connection — previously the terminating click landed on no target and was swallowed as a waypoint. The committed wire follows the route already drawn (a breakout *started* on a bus still commits straight). breakoutBit/breakoutBitCmd gained an optional bends arg; breakoutBitCmd resolves a branch far-endpoint via resolveSpec.
+Touches: FR-043b (new); design §6.9 (breakout, WIRE state table), traceability.
+
 ## 2026-06-23 — Keep the source group's bus brace shown while dragging
 What: Fixed a bug where a bus started on a pin-group snap lost its source brace as soon as the cursor dragged out of that group's snap range (the brace only reappeared once the bus was committed). The in-progress source group's brace now stays drawn for the whole drag, alongside any prospective destination brace.
 Touches: FR-042b; design §6.9.

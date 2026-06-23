@@ -698,11 +698,14 @@ export function snapBusGroupCmd(busId, vertexId, instanceRefdes, groupName) {
   };
 }
 
-// breakoutBitCmd taps one bus bit onto a new single-bit wire (FR-043a). Like a
-// branch, it creates a junction vertex and a wire, so it is snapshot-based.
-export function breakoutBitCmd(busId, segIndex, x, y, bit, dest) {
+// breakoutBitCmd taps one bus bit onto a new single-bit wire (FR-043a/FR-043b).
+// Like a branch, it creates a junction vertex and a wire, so it is snapshot-based.
+// `dest` is the wire's far endpoint — a pin/free/vertex spec, or a `branch` spec
+// (FR-043b, when a wire terminating on the bus was started on another conductor),
+// resolved to a junction first; `bends` are the wire's interior corners.
+export function breakoutBitCmd(busId, segIndex, x, y, bit, dest, bends = []) {
   return snapshotCommand("Break out bus bit", (design) =>
-    breakoutBit(design, busId, segIndex, x, y, bit, dest),
+    breakoutBit(design, busId, segIndex, x, y, bit, resolveSpec(design, dest), bends),
   );
 }
 

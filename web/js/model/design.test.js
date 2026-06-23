@@ -498,6 +498,33 @@ test("breakoutBit taps one bus bit and starts a single-bit wire (FR-043a)", () =
   assert.equal(wire.path[0].v, j.id);
 });
 
+test("breakoutBit threads route bends into the wire path (FR-043b)", () => {
+  const d = createDesign("t");
+  addInstance(d, type74138Grp(), 40, 20, 0); // U1 (has pin A0)
+  const bus = freeBus(d, 4);
+  const bends = [
+    { x: 6, y: 8 },
+    { x: 6, y: 10 },
+  ];
+  const wire = breakoutBit(
+    d,
+    bus.id,
+    0,
+    4,
+    0,
+    1,
+    { kind: "pin", refdes: "U1", pin: "A0" },
+    bends,
+  );
+
+  // path is junction-node, the two bends in order, then the pin node
+  assert.equal(wire.path.length, 4);
+  assert.deepEqual(
+    wire.path.slice(1, 3).map((p) => ({ t: p.t, x: p.x, y: p.y })),
+    bends.map((p) => ({ t: "bend", ...p })),
+  );
+});
+
 test("breakoutBit rejects an out-of-range bit", () => {
   const d = createDesign("t");
   const bus = freeBus(d, 4);

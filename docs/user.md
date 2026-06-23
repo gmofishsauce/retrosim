@@ -340,8 +340,12 @@ with a `/N` width annotation.
     if you move or rotate it.
 - **Bit names:** a bus may carry a name per bit; snap-connecting to a named pin
   group adopts those names (bit position, not name, determines connectivity).
-- **Breakout:** you can break a single bit out of a bus and route it as an ordinary
-  wire; the broken-out wire is electrically part of that bus bit's net.
+- **Breakout:** you can tap a single bit out of a bus and route it as an ordinary
+  wire; the tapped wire is electrically part of that bus bit's net. This works in
+  either direction — click a bus first to start the wire there, or draw a wire from
+  a pin and click onto a bus to finish it there. Either way a small dialog lets you
+  choose which bit to tap. (A wire you draw *to* a bus keeps the route you drew; one
+  *started* from a bus runs straight to its destination.)
 
 ---
 

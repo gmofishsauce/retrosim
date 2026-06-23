@@ -969,7 +969,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | BUS | (same as WIRE; an empty-canvas click locks a waypoint and no longer ends the bus at a free point — FR-027e) | `AddBus(...)` | SELECT (FR-040, A6) |
   | BUS | drag endpoint onto component | snap-connect (FR-041–043, §below) | SELECT |
   | BUS | drag endpoint onto another bus | join if equal width; else **reject** (FR-039a) | SELECT |
-  | WIRE | click a bus segment | **breakout**: prompt/derive bit index, create `junction` vertex with `bit` set, begin 1-bit wire (FR-043a) | WIRE_AWAIT_DEST |
+  | WIRE | click a bus segment (no source yet) | **breakout**: prompt bit index, create `junction` vertex with `bit` set, begin 1-bit wire (FR-043a) | WIRE_AWAIT_DEST |
+  | WIRE_AWAIT_DEST | click a bus segment | **breakout (terminate)**: prompt bit index, create `junction` with `bit` set, commit a 1-bit wire from the source along the drawn route (FR-043b); cancel keeps drawing | SELECT (FR-028) |
 
 - **Hit-testing (`hittest.js`):** in world space — components are rectangles
   (their rotated bounding outline); pins use the FR-013d hot region: a circle
@@ -1071,11 +1072,24 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   (`busGroupBrace`, §6.8/FR-042a). `snapBusGroup` recomputes the pack-low block from
   current design state, so it matches what the feedback showed and sequential snaps
   in one commit pack correctly.
-- **Breakout (FR-043a):** in WIRE mode, clicking a **bus** segment creates a
-  `junction` vertex on that bus with `bit` = the chosen lane (defaulting to the
-  bus's nearest bit; if the bus has `bitNames`, a small picker offers them) and
-  starts a single-bit wire from it. The lane union in §6.6 routes the wire into
-  exactly that bit's net.
+- **Breakout (FR-043a/FR-043b):** in WIRE mode, clicking a **bus** segment creates a
+  `junction` vertex on that bus with `bit` = the chosen lane (the `chooseBitDialog`
+  picker, labeled with `bitNames` when present) and a single-bit wire tying it into
+  exactly that bit's net via the §6.6 lane union. This works in **both directions**:
+  - As the **first** click (no `wireSource`), `startBreakout` arms a `breakout`
+    wire source and the next click takes the destination — committed **straight**
+    (`breakoutBitCmd` carries no bends), matching the deliberately straight preview
+    (§6.9 below).
+  - As the **terminating** click of an already-in-progress wire (FR-043b): the wire
+    click handler hit-tests a bus segment (priority pin > bus > wire-branch, mirroring
+    the start priority) *before* `wireTargetAt`, since `wireTargetAt` does not detect
+    buses. On a bus hit it awaits `chooseBitDialog`, then dispatches `breakoutBitCmd`
+    with the in-progress `wireSource` as the breakout wire's far endpoint and the
+    drawn route's bends (`legBends([wireSource, …waypoints, busPoint])`, **reversed**
+    because `breakoutBit` builds the path junction→dest). Honoring the bends keeps the
+    commit faithful to the routed preview the user already sees; cancelling the dialog
+    leaves the wire in progress. `breakoutBitCmd` resolves a `branch` far endpoint
+    through `resolveSpec` (a pin/free/vertex endpoint passes through unchanged).
 - **Width-mismatch guard (FR-039a):** a gesture that would join two buses of
   unequal width is rejected at drop time with a non-fatal toast; no command is
   dispatched. *Snap-connect, breakout, and bit-names may be deferred from the MVP
@@ -2231,7 +2245,7 @@ No files are modified (greenfield).
 | FR-039a | §6.9 | `interaction.js`, `hittest.js` |
 | FR-041, FR-041a, FR-041b | §6.9, §6.11, A3 | `interaction.js`, `dialogs.js` |
 | FR-042, FR-043 | §6.9, §7.2 | `interaction.js`, `model/design.js` |
-| FR-043a | §6.6, §6.9, §7.1a | `interaction.js`, `model/design.js`, `model/netlist.js` |
+| FR-043a, FR-043b | §6.6, §6.9, §7.1a | `interaction.js`, `model/design.js`, `commands.js`, `model/netlist.js` |
 | FR-044, FR-045 | §6.10, §6.12 | `store.js`, `app.js` |
 | FR-046, FR-047, FR-047a, FR-048, FR-049 | §6.5, §6.10, §6.11 | `storage.go`, `dialogs.js`, `fileops.js`, `store.js` |
 | FR-049a | §6.10, §6.11 | `store.js`, `dialogs.js` |

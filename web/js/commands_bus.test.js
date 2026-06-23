@@ -12,6 +12,7 @@ import {
   breakoutBitCmd,
   setBusBitNamesCmd,
   placeComponent,
+  addWireCmd,
 } from "./commands.js";
 
 function newStore() {
@@ -124,6 +125,35 @@ test("breakoutBitCmd taps a bus bit onto a wire; undo restores connectivity", ()
   store.undo();
   assert.equal(store.design.wires.length, 0);
   assert.equal(store.design.buses[0].path.length, 2); // junction removed
+});
+
+test("breakoutBitCmd resolves a branch far-endpoint and threads bends (FR-043b)", () => {
+  const store = newStore();
+  store.dispatch(placeComponent(type74138Grp(), 40, 20, 0)); // U1
+  store.dispatch(addWireCmd({ kind: "pin", refdes: "U1", pin: "A0" }, free(30, 0))); // a host wire
+  const hostId = store.design.wires[0].id;
+  store.dispatch(addBusCmd(free(0, 0), free(20, 0), 4));
+  const busId = store.design.buses[0].id;
+
+  // Terminate a wire that started on the host wire onto the bus: the far endpoint
+  // is a branch spec, resolved to a junction; the drawn route's bend is carried.
+  store.dispatch(
+    breakoutBitCmd(busId, 0, 8, 0, 1, { kind: "branch", wireId: hostId, segIndex: 0, x: 8, y: 0 }, [
+      { x: 8, y: 4 },
+    ]),
+  );
+
+  // a new breakout wire exists with the bend in its path, tied into bit 1's net
+  const breakout = store.design.wires[store.design.wires.length - 1];
+  assert.ok(breakout.path.some((p) => p.t === "bend" && p.x === 8 && p.y === 4));
+  const nets = buildNets(store.design);
+  const bitNet = nets.find((n) =>
+    (n.provenance ?? []).some((pr) => pr.bus === busId && pr.bit === 1),
+  );
+  assert.ok(bitNet, "breakout joins bit 1's net");
+
+  store.undo();
+  assert.ok(!store.design.wires.some((w) => w.id === breakout.id));
 });
 
 test("addBusCmd snaps a component endpoint at creation; undo removes bus+snap", () => {
