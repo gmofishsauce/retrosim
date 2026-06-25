@@ -19,6 +19,10 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-25 — Properties panel: synthetic endpoint sheet for a selected wire/bus (FR-020d)
+What: Selecting a single wire or bus now shows a read-only property sheet naming the conductor's two endpoints, generated dynamically each selection (designator labels can change, FR-011b). A component-pin endpoint reads "<designator> <pin>"; a bus-breakout tap reads "<group>[<bit>]" (snapped pin-group name + tapped bit, else the bus id); a group-snapped bus endpoint reads "<designator> <group>"; anything else (dangling free end, plain junction) reads "unconnected (x, y)". Decisions (with the user): bus identity = snapped group name + index; other endpoints shown by coordinates; bus→group endpoints as designator + group name.
+Touches: FR-020d (new); design §6.11.
+
 ## 2026-06-23 — Memory device generator: ROM content loading (.bin/.hex, FR-114e)
 What: ROMs now load their content at Run. Format is chosen by required extension — .bin (raw bytes) or .hex (whitespace-separated hex byte tokens) — bytes pack little-endian into dataWidth-bit locations (width 4 = low nibble), file byte 0 = location 0. Content is read from the server each Run (only the path is saved), so editing the file and re-running reloads it; a missing/wrong-type/malformed file is reported and that ROM reads U. Server: ListDir gained an extension filter and a new GET /romfile endpoint (ReadFileBytes, 64 MiB cap); the ROM picker filters to .bin/.hex. Client: memory.js parseHexBytes/parseRomBytes + core.loadBytes; createSim.run() is now async (loadRomContents) with a starting-flag guard; buildSimulation takes a romContent map; validateMemSpec rejects a non-.bin/.hex ROM file. Decisions (with the user): require the extension (no content sniffing), little-endian packing, load at Run from the server.
 Touches: FR-114b (narrowed to persistence), FR-114d (ROM reads content), FR-114e (new), FR-053 (ext filter), OQ-013 (narrowed); design §6.4, §6.11, §6.13, traceability.

@@ -1424,6 +1424,18 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `inst.overrides.delays` / `inst.overrides.props` (§7.2) and persist via the
   full-instance save (FR-058). The panel re-renders on every store notification,
   which is why selection now flows through `store.setSelection` (notifying).
+  - *Wire/bus synthetic sheet (FR-020d)*: when the single selection is a wire or a
+    bus (`only.kind === "wire" | "bus"`) the panel instead renders a read-only sheet
+    describing the conductor's two endpoints — its `path`'s first and last `node`
+    entries. A shared `describeEndpoint(design, vertexId)` resolves each endpoint
+    vertex to text, recomputed on every render so a renamed designator (FR-011b) is
+    reflected: a `pin`/`connector` vertex → "`<label> <pin>`" (label via the
+    instance's `label ?? refdes`); a `junction` carrying a `bit` (a bus-breakout
+    tap, FR-043a) → "`<group>[<bit>]`", the group taken from the owning bus's first
+    `groupConnections` entry (else the bus id); a `free` vertex named by some bus's
+    `groupConnections` (group-snapped, FR-042) → "`<label> <group>`"; otherwise
+    "`unconnected (x, y)`" from the vertex position. No editable fields, so the sheet
+    ignores the simulating lock.
   - *Documentation section (FR-105)*: a read-only block rendered from the
     instance's type data (FR-104), placed after the read-only `Type/Size/Pins`
     rows and before the editable delay/property sections. The one-line

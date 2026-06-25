@@ -5,6 +5,7 @@
 // store notification.
 
 import { setOverrideCmd, setSwitchStateCmd, setPortPropsCmd, setLabelCmd } from "../commands.js";
+import { getVertex } from "../model/design.js";
 
 function el(tag, className, text) {
   const e = document.createElement(tag);
@@ -17,6 +18,47 @@ function infoRow(label, value) {
   const row = el("div", "prop-row");
   row.append(el("span", "prop-label", label), el("span", "prop-value", value));
   return row;
+}
+
+// fmt renders a grid coordinate compactly (whole numbers bare, else two places).
+function fmt(n) {
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
+}
+
+// describeEndpoint resolves a conductor endpoint vertex to display text (FR-020d).
+// Recomputed on every render so a renamed designator (FR-011b) is reflected.
+function describeEndpoint(design, vertexId) {
+  const v = getVertex(design, vertexId);
+  if (!v) return "unconnected";
+
+  // Component pin/connector: "<designator> <pin>".
+  if (v.kind === "pin" || v.kind === "connector") {
+    const inst = design.components.find((c) => c.refdes === v.ref);
+    return `${inst?.label ?? v.ref} ${v.pin}`;
+  }
+
+  // Bus-breakout tap (FR-043a): a junction carrying a bit. Name it by the owning
+  // bus's snapped pin-group (FR-042), falling back to the internal bus id.
+  if (v.kind === "junction" && v.bit != null) {
+    const bus = design.buses.find((b) =>
+      b.path.some((p) => p.t === "node" && p.v === v.id),
+    );
+    const group = bus?.groupConnections?.[0]?.group ?? bus?.id ?? "bus";
+    return `${group}[${v.bit}]`;
+  }
+
+  // Group-snapped bus endpoint (FR-042): a free vertex named by some bus's
+  // groupConnections → "<designator> <group>".
+  for (const b of design.buses) {
+    const gc = (b.groupConnections ?? []).find((g) => g.vertex === v.id);
+    if (gc) {
+      const inst = design.components.find((c) => c.refdes === gc.instance);
+      return `${inst?.label ?? gc.instance} ${gc.group}`;
+    }
+  }
+
+  // Dangling free end (FR-029) or plain junction (FR-034).
+  return `unconnected (${fmt(v.x)}, ${fmt(v.y)})`;
 }
 
 // docSection builds the read-only Documentation block (FR-105) from a type's
@@ -72,6 +114,26 @@ export function initProperties({ container, store }) {
     // selection is empty or holds more than one object (FR-020a/FR-016a).
     const sel = store.state.selection;
     const only = sel.length === 1 ? sel[0] : null;
+
+    // A single selected wire or bus gets a read-only synthetic endpoint sheet
+    // (FR-020d), generated dynamically from current design state.
+    if (only && (only.kind === "wire" || only.kind === "bus")) {
+      const design = store.design;
+      const list = only.kind === "wire" ? design.wires : design.buses;
+      const cond = list.find((c) => c.id === only.id);
+      if (!cond) {
+        container.appendChild(el("div", "prop-empty", "No component selected"));
+        return;
+      }
+      const nodes = cond.path.filter((p) => p.t === "node");
+      container.appendChild(el("div", "prop-title", only.kind === "wire" ? "Wire" : "Bus"));
+      container.append(
+        infoRow("From", describeEndpoint(design, nodes[0].v)),
+        infoRow("To", describeEndpoint(design, nodes[nodes.length - 1].v)),
+      );
+      return;
+    }
+
     const inst =
       only && only.kind === "component"
         ? store.design.components.find((c) => c.refdes === only.refdes)
