@@ -11,6 +11,8 @@ import {
   zoomAbout,
   centerViewportOn,
   rotateOffset,
+  isRedundantBend,
+  pruneCollinearBends,
 } from "../geometry.js";
 import {
   hitComponent,
@@ -160,6 +162,16 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     store.design.wires.find((w) => w.id === id) ??
     store.design.buses.find((b) => b.id === id);
 
+  // pathPointXY resolves a conductor path point's grid coordinate: a bend carries
+  // its own (x,y); a node defers to its vertex. Null if the vertex is missing.
+  function pathPointXY(conductor, index) {
+    const pt = conductor.path[index];
+    if (!pt) return null;
+    if (pt.t === "bend") return { x: pt.x, y: pt.y };
+    const v = getVertex(store.design, pt.v);
+    return v ? { x: v.x, y: v.y } : null;
+  }
+
   function setTool(tool, type = null) {
     commitNoteEdit(); // leaving for any tool commits an in-progress note (FR-071f)
     placeType = type;
@@ -270,6 +282,19 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       if (i < stops.length - 2) bends.push({ x: stops[i + 1].x, y: stops[i + 1].y });
     }
     return bends;
+  }
+
+  // prunedLegBends is legBends with non-bending (collinear) bend points removed
+  // (FR-033c). It rebuilds the committing conductor's full polyline — the resolved
+  // source/target coordinates around the leg bends — prunes it, and returns the
+  // surviving interior bends. When an endpoint coordinate cannot be resolved it
+  // falls back to the unpruned bends rather than guess.
+  function prunedLegBends(stops) {
+    const a = routerEndpoint(stops[0]);
+    const b = routerEndpoint(stops[stops.length - 1]);
+    const bends = legBends(stops);
+    if (!a || !b) return bends;
+    return pruneCollinearBends([a, ...bends, b]).slice(1, -1);
   }
 
   // legPolyline returns one leg's grid-point polyline for the preview: the routed
@@ -774,7 +799,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       }
     }
     store.dispatch(
-      addBusCmd(specs.a, specs.b, width, snaps, legBends([specs.a, ...waypointSpecs(), specs.b])),
+      addBusCmd(specs.a, specs.b, width, snaps, prunedLegBends([specs.a, ...waypointSpecs(), specs.b])),
     );
   }
 
@@ -851,7 +876,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     const bit = await chooseBitDialog(busHit.bus);
     if (bit === null) return; // cancelled — keep drawing the wire
     const busPoint = { kind: "free", x: g.x, y: g.y };
-    const bends = legBends([wireSource, ...waypointSpecs(), busPoint]).reverse();
+    const bends = prunedLegBends([wireSource, ...waypointSpecs(), busPoint]).reverse();
     store.dispatch(breakoutBitCmd(busHit.bus.id, busHit.segIndex, g.x, g.y, bit, wireSource, bends));
     setTool("select"); // one-shot (FR-028)
   }
@@ -1018,7 +1043,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
         return;
       }
       store.dispatch(
-        addWireCmd(wireSource, target, legBends([wireSource, ...waypointSpecs(), target])),
+        addWireCmd(wireSource, target, prunedLegBends([wireSource, ...waypointSpecs(), target])),
       );
       setTool("select"); // one-shot (FR-028)
       return;
@@ -1445,17 +1470,31 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       const p = w.path[drag.bendIndex];
       const fx = p.x;
       const fy = p.y;
+      const prev = pathPointXY(w, drag.bendIndex - 1);
+      const next = pathPointXY(w, drag.bendIndex + 1);
       // Rewind the live preview to the pre-drag position so the command
-      // captures the true old position for undo (FR-024/FR-032).
+      // captures the true old state for undo (FR-024/FR-032).
       moveBend(w, drag.bendIndex, drag.origX, drag.origY);
-      store.dispatch(moveBendCmd(drag.wireId, drag.bendIndex, fx, fy));
+      // A bend dragged onto the straight line through its neighbours no longer
+      // bends the wire, so delete it rather than move it (FR-033c).
+      if (prev && next && isRedundantBend(prev, { x: fx, y: fy }, next)) {
+        store.dispatch(deleteBendCmd(drag.wireId, drag.bendIndex));
+      } else {
+        store.dispatch(moveBendCmd(drag.wireId, drag.bendIndex, fx, fy));
+      }
     } else if (drag.type === "segment" && drag.moved && drag.tempIndex >= 0) {
       const w = findWire(drag.wireId);
       const p = w.path[drag.tempIndex];
       const fx = p.x;
       const fy = p.y;
+      const prev = pathPointXY(w, drag.tempIndex - 1);
+      const next = pathPointXY(w, drag.tempIndex + 1);
       w.path.splice(drag.tempIndex, 1); // remove the preview bend
-      store.dispatch(insertBendCmd(drag.wireId, drag.segIndex, fx, fy));
+      // Dragging a straight segment back onto its own line creates no real bend,
+      // so commit nothing (FR-033c).
+      if (!(prev && next && isRedundantBend(prev, { x: fx, y: fy }, next))) {
+        store.dispatch(insertBendCmd(drag.wireId, drag.segIndex, fx, fy));
+      }
     }
     drag = null;
   });

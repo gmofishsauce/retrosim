@@ -780,7 +780,15 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
 ### 6.7 JS: geometry & rotation (`web/js/geometry.js`)
 - **Purpose:** grid snapping, viewport transforms, rotation math.
-- **Satisfies:** FR-012, FR-015, FR-017, FR-020, FR-021.
+- **Satisfies:** FR-012, FR-015, FR-017, FR-020, FR-021, FR-033c.
+- **Collinear-bend pruning (FR-033c):** `isRedundantBend(prev, cur, next)` returns
+  true when `cur` lies on segment `prev→next` — cross-product within `EPS` (1e-9)
+  **and** within the `prev`/`next` bounding box, so dropping it cannot change the
+  drawn shape. `pruneCollinearBends(points)` runs a single left-to-right pass over a
+  polyline (endpoints included), comparing each interior point against the last
+  *kept* point and the next original point, so a run of collinear points collapses
+  fully. `interaction.js` (§6.9) uses these at conductor commit and at bend/segment
+  drag-end; the model primitives (`addWire`/`addBus`) are left untouched.
 - **Rotation (grid-preserving):** an instance has origin `(x,y)` (its unrotated
   top-left, on the grid) and `rotation ∈ {0,90,180,270}`. A pin's unrotated
   offset `(dx,dy)` (integers, from the pin layout) maps to a rotated offset:
@@ -935,7 +943,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 ### 6.9 JS: interaction / tool FSM (`web/js/engine/interaction.js`, `hittest.js`)
 - **Purpose:** translate pointer/keyboard events into Commands; hit-testing.
 - **Satisfies:** FR-008–FR-010, FR-016–FR-019, FR-025, FR-026–FR-034, FR-027b,
-  FR-027c (with §6.9a), FR-038–FR-043a, FR-039a.
+  FR-027c (with §6.9a), FR-033c, FR-038–FR-043a, FR-039a.
 - **Tools / states:** `SELECT` (default, FR-004), `PLACE(type)` (transient, set by
   palette click), `WIRE`, `BUS`. The FSM also has transient sub-states for
   in-progress gestures (e.g., `WIRE_AWAIT_DEST`, `DRAGGING_BEND`,
@@ -1038,6 +1046,21 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   two-point commit (`breakoutBitCmd` carries no bends), so their preview never
   promises a route the commit won't produce. (Reworked 2026-06-12; supersedes
   the straight-line-only preview and two-point commit.)
+- **Collinear-bend pruning (FR-033c):** redundant, non-bending bend points are
+  removed at three points, all using `geometry.js`'s `isRedundantBend` /
+  `pruneCollinearBends` (§6.7). (a) *Conductor commit:* `prunedLegBends(stops)`
+  rebuilds the full polyline (resolved source/target coords plus `legBends`),
+  prunes it, and returns the surviving interior bends; it feeds every commit path —
+  `AddWire`, `AddBus`, and the terminate-on-bus breakout (`breakoutBitCmd`,
+  FR-043b) — so collinear routed corners and straight-line waypoints (FR-027e)
+  never commit as bends, folded into the single creation command. (The start-on-bus
+  breakout, FR-043a, commits straight with no bends and is unaffected.)
+  (b) *Bend drag-end:* if the dragged bend's final position is collinear with its
+  path neighbours, the mouseup dispatches `DeleteBend` instead of `MoveBend`
+  (undo restores it). (c) *Segment drag-end:* if the released point is collinear
+  with the host segment's endpoints, the live preview bend is dropped and **no**
+  command is dispatched. Buses share these paths (FR-039). Previously-saved
+  conductors are not retroactively swept.
 - **Bus snap-connect (FR-041–FR-043a, A3/A7):** an endpoint targets a pin group
   one of two ways (`busTargetAt`, priority: bus segment > nearby group > body):
   Group **acceptance** is design-aware (FR-041/FR-041c): for an instance + group,

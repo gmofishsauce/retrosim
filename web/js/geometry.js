@@ -130,6 +130,41 @@ export function segmentIntersectsRect(a, b, rect) {
   );
 }
 
+// COLLINEAR_EPS is the tolerance for the collinear-bend tests (FR-033c). Points
+// lie on grid intersections (FR-021), so the test is effectively exact.
+const COLLINEAR_EPS = 1e-9;
+
+// isRedundantBend reports whether `cur` is a bend point that does not bend the
+// conductor (FR-033c): it is collinear with `prev`→`next` (cross product within
+// COLLINEAR_EPS) and lies within their bounding box, so removing it leaves the
+// drawn shape unchanged.
+export function isRedundantBend(prev, cur, next) {
+  const cross = (cur.x - prev.x) * (next.y - prev.y) - (cur.y - prev.y) * (next.x - prev.x);
+  if (Math.abs(cross) > COLLINEAR_EPS) return false;
+  return (
+    cur.x >= Math.min(prev.x, next.x) - COLLINEAR_EPS &&
+    cur.x <= Math.max(prev.x, next.x) + COLLINEAR_EPS &&
+    cur.y >= Math.min(prev.y, next.y) - COLLINEAR_EPS &&
+    cur.y <= Math.max(prev.y, next.y) + COLLINEAR_EPS
+  );
+}
+
+// pruneCollinearBends returns a copy of a polyline with its non-bending interior
+// points removed (FR-033c). A single left-to-right pass compares each interior
+// point against the last *kept* point and the next original point, so a run of
+// collinear points collapses fully; the endpoints are always kept.
+export function pruneCollinearBends(points) {
+  if (points.length < 3) return [...points];
+  const out = [points[0]];
+  for (let i = 1; i < points.length - 1; i++) {
+    if (!isRedundantBend(out[out.length - 1], points[i], points[i + 1])) {
+      out.push(points[i]);
+    }
+  }
+  out.push(points[points.length - 1]);
+  return out;
+}
+
 // zoomAbout returns a new viewport scaled by factor while keeping the world point
 // currently under `screen` fixed on screen (zoom-to-cursor). Zoom is clamped.
 export function zoomAbout(viewport, screen, factor) {

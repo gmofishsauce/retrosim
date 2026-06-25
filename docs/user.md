@@ -280,6 +280,11 @@ Wires are single-bit nets, drawn as thin black lines.
 - **Bends:** in Select mode, **drag a wire segment** to insert a bend point at the
   nearest grid intersection and drag it; **drag an existing bend** to move it;
   **right-click a bend** → "Delete bend point" to remove it and merge the segments.
+  Bend points that don't actually bend are tidied up automatically: a bend dragged
+  back onto the straight line through its neighbours is removed, dragging a segment
+  and releasing it still-straight adds no bend, and any straight-line corners
+  (including locked waypoints) are dropped when the wire is completed. Buses behave
+  the same way.
 - **Branching:** with the Wire tool active, clicking an existing wire segment
   starts a new branch from that point (an electrical junction, shown as a black
   dot). A single pin may also drive several wires (fan-out).

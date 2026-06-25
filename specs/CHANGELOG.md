@@ -19,6 +19,10 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-25 — Remove bend points that don't bend (FR-033c)
+What: Non-bending (collinear) bend points are no longer created or kept by editing actions. On completing a new wire or bus, the committed path is pruned of any interior bend collinear-and-between its neighbours (covers straight-line waypoints and collinear routed corners) — part of the single creation command. On ending a drag of an existing bend, a now-collinear bend is deleted rather than moved. On ending a drag begun on a straight segment, a released-collinear point creates no bend. Applies to wires and buses alike; only these new actions, no retroactive sweep. Implemented via new pure helpers geometry.js isRedundantBend/pruneCollinearBends (cross-product within 1e-9 + bounding-box containment); model addWire/addBus untouched. Decisions (with the user): apply to both wires and buses; suppress the straight segment-drag bend; new actions only.
+Touches: FR-033c (new); design §6.7, §6.9.
+
 ## 2026-06-25 — Menu keyboard accelerators + visible hints (FR-004b)
 What: Standard accelerators added to the menus where they make sense, shown right-aligned in each menu row. New bindings: File Open Ctrl/Cmd+O, Save Ctrl/Cmd+S, Save As Shift+Ctrl/Cmd+S; View Zoom In Ctrl/Cmd+=/+, Zoom Out Ctrl/Cmd+-. Existing Edit shortcuts (Undo/Redo/Copy/Paste) now also display their hints. New gets none (Ctrl/Cmd+N is browser-reserved and uninterceptable) and Refresh Types none. The new File/View keys live in interaction.js's global keydown handler (initInteraction now receives fileops); Save and zoom stay live while simulating, Open is gated by the lock. Hints are platform-appropriate (⌘/⇧ on macOS, Ctrl+/Shift+ elsewhere). Decision (with the user): leave New unbound rather than advertise a key the browser won't deliver.
 Touches: FR-004b (new); design §6.11.

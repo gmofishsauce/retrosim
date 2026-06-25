@@ -16,6 +16,8 @@ import {
   rectFromPoints,
   pointInRect,
   segmentIntersectsRect,
+  isRedundantBend,
+  pruneCollinearBends,
 } from "./geometry.js";
 
 test("centerViewportOn places the world point at the view center (FR-023b)", () => {
@@ -111,4 +113,45 @@ test("zoomAbout clamps the resulting zoom", () => {
   const vp = { pan: { x: 0, y: 0 }, zoom: 1 };
   assert.equal(zoomAbout(vp, { x: 0, y: 0 }, 100).zoom, ZOOM_MAX);
   assert.equal(zoomAbout(vp, { x: 0, y: 0 }, 0.001).zoom, ZOOM_MIN);
+});
+
+test("isRedundantBend: collinear point between neighbours is redundant (FR-033c)", () => {
+  assert.equal(isRedundantBend({ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }), true);
+  assert.equal(isRedundantBend({ x: 0, y: 0 }, { x: 1, y: 1 }, { x: 3, y: 3 }), true);
+});
+
+test("isRedundantBend: a real corner is not redundant (FR-033c)", () => {
+  assert.equal(isRedundantBend({ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 2 }), false);
+});
+
+test("isRedundantBend: collinear but outside the segment (backtrack) is kept (FR-033c)", () => {
+  // cur is past next on the same line — removing it would shorten the drawn path.
+  assert.equal(isRedundantBend({ x: 0, y: 0 }, { x: 3, y: 0 }, { x: 2, y: 0 }), false);
+});
+
+test("pruneCollinearBends collapses a run of collinear points (FR-033c)", () => {
+  const pts = [
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { x: 2, y: 0 },
+    { x: 3, y: 0 },
+    { x: 3, y: 2 },
+  ];
+  assert.deepEqual(pruneCollinearBends(pts), [
+    { x: 0, y: 0 },
+    { x: 3, y: 0 },
+    { x: 3, y: 2 },
+  ]);
+});
+
+test("pruneCollinearBends keeps real corners and endpoints (FR-033c)", () => {
+  const pts = [
+    { x: 0, y: 0 },
+    { x: 2, y: 0 },
+    { x: 2, y: 2 },
+  ];
+  assert.deepEqual(pruneCollinearBends(pts), pts);
+  // Fewer than three points are returned unchanged (a copy).
+  const two = [{ x: 0, y: 0 }, { x: 1, y: 1 }];
+  assert.deepEqual(pruneCollinearBends(two), two);
 });
