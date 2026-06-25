@@ -271,6 +271,7 @@ async function main() {
       store,
       renderer,
       library,
+      fileops, // FR-004b: Open/Save/Save As keyboard accelerators
       onAddSubDesign: (x, y) => fileops.addSubDesign(x, y), // §6.14
       onOpenSubDesign: (childPath) => fileops.descend(childPath), // FR-100
       onNewGalPart, // FR-066c: upper-palette action tile

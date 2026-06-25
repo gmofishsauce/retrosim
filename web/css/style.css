@@ -68,7 +68,10 @@ body {
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
 }
 .menu-item {
-  display: block;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.5rem;
   width: 100%;
   padding: 0.3rem 1rem;
   background: transparent;
@@ -81,6 +84,9 @@ body {
 }
 .menu-item:hover:not(:disabled) { background: #4a90d9; color: #fff; }
 .menu-item:disabled { opacity: 0.4; cursor: default; }
+/* Right-aligned keyboard accelerator hint in a menu row (FR-004b). */
+.menu-accel { color: #aaa; }
+.menu-item:hover:not(:disabled) .menu-accel { color: #dde; }
 
 #design-name { font-weight: 600; margin-left: 0.5rem; }
 

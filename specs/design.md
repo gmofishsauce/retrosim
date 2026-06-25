@@ -1257,7 +1257,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Dependencies:** model.
 
 ### 6.11 JS: chrome widgets (`web/js/chrome/*.js`)
-- **Menu/tool bar (`toolbar.js`)** — Satisfies FR-004a, FR-026, FR-035, FR-022,
+- **Menu/tool bar (`toolbar.js`)** — Satisfies FR-004a, FR-004b, FR-026, FR-035, FR-022,
   FR-023, FR-024, FR-044, FR-046, FR-049, FR-052, FR-076, FR-087, FR-088. A
   single horizontal bar with pull-down menus on the left and always-visible
   buttons on the right (FR-004a). **Menus:** **File** — New, Open, Save, Save As,
@@ -1280,6 +1280,20 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   at startup. (Reworked 2026-06-21; supersedes the former flat toolbar — a row of
   text/icon buttons — whose File ops and Undo/Redo/zoom moved into menus while the
   modal tools and Run stayed as buttons. The filename is retained for now.)
+  - *Menu accelerators (FR-004b)*: `addItem` takes an optional accelerator
+    descriptor and renders it right-aligned in the row (a `.menu-accel` span; the
+    label and hint sit in a flex row). An `accelLabel(descriptor)` helper formats
+    the platform-appropriate text (⌘/⇧ on macOS via a one-time `isMac` check, else
+    `Ctrl+`/`Shift+`). The new File/View key bindings live in the global keydown
+    handler (§6.9, `interaction.js`) beside the existing undo/redo/copy/paste keys;
+    `initInteraction` now also receives `fileops` so the handler can call it:
+    `Ctrl/Cmd+O`→`fileops.open()`, `Ctrl/Cmd+S`→`fileops.save()`,
+    `Shift+Ctrl/Cmd+S`→`fileops.save({saveAs})`, `Ctrl/Cmd+=`/`+`→`zoomBy(1.25)`,
+    `Ctrl/Cmd+-`→`zoomBy(0.8)`, each `preventDefault`-ing the browser default. Save
+    and the zoom keys sit *above* the simulation-lock early-return (live while
+    simulating, matching the menu, FR-087); Open sits *below* it (disabled while
+    simulating). New (`Ctrl/Cmd+N`, browser-reserved) and Refresh Types get no key
+    and no hint.
 - **Palette (`palette.js`)** — Satisfies FR-003, FR-005, FR-006, FR-008, FR-009,
   FR-009a. Renders one fixed-size tile per `ComponentType` in a 3-column CSS grid,
   sorted ascending by the numeric abbreviated part number (`Number(name.slice(2))`).

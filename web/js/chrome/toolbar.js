@@ -16,6 +16,16 @@ const WIRE_ICON =
   '<line x1="12.6" y1="12.6" x2="17" y2="17"/>' +
   '<circle cx="10" cy="10" r="2.2" stroke-width="1.5"/></g></svg>';
 
+// Keyboard-accelerator hint formatting (FR-004b). The modifier is always
+// Cmd (mac) / Ctrl (elsewhere); accelLabel renders the platform-appropriate text
+// for a descriptor {key, shift?}.
+const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
+function accelLabel({ key, shift }) {
+  return IS_MAC
+    ? `${shift ? "⇧" : ""}⌘${key}`
+    : `Ctrl+${shift ? "Shift+" : ""}${key}`;
+}
+
 export function initToolbar({ container, store, interaction, fileops, sim, library }) {
   const tools = [
     { tool: "select", label: "Select" },
@@ -33,10 +43,10 @@ export function initToolbar({ container, store, interaction, fileops, sim, libra
   const newItem = addItem(fileMenu.panel, "New", "New design", () =>
     fileops.newDesign());
   const openItem = addItem(fileMenu.panel, "Open", "Open design", () =>
-    fileops.open());
-  addItem(fileMenu.panel, "Save", "Save design", () => fileops.save());
+    fileops.open(), { key: "O" });
+  addItem(fileMenu.panel, "Save", "Save design", () => fileops.save(), { key: "S" });
   addItem(fileMenu.panel, "Save As", "Save under a new name", () =>
-    fileops.save({ saveAs: true }));
+    fileops.save({ saveAs: true }), { key: "S", shift: true });
   // Refresh Types re-copies type data from the loaded library into placed
   // instances (FR-088), e.g. after editing a YAML behavior and restarting.
   const refreshItem = addItem(
@@ -50,19 +60,19 @@ export function initToolbar({ container, store, interaction, fileops, sim, libra
   // Copy/Paste etc. will land in the Edit menu later.
   const editMenu = createMenu("Edit");
   const undoItem = addItem(editMenu.panel, "Undo", "Undo (Ctrl/Cmd+Z)", () =>
-    store.undo());
+    store.undo(), { key: "Z" });
   const redoItem = addItem(editMenu.panel, "Redo", "Redo (Shift+Ctrl/Cmd+Z)", () =>
-    store.redo());
+    store.redo(), { key: "Z", shift: true });
   const copyItem = addItem(editMenu.panel, "Copy", "Copy selection (Ctrl/Cmd+C)", () =>
-    interaction.copySelection());
+    interaction.copySelection(), { key: "C" });
   const pasteItem = addItem(editMenu.panel, "Paste", "Paste (Ctrl/Cmd+V)", () =>
-    interaction.startPaste());
+    interaction.startPaste(), { key: "V" });
   container.appendChild(editMenu.menu);
 
   // Zoom stays enabled while simulating (FR-087).
   const viewMenu = createMenu("View");
-  addItem(viewMenu.panel, "Zoom In", "Zoom in", () => interaction.zoomBy(1.25));
-  addItem(viewMenu.panel, "Zoom Out", "Zoom out", () => interaction.zoomBy(0.8));
+  addItem(viewMenu.panel, "Zoom In", "Zoom in", () => interaction.zoomBy(1.25), { key: "+" });
+  addItem(viewMenu.panel, "Zoom Out", "Zoom out", () => interaction.zoomBy(0.8), { key: "-" });
   container.appendChild(viewMenu.menu);
 
   container.appendChild(el("span", "tool-sep"));
@@ -126,12 +136,19 @@ export function initToolbar({ container, store, interaction, fileops, sim, libra
     return entry;
   }
 
-  function addItem(panel, label, title, onClick) {
-    const b = button(label, title, () => {
+  // addItem appends a clickable menu row: a label on the left and, when `accel`
+  // is given, its keyboard-accelerator hint right-aligned (FR-004b).
+  function addItem(panel, label, title, onClick, accel) {
+    const b = document.createElement("button");
+    b.className = "menu-item";
+    b.type = "button";
+    b.title = title;
+    b.appendChild(el("span", "menu-item-label")).textContent = label;
+    if (accel) b.appendChild(el("span", "menu-accel")).textContent = accelLabel(accel);
+    b.addEventListener("click", () => {
       closeMenus();
       onClick();
     });
-    b.className = "menu-item";
     panel.appendChild(b);
     return b;
   }

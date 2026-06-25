@@ -140,7 +140,7 @@ function showToast(msg) {
 // `name` matches the ADD tile so the armed-tile highlight (FR-009a) still works.
 const ADD_TYPE = { name: "add", isAdd: true };
 
-export function initInteraction({ canvas, palette, store, renderer, library, onAddSubDesign, onOpenSubDesign, onNewGalPart, onNewMemDevice }) {
+export function initInteraction({ canvas, palette, store, renderer, library, fileops, onAddSubDesign, onOpenSubDesign, onNewGalPart, onNewMemDevice }) {
   let placeType = null; // ComponentType when tool === "place"
   let wireSource = null; // pending WIRE source spec
   let wireWaypoints = []; // locked intermediate waypoints for the in-progress wire/bus (FR-027e)
@@ -1494,17 +1494,45 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
       return;
     }
 
+    const mod = e.metaKey || e.ctrlKey;
+
     // Copy (Ctrl/Cmd+C) is read-only, so it is allowed even while simulating
     // (FR-111) — handled above the simulation lock below.
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c") {
+    if (mod && e.key.toLowerCase() === "c") {
       e.preventDefault();
       copySelection();
+      return;
+    }
+
+    // File/View accelerators that stay live while simulating (FR-004b/FR-087):
+    // Save, Save As, and zoom — matching their menu items, which are not locked.
+    if (mod && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      fileops.save(e.shiftKey ? { saveAs: true } : undefined);
+      return;
+    }
+    if (mod && (e.key === "=" || e.key === "+")) {
+      e.preventDefault();
+      zoomBy(1.25);
+      return;
+    }
+    if (mod && e.key === "-") {
+      e.preventDefault();
+      zoomBy(0.8);
       return;
     }
 
     // Simulation lock (FR-087): Space (pan) and Escape stay; every shortcut
     // below mutates the design or arms a mutating tool.
     if (store.state.simulating) return;
+
+    // Open (Ctrl/Cmd+O) is below the lock, so it is disabled while simulating
+    // (FR-004b), matching its menu item.
+    if (mod && e.key.toLowerCase() === "o") {
+      e.preventDefault();
+      fileops.open();
+      return;
+    }
 
     // Backspace while drawing pops the most-recent locked waypoint (FR-027e),
     // re-routing the live leg; Esc (above) cancels the whole conductor. Swallow
@@ -1520,7 +1548,6 @@ export function initInteraction({ canvas, palette, store, renderer, library, onA
     }
 
     // Undo/redo: Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z or Ctrl/Cmd+Y (FR-024).
-    const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === "z") {
       e.preventDefault();
       if (e.shiftKey) store.redo();

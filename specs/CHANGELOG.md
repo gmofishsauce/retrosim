@@ -19,6 +19,10 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-25 — Menu keyboard accelerators + visible hints (FR-004b)
+What: Standard accelerators added to the menus where they make sense, shown right-aligned in each menu row. New bindings: File Open Ctrl/Cmd+O, Save Ctrl/Cmd+S, Save As Shift+Ctrl/Cmd+S; View Zoom In Ctrl/Cmd+=/+, Zoom Out Ctrl/Cmd+-. Existing Edit shortcuts (Undo/Redo/Copy/Paste) now also display their hints. New gets none (Ctrl/Cmd+N is browser-reserved and uninterceptable) and Refresh Types none. The new File/View keys live in interaction.js's global keydown handler (initInteraction now receives fileops); Save and zoom stay live while simulating, Open is gated by the lock. Hints are platform-appropriate (⌘/⇧ on macOS, Ctrl+/Shift+ elsewhere). Decision (with the user): leave New unbound rather than advertise a key the browser won't deliver.
+Touches: FR-004b (new); design §6.11.
+
 ## 2026-06-25 — Properties panel: synthetic endpoint sheet for a selected wire/bus (FR-020d)
 What: Selecting a single wire or bus now shows a read-only property sheet naming the conductor's two endpoints, generated dynamically each selection (designator labels can change, FR-011b). A component-pin endpoint reads "<designator> <pin>"; a bus-breakout tap reads "<group>[<bit>]" (snapped pin-group name + tapped bit, else the bus id); a group-snapped bus endpoint reads "<designator> <group>"; anything else (dangling free end, plain junction) reads "unconnected (x, y)". Decisions (with the user): bus identity = snapped group name + index; other endpoints shown by coordinates; bus→group endpoints as designator + group name.
 Touches: FR-020d (new); design §6.11.
