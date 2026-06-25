@@ -75,8 +75,10 @@ func (l *Library) Create(dir string, yamlText []byte) (ComponentType, error) {
 	if err != nil {
 		return ComponentType{}, err
 	}
-	if t.PartNumber == "" {
-		return ComponentType{}, fmt.Errorf("a created part requires a 'partnumber' (set 'gal:' and 'partnumber:')")
+	// A created part must be identifiably authored (FR-007a): a GAL part carries a
+	// partnumber (FR-066b); a generated memory device carries a mem block (FR-114f).
+	if t.PartNumber == "" && t.Mem == nil {
+		return ComponentType{}, fmt.Errorf("a created part requires a 'partnumber' (a GAL part) or a 'mem' block (a memory device)")
 	}
 	fname, err := componentFileName(t.ID)
 	if err != nil {

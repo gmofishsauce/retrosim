@@ -3,10 +3,12 @@ import assert from "node:assert/strict";
 
 import {
   galPartYaml,
+  memDeviceYaml,
   pinGroupGeometryError,
   validateMemSpec,
   MEM_MAX_ADDR_BITS,
 } from "./dialogs.js";
+import { memDeviceType } from "../builtins.js";
 
 // A 22V10-shaped pin set: left inputs at pos 1..3, right OLMCs at pos 1..2.
 const geoPins = [
@@ -116,4 +118,32 @@ test("validateMemSpec rejects a data width outside {4,8,16,32} (FR-114a)", () =>
 
 test("validateMemSpec rejects an unknown device class (FR-114a)", () => {
   assert.match(validateMemSpec(memSpec({ kind: "flash" })), /RAM or ROM/);
+});
+
+// --- memDeviceYaml (FR-114f) ---
+
+test("memDeviceYaml emits the mem block, pinout, and groups for a RAM (FR-114f)", () => {
+  const type = memDeviceType({
+    name: "PROGRAM_RAM", kind: "ram", addressBits: 8, dataWidth: 8, locations: 256,
+  });
+  const yaml = memDeviceYaml(type);
+  assert.match(yaml, /^id: "type-PROGRAM_RAM"$/m);
+  assert.match(yaml, /^type: "PROGRAM_RAM"$/m);
+  assert.match(yaml, /^mem: \{ kind: ram, addressBits: 8, dataWidth: 8, locations: 256 \}$/m);
+  // bidir data pin on a RAM, address pin, and the two snap groups.
+  assert.match(yaml, /name: "A0", side: left, pos: 1, dir: in/);
+  assert.match(yaml, /name: "D0", side: right, pos: 1, dir: bidir/);
+  assert.match(yaml, /name: "ADDR", pins: \["A0"/);
+  assert.match(yaml, /name: "DATA", pins: \["D0"/);
+  assert.ok(!yaml.includes("romFile"));
+});
+
+test("memDeviceYaml includes romFile and tristate data pins for a ROM (FR-114f)", () => {
+  const type = memDeviceType({
+    name: "FONT_ROM", kind: "rom", addressBits: 4, dataWidth: 16, locations: 16,
+    romFile: "/roms/font.bin",
+  });
+  const yaml = memDeviceYaml(type);
+  assert.match(yaml, /^mem: \{ kind: rom, addressBits: 4, dataWidth: 16, locations: 16, romFile: "\/roms\/font.bin" \}$/m);
+  assert.match(yaml, /name: "D0", side: right, pos: 1, dir: tristate/);
 });

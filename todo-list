@@ -12,7 +12,7 @@ DONE    clock
    logic analyzer?
 DONE auto wire tool over bubbles
 DONE status bar with message area and mode {select, wire, move, bus, others?}
-Galasm extension for memories
+DONE Galasm extension for memories
 module structure for sheets
 DONE implement right-click centers.
 DONE Get rid of pan and implement group select.
@@ -20,17 +20,33 @@ DONE Improve (expand) click area for wiring
 DONE does change-name during initial save preserve the new name?
 DONE disconnect and rconnect handling
 
-Is there a problem with rotation? I've never seen the rotation
+FIXED Is there a problem with rotation? I've never seen the rotation
 operation in a context menu. Yes, wire bend points don't move along
 with the parts even when they are selected.
 
-Also wire connection points (the black dots were wires connect)
+FIXED Also wire connection points (the black dots were wires connect)
 never remove. You cannot drag them. They do not move when selected
 and the part is rotated.
 
-Change the visualization of bus snap connections so that the bus
+FIXED Change the visualization of bus snap connections so that the bus
 snaps to a thing that looks like a curly brace. Change the
 implementation of groups so that the pins within the group must be
 continuous and on a single side.
 
-2mm of garbage at the bottom of the drawing canvas.
+FIXED 2mm of garbage at the bottom of the drawing canvas.
+
+DONE needs keyboard accelerators
+
+DONE Straight line bend points should disappear.
+
+DONE Wires need property sheets explaining the endpoints.
+
+A way for AIs to design (use the app).
+
+Simulator support for test vectors and a Claude skill for creating them.
+
+Persistence for memory designs and gal designs.
+
+Improve labeling of + GAL button and MEM button.
+
+Fit to screen and crnter-zoom zoom operations

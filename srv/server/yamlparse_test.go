@@ -373,3 +373,38 @@ func TestParseComponentMissingFile(t *testing.T) {
 		t.Fatal("expected error for missing file")
 	}
 }
+
+// A generated memory device's mem block parses onto ComponentType.Mem (FR-114f).
+func TestParseComponentMem(t *testing.T) {
+	path := writeYAML(t, `
+id: "type-FONT_ROM"
+type: "FONT_ROM"
+mem: { kind: rom, addressBits: 4, dataWidth: 16, locations: 16, romFile: "/r/x.bin" }
+pins:
+  - { name: A0, side: left, pos: 1, dir: in }
+  - { name: D0, side: right, pos: 1, dir: tristate }
+`)
+	ct, err := ParseComponent(path)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if ct.Mem == nil {
+		t.Fatal("expected mem block")
+	}
+	if ct.Mem.Kind != "rom" || ct.Mem.AddressBits != 4 || ct.Mem.DataWidth != 16 || ct.Mem.RomFile != "/r/x.bin" {
+		t.Fatalf("mem parse wrong: %+v", ct.Mem)
+	}
+}
+
+// An invalid mem block (bad data width) is rejected (FR-114f).
+func TestParseComponentMemInvalid(t *testing.T) {
+	path := writeYAML(t, `
+type: "BAD"
+mem: { kind: ram, addressBits: 8, dataWidth: 7, locations: 256 }
+pins:
+  - { name: A0, side: left, pos: 1, dir: in }
+`)
+	if _, err := ParseComponent(path); err == nil {
+		t.Fatal("expected error for invalid mem.dataWidth")
+	}
+}

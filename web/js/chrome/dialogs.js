@@ -348,6 +348,42 @@ export function galPartYaml({ partnumber, description, inputs, olmcs, groups, be
   return lines.join("\n") + "\n";
 }
 
+// memDeviceYaml serializes a generated memory device type (memDeviceType output,
+// builtins.js) to component YAML for persistence (FR-114f, §7.6). It emits the
+// explicit pinout plus a `mem:` block; the server parses it like any component and
+// the client's built-in behavior (FR-114d) binds from the round-tripped `mem` data
+// on reload. Quoted scalars use JSON.stringify (valid YAML 1.2 double-quoted form).
+export function memDeviceYaml(type) {
+  const m = type.mem;
+  const memFields = [
+    `kind: ${m.kind}`,
+    `addressBits: ${m.addressBits}`,
+    `dataWidth: ${m.dataWidth}`,
+    `locations: ${m.locations}`,
+  ];
+  if (m.romFile) memFields.push(`romFile: ${JSON.stringify(m.romFile)}`);
+
+  // Emit the explicit, immutable id (FR-066e) so the device keys stably; `type` is
+  // the YAML display-name field (§7.6), here the device's free-form name.
+  const lines = [`id: ${JSON.stringify(type.id)}`, `type: ${JSON.stringify(type.name)}`];
+  if (type.description) lines.push(`description: ${JSON.stringify(type.description)}`);
+  lines.push(`mem: { ${memFields.join(", ")} }`);
+  lines.push(`outline: [${type.width}, ${type.height}]`, `pins:`);
+  for (const p of type.pins) {
+    lines.push(
+      `  - { name: ${JSON.stringify(p.name)}, side: ${p.side}, pos: ${p.position}, dir: ${p.direction} }`,
+    );
+  }
+  if (type.pinGroups && type.pinGroups.length) {
+    lines.push(`groups:`);
+    for (const g of type.pinGroups) {
+      const members = g.pins.map((n) => JSON.stringify(n)).join(", ");
+      lines.push(`  - { name: ${JSON.stringify(g.name)}, pins: [${members}] }`);
+    }
+  }
+  return lines.join("\n") + "\n";
+}
+
 // pinGroupGeometryError returns a reason string if the chosen members violate the
 // pin-group geometry rule (FR-063a), else null. The bus-snap brace can only render
 // a group whose pins are colinear on one edge with no foreign pin between them, so

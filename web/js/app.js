@@ -4,7 +4,7 @@
 // the library is ready (FR-003).
 
 import { getComponents, getDefaults, createComponent } from "./api.js";
-import { newGalPartDialog, memDeviceDialog } from "./chrome/dialogs.js";
+import { newGalPartDialog, memDeviceDialog, memDeviceYaml } from "./chrome/dialogs.js";
 import { BUILTINS, memDeviceType } from "./builtins.js";
 import { createDesign, typeIdentity } from "./model/design.js";
 import { createStore } from "./store.js";
@@ -229,26 +229,26 @@ async function main() {
         toast(`Added GAL part ${created.partnumber}`);
       }
     };
-    // Open the New memory device dialog (FR-114) and register the generated type
-    // (FR-114c) live, like a new GAL part. Its built-in behavior, ROM-content
-    // reading, and cross-session persistence are still deferred (FR-114b/OQ-013):
-    // the type is in-session only (placed instances still round-trip via their
-    // embedded typeData, FR-057), and a placed device does not yet simulate.
+    // Open the New memory device dialog (FR-114), persist the generated type to the
+    // component library, and register it live — exactly like a new GAL part
+    // (FR-114f/FR-007a). The built-in behavior binds from the round-tripped `mem`
+    // block on reload (FR-114d), so a persisted device places and simulates.
     const onNewMemDevice = async () => {
       await memDeviceDialog({
         startPath: defaults.dataDir,
-        submit: (spec) => {
+        submit: async (spec) => {
           const type = memDeviceType(spec);
-          // The name derives the library id (FR-066e); reject a name that
-          // collides with any existing type — loaded parts, GAL parts, built-ins,
-          // or an earlier memory device (FR-007a). Thrown errors surface inline in
-          // the dialog, which stays open.
-          if (library.some((t) => typeIdentity(t) === type.id)) {
+          // A built-in id collision is caught here: built-ins are not in the server
+          // library, so the create endpoint cannot see them. Collisions with loaded
+          // parts, GAL parts, or an earlier memory device are rejected by the
+          // server's create (409). Either error surfaces inline (dialog stays open).
+          if (BUILTINS.some((t) => typeIdentity(t) === type.id)) {
             throw new Error(`A component named "${type.name}" already exists.`);
           }
-          addCreatedPart(type);
-          toast(`Added memory device ${type.name}`);
-          return type;
+          const created = await createComponent(memDeviceYaml(type));
+          addCreatedPart(created);
+          toast(`Added memory device ${created.name}`);
+          return created;
         },
       });
     };

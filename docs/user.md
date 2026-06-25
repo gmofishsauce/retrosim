@@ -182,6 +182,36 @@ the part number) and adds its tile to the upper palette **immediately** — no
 restart. From there it places, wires, and simulates like any other part. (Cancel
 discards it.)
 
+### Creating a memory device (RAM/ROM)
+
+Beside **+ GAL** is the **MEM** tile, which opens the **New memory device** dialog
+to generate a RAM or ROM without writing YAML:
+
+- **Type** — **RAM** or **ROM** (the radio at the top). Switching it resets the
+  class-specific fields.
+- **Name** — the device's display name, which also names its library file. It is
+  pre-filled with a size-based suggestion (e.g. `RAM 256×8`) that keeps tracking
+  the size until you edit it.
+- **Address bits** *n* — the device has 2ⁿ locations (the count is shown beside
+  the field).
+- **Data width** — 4, 8, 16, or 32 bits.
+- **ROM file** (ROM only) — the content file (`.bin` or `.hex`) whose bytes the
+  ROM serves, chosen through the same file browser as Open. Its contents are read
+  at each Run, so editing the file and re-running reloads it.
+
+The generated chip carries its address pins (group **ADDR**) and the control pins
+`CE/`, `OE/`, and — on a RAM — `WE/` on the left edge, and its data pins (group
+**DATA**) on the right, so a bus can snap-connect to the address or data lines all
+at once.
+
+**Create** saves the device into the component library as a YAML file named after
+its name and adds its tile **immediately** — no restart. Like a custom GAL part it
+**persists across reloads**: reopen the app and the device is still in the palette,
+ready to place and simulate. Creation is one-way for now — the app never overwrites
+an existing part, so a name that already exists is refused with an inline message;
+to change a device, create one under a new name (or edit its YAML file directly and
+restart).
+
 ---
 
 ## 4. Navigating the canvas

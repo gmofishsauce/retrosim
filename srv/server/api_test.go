@@ -134,6 +134,20 @@ pins:
   - { name: O0, side: right, pos: 1, dir: out }
 `
 
+// A generated memory device carries a mem block instead of a partnumber (FR-114f).
+const memDeviceYAML = `id: "type-PROGRAM_RAM"
+type: "PROGRAM_RAM"
+description: "256x8 RAM (generated)"
+mem: { kind: ram, addressBits: 8, dataWidth: 8, locations: 256 }
+outline: [4, 13]
+pins:
+  - { name: A0, side: left, pos: 1, dir: in }
+  - { name: D0, side: right, pos: 1, dir: bidir }
+groups:
+  - { name: ADDR, pins: [A0] }
+  - { name: DATA, pins: [D0] }
+`
+
 // POST /api/v1/components creates a part: 201 + the component, the YAML written
 // into the components dir under the part-number filename, and the part visible to
 // a following GET — all without restart (FR-007a).
@@ -217,6 +231,45 @@ func TestCreateComponentInvalid(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+// A memory device (no partnumber, carries a mem block) creates and round-trips
+// its mem block through the library listing (FR-114f).
+func TestCreateMemDevice(t *testing.T) {
+	compDir := t.TempDir()
+	srv := httptest.NewServer(NewRouter(newLibrary(), t.TempDir(), compDir, t.TempDir()))
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/api/v1/components", "application/json",
+		body(t, map[string]string{"yaml": memDeviceYAML}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", resp.StatusCode)
+	}
+	if _, err := os.Stat(filepath.Join(compDir, "type-PROGRAM_RAM.yaml")); err != nil {
+		t.Fatalf("expected written YAML: %v", err)
+	}
+
+	got, err := http.Get(srv.URL + "/api/v1/components")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer got.Body.Close()
+	var list struct {
+		Components []ComponentType `json:"components"`
+	}
+	if err := json.NewDecoder(got.Body).Decode(&list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Components) != 1 || list.Components[0].Mem == nil {
+		t.Fatalf("mem device not listed with mem block: %+v", list.Components)
+	}
+	if m := list.Components[0].Mem; m.Kind != "ram" || m.AddressBits != 8 || m.DataWidth != 8 {
+		t.Fatalf("mem round-trip wrong: %+v", m)
 	}
 }
 

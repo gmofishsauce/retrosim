@@ -64,6 +64,19 @@ type yamlComponent struct {
 	// Documentation (FR-104), all optional.
 	Description string         `yaml:"description"`
 	Datasheet   *yamlDatasheet `yaml:"datasheet"`
+
+	// Generated memory device (FR-114f), optional.
+	Mem *yamlMem `yaml:"mem"`
+}
+
+// yamlMem is the on-disk shape of a generated memory device's parameters
+// (FR-114f); keys match the client's emitted `mem:` block (memDeviceYaml).
+type yamlMem struct {
+	Kind        string `yaml:"kind"`
+	AddressBits int    `yaml:"addressBits"`
+	DataWidth   int    `yaml:"dataWidth"`
+	Locations   int    `yaml:"locations"`
+	RomFile     string `yaml:"romFile"`
 }
 
 type yamlPin struct {
@@ -203,6 +216,31 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		return ComponentType{}, fmt.Errorf("%s: 'partnumber' is only valid on a gal part (set 'gal:')", path)
 	}
 
+	// mem: (FR-114f) — a generated memory device. The client owns the full pinout
+	// (parsed above like any component); this block carries the parameters the
+	// client's built-in behavior binds from (FR-114d). Validate the few fields the
+	// server can check; the device class drives nothing server-side.
+	var mem *MemSpec
+	if doc.Mem != nil {
+		m := doc.Mem
+		if m.Kind != "ram" && m.Kind != "rom" {
+			return ComponentType{}, fmt.Errorf("%s: mem.kind %q invalid (want ram|rom)", path, m.Kind)
+		}
+		if m.AddressBits < 1 {
+			return ComponentType{}, fmt.Errorf("%s: mem.addressBits %d must be >= 1", path, m.AddressBits)
+		}
+		if m.DataWidth != 4 && m.DataWidth != 8 && m.DataWidth != 16 && m.DataWidth != 32 {
+			return ComponentType{}, fmt.Errorf("%s: mem.dataWidth %d invalid (want 4|8|16|32)", path, m.DataWidth)
+		}
+		mem = &MemSpec{
+			Kind:        m.Kind,
+			AddressBits: m.AddressBits,
+			DataWidth:   m.DataWidth,
+			Locations:   m.Locations,
+			RomFile:     m.RomFile,
+		}
+	}
+
 	// id (FR-066e) is the immutable library key, divorced from the free-form
 	// display name. It is optional in the YAML — when omitted it is derived from
 	// the display name so the format stays additive (FR-066) and pre-existing
@@ -259,6 +297,7 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 			PartNumber:  doc.PartNumber,
 			Description: doc.Description,
 			Datasheet:   datasheet,
+			Mem:         mem,
 		}, nil
 	}
 
@@ -298,6 +337,7 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		PartNumber:  doc.PartNumber,
 		Description: doc.Description,
 		Datasheet:   datasheet,
+		Mem:         mem,
 	}, nil
 }
 

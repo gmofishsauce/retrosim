@@ -30,6 +30,21 @@ type ComponentType struct {
 	// properties panel (FR-105); never affects geometry, pins, or simulation.
 	Description string     `json:"description,omitempty"` // one-line function summary
 	Datasheet   *Datasheet `json:"datasheet,omitempty"`   // datasheet provenance + link
+
+	// Mem marks a generated memory device (FR-114c/FR-114f). Carried through
+	// verbatim from the YAML so the client's built-in memory behavior (FR-114d)
+	// binds from this serializable data on reload. Absent on all other types.
+	Mem *MemSpec `json:"mem,omitempty"`
+}
+
+// MemSpec is a generated memory device's parameters (FR-114c/FR-114f). Field
+// names match the client's `typeData.mem` shape (engine/memory.js, sim.js).
+type MemSpec struct {
+	Kind        string `json:"kind"`              // "ram" | "rom"
+	AddressBits int    `json:"addressBits"`       // address-input count n (locations = 2^n)
+	DataWidth   int    `json:"dataWidth"`         // data width in bits: 4 | 8 | 16 | 32
+	Locations   int    `json:"locations"`         // 2^AddressBits, recorded for fidelity
+	RomFile     string `json:"romFile,omitempty"` // ROM only: absolute content-file path (FR-114e)
 }
 
 // Key is a component's library identity (§6.2): its immutable internal id
