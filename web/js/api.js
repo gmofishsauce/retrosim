@@ -78,6 +78,23 @@ export async function loadDesign(path) {
   return body.design;
 }
 
+// loadVectorFile / saveVectorFile read and write a `.tv` test-vector file (§7.7,
+// FR-115a). The payload is plain JSON, so it rides the design load/save endpoints
+// — which neither interpret nor extension-check the body — rather than adding a
+// dedicated route. Returns the parsed doc object / the written path.
+export async function loadVectorFile(path) {
+  const body = await request("/design/load?path=" + encodeURIComponent(path));
+  return body.design;
+}
+export async function saveVectorFile(path, doc) {
+  const body = await request("/design/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, design: doc }),
+  });
+  return body.path;
+}
+
 // ping checks server reachability (FR-089 heartbeat); resolves on any healthy
 // response, rejects when the server is gone.
 export async function ping() {

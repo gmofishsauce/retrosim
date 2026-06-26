@@ -1,8 +1,19 @@
 // Modal file-navigation dialog for Save and Open (§6.11, FR-046-053). Uses the
 // server's /files endpoint to browse directories (no native file picker).
 
-import { listDir } from "../api.js";
+import { listDir, loadVectorFile, saveVectorFile } from "../api.js";
 import { compileBehavior } from "../engine/galasm.js";
+import { loadRomContents } from "../engine/sim.js";
+import {
+  deriveColumns,
+  runVectors,
+  captureRow,
+  validateVectors,
+  serializeVectors,
+  deserializeVectors,
+  reconcileVectors,
+  emptyRow,
+} from "../engine/vectors.js";
 
 function el(tag, className, text) {
   const e = document.createElement(tag);
@@ -967,7 +978,7 @@ export function memDeviceDialog({ submit, startPath = "" }) {
 // openFileDialog resolves to { path } on confirm, or null on cancel. `title`
 // overrides the default heading (e.g. the ROM-content picker, FR-114a) — the
 // browser itself is unchanged (it lists dirs + the server's filtered files).
-export function openFileDialog({ mode, startPath, defaultName = "", title, exts = null } = {}) {
+export function openFileDialog({ mode, startPath, defaultName = "", title, exts = null, saveExt = "json" } = {}) {
   return new Promise((resolve) => {
     const overlay = el("div", "dialog-overlay");
     const box = el("div", "dialog");
@@ -1004,7 +1015,7 @@ export function openFileDialog({ mode, startPath, defaultName = "", title, exts 
       if (mode === "save") {
         let name = nameInput.value.trim();
         if (!name) return;
-        if (!name.endsWith(".json")) name += ".json";
+        if (!name.endsWith("." + saveExt)) name += "." + saveExt;
         done({ path: joinPath(currentPath, name) });
       } else if (selectedFile) {
         done({ path: selectedFile });
@@ -1067,5 +1078,285 @@ export function openFileDialog({ mode, startPath, defaultName = "", title, exts 
     document.addEventListener("keydown", onKey, true);
     document.body.appendChild(overlay);
     navigate(startPath);
+  });
+}
+
+// testVectorsDialog is the combinational test-vector table editor (§6.16, FR-115).
+// Columns are auto-derived from the open design (input switches → 0/1 cells;
+// indicator bits → H/L/X cells); the user fills rows, Runs them against the slow
+// simulator (pass/fail per cell, FR-115d), Captures golden outputs from a sim run,
+// and Loads/Saves a `.tv` sibling file (FR-115a). Resolves to null (no result).
+export function testVectorsDialog({ store, dataDir }) {
+  return new Promise((resolve) => {
+    const design = store.design;
+    const columns = deriveColumns(design);
+    const rows = [emptyRow(columns)]; // start with one blank row to fill
+    let runResults = null; // [{ cells, pass }] aligned to rows, or null when stale
+
+    const overlay = el("div", "dialog-overlay");
+    const box = el("div", "dialog vec-dialog");
+    overlay.appendChild(box);
+    box.appendChild(el("div", "dialog-title", "Test Vectors"));
+
+    // A design with no switches and no indicators has nothing to drive or observe.
+    if (columns.inputs.length === 0 && columns.outputs.length === 0) {
+      box.appendChild(
+        el(
+          "div",
+          "vec-empty",
+          "This design has no input switches or indicators to bind. Place input switches (inputs) and state indicators (outputs), then reopen Test Vectors.",
+        ),
+      );
+      const buttons = el("div", "dialog-buttons");
+      buttons.append(button("Close", () => done()));
+      box.appendChild(buttons);
+      finish();
+      return;
+    }
+
+    const summary = el("div", "vec-summary");
+    const noteEl = el("div", "vec-note");
+    noteEl.hidden = true;
+    const errEl = el("div", "galdlg-error");
+    errEl.hidden = true;
+
+    // --- table ---
+    const table = el("table", "vec-table");
+    const thead = el("thead");
+    // Group header: IN spanning inputs, OUT spanning outputs.
+    const grpRow = el("tr");
+    grpRow.appendChild(el("th", "vec-corner"));
+    if (columns.inputs.length) {
+      const th = el("th", "vec-group", "IN");
+      th.colSpan = columns.inputs.length;
+      grpRow.appendChild(th);
+    }
+    if (columns.outputs.length) {
+      const th = el("th", "vec-group vec-group-out", "OUT");
+      th.colSpan = columns.outputs.length;
+      grpRow.appendChild(th);
+    }
+    grpRow.appendChild(el("th", "vec-corner"));
+    thead.appendChild(grpRow);
+    // Column labels.
+    const labRow = el("tr");
+    labRow.appendChild(el("th", "vec-rownum", "#"));
+    for (const c of columns.inputs) labRow.appendChild(el("th", "vec-collabel", c.label));
+    for (const c of columns.outputs) {
+      labRow.appendChild(el("th", "vec-collabel vec-out", c.label));
+    }
+    labRow.appendChild(el("th", "vec-corner"));
+    thead.appendChild(labRow);
+    table.appendChild(thead);
+    const tbody = el("tbody");
+    table.appendChild(tbody);
+
+    const tableWrap = el("div", "vec-tablewrap");
+    tableWrap.appendChild(table);
+    box.append(tableWrap, summary, noteEl, errEl);
+
+    function mkSelect(opts, value) {
+      const s = el("select", "vec-select");
+      for (const o of opts) {
+        const op = el("option", null, o);
+        op.value = o;
+        s.appendChild(op);
+      }
+      s.value = value;
+      return s;
+    }
+
+    function renderBody() {
+      tbody.replaceChildren();
+      rows.forEach((row, ri) => {
+        const tr = el("tr");
+        tr.appendChild(el("td", "vec-rownum", String(ri + 1)));
+        columns.inputs.forEach((col, ci) => {
+          const td = el("td", "vec-cell");
+          const sel = mkSelect(["0", "1"], row.in[ci]);
+          sel.addEventListener("change", () => {
+            row.in[ci] = sel.value;
+            clearResults();
+          });
+          td.appendChild(sel);
+          tr.appendChild(td);
+        });
+        columns.outputs.forEach((col, ci) => {
+          const td = el("td", "vec-cell vec-out");
+          const sel = mkSelect(["H", "L", "X"], row.out[ci]);
+          sel.addEventListener("change", () => {
+            row.out[ci] = sel.value;
+            clearResults();
+          });
+          td.appendChild(sel);
+          const status = el("span", "vec-status");
+          td.appendChild(status);
+          if (runResults && runResults[ri]) {
+            const cell = runResults[ri].cells[ci];
+            td.classList.add(cell.pass ? "pass" : "fail");
+            if (!cell.pass) status.textContent = `got ${cell.actual}`;
+          }
+          tr.appendChild(td);
+        });
+        const delTd = el("td", "vec-cell");
+        const del = button("✕", () => {
+          rows.splice(ri, 1);
+          if (rows.length === 0) rows.push(emptyRow(columns));
+          clearResults();
+          renderBody();
+        });
+        del.title = "Delete row";
+        delTd.appendChild(del);
+        tr.appendChild(delTd);
+        tbody.appendChild(tr);
+      });
+    }
+
+    // clearResults drops stale pass/fail painting after any edit and repaints.
+    function clearResults() {
+      if (!runResults) return;
+      runResults = null;
+      summary.textContent = "";
+      renderBody();
+    }
+
+    // --- actions ---
+    async function onRun() {
+      errEl.hidden = true;
+      const doc = { inputs: columns.inputs, outputs: columns.outputs, rows };
+      const check = validateVectors(doc);
+      if (!check.ok) return showError(check.errors[0]);
+      try {
+        const romContent = await loadRomContents(design);
+        const res = runVectors(design, doc, { romContent });
+        runResults = res.rows;
+        summary.textContent = `${res.passed} of ${res.total} rows passed`;
+        summary.className = "vec-summary " + (res.passed === res.total ? "ok" : "err");
+        renderBody();
+      } catch (e) {
+        showError(`cannot run vectors: ${e.message}`);
+      }
+    }
+
+    async function onCapture() {
+      errEl.hidden = true;
+      try {
+        const romContent = await loadRomContents(design);
+        for (const row of rows) {
+          row.out = captureRow(design, columns, row.in, { romContent });
+        }
+        clearResults();
+        renderBody();
+      } catch (e) {
+        showError(`cannot capture: ${e.message}`);
+      }
+    }
+
+    async function onSave() {
+      errEl.hidden = true;
+      const res = await openFileDialog({
+        mode: "save",
+        startPath: defaultDir(),
+        defaultName: defaultName(),
+        title: "Save test vectors (.tv)",
+        exts: ["tv"],
+        saveExt: "tv",
+      });
+      if (!res) return;
+      try {
+        await saveVectorFile(res.path, serializeVectors({ inputs: columns.inputs, outputs: columns.outputs, rows }));
+        showNote(`Saved ${baseName(res.path)}`);
+      } catch (e) {
+        showError(`cannot save: ${e.message}`);
+      }
+    }
+
+    async function onLoad() {
+      errEl.hidden = true;
+      const res = await openFileDialog({
+        mode: "open",
+        startPath: defaultDir(),
+        title: "Open test vectors (.tv)",
+        exts: ["tv"],
+      });
+      if (!res) return;
+      try {
+        const obj = await loadVectorFile(res.path);
+        const fileDoc = deserializeVectors(obj);
+        const { rows: aligned, warnings } = reconcileVectors(fileDoc, columns);
+        rows.length = 0;
+        for (const r of aligned) rows.push(r);
+        if (rows.length === 0) rows.push(emptyRow(columns));
+        clearResults();
+        runResults = null;
+        summary.textContent = "";
+        renderBody();
+        if (warnings.length) {
+          showNote(`Loaded with ${warnings.length} warning(s): ${warnings.join("; ")}`);
+        } else {
+          showNote(`Loaded ${baseName(res.path)}`);
+        }
+      } catch (e) {
+        showError(`cannot load: ${e.message}`);
+      }
+    }
+
+    // --- buttons ---
+    const buttons = el("div", "dialog-buttons");
+    const addBtn = button("+ Row", () => {
+      rows.push(emptyRow(columns));
+      clearResults();
+      renderBody();
+    });
+    buttons.append(
+      addBtn,
+      button("Capture", onCapture),
+      button("Run", onRun),
+      button("Load", onLoad),
+      button("Save", onSave),
+      button("Close", () => done()),
+    );
+    box.appendChild(buttons);
+
+    // --- helpers ---
+    function defaultDir() {
+      const sp = store.state.savePath;
+      return sp ? sp.replace(/\/[^/]*$/, "") || "/" : dataDir;
+    }
+    function defaultName() {
+      const sp = store.state.savePath;
+      const base = sp ? baseName(sp).replace(/\.[^.]*$/, "") : design.name || "vectors";
+      return base;
+    }
+    function baseName(p) {
+      return p.split(/[\\/]/).pop();
+    }
+    function showError(msg) {
+      errEl.textContent = msg;
+      errEl.hidden = false;
+    }
+    function showNote(msg) {
+      noteEl.textContent = msg;
+      noteEl.hidden = false;
+    }
+
+    renderBody();
+    finish();
+
+    function finish() {
+      document.addEventListener("keydown", onKey, true);
+      document.body.appendChild(overlay);
+    }
+    function done() {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(null);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done();
+      }
+    }
   });
 }

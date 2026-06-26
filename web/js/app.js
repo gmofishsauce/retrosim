@@ -4,7 +4,7 @@
 // the library is ready (FR-003).
 
 import { getComponents, getDefaults, createComponent } from "./api.js";
-import { newGalPartDialog, memDeviceDialog, memDeviceYaml } from "./chrome/dialogs.js";
+import { newGalPartDialog, memDeviceDialog, memDeviceYaml, testVectorsDialog } from "./chrome/dialogs.js";
 import { BUILTINS, memDeviceType } from "./builtins.js";
 import { createDesign, typeIdentity } from "./model/design.js";
 import { createStore } from "./store.js";
@@ -119,7 +119,7 @@ function renderPalette({ partsEl, builtinsEl, components, builtins, store }) {
   // index math (which addresses part tiles by position) stays valid.
   const newGalTile = document.createElement("div");
   newGalTile.className = "palette-tile galdlg-newtile";
-  newGalTile.textContent = "+ GAL";
+  newGalTile.textContent = "NEW GAL";
   newGalTile.dataset.type = "newgal";
   newGalTile.title = "New GAL part (GAL22V10)";
   partsEl.appendChild(newGalTile);
@@ -129,7 +129,7 @@ function renderPalette({ partsEl, builtinsEl, components, builtins, store }) {
   // and stays after the part tiles so addPart's index math holds.
   const newMemTile = document.createElement("div");
   newMemTile.className = "palette-tile galdlg-newtile";
-  newMemTile.textContent = "MEM";
+  newMemTile.textContent = "NEW MEM";
   newMemTile.dataset.type = "mem";
   newMemTile.title = "New memory device (RAM/ROM)";
   partsEl.appendChild(newMemTile);
@@ -286,6 +286,8 @@ async function main() {
     offerRecovery(store);
     startBackup(store);
     const sim = createSim({ store, renderer }); // slow simulator (§6.13)
+    // Open the combinational test-vector editor (FR-115, §6.16).
+    const onTestVectors = () => testVectorsDialog({ store, dataDir: defaults.dataDir });
     initToolbar({
       container: document.getElementById("tools"),
       store,
@@ -293,6 +295,7 @@ async function main() {
       fileops,
       sim,
       library, // for the Refresh Types action (FR-088)
+      onTestVectors, // FR-115: Simulate ▸ Test Vectors…
     });
     initProperties({ container: document.getElementById("properties"), store });
     overlay.classList.add("hidden");

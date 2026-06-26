@@ -19,6 +19,16 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-26 — Test vectors, combinational v1 (FR-115)
+What: A new **test-vector** feature — an authored table of input patterns + expected outputs, run against the slow simulator with pass/fail scoring. v1 is combinational-only: inputs drive the design's input-switch built-ins (FR-071c), outputs check its indicators (FR-068/FR-071d). Reached from a new **Simulate ▸ Test Vectors…** menu (FR-004a); a large modal table editor (columns auto-derived from the design) with **+Row**, **Run**, **Capture** (fill expected from a sim run), and **Load/Save** of a `.tv` JSON sibling file via the existing server file browser (FR-053). The run executes on a throwaway clone of the design — never mutating, dirtying, or undoing it — settling each row independently like the live combinational simulator (FR-085). Decided with the user: bind to switches/indicators (not ports) for v1; capture-expected included; sibling-file storage; large modal surface. Sequential vectors with a vector-owned deterministic clock are recorded as the forward direction (FR-115e) but not built. This revives the separate-test-vector-format idea OQ-012 had set aside; OQ-012 updated to note vectors (block I/O verification) and memory-as-stimulus (program driving) now coexist.
+Why: Automate verification of combinational logic instead of manually toggling switches and eyeballing indicators.
+Touches: FR-115/115a–e (new), FR-004a (Simulate menu), OQ-012 (revised); design §6.16, §7.7, traceability.
+
+## 2026-06-26 — Rename the New-GAL / New-MEM palette buttons (FR-066c/FR-114)
+What: The upper-palette action tiles now read **NEW GAL** and **NEW MEM** (were "+ GAL" and "MEM"), at the same small font the part tiles ("74163") use. A new `.galdlg-newtile` CSS rule lets the two-word label wrap to two lines so it fits the fixed 48px tile without enlarging the font.
+Why: Clearer that the buttons author a new part/device, not place an existing one.
+Touches: FR-066c, FR-114 (button labels); design §6.11.
+
 ## 2026-06-25 — Persist generated memory devices to the component library (FR-114f)
 What: Memory devices created via the MEM button are now written to srv/components as .yaml artifacts and registered live, exactly like authored GAL parts (FR-007a) — resolving the last deferred memory-device aspect (FR-114b/OQ-013). The device YAML carries its explicit pinout (pins + ADDR/DATA groups) plus a `mem:` block {kind, addressBits, dataWidth, locations, romFile?}; the server parses it generically and serves it from /components, so on reload the device reappears in the palette, places, and simulates (the built-in behavior binds from the serializable `mem` data, not session-only code). Creation only — the server unconditionally refuses to overwrite an existing id or file (409, surfaced inline); a full in-app editing interface is deferred. Scope decided with the user: MEM only (GAL already persisted); full serialized-type YAML (explicit pins) rather than a minimal mem block.
 Server: ComponentType gains a Mem field; yamlparse parses the `mem` block; Create accepts a part carrying either a partnumber (GAL) or a mem block. Client: new memDeviceYaml serializer; onNewMemDevice now POSTs via createComponent instead of the in-session registry.

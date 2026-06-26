@@ -26,7 +26,7 @@ function accelLabel({ key, shift }) {
     : `Ctrl+${shift ? "Shift+" : ""}${key}`;
 }
 
-export function initToolbar({ container, store, interaction, fileops, sim, library }) {
+export function initToolbar({ container, store, interaction, fileops, sim, library, onTestVectors }) {
   const tools = [
     { tool: "select", label: "Select" },
     { tool: "wire", icon: WIRE_ICON },
@@ -74,6 +74,17 @@ export function initToolbar({ container, store, interaction, fileops, sim, libra
   addItem(viewMenu.panel, "Zoom In", "Zoom in", () => interaction.zoomBy(1.25), { key: "+" });
   addItem(viewMenu.panel, "Zoom Out", "Zoom out", () => interaction.zoomBy(0.8), { key: "-" });
   container.appendChild(viewMenu.menu);
+
+  // Simulate menu: the test-vector table editor (FR-115). Disabled while the
+  // interactive simulator is running (FR-087/FR-115b).
+  const simMenu = createMenu("Simulate");
+  const vectorsItem = addItem(
+    simMenu.panel,
+    "Test Vectors…",
+    "Author and run combinational test vectors",
+    () => onTestVectors?.(),
+  );
+  container.appendChild(simMenu.menu);
 
   container.appendChild(el("span", "tool-sep"));
 
@@ -196,6 +207,7 @@ export function initToolbar({ container, store, interaction, fileops, sim, libra
     newItem.disabled = simming;
     openItem.disabled = simming;
     refreshItem.disabled = simming;
+    vectorsItem.disabled = simming;
     runBtn.textContent = simming ? "Stop" : "Run";
     runBtn.title = simming ? "Stop the simulation" : "Run the simulation";
   }

@@ -25,7 +25,7 @@ KiCad-like.
 10. [Files](#10-files)
 11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
-13. [Simulation](#13-simulation)
+13. [Simulation](#13-simulation) — including [Test vectors](#test-vectors)
 14. [If the server disconnects](#14-if-the-server-disconnects)
 15. [Keyboard and mouse reference](#15-keyboard-and-mouse-reference)
 
@@ -590,6 +590,46 @@ select an item instead shows "Editor is locked while the simulator is running" i
 the status bar and changes nothing (a click on empty canvas does nothing). The one
 exception is clicking an **interactive input** (the input switch), which changes
 its value live and re-evaluates the simulation.
+
+### Test vectors
+
+Instead of toggling switches and reading indicators by hand, you can write a
+**table of test vectors** — input patterns paired with the outputs you expect —
+and have the simulator run and score them. Open it from **Simulate ▸ Test
+Vectors…**. (This first version covers **combinational** designs — those with no
+clock generator.)
+
+The table's columns come from your design automatically:
+
+- one **input** column per [input switch](#11-built-in-components), holding `0` or `1`;
+- one **output** column per [indicator](#11-built-in-components) — a single
+  indicator is one column, an 8-wide indicator becomes eight columns `D0`…`D7` —
+  holding the value you expect: **H** (logic 1), **L** (logic 0), or **X**
+  (don't-test, i.e. ignore this output on this row).
+
+Each row is one independent case. Build the table and use the buttons:
+
+- **+ Row** adds a blank row; the **✕** at the end of a row deletes it.
+- **Run** drives the switches to each row's inputs, lets the circuit settle, and
+  compares the indicators to your expected values. Passing output cells turn
+  **green**; a mismatch turns **red** and shows what the circuit actually produced
+  (e.g. `got 1`). A summary line reads "N of M rows passed". A `U` or `Z` output
+  never matches `H` or `L`.
+- **Capture** fills in the expected-output cells of every row by running that row's
+  inputs through the simulator — a quick way to author a "golden" table from a
+  circuit you believe is correct, which you can then edit. (It records whatever the
+  circuit currently does, so eyeball the captured values; capturing a buggy circuit
+  bakes in the bug.)
+- **Load** / **Save** read and write a **test-vector file** (`.tv`, stored beside
+  your design) through the same file browser as Open. Columns are matched back to
+  your switches and indicators by their internal designators, so renaming a label
+  never breaks a saved file; if the design's switches or indicators have changed
+  since the file was written, the mismatch is reported as a warning when you load.
+
+Running test vectors **does not change your design** — it neither marks it modified
+nor disturbs an in-progress edit — and is separate from the **Run/Stop** button.
+The **Test Vectors…** command is unavailable while a normal simulation is running;
+press Stop first.
 
 ---
 

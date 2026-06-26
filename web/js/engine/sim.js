@@ -334,6 +334,34 @@ export function buildSimulation(design, { onMessage = () => {}, romContent = nul
   };
 }
 
+// loadRomContents fetches and parses every distinct ROM content file referenced
+// by the design (FR-114e), returning a Map<path, byte stream> the build seeds
+// into ROM cores. A file that is missing, the wrong type, or malformed is
+// reported (FR-074) and skipped — that ROM then reads U — rather than aborting
+// the run. Never throws. Shared by the live run (createSim) and the test-vector
+// runner (§6.16), which need ROM-backed combinational logic to resolve.
+export async function loadRomContents(design) {
+  const content = new Map();
+  const seen = new Set();
+  for (const inst of design.components) {
+    const mem = inst.typeData?.mem;
+    if (!mem || mem.kind !== "rom" || !mem.romFile || seen.has(mem.romFile)) continue;
+    seen.add(mem.romFile);
+    const lower = mem.romFile.toLowerCase();
+    const format = lower.endsWith(".hex") ? "hex" : lower.endsWith(".bin") ? "bin" : null;
+    if (!format) {
+      postMessage(`${inst.refdes}: ROM file must be .bin or .hex: ${mem.romFile}`);
+      continue;
+    }
+    try {
+      content.set(mem.romFile, parseRomBytes(await readRomFile(mem.romFile), format));
+    } catch (e) {
+      postMessage(`${inst.refdes}: cannot load ROM ${mem.romFile}: ${e.message}`);
+    }
+  }
+  return content;
+}
+
 // MAX_STEPS_PER_FRAME caps a paced frame's work so a huge period × speed
 // cannot freeze the tab (§6.13).
 const MAX_STEPS_PER_FRAME = 10000;
@@ -356,33 +384,6 @@ export function createSim({ store, renderer }) {
   let unsubLive = null; // live-input channel subscription during a run (FR-087b)
   let settling = false; // a combinational settling episode is in flight
   let starting = false; // a run is awaiting its async ROM preload (FR-114e)
-
-  // loadRomContents fetches and parses every distinct ROM content file referenced
-  // by the design (FR-114e), returning a Map<path, byte stream> the build seeds
-  // into ROM cores. A file that is missing, the wrong type, or malformed is
-  // reported (FR-074) and skipped — that ROM then reads U — rather than aborting
-  // the run. Never throws.
-  async function loadRomContents(design) {
-    const content = new Map();
-    const seen = new Set();
-    for (const inst of design.components) {
-      const mem = inst.typeData?.mem;
-      if (!mem || mem.kind !== "rom" || !mem.romFile || seen.has(mem.romFile)) continue;
-      seen.add(mem.romFile);
-      const lower = mem.romFile.toLowerCase();
-      const format = lower.endsWith(".hex") ? "hex" : lower.endsWith(".bin") ? "bin" : null;
-      if (!format) {
-        postMessage(`${inst.refdes}: ROM file must be .bin or .hex: ${mem.romFile}`);
-        continue;
-      }
-      try {
-        content.set(mem.romFile, parseRomBytes(await readRomFile(mem.romFile), format));
-      } catch (e) {
-        postMessage(`${inst.refdes}: cannot load ROM ${mem.romFile}: ${e.message}`);
-      }
-    }
-    return content;
-  }
 
   async function run() {
     if (sim || starting) return;
