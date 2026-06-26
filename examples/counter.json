@@ -1,0 +1,1137 @@
+{
+  "formatVersion": 1,
+  "name": "counter",
+  "components": [
+    {
+      "refdes": "U1",
+      "type": "74163",
+      "x": 36,
+      "y": 19,
+      "rotation": 0,
+      "typeData": {
+        "name": "74163",
+        "renderType": "unit",
+        "width": 6,
+        "height": 12,
+        "pins": [
+          {
+            "name": "A",
+            "side": "left",
+            "position": 2,
+            "direction": "in",
+            "number": 3
+          },
+          {
+            "name": "B",
+            "side": "left",
+            "position": 3,
+            "direction": "in",
+            "number": 4
+          },
+          {
+            "name": "C",
+            "side": "left",
+            "position": 4,
+            "direction": "in",
+            "number": 5
+          },
+          {
+            "name": "D",
+            "side": "left",
+            "position": 5,
+            "direction": "in",
+            "number": 6
+          },
+          {
+            "name": "/CLR",
+            "side": "left",
+            "position": 7,
+            "direction": "in",
+            "number": 1
+          },
+          {
+            "name": "/LOAD",
+            "side": "left",
+            "position": 8,
+            "direction": "in",
+            "number": 9
+          },
+          {
+            "name": "ENP",
+            "side": "left",
+            "position": 10,
+            "direction": "in",
+            "number": 7
+          },
+          {
+            "name": "ENT",
+            "side": "left",
+            "position": 11,
+            "direction": "in",
+            "number": 10
+          },
+          {
+            "name": "QA",
+            "side": "right",
+            "position": 2,
+            "direction": "out",
+            "number": 14
+          },
+          {
+            "name": "QB",
+            "side": "right",
+            "position": 3,
+            "direction": "out",
+            "number": 13
+          },
+          {
+            "name": "QC",
+            "side": "right",
+            "position": 4,
+            "direction": "out",
+            "number": 12
+          },
+          {
+            "name": "QD",
+            "side": "right",
+            "position": 5,
+            "direction": "out",
+            "number": 11
+          },
+          {
+            "name": "RCO",
+            "side": "right",
+            "position": 7,
+            "direction": "out",
+            "number": 15
+          },
+          {
+            "name": "CLK",
+            "side": "top",
+            "position": 2,
+            "direction": "in",
+            "number": 2
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "DATA",
+            "pins": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ]
+          },
+          {
+            "name": "Q",
+            "pins": [
+              "QA",
+              "QB",
+              "QC",
+              "QD"
+            ]
+          }
+        ],
+        "delays": {
+          "th_d": 2,
+          "tpd_clk_q": 6,
+          "tpd_clk_rco": 10,
+          "tpd_ent_rco": 4,
+          "tsu_d": 5
+        },
+        "behavior": "; 74163 (SN74F163A) — synchronous presettable 4-bit binary counter with\n; synchronous clear. Derived from the description (datasheet p.1), the\n; logic diagram (p.3), and the state diagram (p.2); this datasheet has no\n; numbered function table. Priority at each rising clock edge:\n; clear (pin /CLR LOW) > load (pin /LOAD LOW) > count (ENP and ENT both\n; HIGH) > hold.\n;\n; SEQUENTIAL-PART CLOCK CONVENTION (74574.yaml): GALasm's .R registered\n; outputs are clocked by the GAL22V10's dedicated pin-1 clock\n; (galasmManual.txt section 3.4). That pin-1 clock role is played by the\n; part's named clock pin — here CLK, rising-edge triggered. CLK therefore\n; does NOT appear as a term in any equation below; the .R suffix implies it.\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (pin /CLR is GAL signal CLR, so '/CLR' below means \"pin /CLR is\n; LOW\"). Each Qn has four kinds of product term, every one carrying CLR\n; (pin /CLR HIGH, i.e. not clearing):\n;   load:  /LOAD * <data>                     — synchronous preset\n;   count: LOAD * ENP * ENT * <toggle/carry>  — binary up-count\n;   hold:  LOAD * /ENP * Qn  and  LOAD * /ENT * Qn — count disabled\n; The synchronous clear needs no terms of its own: with pin /CLR LOW no\n; term is true, so every register loads 0 at the next rising edge,\n; regardless of /LOAD, ENP, and ENT (p.1: clear overrides load and count).\n;\n; QA (LSB) toggles whenever counting; each higher bit toggles when all\n; lower bits are 1 (the look-ahead carry), otherwise holds while counting.\nQA.R =   CLR * /LOAD * A\n       + CLR *  LOAD * ENP * ENT * /QA\n       + CLR *  LOAD * /ENP * QA\n       + CLR *  LOAD * /ENT * QA\n\nQB.R =   CLR * /LOAD * B\n       + CLR *  LOAD * ENP * ENT *  QA * /QB\n       + CLR *  LOAD * ENP * ENT * /QA *  QB\n       + CLR *  LOAD * /ENP * QB\n       + CLR *  LOAD * /ENT * QB\n\nQC.R =   CLR * /LOAD * C\n       + CLR *  LOAD * ENP * ENT *  QA *  QB * /QC\n       + CLR *  LOAD * ENP * ENT * /QA *  QC\n       + CLR *  LOAD * ENP * ENT * /QB *  QC\n       + CLR *  LOAD * /ENP * QC\n       + CLR *  LOAD * /ENT * QC\n\nQD.R =   CLR * /LOAD * D\n       + CLR *  LOAD * ENP * ENT *  QA *  QB *  QC * /QD\n       + CLR *  LOAD * ENP * ENT * /QA *  QD\n       + CLR *  LOAD * ENP * ENT * /QB *  QD\n       + CLR *  LOAD * ENP * ENT * /QC *  QD\n       + CLR *  LOAD * /ENP * QD\n       + CLR *  LOAD * /ENT * QD\n\n; Ripple-carry output (combinational): HIGH while the count is 15 and ENT\n; is HIGH — ENT is fed forward to enable RCO; ENP does not affect RCO\n; (p.1). Counting spikes can occur on RCO (p.1); this unit-delay model\n; does not reproduce them.\nRCO = ENT * QA * QB * QC * QD\n",
+        "clock": "CLK"
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-1",
+      "type": "clock",
+      "x": 22,
+      "y": 11,
+      "rotation": 0,
+      "typeData": {
+        "name": "clock",
+        "builtin": true,
+        "title": "clock",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"3\" y=\"11\" width=\"30\" height=\"14\" fill=\"#fff\" stroke=\"#333\"/><text x=\"18\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"10\" fill=\"#000\">CLK</text></svg>",
+        "renderType": "clock",
+        "width": 3,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ],
+        "properties": [
+          {
+            "name": "period",
+            "unit": "ns",
+            "default": 100
+          },
+          {
+            "name": "speed",
+            "unit": "Hz",
+            "default": 1
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-2",
+      "type": "pulldown",
+      "x": 29,
+      "y": 37,
+      "rotation": 0,
+      "typeData": {
+        "name": "pulldown",
+        "builtin": true,
+        "title": "pull down",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"none\" stroke=\"#000\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"4\" x2=\"18\" y2=\"28\"/><line x1=\"8\" y1=\"28\" x2=\"28\" y2=\"28\"/></svg>",
+        "renderType": "pulldown",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "top",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-3",
+      "type": "reset",
+      "x": 12,
+      "y": 24,
+      "rotation": 0,
+      "typeData": {
+        "name": "reset",
+        "builtin": true,
+        "title": "power-on reset",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"3\" y=\"11\" width=\"30\" height=\"14\" fill=\"#fff\" stroke=\"#333\"/><text x=\"18\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"10\" fill=\"#000\">RST</text></svg>",
+        "renderType": "reset",
+        "width": 3,
+        "height": 3,
+        "pins": [
+          {
+            "name": "R",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          },
+          {
+            "name": "/R",
+            "side": "right",
+            "position": 2,
+            "direction": "out"
+          }
+        ],
+        "properties": [
+          {
+            "name": "cycles",
+            "unit": "cycles",
+            "default": 3
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-4",
+      "type": "pullup",
+      "x": 23,
+      "y": 17,
+      "rotation": 0,
+      "typeData": {
+        "name": "pullup",
+        "builtin": true,
+        "title": "pull up",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"none\" stroke=\"#000\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"8,13 18,6 28,13\"/><polyline points=\"8,20 18,13 28,20\"/><line x1=\"18\" y1=\"22\" x2=\"18\" y2=\"32\"/></svg>",
+        "renderType": "pullup",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "bottom",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-5",
+      "type": "indicator",
+      "x": 45,
+      "y": 16,
+      "rotation": 0,
+      "typeData": {
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-6",
+      "type": "indicator",
+      "x": 48,
+      "y": 16,
+      "rotation": 0,
+      "typeData": {
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-7",
+      "type": "indicator",
+      "x": 51,
+      "y": 16,
+      "rotation": 0,
+      "typeData": {
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-8",
+      "type": "indicator",
+      "x": 54,
+      "y": 16,
+      "rotation": 0,
+      "typeData": {
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-9",
+      "type": "indicator",
+      "x": 64,
+      "y": 16,
+      "rotation": 0,
+      "typeData": {
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-10",
+      "type": "indicator",
+      "x": 37,
+      "y": 7,
+      "rotation": 0,
+      "typeData": {
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-11",
+      "type": "indicator",
+      "x": 17,
+      "y": 17,
+      "rotation": 0,
+      "typeData": {
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1"
+        },
+        {
+          "t": "bend",
+          "x": 36,
+          "y": 12
+        },
+        {
+          "t": "node",
+          "v": "v29"
+        },
+        {
+          "t": "bend",
+          "x": 36,
+          "y": 17
+        },
+        {
+          "t": "bend",
+          "x": 38,
+          "y": 17
+        },
+        {
+          "t": "node",
+          "v": "v2"
+        }
+      ]
+    },
+    {
+      "id": "w2",
+      "path": [
+        {
+          "t": "node",
+          "v": "v3"
+        },
+        {
+          "t": "node",
+          "v": "v5"
+        },
+        {
+          "t": "bend",
+          "x": 30,
+          "y": 24
+        },
+        {
+          "t": "node",
+          "v": "v4"
+        }
+      ]
+    },
+    {
+      "id": "w3",
+      "path": [
+        {
+          "t": "node",
+          "v": "v6"
+        },
+        {
+          "t": "node",
+          "v": "v7"
+        },
+        {
+          "t": "bend",
+          "x": 30,
+          "y": 23
+        },
+        {
+          "t": "node",
+          "v": "v5"
+        }
+      ]
+    },
+    {
+      "id": "w4",
+      "path": [
+        {
+          "t": "node",
+          "v": "v8"
+        },
+        {
+          "t": "bend",
+          "x": 30,
+          "y": 22
+        },
+        {
+          "t": "node",
+          "v": "v9"
+        },
+        {
+          "t": "node",
+          "v": "v7"
+        }
+      ]
+    },
+    {
+      "id": "w5",
+      "path": [
+        {
+          "t": "node",
+          "v": "v10"
+        },
+        {
+          "t": "bend",
+          "x": 30,
+          "y": 21
+        },
+        {
+          "t": "node",
+          "v": "v9"
+        }
+      ]
+    },
+    {
+      "id": "w6",
+      "path": [
+        {
+          "t": "node",
+          "v": "v11"
+        },
+        {
+          "t": "node",
+          "v": "v31"
+        },
+        {
+          "t": "bend",
+          "x": 32,
+          "y": 26
+        },
+        {
+          "t": "bend",
+          "x": 33,
+          "y": 26
+        },
+        {
+          "t": "node",
+          "v": "v12"
+        }
+      ]
+    },
+    {
+      "id": "w7",
+      "path": [
+        {
+          "t": "node",
+          "v": "v13"
+        },
+        {
+          "t": "node",
+          "v": "v15"
+        },
+        {
+          "t": "bend",
+          "x": 24,
+          "y": 27
+        },
+        {
+          "t": "node",
+          "v": "v14"
+        }
+      ]
+    },
+    {
+      "id": "w8",
+      "path": [
+        {
+          "t": "node",
+          "v": "v16"
+        },
+        {
+          "t": "node",
+          "v": "v17"
+        },
+        {
+          "t": "bend",
+          "x": 24,
+          "y": 29
+        },
+        {
+          "t": "node",
+          "v": "v15"
+        }
+      ]
+    },
+    {
+      "id": "w9",
+      "path": [
+        {
+          "t": "node",
+          "v": "v18"
+        },
+        {
+          "t": "bend",
+          "x": 24,
+          "y": 30
+        },
+        {
+          "t": "node",
+          "v": "v17"
+        }
+      ]
+    },
+    {
+      "id": "w10",
+      "path": [
+        {
+          "t": "node",
+          "v": "v19"
+        },
+        {
+          "t": "bend",
+          "x": 46,
+          "y": 21
+        },
+        {
+          "t": "node",
+          "v": "v20"
+        }
+      ]
+    },
+    {
+      "id": "w11",
+      "path": [
+        {
+          "t": "node",
+          "v": "v21"
+        },
+        {
+          "t": "bend",
+          "x": 49,
+          "y": 22
+        },
+        {
+          "t": "node",
+          "v": "v22"
+        }
+      ]
+    },
+    {
+      "id": "w12",
+      "path": [
+        {
+          "t": "node",
+          "v": "v23"
+        },
+        {
+          "t": "bend",
+          "x": 52,
+          "y": 23
+        },
+        {
+          "t": "node",
+          "v": "v24"
+        }
+      ]
+    },
+    {
+      "id": "w13",
+      "path": [
+        {
+          "t": "node",
+          "v": "v25"
+        },
+        {
+          "t": "bend",
+          "x": 55,
+          "y": 24
+        },
+        {
+          "t": "node",
+          "v": "v26"
+        }
+      ]
+    },
+    {
+      "id": "w14",
+      "path": [
+        {
+          "t": "node",
+          "v": "v27"
+        },
+        {
+          "t": "bend",
+          "x": 65,
+          "y": 26
+        },
+        {
+          "t": "node",
+          "v": "v28"
+        }
+      ]
+    },
+    {
+      "id": "w15",
+      "path": [
+        {
+          "t": "node",
+          "v": "v30"
+        },
+        {
+          "t": "bend",
+          "x": 38,
+          "y": 13
+        },
+        {
+          "t": "node",
+          "v": "v29"
+        }
+      ]
+    },
+    {
+      "id": "w16",
+      "path": [
+        {
+          "t": "node",
+          "v": "v32"
+        },
+        {
+          "t": "node",
+          "v": "v31"
+        }
+      ]
+    }
+  ],
+  "buses": [],
+  "vertices": [
+    {
+      "id": "v1",
+      "kind": "pin",
+      "ref": "A-1",
+      "pin": "OUT",
+      "x": 22,
+      "y": 9
+    },
+    {
+      "id": "v2",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "CLK",
+      "x": 31,
+      "y": 16
+    },
+    {
+      "id": "v3",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D",
+      "x": 29,
+      "y": 21
+    },
+    {
+      "id": "v4",
+      "kind": "pin",
+      "ref": "A-2",
+      "pin": "OUT",
+      "x": 25,
+      "y": 34
+    },
+    {
+      "id": "v5",
+      "kind": "junction",
+      "x": 30,
+      "y": 24
+    },
+    {
+      "id": "v6",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "C",
+      "x": 29,
+      "y": 20
+    },
+    {
+      "id": "v7",
+      "kind": "junction",
+      "x": 30,
+      "y": 23
+    },
+    {
+      "id": "v8",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "B",
+      "x": 29,
+      "y": 19
+    },
+    {
+      "id": "v9",
+      "kind": "junction",
+      "x": 30,
+      "y": 22
+    },
+    {
+      "id": "v10",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "A",
+      "x": 29,
+      "y": 18
+    },
+    {
+      "id": "v11",
+      "kind": "pin",
+      "ref": "A-3",
+      "pin": "/R",
+      "x": 8,
+      "y": 22
+    },
+    {
+      "id": "v12",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "/CLR",
+      "x": 29,
+      "y": 23
+    },
+    {
+      "id": "v13",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "/LOAD",
+      "x": 29,
+      "y": 24
+    },
+    {
+      "id": "v14",
+      "kind": "pin",
+      "ref": "A-4",
+      "pin": "OUT",
+      "x": 19,
+      "y": 16
+    },
+    {
+      "id": "v15",
+      "kind": "junction",
+      "x": 24,
+      "y": 27
+    },
+    {
+      "id": "v16",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "ENP",
+      "x": 29,
+      "y": 26
+    },
+    {
+      "id": "v17",
+      "kind": "junction",
+      "x": 24,
+      "y": 29
+    },
+    {
+      "id": "v18",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "ENT",
+      "x": 29,
+      "y": 27
+    },
+    {
+      "id": "v19",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "QA",
+      "x": 35,
+      "y": 18
+    },
+    {
+      "id": "v20",
+      "kind": "pin",
+      "ref": "A-5",
+      "pin": "IN",
+      "x": 41,
+      "y": 15
+    },
+    {
+      "id": "v21",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "QB",
+      "x": 35,
+      "y": 19
+    },
+    {
+      "id": "v22",
+      "kind": "pin",
+      "ref": "A-6",
+      "pin": "IN",
+      "x": 44,
+      "y": 15
+    },
+    {
+      "id": "v23",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "QC",
+      "x": 35,
+      "y": 20
+    },
+    {
+      "id": "v24",
+      "kind": "pin",
+      "ref": "A-7",
+      "pin": "IN",
+      "x": 47,
+      "y": 15
+    },
+    {
+      "id": "v25",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "QD",
+      "x": 35,
+      "y": 21
+    },
+    {
+      "id": "v26",
+      "kind": "pin",
+      "ref": "A-8",
+      "pin": "IN",
+      "x": 50,
+      "y": 15
+    },
+    {
+      "id": "v27",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "RCO",
+      "x": 35,
+      "y": 23
+    },
+    {
+      "id": "v28",
+      "kind": "pin",
+      "ref": "A-9",
+      "pin": "IN",
+      "x": 60,
+      "y": 15
+    },
+    {
+      "id": "v29",
+      "kind": "junction",
+      "x": 36,
+      "y": 13
+    },
+    {
+      "id": "v30",
+      "kind": "pin",
+      "ref": "A-10",
+      "pin": "IN",
+      "x": 31,
+      "y": 3
+    },
+    {
+      "id": "v31",
+      "kind": "junction",
+      "x": 18,
+      "y": 26
+    },
+    {
+      "id": "v32",
+      "kind": "pin",
+      "ref": "A-11",
+      "pin": "IN",
+      "x": 13,
+      "y": 16
+    }
+  ],
+  "nets": [
+    {
+      "pins": [
+        "A-1.OUT",
+        "U1.CLK",
+        "A-10.IN"
+      ],
+      "members": [
+        "w1",
+        "w15"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U1.D",
+        "A-2.OUT",
+        "U1.C",
+        "U1.B",
+        "U1.A"
+      ],
+      "members": [
+        "w2",
+        "w3",
+        "w4",
+        "w5"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-3./R",
+        "U1./CLR",
+        "A-11.IN"
+      ],
+      "members": [
+        "w6",
+        "w16"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1./LOAD",
+        "A-4.OUT",
+        "U1.ENP",
+        "U1.ENT"
+      ],
+      "members": [
+        "w7",
+        "w8",
+        "w9"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U1.QA",
+        "A-5.IN"
+      ],
+      "members": [
+        "w10"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.QB",
+        "A-6.IN"
+      ],
+      "members": [
+        "w11"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.QC",
+        "A-7.IN"
+      ],
+      "members": [
+        "w12"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.QD",
+        "A-8.IN"
+      ],
+      "members": [
+        "w13"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.RCO",
+        "A-9.IN"
+      ],
+      "members": [
+        "w14"
+      ],
+      "provenance": [],
+      "name": "IN"
+    }
+  ]
+}
