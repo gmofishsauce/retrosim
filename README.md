@@ -1,39 +1,52 @@
 # retrosim
 
-A full featured digital Simulator including user interface and generator for simulation engine. I know the world has many of these but I'm going to make this one just the way I like it.
+A full featured digital Simulator including user interface, "slow"(debug) simulator and generator for simulation engine. I know the world has many of these but I'm going to make this one just the way I like it.
 
 retrosim is a localhost-only schematic editor: a JavaScript single-page app
 (`web/`) served by a small Go server (`srv/`).
 
-## Building
+## Features
 
-Requires Go 1.24 or later. Build the server binary from the `srv/` module:
+An incomplete list:
 
-```sh
-(cd srv && go build -o ../retrosim ./cmd/retrosim)
-```
+ - logical schematic editor (no power or ground, no resistors or capacitors).
+ - 4-state simulator with full support for 3-state busses
+ - TTL components mostly described by YAML files using GALasm for behavior (see [doc](specs/galasmManual.txt)).
+ - interactive low speed simulator for debugging
+ - generates high speed simulator (C program) for any design (TBD).
+ - Generate RAMs, ROMs, and 22V10 GAL designs in-app.
+ - create YAMLs for additional TTL chips using a Claude skill.
+ 
+## What You Need
 
-This produces the `retrosim` executable in the repository root.
+To run this program you must be able to pull the repository from Github and build the server using a recent Go compiler. When the server is built correctly it automatically serves the front end, (the schematic editor and low speed simulator, at `localhost:8137`.
 
-## Running
+### Windows Support (or lack of it)
 
-Start the server from the repository root, pointing it at the web assets and
-component library:
+This program has been entirely developed and tested on Mac. I have no idea how the build will work on Windows or whether there are portability issues in the code. All the code is written in Java script and Golang, so major issues are not expected. **If you are willing to give this a try it would be greatly appreciated**.
 
-```sh
-./retrosim --web-dir=./web --components-dir=./srv/components
-```
+## Building and Running
 
-It binds `127.0.0.1:8137` only (loopback). Open <http://127.0.0.1:8137> in a
-modern desktop Chrome or Firefox to use the editor. By default designs are saved
-in `~/Documents/retrosim` (created if absent).
-
-The `build-run` script does both steps — clean-rebuild then run — and forwards
-any extra flags to the server:
+Requires Go 1.24 or later. Build the server binary:
 
 ```sh
+cd <your-path>/retrosim
 ./build-run
 ```
+
+This produces the `retrosim` executable in the repository root and executes it. You should see something like this:
+
+```
+$ ./build-run 
+2026/06/26 14:06:49 retrosim: data dir /<your-login>/Documents/retrosim
+2026/06/26 14:06:49 retrosim: listening on http://127.0.0.1:8137
+```
+Now open <http://127.0.0.1:8137> in a
+modern desktop Chrome or Firefox to use the editor. By default designs are saved
+in `~/Documents/retrosim` on Mac (created if absent). I hope something similar will happen on Windows.
+
+The `build-run` script does both steps — clean-rebuild then run — and forwards
+any extra flags to the server.
 
 ## Documentation
 
@@ -41,14 +54,23 @@ See the [user manual](docs/user.md) for how to use the editor: building and
 running, the canvas selection model, wiring and buses, files, the Refresh
 button, the built-in components, and simulation.
 
-## Simulation
+## Known Issues
+
+- high speed simulation generator is not yet written.
+- test vector support is minimal.
+- lots more editing user interface issues
+
+## About 4-State Simulation
 
 
-This discussion was captured after the "slow" simulator already existed.
+This discussion with Claude was captured after the "slow" simulator already existed.
 
-❯ I have a question about retrosim that is strictly for discussion (for now). I
+**Author❯** I have a question about retrosim that is strictly for discussion (for now). I
   originally described the Simulator as having four states: 1, 0, U, and Z. But at     the same time I made a component called a "pull up". This implies a weak-1 state.    So does the existing ("slow") simulator Implement more than four states? This will
   become important when we write the generator for the C program or "fast"             simulator. Please discuss.
+
+**Claude>**
+
 
 ⏺ I'll dig into how the slow simulator actually represents and resolves logic values
   before discussing — let me look at the simulation engine and the pull-up component.
@@ -96,7 +118,7 @@ This discussion was captured after the "slow" simulator already existed.
   the resolver, as a lower-priority tier — it collapses to one of the four net values
   before anyone reads it.
 
-  Why this matters for the fast/C generator
+  Why this matters for the [future - jjb] fast/C generator
 
   FR-107 requires the C engine to agree with the slow engine on every net,
   bit-for-bit ("an optimization, not a different semantics"). So the generator can't

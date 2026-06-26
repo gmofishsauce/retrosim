@@ -45,7 +45,7 @@ A way for AIs to design (use the app).
 
 Simulator support for test vectors and a Claude skill for creating them.
 
-Persistence for memory designs and gal designs.
+DONE Persistence for memory designs and gal designs.
 
 Improve labeling of + GAL button and MEM button.
 
