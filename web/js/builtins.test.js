@@ -1,7 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { BUILTINS, BEHAVIORS, INTERACTIONS, memDeviceType } from "./builtins.js";
+import {
+  BUILTINS,
+  BEHAVIORS,
+  INTERACTIONS,
+  memDeviceType,
+  portNFields,
+  PORTN_MIN_WIDTH,
+  PORTN_MAX_WIDTH,
+  PORTN_DEFAULT_WIDTH,
+} from "./builtins.js";
 
 function find(name) {
   const t = BUILTINS.find((b) => b.name === name);
@@ -9,13 +18,15 @@ function find(name) {
   return t;
 }
 
-// The 8-wide built-ins (FR-071d/FR-071e) each expose eight left-edge bit pins in
-// one pin group, so an 8-bit bus snap-connects to all of them at once (and, per
-// FR-041c, a narrower bus may take a free sub-block of the group).
-test("8-wide built-ins expose eight grouped bits for an 8-bit bus snap (FR-071d/e)", () => {
+// The wide built-ins (FR-071d/FR-071e) expose their bit pins down the left edge
+// in one pin group, so a same-width bus snap-connects to all of them at once
+// (and, per FR-041c, a narrower bus may take a free sub-block of the group). The
+// 8-wide indicator is fixed at eight; the multi-bit port's palette prototype uses
+// the default width (8) but regenerates per its chosen width (covered below).
+test("wide built-ins expose grouped bits for a bus snap (FR-071d/e)", () => {
   for (const { name, prefix, dir } of [
     { name: "indicator8", prefix: "D", dir: "in" },
-    { name: "port8", prefix: "P", dir: "bidir" },
+    { name: "portN", prefix: "P", dir: "bidir" },
   ]) {
     const t = find(name);
     assert.equal(t.width, 3);
@@ -40,12 +51,37 @@ test("8-wide built-ins expose eight grouped bits for an 8-bit bus snap (FR-071d/
   }
 });
 
-// Both are passive: a grouped bus terminal (port8) and a display-only indicator
-// (indicator8) drive nothing (FR-071d/e).
-test("8-wide built-ins drive nothing", () => {
+// portNFields generates a multi-bit port's width-driven typeData (FR-071e): N
+// bidir pins P0..P(N-1) down the left edge in one group P, footprint 3×(N+1).
+test("portNFields generates pins/group/footprint for the chosen width (FR-071e)", () => {
+  for (const n of [PORTN_MIN_WIDTH, 5, PORTN_MAX_WIDTH]) {
+    const f = portNFields(n);
+    assert.equal(f.width, 3);
+    assert.equal(f.height, n + 1);
+    assert.equal(f.pins.length, n);
+    assert.deepEqual(
+      f.pins.map((p) => p.name),
+      Array.from({ length: n }, (_, i) => "P" + i),
+    );
+    assert.ok(f.pins.every((p) => p.side === "left" && p.direction === "bidir"));
+    assert.deepEqual(
+      f.pins.map((p) => p.position),
+      Array.from({ length: n }, (_, i) => i + 1),
+    );
+    assert.deepEqual(f.pinGroups, [
+      { name: "P", pins: Array.from({ length: n }, (_, i) => "P" + i) },
+    ]);
+  }
+  // The palette prototype carries the default width.
+  assert.equal(find("portN").pins.length, PORTN_DEFAULT_WIDTH);
+});
+
+// Both are passive: the multi-bit port (an interface node) and the display-only
+// indicator drive nothing (FR-071d/e).
+test("wide built-ins drive nothing", () => {
   // BEHAVIORS is keyed by type id (FR-066e), e.g. "type-indicator8".
   assert.deepEqual(BEHAVIORS["type-indicator8"]({}), []);
-  assert.deepEqual(BEHAVIORS["type-port8"]({}), []);
+  assert.deepEqual(BEHAVIORS["type-portN"]({}), []);
 });
 
 // --- memDeviceType (FR-114c) ---

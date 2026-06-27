@@ -9,10 +9,44 @@ import {
   resolveSubDesigns,
 } from "./subdesign.js";
 import { serializeDesign, deserializeDesign } from "./persist.js";
-import { BUILTINS } from "../builtins.js";
+import { BUILTINS, portNFields } from "../builtins.js";
 
 const PORT = BUILTINS.find((b) => b.name === "port");
 const SWITCH = BUILTINS.find((b) => b.name === "switch");
+
+// A child with a multi-bit portN (label "b", given width) whose P pins are
+// bus-snapped to a component's bit pins of direction `srcDir`. Built as plain
+// save-shape data because a portN joins a net through a bus group-snap (not a
+// drawn wire). Used to exercise the interface derivation (FR-071e/FR-095/FR-094c).
+function childWithPortN(width, srcDir) {
+  const bits = (p) => Array.from({ length: width }, (_, i) => p + i);
+  return {
+    name: "wide",
+    components: [
+      {
+        refdes: "U2",
+        typeData: {
+          renderType: "unit",
+          pins: bits("S").map((name) => ({ name, side: "right", direction: srcDir })),
+        },
+      },
+      { refdes: "A-4", label: "b", width, typeData: { renderType: "portN", ...portNFields(width) } },
+    ],
+    buses: [
+      {
+        id: "b1",
+        width,
+        path: [{ t: "node", v: "v7" }, { t: "node", v: "v8" }],
+        groupConnections: [
+          { vertex: "v7", instance: "U2", group: "S", bitMap: bits("S") },
+          { vertex: "v8", instance: "A-4", group: "P", bitMap: bits("P") },
+        ],
+      },
+    ],
+    wires: [],
+    vertices: [{ id: "v7", kind: "free", x: 0, y: 0 }, { id: "v8", kind: "free", x: 1, y: 0 }],
+  };
+}
 
 // A child design with three ports. Direction is derived from wiring (FR-094c):
 // Q is driven by a switch output → "out"; CLK and D stay unwired → "in".
@@ -59,6 +93,52 @@ test("designInterface ignores unlabeled ports and non-ports", () => {
   addInstance(d, BUILTINS.find((b) => b.name === "clock"), 0, 0, 0); // not a port
   const iface = designInterface(d);
   assert.equal(iface.length, 1); // only the first (default-labeled) port
+});
+
+// Regression (FR-071e): a multi-bit portN must reach the embedded interface — the
+// bug that started this was a wide port rendering nothing when embedded because
+// designInterface admitted only renderType "port".
+test("designInterface includes a portN as one width-N signal (FR-071e/FR-095)", () => {
+  const iface = designInterface(childWithPortN(8, "bidir"));
+  assert.deepEqual(iface, [{ label: "b", dir: "bidir", width: 8 }]);
+});
+
+// A multi-bit signal expands into N one-bit pins plus a pin group, so a bus snaps
+// via the ordinary group machinery — pins are always one bit (FR-095/FR-099).
+test("synthTypeForInterface expands a portN into a one-bit pin group (FR-095/FR-099)", () => {
+  const iface = designInterface(childWithPortN(8, "bidir"));
+  const td = synthTypeForInterface(iface, "ic", "wide");
+  // Eight one-bit pins b0..b7, all on the left (bidir), contiguous in bit order.
+  assert.deepEqual(
+    td.pins.map((p) => p.name),
+    Array.from({ length: 8 }, (_, i) => "b" + i),
+  );
+  assert.ok(td.pins.every((p) => p.side === "left" && p.direction === "bidir"));
+  assert.deepEqual(td.pins.map((p) => p.position), [1, 2, 3, 4, 5, 6, 7, 8]);
+  // No pin carries a width attribute (a pin is one bit).
+  assert.ok(td.pins.every((p) => !("width" in p)));
+  // A pin group named for the label lets a matching bus snap to it (FR-041/FR-042).
+  assert.deepEqual(td.pinGroups, [
+    { name: "b", pins: Array.from({ length: 8 }, (_, i) => "b" + i) },
+  ]);
+});
+
+// portN direction aggregates across its bit nets (FR-094c): the bus source's pin
+// direction propagates to the whole group, and the bit count tracks the chosen N.
+test("portN direction is derived & aggregated across bits (FR-094c)", () => {
+  assert.deepEqual(designInterface(childWithPortN(4, "out")), [{ label: "b", dir: "out", width: 4 }]);
+  assert.deepEqual(designInterface(childWithPortN(4, "in")), [{ label: "b", dir: "in", width: 4 }]);
+  // An output-driven portN's bits land on the right edge of the embedded IC (FR-099).
+  const td = synthTypeForInterface(designInterface(childWithPortN(4, "out")), "ic", "wide");
+  assert.ok(td.pins.every((p) => p.side === "right"));
+  assert.equal(td.pins.length, 4);
+});
+
+// A 1-wide port stays a single one-bit pin with no group and no width (FR-094).
+test("synthTypeForInterface keeps 1-wide ports as one-bit pins (FR-094)", () => {
+  const td = synthTypeForInterface(designInterface(childWithPorts()), "ic", "counter");
+  assert.ok(td.pins.every((p) => !("width" in p)));
+  assert.equal(td.pinGroups, undefined); // no bus groups for plain ports
 });
 
 test("synthTypeForInterface ic puts inputs left, outputs right (FR-099)", () => {

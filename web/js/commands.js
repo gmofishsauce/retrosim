@@ -465,8 +465,8 @@ export function setNoteTextCmd(refdes, text) {
 }
 
 // setPortPropsCmd patches a port instance's interface fields (FR-094, §6.14):
-// any of label / portDir / width supplied in `patch` is set; the prior values
-// of just those keys are captured once so undo restores them.
+// any key supplied in `patch` (currently the label) is set; the prior values of
+// just those keys are captured once so undo restores them.
 export function setPortPropsCmd(refdes, patch) {
   let captured = false;
   const old = {};

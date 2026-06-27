@@ -158,6 +158,54 @@ export function promptWidthDialog(current) {
   });
 }
 
+// promptPortWidthDialog asks for a multi-bit port's bit width on placement
+// (FR-071e). The width is constrained to [min, max] (2–16); resolves to an
+// integer in range, or null on cancel / out-of-range input.
+export function promptPortWidthDialog(def, min, max) {
+  return new Promise((resolve) => {
+    const overlay = el("div", "dialog-overlay");
+    const box = el("div", "dialog");
+    overlay.appendChild(box);
+
+    box.appendChild(el("div", "dialog-title", "Multi-bit port width"));
+    const row = el("div", "dialog-row");
+    const input = el("input", "dialog-name");
+    input.type = "number";
+    input.min = String(min);
+    input.max = String(max);
+    input.value = String(def);
+    row.append(el("label", "dialog-label", `Width (bits, ${min}–${max}):`), input);
+    box.appendChild(row);
+
+    const buttons = el("div", "dialog-buttons");
+    buttons.append(button("Cancel", () => done(null)), button("OK", onOk));
+    box.appendChild(buttons);
+
+    function onOk() {
+      const n = parseInt(input.value, 10);
+      done(Number.isInteger(n) && n >= min && n <= max ? n : null);
+    }
+    function done(result) {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(null);
+      } else if (e.key === "Enter") {
+        e.stopPropagation();
+        onOk();
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+    input.focus();
+    input.select();
+  });
+}
+
 // promptBitNamesDialog edits a bus's per-bit names (FR-037b): one field per bit,
 // prefilled with any current names. Resolves to { names } where names is a
 // length-width array (or null when every field is blank, to clear names), or null

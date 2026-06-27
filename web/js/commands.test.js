@@ -325,33 +325,23 @@ test("setOverrideCmd sets and clears a per-instance delay override; undo restore
   assert.equal(find(store.design, "U1").overrides.delays.tpd, 12);
 });
 
-test("setPortPropsCmd patches port label/portDir/width; undo restores prior values (FR-094)", () => {
+test("setPortPropsCmd patches a port label; undo restores prior values (FR-094)", () => {
   const store = newStore();
   const port = { name: "port", builtin: true, renderType: "port", width: 2, height: 2, pins: [] };
   store.dispatch(placeComponent(port, 0, 0, 0)); // A-1
   const p = find(store.design, "A-1");
-  assert.deepEqual([p.label, p.portDir, p.width], ["A-1", "in", 1]);
+  // A 1-wide port defaults its label to the refdes and carries no width (FR-094).
+  assert.equal(p.label, "A-1");
+  assert.equal(p.width, undefined);
 
-  store.dispatch(setPortPropsCmd("A-1", { label: "CLK", portDir: "out", width: 4 }));
-  assert.deepEqual(
-    [find(store.design, "A-1").label, find(store.design, "A-1").portDir, find(store.design, "A-1").width],
-    ["CLK", "out", 4],
-  );
+  store.dispatch(setPortPropsCmd("A-1", { label: "CLK" }));
+  assert.equal(find(store.design, "A-1").label, "CLK");
 
   store.undo();
-  assert.deepEqual(
-    [find(store.design, "A-1").label, find(store.design, "A-1").portDir, find(store.design, "A-1").width],
-    ["A-1", "in", 1],
-  );
+  assert.equal(find(store.design, "A-1").label, "A-1");
 
   store.redo();
-  assert.equal(find(store.design, "A-1").width, 4);
-
-  // A partial patch leaves untouched keys alone.
-  store.dispatch(setPortPropsCmd("A-1", { width: 1 }));
   assert.equal(find(store.design, "A-1").label, "CLK");
-  store.undo();
-  assert.equal(find(store.design, "A-1").width, 4);
 });
 
 test("setOverrideCmd handles the props group independently of delays (FR-020b)", () => {

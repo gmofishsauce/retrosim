@@ -495,8 +495,8 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
     drawSwitch(ctx, inst, vp, selected);
   } else if (td.renderType === "indicator8") {
     drawIndicator8(ctx, inst, vp, selected, sim);
-  } else if (td.renderType === "port8") {
-    drawPort8(ctx, inst, vp, selected);
+  } else if (td.renderType === "portN") {
+    drawPortN(ctx, inst, vp, selected);
   } else if (td.renderType === "port") {
     drawPort(ctx, inst, vp, selected);
   } else {
@@ -710,14 +710,16 @@ function drawIndicator8(ctx, inst, vp, selected, sim) {
   }
 }
 
-// drawPort8 renders the 8-wide port as eight narrow right-pointing pentagons
-// (FR-071e), one centered on each bit pin's row (BIT_PINS positions 1..8) so the
-// flags line up with the eight connection bubbles the shared pin loop draws down
-// the left edge. Each points off-sheet (apex right, away from the pins).
-function drawPort8(ctx, inst, vp, selected) {
+// drawPortN renders the multi-bit port as N narrow right-pointing pentagons
+// (FR-071e), one centered on each bit pin's row (BIT_PINS positions 1..N) so the
+// flags line up with the connection bubbles the shared pin loop draws down the
+// left edge. N is the instance's chosen width (its pin count). Each points
+// off-sheet (apex right, away from the pins).
+function drawPortN(ctx, inst, vp, selected) {
   const stroke = selected ? "#4a90d9" : "#333";
   ctx.lineWidth = selected ? 2 : 1;
-  for (let i = 0; i < 8; i++) {
+  const n = inst.typeData.pins.length;
+  for (let i = 0; i < n; i++) {
     const mid = i + 1; // pin row
     const y0 = mid - 0.42;
     const y1 = mid + 0.42;
@@ -937,8 +939,7 @@ function drawPort(ctx, inst, vp, selected) {
     ctx.fill();
   }
 
-  let text = inst.label ?? "";
-  if (inst.width > 1) text += "/" + inst.width;
+  const text = inst.label ?? ""; // a 1-wide port is always one bit (FR-094)
   ctx.fillStyle = "#000";
   ctx.font = Math.round(0.45 * scaleFor(vp)) + "px system-ui, sans-serif";
   ctx.textAlign = "center";

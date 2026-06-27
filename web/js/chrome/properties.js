@@ -208,10 +208,12 @@ export function initProperties({ container, store }) {
       container.appendChild(row);
     }
 
-    // Port interface fields (FR-094, §6.14): a port carries a signal label, a
-    // direction (in/out/bidir), and a bit width, edited here and patched via
-    // setPortPropsCmd. Disabled while simulating (FR-087).
-    if (td.renderType === "port") {
+    // Port interface fields (FR-094, §6.14): a port carries an editable signal
+    // label (patched via setPortPropsCmd, disabled while simulating FR-087) and a
+    // read-only derived direction (FR-094c). A 1-wide port is always one bit
+    // (FR-094, no width); only the multi-bit portN shows a width — fixed at
+    // placement (FR-071e), read-only.
+    if (td.renderType === "port" || td.renderType === "portN") {
       container.appendChild(el("div", "prop-section", "Port"));
 
       const labelRow = el("div", "prop-row");
@@ -238,23 +240,14 @@ export function initProperties({ container, store }) {
       dirRow.appendChild(el("span", "prop-value", portDirection(store.design, inst.refdes)));
       container.appendChild(dirRow);
 
-      const widthRow = el("div", "prop-row");
-      widthRow.appendChild(el("label", "prop-label", "width"));
-      const widthInput = el("input", "prop-input");
-      widthInput.type = "number";
-      widthInput.min = "1";
-      widthInput.value = String(inst.width ?? 1);
-      widthInput.disabled = locked;
-      widthInput.addEventListener("change", () => {
-        const n = parseInt(widthInput.value, 10);
-        if (!Number.isInteger(n) || n < 1) {
-          render(); // reject non-positive-integer width, restore display
-          return;
-        }
-        store.dispatch(setPortPropsCmd(inst.refdes, { width: n }));
-      });
-      widthRow.appendChild(widthInput);
-      container.appendChild(widthRow);
+      // Only the multi-bit port has a width, fixed at placement (FR-071e), shown
+      // read-only. A 1-wide port is always one bit (FR-094) — no width control.
+      if (td.renderType === "portN") {
+        const widthRow = el("div", "prop-row");
+        widthRow.appendChild(el("label", "prop-label", "width"));
+        widthRow.appendChild(el("span", "prop-value", String(inst.width ?? td.pins.length)));
+        container.appendChild(widthRow);
+      }
     }
 
     // overrideRow builds one editable numeric field whose value shadows the

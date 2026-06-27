@@ -11,41 +11,74 @@
 import { nextRefNum } from "./design.js";
 import { buildNets } from "./netlist.js";
 
-// classifyPortDir derives a port's external direction from the net carrying its
-// label (FR-094c). A connector label *names* its net (FR-094a) — the connector
-// vertex itself is not listed among the net's component pins — so the net is
-// found by name. Rule: bidir if the net touches any bidirectional/three-state
-// pin (a RAM/ROM data line), else output if a plain output pin drives it, else
-// input (also when the port is unconnected, i.e. no net carries its label).
-function classifyPortDir(nets, byRefdes, label) {
-  if (!label) return "in";
-  const net = nets.find((n) => n.name === label);
-  if (!net) return "in";
+// netContribDir inspects one net's non-port pins and reports the direction that
+// net contributes to a port on it (FR-094c): "bidir" if any pin is itself
+// bidirectional/three-state (a RAM/ROM data line), else "out" if a plain output
+// pin drives it, else null (no driver — contributes the "in" default).
+function netContribDir(net, byRefdes) {
   let driven = false;
   for (const key of net.pins) {
     const i = key.lastIndexOf(".");
     const inst = byRefdes.get(key.slice(0, i));
     const rt = inst?.typeData?.renderType;
-    if (!inst || rt === "port" || rt === "port8") continue;
+    if (!inst || rt === "port" || rt === "portN") continue;
     const dir = inst.typeData?.pins?.find((p) => p.name === key.slice(i + 1))?.direction;
     if (dir === "bidir" || dir === "tristate") return "bidir";
     if (dir === "out") driven = true;
   }
-  return driven ? "out" : "in";
+  return driven ? "out" : null;
+}
+
+// aggregateDir folds per-net contributions into one direction (FR-094c): bidir
+// if any net is bidir, else output if any is output-driven, else input (also the
+// empty / all-unconnected case).
+function aggregateDir(contribs) {
+  if (contribs.includes("bidir")) return "bidir";
+  if (contribs.includes("out")) return "out";
+  return "in";
+}
+
+// classifyPortDir derives a 1-wide port's direction (FR-094c). A connector label
+// *names* its net (FR-094a) — the connector vertex itself is not listed among the
+// net's component pins — so the net is found by name (input when unconnected).
+function classifyPortDir(nets, byRefdes, label) {
+  if (!label) return "in";
+  const net = nets.find((n) => n.name === label);
+  if (!net) return "in";
+  return aggregateDir([netContribDir(net, byRefdes)]);
+}
+
+// classifyPortNDir derives a multi-bit port's single direction (FR-071e/FR-094c)
+// by aggregating across its bit nets. Unlike the 1-wide port, a portN's P pins
+// *are* net members (joined through the snapped bus/wire), so each bit's net is
+// found by the pin key `<refdes>.<Pi>`.
+function classifyPortNDir(nets, byRefdes, refdes, pinNames) {
+  const contribs = [];
+  for (const name of pinNames) {
+    const net = nets.find((n) => n.pins.includes(`${refdes}.${name}`));
+    if (net) contribs.push(netContribDir(net, byRefdes));
+  }
+  return aggregateDir(contribs);
 }
 
 // portDirection derives one port's direction from the current design wiring
-// (FR-094c). Used by the properties panel for a live read-only display.
+// (FR-094c). Used by the properties panel for a live read-only display. Handles
+// both the 1-wide port (by label) and the multi-bit port (by its P pins).
 export function portDirection(design, portRefdes) {
   const byRefdes = new Map((design.components ?? []).map((c) => [c.refdes, c]));
-  const label = byRefdes.get(portRefdes)?.label;
-  return classifyPortDir(buildNets(design, () => {}), byRefdes, label);
+  const inst = byRefdes.get(portRefdes);
+  const nets = buildNets(design, () => {});
+  if (inst?.typeData?.renderType === "portN") {
+    return classifyPortNDir(nets, byRefdes, portRefdes, (inst.typeData.pins ?? []).map((p) => p.name));
+  }
+  return classifyPortDir(nets, byRefdes, inst?.label);
 }
 
-// designInterface returns a child design's external interface (FR-095): one
-// pin per distinct port label, carrying that label's width and its direction
-// derived from the child's wiring (FR-094c), in a deterministic order (by
-// label). The first port seen for a label wins on a width disagreement.
+// designInterface returns a child design's external interface (FR-095): one pin
+// per distinct port label — across both 1-wide `port`s and multi-bit `portN`s
+// (FR-071e) — carrying that label's width and its direction derived from the
+// child's wiring (FR-094c), in a deterministic order (by label). The first port
+// seen for a label wins on a width disagreement.
 export function designInterface(childDesign) {
   // A child may be a minimal/partial object (no wires/vertices yet); give
   // buildNets the arrays it expects so derivation never throws.
@@ -58,14 +91,26 @@ export function designInterface(childDesign) {
   for (const c of childDesign.components ?? []) {
     // Identify ports by renderType, not the `type` field — the latter is now the
     // library id (FR-066e), e.g. "type-port", not the bare "port".
-    if (c.typeData?.renderType !== "port") continue;
+    const rt = c.typeData?.renderType;
+    if (rt !== "port" && rt !== "portN") continue;
     const label = c.label;
     if (label == null || label === "") continue;
-    if (!byLabel.has(label)) {
+    if (byLabel.has(label)) continue;
+    if (rt === "portN") {
+      // A portN contributes one width-N pin; N is its P pin-group size, and its
+      // direction aggregates across the nets its P pins join.
+      const pinNames = (c.typeData.pins ?? []).map((p) => p.name);
+      byLabel.set(label, {
+        label,
+        dir: classifyPortNDir(nets, byRefdes, c.refdes, pinNames),
+        width: pinNames.length,
+      });
+    } else {
+      // A 1-wide port is always one bit (FR-094); it has no width field.
       byLabel.set(label, {
         label,
         dir: classifyPortDir(nets, byRefdes, label),
-        width: c.width ?? 1,
+        width: 1,
       });
     }
   }
@@ -77,48 +122,58 @@ export function designInterface(childDesign) {
 const IC_WIDTH = 6; // grid units; wide enough for interior pin labels
 const CONNECTOR_WIDTH = 3; // a tall, narrow strip (FR-099)
 
+// signalBits expands one interface signal into its one-bit pin names and, for a
+// multi-bit signal, the pin group a matching-width bus snaps to (FR-095/FR-099).
+// A pin is always one bit: width:1 → a single pin named by the label; width:N →
+// pins `<label>0`..`<label>(N-1)` plus a group named `<label>`.
+function signalBits(sig) {
+  if ((sig.width ?? 1) <= 1) return { names: [sig.label], group: null };
+  const names = Array.from({ length: sig.width }, (_, i) => `${sig.label}${i}`);
+  return { names, group: { name: sig.label, pins: names } };
+}
+
 // synthTypeForInterface builds the in-memory synthetic ComponentType for an
 // embedded sub-design (FR-099). Both render styles are plain rectangles, so the
 // generic component renderer and the pin machinery work unchanged; only the pin
 // layout differs:
 //   "ic"        — inputs on the left, outputs on the right, bidir on the left.
 //   "connector" — all interface pins ranked along the right edge, in label order.
-// Each pin's `width` (>1 for a bus interface) rides along for later bus snap.
+// A multi-bit signal expands into N contiguous one-bit pins plus a pin group, so
+// a matching bus snaps via the ordinary group machinery (FR-041/FR-042).
 export function synthTypeForInterface(iface, render, name = "subdesign") {
+  const pinGroups = [];
+  const collect = (sig, side, pins) => {
+    const { names, group } = signalBits(sig);
+    for (const nm of names) pins.push({ name: nm, side, position: pins.length + 1, direction: sig.dir });
+    if (group) pinGroups.push(group);
+  };
+  const withGroups = (type) => (pinGroups.length ? { ...type, pinGroups } : type);
+
   if (render === "connector") {
-    const pins = iface.map((p, i) => ({
-      name: p.label,
-      side: "right",
-      position: i + 1,
-      direction: p.dir,
-      width: p.width,
-    }));
-    return {
+    const pins = [];
+    for (const sig of iface) collect(sig, "right", pins);
+    return withGroups({
       name,
       renderType: "unit",
       width: CONNECTOR_WIDTH,
-      height: iface.length + 1,
+      height: pins.length + 1,
       pins,
-    };
+    });
   }
-  // "ic": inputs (and bidir) left, outputs right.
+  // "ic": inputs (and bidir) left, outputs right; a signal's bits stay together.
   const left = [];
   const right = [];
-  for (const p of iface) (p.dir === "out" ? right : left).push(p);
-  const pins = [];
-  left.forEach((p, i) =>
-    pins.push({ name: p.label, side: "left", position: i + 1, direction: p.dir, width: p.width }),
-  );
-  right.forEach((p, i) =>
-    pins.push({ name: p.label, side: "right", position: i + 1, direction: p.dir, width: p.width }),
-  );
-  return {
+  for (const sig of iface) {
+    const toRight = sig.dir === "out";
+    collect(sig, toRight ? "right" : "left", toRight ? right : left);
+  }
+  return withGroups({
     name,
     renderType: "unit",
     width: IC_WIDTH,
     height: Math.max(left.length, right.length) + 1,
-    pins,
-  };
+    pins: [...left, ...right],
+  });
 }
 
 // resolveSubDesigns fills in (or refreshes) the in-memory synthetic typeData of

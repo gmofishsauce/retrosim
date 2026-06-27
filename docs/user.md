@@ -475,7 +475,7 @@ no behavior, and no designator — see below.)
 | **Power-on reset** | two outputs (`R` active-high, `/R` active-low, right) | Asserts reset (`R`=1, `/R`=0) for the first `cycles` clock periods of a run, then releases (inverse afterward). Property: `cycles` (default 3). |
 | **Input switch** | one output (`OUT`, right) | A user-set logic source with two states, **1** and **0**, drawn like the state indicator — a round value bubble (white **1** / black **0**) — with a small arrow toward its output pin. A **strong** driver: it overrides pull-ups/pull-downs on its net. Set its state in the properties panel while editing, or **click it during a simulation** to toggle **0 ↔ 1**. The state is saved with the design (a new switch starts at **0**). |
 | **State indicator (8-wide)** | eight inputs (`D0`–`D7`, left) | An 8-bit display, drawn as an LED **bar-graph** (eight stripes). Display only — drives nothing. The eight pins form one pin group, so an 8-wide bus snap-connects to all bits at once (see [Buses](#7-buses)); each stripe shows its bit's value (white **1** / black **0** / gray **?**) during and after a run. |
-| **Port / off-sheet connector (8 wide)** | eight pins (`P0`–`P7`, left) | An 8-bit off-sheet connector, drawn as eight narrow pentagons — one roughly aligned with each pin, each pointing off-sheet away from the pins. The eight pins form one pin group so an 8-wide bus snap-connects to all bits at once (see [Buses](#7-buses)). It is a bus terminal for now: it drives nothing and does not yet join to same-label or cross-file ports (that's the 1-wide [port](#12-sub-designs-and-ports)'s job today). |
+| **Port / off-sheet connector (multi-bit)** | N pins (`P0`–`P(N-1)`, left) | A multi-bit interface port. When you drop it, a dialog asks for its **bit width** (2–16); that width is fixed for the life of the instance (to change it, delete and re-place). It is drawn as N narrow pentagons — one roughly aligned with each pin, each pointing off-sheet away from the pins. The N pins form one pin group so a matching-width bus snap-connects to all bits at once (see [Buses](#7-buses)). Like the 1-wide [port](#12-sub-designs-and-ports) it is part of the design's interface (it contributes a pin **group** when the design is embedded), with a direction derived from its wiring; it does not yet join to same-label or cross-file ports. |
 | **Text note** (`NOTE` tile) | none | A free-form text annotation — pure documentation, with no pins, no wiring, and no part in simulation. See **[Text notes](#text-notes)** below for how to type and edit one. |
 
 You can override a built-in's properties per instance via the properties panel
@@ -523,17 +523,25 @@ that marks a net as part of the design's external interface. It is drawn as a
 connection pin (facing into the sheet), and the apex points off-sheet. The apex
 keeps its relationship to the pin as you rotate the part, while the label stays
 upright. Place it like any built-in and wire its single connection point into
-your circuit. Select a port to edit its three fields in the properties panel:
+your circuit. A port is always **one bit**. Select a port to see its fields in the
+properties panel:
 
-- **label** — the signal name. Within one design, **all ports with the same label
-  are the same net**, so an interface signal can appear at several points on the
-  sheet without a drawn wire between them. (A fresh port's label defaults to its
-  `A-` designator, i.e. its own net until you name it.)
-- **direction** — `in`, `out`, or `bidir`.
-- **width** — bits (default 1; greater than 1 makes it a bus interface).
+- **label** — the signal name (editable). Within one design, **all ports with the
+  same label are the same net**, so an interface signal can appear at several
+  points on the sheet without a drawn wire between them. (A fresh port's label
+  defaults to its `A-` designator, i.e. its own net until you name it.)
+- **direction** — `in`, `out`, or `bidir`, **derived from the port's wiring**
+  (shown read-only): `bidir` if its net touches a bidirectional/three-state pin
+  (e.g. a RAM/ROM data line), else `out` if a plain output drives it, else `in`.
 
-A design's **interface** is the set of its ports: one interface pin per distinct
-label, carrying that label's direction and width. A design with no ports has no
+For a **multi-bit (bus) interface**, use the *Port / off-sheet connector
+(multi-bit)* built-in instead — you choose its width (2–16) when you drop it, and
+it presents its bits as a pin group (see the built-ins table in
+[Built-in components](#11-built-in-components)).
+
+A design's **interface** is the set of its ports: each distinct 1-wide-port label
+contributes one one-bit interface pin, and each multi-bit port contributes a pin
+**group** — each carrying its derived direction. A design with no ports has no
 interface and cannot be embedded.
 
 **Embedding a sub-design (ADD).** The **ADD** tile (the dashed `+` box at the end

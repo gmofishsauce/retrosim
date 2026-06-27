@@ -69,9 +69,16 @@ import {
   chooseGroupDialog,
   chooseBitDialog,
   promptWidthDialog,
+  promptPortWidthDialog,
   promptBitNamesDialog,
 } from "../chrome/dialogs.js";
-import { INTERACTIONS } from "../builtins.js";
+import {
+  INTERACTIONS,
+  portNFields,
+  PORTN_MIN_WIDTH,
+  PORTN_MAX_WIDTH,
+  PORTN_DEFAULT_WIDTH,
+} from "../builtins.js";
 import { openContextMenu } from "../chrome/contextmenu.js";
 import { postMessage } from "../chrome/statusbar.js";
 
@@ -498,7 +505,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     }
   }
 
-  function placeAt(screenPt) {
+  async function placeAt(screenPt) {
     const g = snapToGrid(screenPt, store.state.viewport);
     // The ADD tile is not a component: it opens the Add sub-component flow
     // (§6.14), which runs its own dialog and dispatches placeSubDesign.
@@ -507,7 +514,23 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       if (onAddSubDesign) onAddSubDesign(g.x, g.y);
       return;
     }
-    store.dispatch(placeComponent(placeType, g.x, g.y, 0));
+    let type = placeType;
+    // A multi-bit port's bit width is chosen at placement (FR-071e): prompt for
+    // it, then bake the width-driven pins/group/footprint into the type. Cancel
+    // (or out-of-range input) places nothing.
+    if (placeType.renderType === "portN") {
+      const width = await promptPortWidthDialog(
+        PORTN_DEFAULT_WIDTH,
+        PORTN_MIN_WIDTH,
+        PORTN_MAX_WIDTH,
+      );
+      if (width == null) {
+        setTool("select");
+        return;
+      }
+      type = { ...placeType, ...portNFields(width) };
+    }
+    store.dispatch(placeComponent(type, g.x, g.y, 0));
     const placed = store.design.components[store.design.components.length - 1];
     setTool("select");
     select({ kind: "component", refdes: placed.refdes });

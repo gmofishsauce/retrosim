@@ -84,10 +84,11 @@ const PORT_ICON =
   ' font-family="system-ui,sans-serif" font-weight="bold" font-size="9" fill="#000">P</text>' +
   "</svg>";
 
-// PORT8_ICON: a short stacked column of right-pointing pentagons, suggesting the
-// 8-wide port (FR-071e). Fewer than eight, with no letter — the stack only marks
-// the type. The same glyph is used for the palette tile and the placed object.
-const PORT8_ICON =
+// PORTN_ICON: a short stacked column of right-pointing pentagons, suggesting the
+// multi-bit port (FR-071e). Just a few flags, with no letter — the stack only
+// marks the type, independent of the instance's chosen width. The same glyph is
+// used for the palette tile and the placed object.
+const PORTN_ICON =
   '<svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"' +
   ' fill="#fff" stroke="#333" stroke-width="1.5" stroke-linejoin="round">' +
   "0 8 16 24".split(" ").map(Number)
@@ -109,14 +110,34 @@ const BARGRAPH_ICON =
     .join("") +
   "</svg>";
 
-// BIT_NAMES returns the eight bit names "<prefix>0".."<prefix>7" for an 8-wide
-// built-in's pins and its single pin group (FR-071d/e).
-const BIT_NAMES = (prefix) => Array.from({ length: 8 }, (_, i) => `${prefix}${i}`);
+// BIT_NAMES returns the n bit names "<prefix>0".."<prefix>(n-1)" for a wide
+// built-in's pins and its single pin group (FR-071d/e). n defaults to 8 (the
+// fixed-width 8-wide indicator); the multi-bit port passes its chosen width.
+const BIT_NAMES = (prefix, n = 8) => Array.from({ length: n }, (_, i) => `${prefix}${i}`);
 
-// BIT_PINS lays the eight bit pins down one side at grid rows 1..8 — a 3×9
+// BIT_PINS lays the n bit pins down one side at grid rows 1..n — a 3×(n+1)
 // footprint leaves a one-unit margin top and bottom (FR-071d/e).
-const BIT_PINS = (prefix, side, direction) =>
-  BIT_NAMES(prefix).map((name, i) => ({ name, side, position: i + 1, direction }));
+const BIT_PINS = (prefix, side, direction, n = 8) =>
+  BIT_NAMES(prefix, n).map((name, i) => ({ name, side, position: i + 1, direction }));
+
+// Multi-bit port width bounds and default (FR-071e): the drop-time dialog
+// constrains the chosen width to [2, 16]; the palette prototype uses the default.
+export const PORTN_MIN_WIDTH = 2;
+export const PORTN_MAX_WIDTH = 16;
+export const PORTN_DEFAULT_WIDTH = 8;
+
+// portNFields returns the width-driven typeData fields for a multi-bit port of
+// the given bit width (FR-071e): N left-edge bidir pins P0..P(N-1) in one pin
+// group P, in a 3×(N+1) footprint. The chosen width is fixed at placement; the
+// drop flow (§6.14) stamps these onto the instance's typeData.
+export function portNFields(width) {
+  return {
+    width: 3,
+    height: width + 1,
+    pins: BIT_PINS("P", "left", "bidir", width),
+    pinGroups: [{ name: "P", pins: BIT_NAMES("P", width) }],
+  };
+}
 
 // builtinId is the immutable library id of a built-in type (FR-066e): the same
 // "type-"+name rule the YAML library and the save-format migration use, so a
@@ -230,19 +251,17 @@ const BUILTIN_DEFS = [
     pinGroups: [{ name: "D", pins: BIT_NAMES("D") }],
   },
   {
-    name: "port8",
+    name: "portN",
     builtin: true,
-    title: "port / off-sheet connector (8 wide)", // FR-071e palette tooltip
-    icon: PORT8_ICON,
-    renderType: "port8",
-    width: 3,
-    height: 9,
-    // Eight on-sheet ("internal") bits down the left edge, grouped for bus snap
-    // (FR-041/FR-042), adopting P0..P7. A grouped bus terminal only for now: it
-    // drives nothing and does no off-sheet net joining yet (FR-071e); the
-    // external/off-sheet side stays virtual.
-    pins: BIT_PINS("P", "left", "bidir"),
-    pinGroups: [{ name: "P", pins: BIT_NAMES("P") }],
+    title: "port / off-sheet connector (multi-bit)", // FR-071e palette tooltip
+    icon: PORTN_ICON,
+    renderType: "portN",
+    // Palette prototype at the default width; the drop dialog (§6.14) regenerates
+    // these fields for the user's chosen width (2–16) on placement. Each instance
+    // carries a `label` (interface signal name) and the chosen bit `width`, joins
+    // the interface (FR-095) with a derived direction (FR-094c), and snaps an
+    // N-bit bus to its P0..P(N-1) group (FR-041/FR-042).
+    ...portNFields(PORTN_DEFAULT_WIDTH),
   },
   {
     name: "note",
@@ -372,9 +391,9 @@ const BEHAVIOR_DEFS = {
   indicator8() {
     return [];
   },
-  // Grouped bus terminal (FR-071e): drives nothing on its own. Off-sheet net
-  // joining (same-label / cross-file) is deferred to a later change.
-  port8() {
+  // Multi-bit port (FR-071e): drives nothing on its own — it is an interface
+  // node (FR-095). Off-sheet net joining (same-label / cross-file) is deferred.
+  portN() {
     return [];
   },
 };

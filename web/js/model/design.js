@@ -103,10 +103,19 @@ export function addInstance(design, type, x, y, rotation) {
   // A port carries its interface fields (FR-094, §7.2): a label defaulting to the
   // refdes (so a fresh port is its own net until the user names it), direction,
   // and bit width. The optional off-sheet target (FR-101) is added in phase 4.
+  // A 1-wide port is always one bit (FR-094): it carries a label (default refdes)
+  // and a derived direction, but no width field.
   if (type.renderType === "port") {
     inst.label = refdes;
     inst.portDir = "in";
-    inst.width = 1;
+  }
+  // A multi-bit port (FR-071e) carries a label (default refdes) and its chosen
+  // bit width, fixed at placement. The width-driven pins/group/footprint are
+  // already baked into `type` by the drop dialog (§6.14), so the bit width is the
+  // pin count; the interface (FR-095) and derived direction (FR-094c) read it.
+  if (type.renderType === "portN") {
+    inst.label = refdes;
+    inst.width = type.pins.length;
   }
   design.components.push(inst);
   return inst;

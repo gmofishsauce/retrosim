@@ -94,7 +94,8 @@ export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {
       // live model: replace the port entries with copies carrying the value.
       const portDir = new Map();
       for (const c of store.design.components) {
-        if (c.typeData?.renderType === "port") {
+        const rt = c.typeData?.renderType;
+        if (rt === "port" || rt === "portN") {
           portDir.set(c.refdes, portDirection(store.design, c.refdes));
         }
       }
