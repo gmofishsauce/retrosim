@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-27 — Wire/bus endpoint sheet: a junction reads as connected (FR-020d)
+What: In the read-only wire/bus property sheet, a plain junction endpoint (FR-034) now reads "junction (x, y)" instead of "unconnected (x, y)". A junction always ties two or more conductors, so labeling it unconnected was wrong and misleading; only a genuinely dangling free end (FR-029) still reads "unconnected (x, y)".
+Why: User reported a connected junction (a dot where two wires meet) being shown as not connected.
+Touches: FR-020d; design §properties (describeEndpoint).
+
 ## 2026-06-27 — Palette half heading bars (FR-006a)
 What: Each half of the tool palette gets a small fixed (non-scrolling) heading bar above its tiles, in the tile-label font: "TTL Components" (upper) and "Built-In Components" (lower). Each half is restructured into a flex column of heading + scrolling tile grid.
 Why: Label the two regions so their distinction is obvious.

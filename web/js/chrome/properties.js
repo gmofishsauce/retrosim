@@ -57,7 +57,10 @@ function describeEndpoint(design, vertexId) {
     }
   }
 
-  // Dangling free end (FR-029) or plain junction (FR-034).
+  // A plain junction (FR-034) ties ≥2 conductors, so it is connected (FR-020d).
+  if (v.kind === "junction") return `junction (${fmt(v.x)}, ${fmt(v.y)})`;
+
+  // Dangling free end (FR-029).
   return `unconnected (${fmt(v.x)}, ${fmt(v.y)})`;
 }
 

@@ -1483,7 +1483,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     instance's `label ?? refdes`); a `junction` carrying a `bit` (a bus-breakout
     tap, FR-043a) → "`<group>[<bit>]`", the group taken from the owning bus's first
     `groupConnections` entry (else the bus id); a `free` vertex named by some bus's
-    `groupConnections` (group-snapped, FR-042) → "`<label> <group>`"; otherwise
+    `groupConnections` (group-snapped, FR-042) → "`<label> <group>`"; a plain
+    `junction` (no `bit`, FR-034) → "`junction (x, y)`" (a junction ties ≥2
+    conductors, so it is connected); otherwise (a dangling `free` end, FR-029) →
     "`unconnected (x, y)`" from the vertex position. No editable fields, so the sheet
     ignores the simulating lock.
   - *Documentation section (FR-105)*: a read-only block rendered from the
