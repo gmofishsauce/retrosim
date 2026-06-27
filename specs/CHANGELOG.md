@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-27 — Palette half heading bars (FR-006a)
+What: Each half of the tool palette gets a small fixed (non-scrolling) heading bar above its tiles, in the tile-label font: "TTL Components" (upper) and "Built-In Components" (lower). Each half is restructured into a flex column of heading + scrolling tile grid.
+Why: Label the two regions so their distinction is obvious.
+Touches: FR-006a; design §rendering FR-006a, §palette component.
+
 ## 2026-06-27 — Zoom-based label culling (FR-012a)
 What: As a component symbol shrinks on screen, its labels are progressively dropped so fixed-size text doesn't bury a small symbol: below a first threshold pin name labels disappear, below a second the type display-name line disappears too, leaving only the U-number (re-centered). Gated on apparent on-screen symbol size — min footprint dimension × pixels-per-grid-unit — not raw zoom, so a physically larger part keeps its labels to a lower zoom than a small one. Subunits gate only the pin-label step; built-ins are unaffected. Chosen with the user over text-measurement and raw-zoom-factor alternatives.
 Why: At small on-screen sizes the fixed-pixel pin/type text overwhelmed the scaled symbol into a mess of squiggles.

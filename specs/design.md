@@ -57,7 +57,9 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
   left→right, top→bottom in ascending part-number order (supersedes flat list).
 - **FR-006a** — Palette split 50/50 by a midpoint divider: upper region = 74-series
   tiles, lower region = built-in objects (FR-067) with icon+tooltip tiles; each
-  region scrolls independently.
+  region scrolls independently. Each half wraps a fixed (non-scrolling) heading
+  bar ("TTL Components" / "Built-In Components", tile-label font) above its
+  scrolling tile grid.
 - **FR-007** — Library loaded once at startup; no live reload of YAML files.
 
 **Component Placement**
@@ -1349,7 +1351,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   the library load resolves (FR-003).
   The palette is split 50/50 (FR-006a) into an upper region (#palette-parts) for
   the 74-series tiles and a lower region (#palette-builtins) for built-in objects;
-  each scrolls independently. Lower-region tiles render an SVG icon (the object's
+  each scrolls independently beneath a fixed `.palette-heading` bar (its half is a
+  flex column: non-scrolling heading + scrolling grid). Lower-region tiles render an SVG icon (the object's
   glyph, e.g. the indicator bubble) with a descriptive `title`, and `dataset.type`
   set to the built-in type name; the armed-state subscription covers both regions.
 - **Built-in objects (`builtins.js`)** — Satisfies FR-067–FR-071e. Exports a
