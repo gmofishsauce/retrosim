@@ -79,7 +79,18 @@ export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {
       // serialized name so the file matches, and update the store only after
       // the write succeeds.
       const name = path.split(/[\\/]/).pop().replace(/\.json$/i, "");
-      await apiSave(path, { ...serializeDesign(store.design), name });
+      const out = { ...serializeDesign(store.design), name };
+      // Sub-design child paths are absolute in memory (FR-098); write them
+      // relative to this file's dir so the saved design stays portable. The
+      // serialized sub-design entries are fresh objects (stripSubDesign), so
+      // mutating them does not touch the live model.
+      const baseDir = dirOf(path);
+      for (const c of out.components) {
+        if (c.kind === "subdesign" && c.childPath) {
+          c.childPath = relPath(baseDir, c.childPath);
+        }
+      }
+      await apiSave(path, out);
       store.markSaved(path, name);
     } catch (e) {
       toast("Save failed: " + e.message);
@@ -102,10 +113,16 @@ export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {
         );
       }
       const loaded = deserializeDesign(obj);
-      // Resolve each sub-design's interface from its child file before the first
-      // render (FR-098 loading): paths are stored relative to this design's dir.
+      // Sub-design child paths are stored relative to this design's dir on disk
+      // but held absolute in memory (FR-098): absolutize them before resolving
+      // interfaces, so the live model carries absolute paths.
       const baseDir = dirOf(absPath);
-      await resolveSubDesigns(loaded, (childPath) => apiLoad(resolveRel(baseDir, childPath)), toast);
+      for (const inst of loaded.components) {
+        if (inst.kind === "subdesign" && inst.childPath) {
+          inst.childPath = resolveRel(baseDir, inst.childPath);
+        }
+      }
+      await resolveSubDesigns(loaded, (childPath) => apiLoad(childPath), toast);
       store.replaceDesign(loaded, { savePath: absPath });
       return true;
     } catch (e) {
@@ -128,10 +145,19 @@ export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {
   // navigates to it, and on success pushes the parent onto the back-stack so the
   // user can return (FR-100a). A sub-design's parent is always saved (FR-097b).
   async function descend(childPath) {
-    const parentPath = store.state.savePath;
-    if (!parentPath) return;
-    const abs = resolveRel(dirOf(parentPath), childPath);
-    if (await navigateTo(abs)) {
+    let parentPath = store.state.savePath;
+    if (!parentPath) {
+      // Phase-1 interim (FR-100a): returning re-opens the parent from its file,
+      // so it must be saved before we can descend and come back to it.
+      if (!window.confirm("Save this design first? It must be saved so you can return to it after opening the sub-component.")) {
+        return;
+      }
+      await save();
+      parentPath = store.state.savePath;
+      if (!parentPath) return; // save cancelled
+    }
+    // childPath is already absolute in memory (FR-098).
+    if (await navigateTo(childPath)) {
       navStack.push(parentPath);
       notifyNav();
     }
@@ -162,18 +188,16 @@ export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {
   }
 
   // addSubDesign embeds a child design as a sub-design instance at (x,y) on the
-  // canvas (FR-097/098, §6.14). The child path is stored relative to this
-  // design's save dir, so the parent must be saved first (FR-097b).
+  // canvas (FR-097/098, §6.14). The child path is held absolute in memory and
+  // relativized at save (FR-098), so embedding needs no saved parent (FR-097b).
   async function addSubDesign(x, y) {
-    if (!store.state.savePath) {
-      toast("Save this design before adding a sub-component");
-      await save();
-      if (!store.state.savePath) return; // save cancelled
-    }
-    const parentPath = store.state.savePath;
-    const res = await openFileDialog({ mode: "open", startPath: dirOf(parentPath) });
+    const parentPath = store.state.savePath; // may be null (unsaved parent)
+    const res = await openFileDialog({
+      mode: "open",
+      startPath: parentPath ? dirOf(parentPath) : dataDir,
+    });
     if (!res) return;
-    if (res.path === parentPath) {
+    if (parentPath && res.path === parentPath) {
       toast("A design cannot embed itself");
       return;
     }
@@ -191,9 +215,9 @@ export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {
     }
     const render = await chooseRenderDialog(iface, obj.defaultRender ?? "ic");
     if (!render) return;
-    const childPath = relPath(dirOf(parentPath), res.path);
+    // Store the child's absolute path; it is relativized at save (FR-098).
     const childName = baseOf(res.path).replace(/\.json$/i, "");
-    store.dispatch(placeSubDesign({ childPath, render, iface, childName }, x, y));
+    store.dispatch(placeSubDesign({ childPath: res.path, render, iface, childName }, x, y));
   }
 
   // newDesign starts a fresh empty design, warning about unsaved changes

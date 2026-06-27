@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-27 — Sub-design child path: absolute in memory, relative on disk (FR-097b/FR-098/FR-100a)
+What: Adding a sub-component no longer requires saving the parent first. A sub-design instance now holds its child reference as an absolute path in memory; fileops relativizes it to the parent's save dir on save and absolutizes it on load. Embedding places the instance immediately like any other component, with no save prompt. As an interim (phase 1), descending into a sub-design of an unsaved parent still prompts to save the parent (so Back can return to it via its file); a later change may retain an unsaved parent in memory so even descent needs no save. Also fixes a latent bug where Save As into a different folder left the stored relative path pointing at the old location.
+Why: The save dialog appearing on embed (to compute the relative path) was confusing; the relative path is only needed on disk, not to place the instance.
+Touches: FR-097b, FR-098, FR-100a (FR-047/FR-057/FR-060b context); design §6.14, §7.4.
+
 ## 2026-06-27 — Confirm before overwriting an existing design file (FR-049b)
 What: A save prompt (first save or Save As) that targets a path already naming an existing file now asks the user to confirm the overwrite, and aborts the save if declined. Implemented in the save-mode file dialog. Subsequent saves of the same design to its own file (FR-048) are unaffected — they skip the dialog and still overwrite silently.
 Why: User twice clobbered an existing design file by saving a new design over it with no warning.
