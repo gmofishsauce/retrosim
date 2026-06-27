@@ -184,6 +184,7 @@ A localhost-only digital circuit design editor for retro computing hobbyists who
 - FR-048: Subsequent saves of the same design shall overwrite the existing file without prompting.
 - FR-049: The user shall be able to invoke Save As at any time to save the design under a new name.
 - FR-049a: The application shall indicate when the current design has unsaved changes, and shall warn the user before discarding unsaved changes (e.g., on New or Open).
+- FR-049b: When a save prompt (the first save, FR-047, or Save As, FR-049) targets a path that already names an existing file, the application shall require the user to confirm the overwrite before writing, and shall abort the save if the user declines. This guards against silently clobbering an unrelated design file. It does not apply to subsequent saves of the same design to its own already-chosen file (FR-048), which still overwrite without prompting. (Added 2026-06-27.)
 - FR-050: The server shall store design files by default in a `retrosim` folder inside the user's documents directory — macOS and Linux `~/Documents/retrosim`, Windows `%USERPROFILE%\Documents\retrosim` — creating it if absent. (Folder renamed 2026-06-13 from `wut4-editor` to `retrosim` following the project rename. Reworked 2026-06-12; supersedes the platform-standard application data directory: designs are user documents, and hiding them in app-data locations was a stakeholder misunderstanding.)
 - FR-051: The file dialog shall allow the user to choose a different save location.
 

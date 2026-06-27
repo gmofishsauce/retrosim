@@ -993,6 +993,7 @@ export function openFileDialog({ mode, startPath, defaultName = "", title, exts 
 
     let currentPath = startPath;
     let selectedFile = null;
+    let existingFiles = new Set(); // file names in the current dir, for the overwrite guard (FR-049b)
 
     let nameInput = null;
     if (mode === "save") {
@@ -1016,6 +1017,10 @@ export function openFileDialog({ mode, startPath, defaultName = "", title, exts 
         let name = nameInput.value.trim();
         if (!name) return;
         if (!name.endsWith("." + saveExt)) name += "." + saveExt;
+        // Confirm before clobbering an existing file (FR-049b).
+        if (existingFiles.has(name) && !window.confirm(`"${name}" already exists. Overwrite?`)) {
+          return;
+        }
         done({ path: joinPath(currentPath, name) });
       } else if (selectedFile) {
         done({ path: selectedFile });
@@ -1032,6 +1037,7 @@ export function openFileDialog({ mode, startPath, defaultName = "", title, exts 
       }
       currentPath = listing.path;
       selectedFile = null;
+      existingFiles = new Set(listing.entries.filter((e) => !e.isDir).map((e) => e.name));
       pathLabel.textContent = listing.path;
       listEl.replaceChildren();
 

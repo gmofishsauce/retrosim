@@ -257,6 +257,11 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-048** — Subsequent saves overwrite without prompting.
 - **FR-049** — Save As at any time, to a new name.
 - **FR-049a** — Indicate unsaved changes; warn before discarding them (New/Open).
+- **FR-049b** — A save prompt (FR-047/FR-049) that targets an existing file
+  confirms the overwrite before writing and aborts if declined. Implemented in
+  the save-mode file dialog (`openFileDialog`, dialogs.js): on OK it confirms
+  when the chosen name matches a file in the current directory listing. The
+  FR-048 same-file re-save skips the dialog, so it is unaffected.
 - **FR-050** — Server stores designs in `retrosim` inside the user's
   documents directory by default (created if absent). (Reworked 2026-06-12;
   supersedes the platform-standard application data directory.)

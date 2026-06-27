@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-27 — Confirm before overwriting an existing design file (FR-049b)
+What: A save prompt (first save or Save As) that targets a path already naming an existing file now asks the user to confirm the overwrite, and aborts the save if declined. Implemented in the save-mode file dialog. Subsequent saves of the same design to its own file (FR-048) are unaffected — they skip the dialog and still overwrite silently.
+Why: User twice clobbered an existing design file by saving a new design over it with no warning.
+Touches: FR-049b (new; FR-047/FR-048/FR-049); design §rendering FR-049b.
+
 ## 2026-06-27 — Wire/bus endpoint sheet: a junction reads as connected (FR-020d)
 What: In the read-only wire/bus property sheet, a plain junction endpoint (FR-034) now reads "junction (x, y)" instead of "unconnected (x, y)". A junction always ties two or more conductors, so labeling it unconnected was wrong and misleading; only a genuinely dangling free end (FR-029) still reads "unconnected (x, y)".
 Why: User reported a connected junction (a dot where two wires meet) being shown as not connected.
