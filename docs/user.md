@@ -221,7 +221,10 @@ restart).
 - **Pan:** drag with the **middle** mouse button, or hold **Space** and drag with
   the left button.
 - **Recenter:** **right-click on empty canvas** — the clicked point becomes the
-  new center of the view (zoom unchanged).
+  new center of the view (zoom unchanged). If you then zoom **before moving the
+  mouse**, the zoom is anchored on that new center, so the recentered point
+  stays put — handy for "right-click a spot, then wheel in on it." Moving the
+  mouse returns zoom to its usual zoom-toward-the-cursor behavior.
 - **Context menu:** **right-click on an object** (component, wire, bus, or bend
   point) opens a menu of actions for that object.
 
