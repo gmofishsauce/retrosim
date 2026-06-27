@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-27 — Port direction derived from wiring (FR-094c)
+What: A port's direction is no longer a hand-set in/out/bidir field; it is derived live from the port's net — bidir if the net touches any bidir/tristate pin (RAM/ROM data), else output if driven by a plain output pin, else input (also when unconnected). The properties panel shows it read-only. designInterface derives it via a new portDirection() helper, so an embedded sub-design's IC lays inputs on the left and outputs on the right correctly without the user having to mark each output port. The save format stores the derived value (written at save). Netlist/sim are unaffected (ports join nets by label; direction only drove IC layout + display).
+Why: User embedded a sub-design whose output ports were left at the default "in" and so rendered on the wrong (left) side; direction should track the wiring.
+Touches: FR-094, FR-094c (new), FR-095, FR-099, FR-060b; design §6.14, §7.2.
+
 ## 2026-06-27 — Sub-design child path: absolute in memory, relative on disk (FR-097b/FR-098/FR-100a)
 What: Adding a sub-component no longer requires saving the parent first. A sub-design instance now holds its child reference as an absolute path in memory; fileops relativizes it to the parent's save dir on save and absolutizes it on load. Embedding places the instance immediately like any other component, with no save prompt. As an interim (phase 1), descending into a sub-design of an unsaved parent still prompts to save the parent (so Back can return to it via its file); a later change may retain an unsaved parent in memory so even descent needs no save. Also fixes a latent bug where Save As into a different folder left the stored relative path pointing at the old location.
 Why: The save dialog appearing on embed (to compute the relative path) was confusing; the relative path is only needed on disk, not to place the instance.

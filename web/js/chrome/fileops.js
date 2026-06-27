@@ -7,7 +7,7 @@ import {
   deserializeDesign,
   FORMAT_VERSION,
 } from "../model/persist.js";
-import { designInterface, resolveSubDesigns } from "../model/subdesign.js";
+import { designInterface, resolveSubDesigns, portDirection } from "../model/subdesign.js";
 import { placeSubDesign } from "../commands.js";
 import { saveDesign as apiSave, loadDesign as apiLoad } from "../api.js";
 import { openFileDialog, chooseRenderDialog } from "./dialogs.js";
@@ -90,6 +90,17 @@ export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {
           c.childPath = relPath(baseDir, c.childPath);
         }
       }
+      // Persist each port's derived direction (FR-094c) without mutating the
+      // live model: replace the port entries with copies carrying the value.
+      const portDir = new Map();
+      for (const c of store.design.components) {
+        if (c.typeData?.renderType === "port") {
+          portDir.set(c.refdes, portDirection(store.design, c.refdes));
+        }
+      }
+      out.components = out.components.map((c) =>
+        portDir.has(c.refdes) ? { ...c, portDir: portDir.get(c.refdes) } : c,
+      );
       await apiSave(path, out);
       store.markSaved(path, name);
     } catch (e) {

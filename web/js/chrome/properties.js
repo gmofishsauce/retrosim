@@ -6,6 +6,7 @@
 
 import { setOverrideCmd, setSwitchStateCmd, setPortPropsCmd, setLabelCmd } from "../commands.js";
 import { getVertex } from "../model/design.js";
+import { portDirection } from "../model/subdesign.js";
 
 function el(tag, className, text) {
   const e = document.createElement(tag);
@@ -230,20 +231,11 @@ export function initProperties({ container, store }) {
       labelRow.appendChild(labelInput);
       container.appendChild(labelRow);
 
+      // Direction is derived from the wiring (FR-094c), shown read-only; it
+      // updates live as the panel re-renders on each store change.
       const dirRow = el("div", "prop-row");
       dirRow.appendChild(el("label", "prop-label", "direction"));
-      const dirSelect = el("select", "prop-input");
-      for (const d of ["in", "out", "bidir"]) {
-        const opt = el("option", null, d);
-        opt.value = d;
-        dirSelect.appendChild(opt);
-      }
-      dirSelect.value = inst.portDir ?? "in";
-      dirSelect.disabled = locked;
-      dirSelect.addEventListener("change", () => {
-        store.dispatch(setPortPropsCmd(inst.refdes, { portDir: dirSelect.value }));
-      });
-      dirRow.appendChild(dirSelect);
+      dirRow.appendChild(el("span", "prop-value", portDirection(store.design, inst.refdes)));
       container.appendChild(dirRow);
 
       const widthRow = el("div", "prop-row");

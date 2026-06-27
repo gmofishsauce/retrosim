@@ -12,20 +12,24 @@ import { serializeDesign, deserializeDesign } from "./persist.js";
 import { BUILTINS } from "../builtins.js";
 
 const PORT = BUILTINS.find((b) => b.name === "port");
+const SWITCH = BUILTINS.find((b) => b.name === "switch");
 
-// A child design with three ports: CLK (in), D (in), Q (out).
+// A child design with three ports. Direction is derived from wiring (FR-094c):
+// Q is driven by a switch output → "out"; CLK and D stay unwired → "in".
 function childWithPorts() {
   const d = createDesign("counter");
-  const ports = [
-    ["CLK", "in"],
-    ["Q", "out"],
-    ["D", "in"],
-  ];
-  for (const [label, dir] of ports) {
+  const byLabel = {};
+  for (const label of ["CLK", "Q", "D"]) {
     const p = addInstance(d, PORT, 0, 0, 0);
     p.label = label;
-    p.portDir = dir;
+    byLabel[label] = p;
   }
+  const sw = addInstance(d, SWITCH, 0, 0, 0);
+  addWire(
+    d,
+    { kind: "pin", refdes: sw.refdes, pin: "OUT" },
+    { kind: "pin", refdes: byLabel.Q.refdes, pin: "P" },
+  );
   return d;
 }
 
@@ -42,10 +46,9 @@ test("designInterface dedupes repeated labels (first wins)", () => {
   const d = childWithPorts();
   const extra = addInstance(d, PORT, 0, 0, 0);
   extra.label = "CLK"; // a second CLK port elsewhere on the sheet
-  extra.portDir = "out";
   const iface = designInterface(d);
   assert.equal(iface.filter((p) => p.label === "CLK").length, 1);
-  assert.equal(iface.find((p) => p.label === "CLK").dir, "in"); // first wins
+  assert.equal(iface.find((p) => p.label === "CLK").dir, "in"); // unwired CLK → in
 });
 
 test("designInterface ignores unlabeled ports and non-ports", () => {

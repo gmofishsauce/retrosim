@@ -9,12 +9,51 @@
 // flattening for the simulator (FR-102) lands in a later step.
 
 import { nextRefNum } from "./design.js";
+import { buildNets } from "./netlist.js";
+
+// classifyPortDir derives a port's external direction from the net carrying its
+// label (FR-094c). A connector label *names* its net (FR-094a) — the connector
+// vertex itself is not listed among the net's component pins — so the net is
+// found by name. Rule: bidir if the net touches any bidirectional/three-state
+// pin (a RAM/ROM data line), else output if a plain output pin drives it, else
+// input (also when the port is unconnected, i.e. no net carries its label).
+function classifyPortDir(nets, byRefdes, label) {
+  if (!label) return "in";
+  const net = nets.find((n) => n.name === label);
+  if (!net) return "in";
+  let driven = false;
+  for (const key of net.pins) {
+    const i = key.lastIndexOf(".");
+    const inst = byRefdes.get(key.slice(0, i));
+    const rt = inst?.typeData?.renderType;
+    if (!inst || rt === "port" || rt === "port8") continue;
+    const dir = inst.typeData?.pins?.find((p) => p.name === key.slice(i + 1))?.direction;
+    if (dir === "bidir" || dir === "tristate") return "bidir";
+    if (dir === "out") driven = true;
+  }
+  return driven ? "out" : "in";
+}
+
+// portDirection derives one port's direction from the current design wiring
+// (FR-094c). Used by the properties panel for a live read-only display.
+export function portDirection(design, portRefdes) {
+  const byRefdes = new Map((design.components ?? []).map((c) => [c.refdes, c]));
+  const label = byRefdes.get(portRefdes)?.label;
+  return classifyPortDir(buildNets(design, () => {}), byRefdes, label);
+}
 
 // designInterface returns a child design's external interface (FR-095): one
-// pin per distinct port label, carrying that label's direction and width, in a
-// deterministic order (by label). The first port seen for a label wins on a
-// direction/width disagreement (a malformed child); callers may warn.
+// pin per distinct port label, carrying that label's width and its direction
+// derived from the child's wiring (FR-094c), in a deterministic order (by
+// label). The first port seen for a label wins on a width disagreement.
 export function designInterface(childDesign) {
+  // A child may be a minimal/partial object (no wires/vertices yet); give
+  // buildNets the arrays it expects so derivation never throws.
+  const nets = buildNets(
+    { wires: [], buses: [], vertices: [], components: [], ...childDesign },
+    () => {},
+  );
+  const byRefdes = new Map((childDesign.components ?? []).map((c) => [c.refdes, c]));
   const byLabel = new Map();
   for (const c of childDesign.components ?? []) {
     // Identify ports by renderType, not the `type` field — the latter is now the
@@ -23,7 +62,11 @@ export function designInterface(childDesign) {
     const label = c.label;
     if (label == null || label === "") continue;
     if (!byLabel.has(label)) {
-      byLabel.set(label, { label, dir: c.portDir ?? "in", width: c.width ?? 1 });
+      byLabel.set(label, {
+        label,
+        dir: classifyPortDir(nets, byRefdes, label),
+        width: c.width ?? 1,
+      });
     }
   }
   return [...byLabel.values()].sort((a, b) =>
