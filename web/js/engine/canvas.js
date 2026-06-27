@@ -29,6 +29,11 @@ import { sameRef } from "../store.js";
 const INDICATOR_RADIUS = 0.85;
 const PIN_FONT = "10px system-ui, sans-serif";
 const LABEL_FONT = "bold 11px system-ui, sans-serif";
+// Zoom-based label culling (FR-012a): apparent on-screen symbol size, in CSS px
+// (min footprint dimension × scale), below which pin labels (T1) then the type
+// display-name line (T2) stop being drawn. The U-number is always drawn.
+const LABEL_T1 = 40;
+const LABEL_T2 = 22;
 // Conflicted nets stroke red while the conflict persists (FR-082).
 const CONFLICT_COLOR = "#b00020";
 
@@ -457,6 +462,9 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
   const td = inst.typeData;
   if (!td) return;
 
+  // Apparent on-screen symbol size, for label culling (FR-012a).
+  const symPx = Math.min(td.width, td.height) * scaleFor(vp);
+
   // A text note (FR-071f) owns its whole rendering: text that rotates with it,
   // a dotted box when selected, and no pins or refdes/type label. Drawn and done.
   if (td.renderType === "note") {
@@ -564,8 +572,9 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
       lref = worldToScreen({ x: inst.x + er.x, y: inst.y + er.y }, vp);
     }
     // A built-in's glyph owns its body, so skip the pin name (it would land on
-    // top of the glyph).
-    if (!td.builtin) {
+    // top of the glyph). Pin labels are also culled once the symbol is small on
+    // screen (FR-012a).
+    if (!td.builtin && symPx >= LABEL_T1) {
       ctx.fillStyle = "#333";
       ctx.fillText(pin.name, lref.x - Math.sign(outR.x) * 8, lref.y - Math.sign(outR.y) * 8);
     }
@@ -584,12 +593,16 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
     // on any 90°-rotation's vertical extent is max(width,height).
     const off = (Math.max(td.width, td.height) / 2) * scaleFor(vp) + 7;
     ctx.fillText(inst.label ?? inst.refdes, center.x, center.y - off);
-  } else {
+  } else if (symPx >= LABEL_T2) {
     // Designator (the editable label, falling back to the refdes) above the
     // type's display name (FR-012). The type name comes from typeData — not
     // inst.type, which is the internal library id (FR-066e).
     ctx.fillText(inst.label ?? inst.refdes, center.x, center.y - 6);
     ctx.fillText(td.partnumber || td.name, center.x, center.y + 6);
+  } else {
+    // Symbol too small for two lines: drop the type name, center the U-number
+    // (FR-012a).
+    ctx.fillText(inst.label ?? inst.refdes, center.x, center.y);
   }
 }
 

@@ -231,6 +231,13 @@ restart).
 > Note: left-dragging empty canvas does **not** pan; it draws a selection
 > rectangle (next section).
 
+**Labels thin out when zoomed out.** Component text is drawn at a fixed size, so
+on a small symbol it would otherwise pile up into a knot of squiggles. As you
+zoom out, a component drops its **pin name labels** first, then its **type/part
+name**, leaving just the **U-number** (reference designator), which is always
+shown. Zoom back in to bring them back. Larger parts keep their labels to a
+lower zoom than small ones.
+
 ---
 
 ## 5. The selection model

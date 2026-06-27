@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-27 — Zoom-based label culling (FR-012a)
+What: As a component symbol shrinks on screen, its labels are progressively dropped so fixed-size text doesn't bury a small symbol: below a first threshold pin name labels disappear, below a second the type display-name line disappears too, leaving only the U-number (re-centered). Gated on apparent on-screen symbol size — min footprint dimension × pixels-per-grid-unit — not raw zoom, so a physically larger part keeps its labels to a lower zoom than a small one. Subunits gate only the pin-label step; built-ins are unaffected. Chosen with the user over text-measurement and raw-zoom-factor alternatives.
+Why: At small on-screen sizes the fixed-pixel pin/type text overwhelmed the scaled symbol into a mess of squiggles.
+Touches: FR-012a (new; FR-012/FR-015); design §rendering FR-012a.
+
 ## 2026-06-27 — Right-click recenter arms a pending zoom anchor (FR-023b)
 What: After a right-click recenter, a zoom (FR-022) begun before moving the mouse now anchors at the canvas center instead of the stale cursor position, so the recentered point stays fixed under the zoom. A browser cannot warp the OS cursor the way KiCad does, so a pending zoom anchor at canvas center is armed on recenter and cleared on the next pointer movement.
 Why: Previously the recentered point drifted on the first zoom because wheel zoom anchored on the off-center cursor.

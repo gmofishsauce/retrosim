@@ -76,6 +76,14 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-012** — Each instance displays its designator label (e.g., `U3`) and type
   display name (e.g., `74138`) as canvas labels, **always rendered upright**
   regardless of rotation.
+- **FR-012a** — Label text is fixed-pixel (`PIN_FONT`/`LABEL_FONT` in
+  `canvas.js`) while the symbol scales with zoom, so on a small symbol the text
+  crowds. `drawComponent` culls labels by apparent on-screen symbol size
+  `symPx = min(td.width, td.height) · scaleFor(vp)`: below `LABEL_T1` it skips
+  pin name labels, below `LABEL_T2` (< T1) it also skips the type display-name
+  line and centers the lone designator. The designator (U-number) is always
+  drawn. Subunits gate only on T1 (no type line); built-ins are unaffected (no
+  pin labels, designator only). Thresholds are tuning constants.
 
 **Component Appearance**
 - **FR-013** — Each component is a rectangular outline with a small connection
