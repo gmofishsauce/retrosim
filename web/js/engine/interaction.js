@@ -149,6 +149,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
   let lastMove = null; // last mousemove event, for refreshing the preview after a Backspace pop
   let drag = null; // transient drag state for SELECT gestures
   let pan = null; // transient pan state { sx, sy, pan0 }
+  let pendingZoomAnchor = null; // {x,y} screen pt to anchor the next zoom after a right-click recenter (FR-023b); cleared on pointer move
   let spaceDown = false; // space held -> left-drag pans
   let clipboard = null; // session copy fragment (FR-111); survives New/Open
   let pasteFrag = null; // fragment armed for placement while tool === "paste"
@@ -1213,6 +1214,10 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       renderer.setViewport(
         centerViewportOn(store.state.viewport, world, rect.width, rect.height),
       );
+      // A browser can't warp the cursor to the new center; instead anchor the
+      // next zoom at the canvas center so the recentered point stays fixed
+      // until the pointer moves (FR-023b).
+      pendingZoomAnchor = { x: rect.width / 2, y: rect.height / 2 };
       return;
     }
     if (store.state.simulating) return; // menu actions mutate (FR-087)
@@ -1272,6 +1277,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
 
   window.addEventListener("mousemove", (e) => {
     lastPointer = e; // remembered so a menu-invoked paste can seat its ghost
+    pendingZoomAnchor = null; // the cursor moved; resume zoom-to-cursor (FR-023b)
     if (store.state.tool === "paste" && pasteFrag) {
       updatePasteGhost(e);
       return;
@@ -1396,7 +1402,8 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     (e) => {
       e.preventDefault();
       const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-      renderer.setViewport(zoomAbout(store.state.viewport, canvasPoint(e), factor));
+      const anchor = pendingZoomAnchor ?? canvasPoint(e);
+      renderer.setViewport(zoomAbout(store.state.viewport, anchor, factor));
     },
     { passive: false },
   );

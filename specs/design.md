@@ -965,7 +965,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | SELECT | drag bend point | `MoveBend` (rubber-band FR-032) | DRAGGING_BEND |
   | SELECT | right-click bend | context menu → `DeleteBend` (FR-033) | SELECT |
   | SELECT | right-click bus | context menu → `SetBusWidth` (FR-038) | SELECT |
-  | SELECT | right-click bare canvas | recenter view on the cursor's world point (FR-023b) | SELECT |
+  | SELECT | right-click bare canvas | recenter view on the cursor's world point + arm pending zoom anchor at canvas center (FR-023b) | SELECT |
   | SELECT | press bare canvas | begin rubber-band; snapshot pre-drag selection (FR-016b/FR-023a) | MARQUEE |
   | SELECT | release bare canvas (no drag) | clear selection (Shift preserves) (FR-023a) | SELECT |
   | MARQUEE | drag | window (drag right) or crossing (drag left) hits; live-update selection (replace, or Shift-add to the snapshot) (FR-016b) | MARQUEE |

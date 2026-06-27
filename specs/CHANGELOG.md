@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-27 — Right-click recenter arms a pending zoom anchor (FR-023b)
+What: After a right-click recenter, a zoom (FR-022) begun before moving the mouse now anchors at the canvas center instead of the stale cursor position, so the recentered point stays fixed under the zoom. A browser cannot warp the OS cursor the way KiCad does, so a pending zoom anchor at canvas center is armed on recenter and cleared on the next pointer movement.
+Why: Previously the recentered point drifted on the first zoom because wheel zoom anchored on the off-center cursor.
+Touches: FR-023b (FR-022); design §interaction state table.
+
 ## 2026-06-26 — Test vectors, combinational v1 (FR-115)
 What: A new **test-vector** feature — an authored table of input patterns + expected outputs, run against the slow simulator with pass/fail scoring. v1 is combinational-only: inputs drive the design's input-switch built-ins (FR-071c), outputs check its indicators (FR-068/FR-071d). Reached from a new **Simulate ▸ Test Vectors…** menu (FR-004a); a large modal table editor (columns auto-derived from the design) with **+Row**, **Run**, **Capture** (fill expected from a sim run), and **Load/Save** of a `.tv` JSON sibling file via the existing server file browser (FR-053). The run executes on a throwaway clone of the design — never mutating, dirtying, or undoing it — settling each row independently like the live combinational simulator (FR-085). Decided with the user: bind to switches/indicators (not ports) for v1; capture-expected included; sibling-file storage; large modal surface. Sequential vectors with a vector-owned deterministic clock are recorded as the forward direction (FR-115e) but not built. This revives the separate-test-vector-format idea OQ-012 had set aside; OQ-012 updated to note vectors (block I/O verification) and memory-as-stimulus (program driving) now coexist.
 Why: Automate verification of combinational logic instead of manually toggling switches and eyeballing indicators.
