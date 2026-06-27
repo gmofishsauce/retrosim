@@ -13,13 +13,13 @@ An incomplete list:
  - 4-state simulator with full support for 3-state busses
  - TTL components mostly described by YAML files using GALasm for behavior (see [doc](specs/galasmManual.txt)).
  - interactive low speed simulator for debugging
- - generates high speed simulator (C program) for any design (TBD).
- - Generate RAMs, ROMs, and 22V10 GAL designs in-app.
- - create YAMLs for additional TTL chips using a Claude skill.
+ - generates higher speed simulator (C program) for any design.
+ - Generate custom RAM, ROM, and 22V10 GAL designs in-app.
+ - if you are a Claude user, create YAMLs for additional TTL chips using a Claude skill.
  
 ## What You Need
 
-To run this program you must be able to pull the repository from Github and build the server using a recent Go compiler. When the server is built correctly it automatically serves the front end, (the schematic editor and low speed simulator, at `localhost:8137`.
+To run this program you must be able to pull the repository from Github and build the server using a recent Go compiler. When the server is built correctly it automatically serves the front end, (schematic editor and low speed "debug" simulator0 at [localhost:8137](localhost:8137).
 
 ### Windows Support (or lack of it)
 
