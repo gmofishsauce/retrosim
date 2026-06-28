@@ -35,6 +35,7 @@ import {
   deleteComponent,
   addWireCmd,
   deleteWireCmd,
+  deleteSegmentCmd,
   insertBendCmd,
   moveBendCmd,
   moveVertexCmd,
@@ -459,6 +460,20 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
   function deleteSelection() {
     const cmds = [];
     const seenPkg = new Set();
+    // Group segment selections (FR-033d) by conductor: a single selected segment
+    // deletes just that leg; several of the same conductor delete the whole
+    // conductor, since each split invalidates the others' indices.
+    const segByCond = new Map();
+    for (const ref of store.state.selection) {
+      if (ref.kind !== "segment") continue;
+      if (!segByCond.has(ref.id)) segByCond.set(ref.id, []);
+      segByCond.get(ref.id).push(ref.segIndex);
+    }
+    for (const [id, idxs] of segByCond) {
+      if (idxs.length === 1) cmds.push(deleteSegmentCmd(id, idxs[0]));
+      else if (store.design.wires.some((w) => w.id === id)) cmds.push(deleteWireCmd(id));
+      else cmds.push(deleteBusCmd(id));
+    }
     for (const ref of store.state.selection) {
       if (ref.kind === "wire") cmds.push(deleteWireCmd(ref.id));
       else if (ref.kind === "bus") cmds.push(deleteBusCmd(ref.id));
@@ -1179,15 +1194,17 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     }
     const seg = hitSegment(store.design, world, segTol());
     if (seg) {
-      select({ kind: "wire", id: seg.wire.id }, e.shiftKey);
-      // A plain click selects; a drag inserts a bend here (decided on move).
+      // A plain click selects just this segment (FR-031); a drag inserts a bend
+      // here instead (decided on move).
+      select({ kind: "segment", id: seg.wire.id, segIndex: seg.segIndex }, e.shiftKey);
       drag = { type: "segment", wireId: seg.wire.id, segIndex: seg.segIndex, tempIndex: -1, moved: false };
       return;
     }
     const busSeg = hitBusSegment(store.design, world, segTol());
     if (busSeg) {
-      select({ kind: "bus", id: busSeg.bus.id }, e.shiftKey);
-      // Same as wires (FR-039): a plain click selects; a drag inserts a bend.
+      // Same as wires (FR-039/FR-031): a plain click selects the segment; a drag
+      // inserts a bend.
+      select({ kind: "segment", id: busSeg.bus.id, segIndex: busSeg.segIndex }, e.shiftKey);
       drag = { type: "segment", wireId: busSeg.bus.id, segIndex: busSeg.segIndex, tempIndex: -1, moved: false };
       return;
     }
@@ -1279,12 +1296,23 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       });
     } else if (seg) {
       items.push({
+        label: "Delete segment",
+        danger: true,
+        onClick: () => store.dispatch(deleteSegmentCmd(seg.wire.id, seg.segIndex)),
+      });
+      items.push({
         label: "Delete wire",
         danger: true,
         onClick: () => store.dispatch(deleteWireCmd(seg.wire.id)),
       });
     } else if (busSeg) {
       const bus = busSeg.bus;
+      items.push({
+        label: "Delete segment",
+        danger: true,
+        onClick: () => store.dispatch(deleteSegmentCmd(bus.id, busSeg.segIndex)),
+      });
+      items.push({ separator: true });
       items.push({
         label: "Set width…",
         onClick: async () => {
@@ -1688,13 +1716,16 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     } else if (
       (e.key === "+" || e.key === "=" || e.key === "-") &&
       sel.length === 1 &&
-      sel[0].kind === "bus"
+      (sel[0].kind === "bus" || sel[0].kind === "segment")
     ) {
       // Stopgap width control until the right-click context menu (FR-038, S20).
-      e.preventDefault();
+      // A bus click now selects a segment (FR-031), so resolve its parent bus.
       const bus = store.design.buses.find((b) => b.id === sel[0].id);
-      const delta = e.key === "-" ? -1 : 1;
-      store.dispatch(setBusWidthCmd(sel[0].id, Math.max(1, bus.width + delta)));
+      if (bus) {
+        e.preventDefault();
+        const delta = e.key === "-" ? -1 : 1;
+        store.dispatch(setBusWidthCmd(bus.id, Math.max(1, bus.width + delta)));
+      }
     }
   });
 

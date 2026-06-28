@@ -8,6 +8,7 @@ import {
   packageSiblings,
   addWire,
   deleteWire,
+  deleteSegment,
   deleteInstance,
   branchWire,
   insertBend,
@@ -658,6 +659,14 @@ export function addBusCmd(specA, specB, width, snaps = [], bends = []) {
 export function deleteBusCmd(busId) {
   return snapshotCommand(`Delete bus ${busId}`, (design) =>
     deleteBus(design, busId),
+  );
+}
+
+// deleteSegmentCmd removes a single segment of a wire or bus (FR-033d), splitting
+// the conductor and running the connectivity cleanup.
+export function deleteSegmentCmd(conductorId, segIndex) {
+  return snapshotCommand("Delete segment", (design) =>
+    deleteSegment(design, conductorId, segIndex),
   );
 }
 

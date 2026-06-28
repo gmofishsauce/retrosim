@@ -1001,6 +1001,50 @@ export function deleteWire(design, wireId) {
   cleanup(design);
 }
 
+// deleteSegment removes a single path edge (segment `segIndex`) of a wire or bus
+// (FR-033d), cutting the conductor into its leading and trailing parts. A cut bend
+// point becomes a dangling free endpoint (FR-029); a cut node is kept. A part with
+// fewer than two points is dropped, leaving its lone endpoint unconnected. The two
+// parts inherit the conductor's width/bit names; each groupConnection (FR-042)
+// stays with the part that keeps its vertex. cleanup() then demotes orphaned
+// junctions and prunes fully-disconnected conductors (FR-030).
+export function deleteSegment(design, conductorId, segIndex) {
+  const conductor = conductorById(design, conductorId);
+  if (!conductor) throw new Error(`no such conductor ${conductorId}`);
+  const path = conductor.path;
+  if (segIndex < 0 || segIndex >= path.length - 1) {
+    throw new Error(`bad segment index ${segIndex}`);
+  }
+  const isBus = design.buses.includes(conductor);
+
+  // The two cut points (the deleted edge's ends): a bend becomes a new free
+  // endpoint, a node is kept as is.
+  const cutPoint = (p) =>
+    p.t === "bend"
+      ? { t: "node", v: addVertex(design, { kind: "free", x: p.x, y: p.y }).id }
+      : p;
+  const lead = [...path.slice(0, segIndex), cutPoint(path[segIndex])];
+  const trail = [cutPoint(path[segIndex + 1]), ...path.slice(segIndex + 2)];
+
+  removeConductor(design, conductor);
+  for (const part of [lead, trail]) {
+    if (part.length < 2) continue; // a lone endpoint is simply left unconnected
+    if (isBus) {
+      const ids = new Set(part.filter((p) => p.t === "node").map((p) => p.v));
+      design.buses.push({
+        id: "b" + design.nextBusId++,
+        path: part,
+        width: conductor.width,
+        groupConnections: (conductor.groupConnections ?? []).filter((gc) => ids.has(gc.vertex)),
+        bitNames: conductor.bitNames,
+      });
+    } else {
+      design.wires.push({ id: "w" + design.nextWireId++, path: part });
+    }
+  }
+  cleanup(design);
+}
+
 // deleteInstance removes a component (FR-018a). Its pin vertices are converted to
 // free vertices at their current world position so connected wires remain with a
 // dangling end; cleanup then prunes any wire left fully disconnected (FR-030).

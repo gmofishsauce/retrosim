@@ -119,18 +119,22 @@ export function initProperties({ container, store }) {
     const sel = store.state.selection;
     const only = sel.length === 1 ? sel[0] : null;
 
-    // A single selected wire or bus gets a read-only synthetic endpoint sheet
+    // A single selected wire or bus — or a single selected segment, which shows
+    // its parent conductor (FR-031) — gets a read-only synthetic endpoint sheet
     // (FR-020d), generated dynamically from current design state.
-    if (only && (only.kind === "wire" || only.kind === "bus")) {
+    if (only && (only.kind === "wire" || only.kind === "bus" || only.kind === "segment")) {
       const design = store.design;
-      const list = only.kind === "wire" ? design.wires : design.buses;
-      const cond = list.find((c) => c.id === only.id);
+      const isWire =
+        only.kind === "segment"
+          ? design.wires.some((c) => c.id === only.id)
+          : only.kind === "wire";
+      const cond = (isWire ? design.wires : design.buses).find((c) => c.id === only.id);
       if (!cond) {
         container.appendChild(el("div", "prop-empty", "No component selected"));
         return;
       }
       const nodes = cond.path.filter((p) => p.t === "node");
-      container.appendChild(el("div", "prop-title", only.kind === "wire" ? "Wire" : "Bus"));
+      container.appendChild(el("div", "prop-title", isWire ? "Wire" : "Bus"));
       container.append(
         infoRow("From", describeEndpoint(design, nodes[0].v)),
         infoRow("To", describeEndpoint(design, nodes[nodes.length - 1].v)),

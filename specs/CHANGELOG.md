@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-28 — Segment-granular wire/bus selection and single-leg delete (FR-033d)
+What: A plain click on a wire/bus segment now selects just that segment (KiCad-style), highlighted on canvas, instead of the whole conductor (FR-031 reworked). A new deleteSegment op (FR-033d) deletes the selected leg via Delete or a "Delete segment" context-menu item: it cuts the path at that edge, promotes a cut bend to a dangling free endpoint, drops a degenerate half, and runs cleanup — interior cut → two dangling wires, end cut → one shorter wire plus an unconnected endpoint. Generic over wires and buses (parts inherit width/bitNames; groupConnections follow their endpoint). Whole-conductor delete stays available via "Delete wire/bus" and rubber-band select. Drag-to-insert-bend (FR-031) and rotate/move (components-only) are unchanged.
+Why: Familiar KiCad selection feel and the ability to delete a single leg without redrawing the whole wire.
+Touches: FR-031 (reworked), FR-033d (new); FR-033b (context menu), FR-020d (properties), FR-016b (marquee scope); design §6.6 (deleteSegment), §6.9 (segment select/delete FSM), §6.11 (context menu).
+
 ## 2026-06-28 — Beginning/completing a wire/bus on a dangling end joins them into one (FR-034c)
 What: Beginning or terminating a new wire (or bus) on an existing dangling endpoint used to create a junction (black connection dot) because the start/completion paths only saw the host segment and treated the click as a branch. Now danglingEndAt detects a free, non-snapped end of the same conductor type (same width for buses) on both the start and completion paths and returns a vertex source/target, and joinFreeEnd splices the two conductors into one continuous conductor — the shared point becomes a bend (pruned if collinear, FR-033c), no junction, no dangling mark. Width-mismatched bus joins are rejected (FR-039a); a wire on a dangling bus end still taps a bit (FR-043b). Scoped to the add commands, not global cleanup.
 Why: A dangling-end termination should merge wires, not stamp a connection dot.

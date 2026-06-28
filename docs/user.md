@@ -248,9 +248,12 @@ This is the heart of the editor and follows KiCad's conventions.
 
 **Clicking**
 
-- **Left-click an object** selects it, replacing any current selection.
+- **Left-click an object** selects it, replacing any current selection. Clicking a
+  **wire or bus** selects just the **single segment** under the cursor (the stretch
+  between two bends/endpoints), KiCad-style — not the whole conductor — and that
+  segment is highlighted. (To select a whole wire/bus, rubber-band over it.)
 - **Shift + left-click** toggles an object in or out of the selection, so you can
-  build up a set of components, wires, and buses of any mix.
+  build up a set of components, wires, buses, and segments of any mix.
 - **Left-click empty canvas** clears the selection (Shift+click preserves it).
 
 **Rubber-band (box) selection** — left-drag on empty canvas:
@@ -277,7 +280,12 @@ This is the heart of the editor and follows KiCad's conventions.
   to the selection — so the sub-circuit keeps its shape. A lone component rotates
   in place about its own origin; a multi-component selection turns about the
   centre of its bounding box.
-- **Delete:** press **Delete** or **Backspace** to remove every selected object.
+- **Delete:** press **Delete** or **Backspace** to remove every selected object. If
+  the selection is a single wire/bus **segment**, only that leg is deleted: cutting
+  an interior leg leaves two wires each with a dangling end, and cutting an end leg
+  leaves a shorter wire plus a now-unconnected pin. (Select several legs of one
+  conductor and delete to remove the whole conductor.) A dangling end shows as a
+  small red square; you can later re-join two ends by drawing a wire onto one.
 - **Copy / Paste:** **Copy** (Edit ▸ Copy or **Ctrl/Cmd+C**) puts the selected
   components — and the wiring *interior* to them (the same rule as Move) — onto a
   clipboard. **Paste** (Edit ▸ Paste or **Ctrl/Cmd+V**) drops a copy: a translucent
@@ -335,6 +343,8 @@ Wires are single-bit nets, drawn as thin black lines.
   two wires into one continuous wire — no junction dot appears and the red square
   goes away. Buses join the same way when their widths match. (Ending a wire on a
   dangling **bus** end still taps a single bit instead.)
+- **Right-click a wire** for **Delete segment** (just the leg under the cursor) and
+  **Delete wire** (the whole conductor).
 - **Moving a junction:** in Select mode, **drag a junction dot** to a new grid
   intersection. Because a junction is one shared connection point, every wire and
   bus that meets there follows it and the branch stays connected — the move
@@ -357,9 +367,9 @@ with a `/N` width annotation.
   A bus is completed by clicking a pin group, an existing bus/wire, or a component
   body — **not** by clicking empty space, which adds a waypoint. (A bus may still
   *start* in empty space.)
-- **Right-click a bus** for: **Set width…**, **Edit bit names…**, and
-  **Delete bus**. (With exactly one bus selected you can also press `+` / `-` to
-  change its width.)
+- **Right-click a bus** for: **Delete segment** (just the leg under the cursor),
+  **Set width…**, **Edit bit names…**, and **Delete bus**. (With one bus segment
+  selected you can also press `+` / `-` to change the bus's width.)
 - **Snap-connect to a pin group:** the editor connects a bus to a **pin group** —
   a set of related pins (e.g. the 8 `D` inputs of a `74574`, or the 8 bits of an
   8-wide port/indicator) — wiring each bus bit to the corresponding pin in declared
@@ -674,7 +684,7 @@ clear message until then, without losing your work.
 
 | Action | Result |
 |---|---|
-| Left-click object | Select it (replaces selection) |
+| Left-click object | Select it (replaces selection); on a wire/bus selects one segment |
 | Shift + left-click object | Toggle it in the selection |
 | Left-click empty | Clear selection (Shift preserves) |
 | Left-drag empty → right | Window select (enclosed only) |

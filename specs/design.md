@@ -189,9 +189,12 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-030** — A wire/bus with no connected endpoints is auto-removed.
 
 **Wire Routing (Bend Points)**
-- **FR-031** — In select mode, a plain click on a wire segment selects the wire;
-  a press-and-drag beginning on a segment inserts a bend point at the nearest
-  grid intersection, splitting the segment in two, and drags it until release.
+- **FR-031** — In select mode, a plain click on a wire/bus segment selects **that
+  segment** (a `{kind:"segment", id, segIndex}` ref, highlighted by `drawWires`/
+  `drawBuses`, §6.8), not the whole conductor; a press-and-drag beginning on a
+  segment instead inserts a bend point at the nearest grid intersection, splitting
+  the segment in two, and drags it until release. Whole-conductor selection is via
+  the rubber-band (FR-016b); single-leg delete is FR-033d.
 - **FR-032** — Drag a bend point to any grid intersection (mouse held down); the
   two adjoining segments rubber-band continuously.
 - **FR-032a** — Drag a junction point the same way. A junction is a shared
@@ -206,6 +209,13 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-033** — Right-click a bend point → "Delete bend point"; the two adjoining
   segments merge into one straight segment.
 - **FR-033a** — In select mode, delete an entire wire or bus.
+- **FR-033d** — Delete a single selected **segment** (FR-031): the Delete key on a
+  `segment` selection, or the context menu's "Delete segment" (§6.11), dispatches
+  `deleteSegmentCmd(id, segIndex)` → `deleteSegment` (§6.6), which cuts the path at
+  that edge, promotes any cut bend to a `free`-vertex endpoint, drops a degenerate
+  (<2-point) half, and runs `cleanup`. Generic over wire/bus (the two parts inherit
+  width/bitNames; each `groupConnection` follows the part keeping its vertex). One
+  undoable action.
 
 **Wire Branching and Connectivity**
 - **FR-034** — While the Wire tool is active, clicking an existing wire segment
@@ -739,6 +749,10 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     pruning it if collinear per FR-033c; called by `addWire`/`addBus` commands for a
     `vertex` endpoint), `deleteWire` (decrements junction-vertex ref counts,
     demoting to `free`/deleting per §3.3 G2; prunes all-`free` wires per FR-030),
+    `deleteSegment` (FR-033d: cut a conductor at one path edge into two parts,
+    promoting a cut `bend` to a `free`-vertex endpoint and keeping a cut `node` as
+    is; drop a <2-point part; the two parts inherit width/bitNames and each
+    `groupConnection` follows the part keeping its vertex; then `cleanup`),
     `deleteInstance` (converts the instance's `pin` vertices to `free`, then runs
     the FR-030 sweep; for a subunit instance it expands to **all** siblings
     sharing the package U-number — FR-018b — as one operation, the confirmation
@@ -979,9 +993,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | SELECT | click component | select it, replacing the selection (FR-016) | SELECT |
   | SELECT | shift-click object | toggle it in the selection (component/wire/bus, FR-016a) | SELECT |
   | SELECT | drag selected component | `MoveComponent` for each selected component (snap, stretch connected segs FR-018) + `TranslateWiring` for the interior wiring of the moving set (FR-018c), as one `composite` | SELECT |
-  | SELECT | press Delete on selection | `DeleteComponent`/`DeleteWire`/`DeleteBus` for every selected object (FR-018a/FR-033a/FR-016a) | SELECT |
+  | SELECT | press Delete on selection | `DeleteComponent`/`DeleteWire`/`DeleteBus`/`DeleteSegment` per selected ref kind (FR-018a/FR-033a/FR-033d/FR-016a) | SELECT |
   | SELECT | press `r` on selection | one `RotateSelection` turning every selected component **and** the interior bends/junctions rigidly about a single grid-snapped pivot (FR-019/FR-016a) | SELECT |
-  | SELECT | click wire/bus segment | select it, replacing the selection (FR-031) | SELECT |
+  | SELECT | click wire/bus segment | select that **segment** (`{kind:"segment", id, segIndex}`), replacing the selection (FR-031) | SELECT |
   | SELECT | drag from wire/bus segment | `InsertBend` at nearest grid pt, the new bend dragging until release (FR-031) | DRAGGING_BEND |
   | SELECT | drag bend point | `MoveBend` (rubber-band FR-032) | DRAGGING_BEND |
   | SELECT | right-click bend | context menu → `DeleteBend` (FR-033) | SELECT |
@@ -1546,10 +1560,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   other modules to call; status text
   is transient UI, not design state, so it does not flow through the store or
   the undo stack.
-- **Context menu (`contextmenu.js`)** — Satisfies FR-033, FR-033b, FR-038, FR-037b,
+- **Context menu (`contextmenu.js`)** — Satisfies FR-033, FR-033b, FR-033d, FR-038, FR-037b,
   FR-033a, FR-018a. Right-click hit-tests the cursor (bend → wire → bus → component
   priority) and surfaces the matching actions: "Delete bend point" (on a bend);
-  "Delete wire" (on a wire); "Set width…", "Edit bit names…", and "Delete bus" (on
+  "Delete segment" (the segment under the cursor, FR-033d) and "Delete wire" (on a wire);
+  "Delete segment", "Set width…", "Edit bit names…", and "Delete bus" (on
   a bus); "Delete component" (on a component). Dismissed by choosing an item,
   Escape, or an outside click. `interaction.js` builds the item list and dispatches
   the commands; `contextmenu.js` only renders and positions the menu. Width and

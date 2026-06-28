@@ -8,9 +8,14 @@
 export const UNDO_CAP = 100;
 
 // sameRef compares two selection refs by kind and identity (refdes for
-// components, id for wires/buses) — FR-016a.
+// components, id for wires/buses, id+segIndex for segments) — FR-016a/FR-031.
 export function sameRef(a, b) {
-  return a.kind === b.kind && a.refdes === b.refdes && a.id === b.id;
+  return (
+    a.kind === b.kind &&
+    a.refdes === b.refdes &&
+    a.id === b.id &&
+    a.segIndex === b.segIndex
+  );
 }
 
 function sameRefIn(list, ref) {

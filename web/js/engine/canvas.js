@@ -279,6 +279,22 @@ function drawWires(ctx, design, vp, selection, conflicts) {
     ctx.lineWidth = selected ? 2.5 : conflicted ? 2 : 1;
     ctx.strokeStyle = selected ? "#4a90d9" : conflicted ? CONFLICT_COLOR : "#000";
     ctx.stroke();
+    highlightSelectedSegments(ctx, pts, selection, w.id, 2.5);
+  }
+}
+
+// highlightSelectedSegments overstrokes each selected single segment (FR-031) of a
+// conductor in the selection color, so a clicked leg reads as highlighted.
+function highlightSelectedSegments(ctx, pts, selection, id, width) {
+  for (const s of selection) {
+    if (s.kind !== "segment" || s.id !== id) continue;
+    if (s.segIndex < 0 || s.segIndex >= pts.length - 1) continue;
+    ctx.beginPath();
+    ctx.moveTo(pts[s.segIndex].x, pts[s.segIndex].y);
+    ctx.lineTo(pts[s.segIndex + 1].x, pts[s.segIndex + 1].y);
+    ctx.lineWidth = width;
+    ctx.strokeStyle = "#4a90d9";
+    ctx.stroke();
   }
 }
 
@@ -301,6 +317,7 @@ function drawBuses(ctx, design, vp, selection, conflicts) {
     ctx.lineWidth = selected ? 5 : 3;
     ctx.strokeStyle = selected ? "#4a90d9" : conflicted ? CONFLICT_COLOR : "#1565c0";
     ctx.stroke();
+    highlightSelectedSegments(ctx, pts, selection, b.id, 5);
 
     // Width annotation: a slash tick plus the bit count, at the first segment's
     // midpoint.
