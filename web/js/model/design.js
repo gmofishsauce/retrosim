@@ -2,7 +2,7 @@
 // Mutations are normally driven by Command objects (store.js), but the low-level
 // operations live here so they are unit-testable in isolation.
 
-import { rotateOffset } from "../geometry.js";
+import { rotateOffset, isRedundantBend } from "../geometry.js";
 import {
   gateInputCount,
   pinSlot,
@@ -721,6 +721,122 @@ function conductorById(design, id) {
     design.buses.find((b) => b.id === id) ??
     null
   );
+}
+
+// groupSnappedVertices returns the set of vertex ids that are bus group-snap
+// endpoints (FR-042): `free` in kind but electrically connected, so they are not
+// dangling and never join-merge.
+function groupSnappedVertices(design) {
+  const s = new Set();
+  for (const b of design.buses) {
+    for (const gc of b.groupConnections ?? []) s.add(gc.vertex);
+  }
+  return s;
+}
+
+// endpointRefs returns every conductor endpoint (first/last path node) that
+// references a vertex: [{conductor, index, isBus}].
+function endpointRefs(design, vertexId) {
+  const out = [];
+  for (const c of allConductors(design)) {
+    const last = c.path.length - 1;
+    for (const i of last === 0 ? [0] : [0, last]) {
+      const p = c.path[i];
+      if (p && p.t === "node" && p.v === vertexId) {
+        out.push({ conductor: c, index: i, isBus: design.buses.includes(c) });
+      }
+    }
+  }
+  return out;
+}
+
+// danglingEndAt returns the dangling endpoint a point lands on (FR-034c): a free,
+// non-group-snapped vertex within `tol` (world units) that is the lone endpoint of
+// exactly one conductor, with that conductor, whether it is a bus, and its width.
+// Null when no such end is near. The wire/bus tools use this to join onto a
+// dangling end instead of branching a junction (FR-034b).
+export function danglingEndAt(design, pt, tol = 0.5) {
+  const snapped = groupSnappedVertices(design);
+  let best = null;
+  let bestD2 = tol * tol;
+  for (const v of design.vertices) {
+    if (v.kind !== "free" || snapped.has(v.id)) continue;
+    const dx = v.x - pt.x;
+    const dy = v.y - pt.y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 > bestD2) continue;
+    const refs = endpointRefs(design, v.id);
+    if (refs.length !== 1) continue; // a dangling end belongs to exactly one conductor
+    best = {
+      vertex: v,
+      conductor: refs[0].conductor,
+      isBus: refs[0].isBus,
+      width: refs[0].isBus ? refs[0].conductor.width : 1,
+    };
+    bestD2 = d2;
+  }
+  return best;
+}
+
+// pathPointCoord resolves a path point's world coordinate (bend carries its own;
+// a node defers to its vertex).
+function pathPointCoord(design, p) {
+  return p.t === "bend" ? { x: p.x, y: p.y } : vertexWorld(design, getVertex(design, p.v));
+}
+
+// prunePath drops interior bend points that do not bend the conductor (FR-033c),
+// keeping every node (ends/junctions) and the path endpoints.
+function prunePath(design, conductor) {
+  const path = conductor.path;
+  if (path.length < 3) return;
+  const out = [path[0]];
+  for (let i = 1; i < path.length - 1; i++) {
+    const prev = pathPointCoord(design, out[out.length - 1]);
+    const cur = pathPointCoord(design, path[i]);
+    const next = pathPointCoord(design, path[i + 1]);
+    if (path[i].t === "bend" && isRedundantBend(prev, cur, next)) continue;
+    out.push(path[i]);
+  }
+  out.push(path[path.length - 1]);
+  conductor.path = out;
+}
+
+// joinFreeEnd merges the two conductors meeting at a dangling free vertex into one
+// continuous conductor (FR-034c). No-op unless vertexId is a free, non-group-
+// snapped vertex that is the endpoint of exactly two distinct conductors of the
+// same type (and, for buses, equal width, FR-039a). The shared point becomes an
+// interior bend of the joined conductor, pruned if collinear (FR-033c); the now-
+// unused vertex is removed, so no junction and no dangling mark remain.
+export function joinFreeEnd(design, vertexId) {
+  const v = getVertex(design, vertexId);
+  if (!v || v.kind !== "free" || groupSnappedVertices(design).has(vertexId)) return;
+  const refs = endpointRefs(design, vertexId);
+  if (refs.length !== 2) return;
+  const [r1, r2] = refs;
+  if (r1.conductor === r2.conductor) return; // a self-loop on one conductor
+  if (r1.isBus !== r2.isBus) return; // type mismatch
+  if (r1.isBus && r1.conductor.width !== r2.conductor.width) return; // FR-039a
+
+  // Orient both paths so the shared vertex sits at keep's tail and drop's head,
+  // then splice: keep (minus shared node) + bend at the shared point + drop
+  // (minus shared node).
+  const keep = r1.conductor;
+  const drop = r2.conductor;
+  const keepPath = r1.index === 0 ? [...keep.path].reverse() : [...keep.path];
+  const dropPath = r2.index === 0 ? [...drop.path] : [...drop.path].reverse();
+  keep.path = [
+    ...keepPath.slice(0, -1),
+    { t: "bend", x: v.x, y: v.y },
+    ...dropPath.slice(1),
+  ];
+  // Carry the dropped bus's group connections onto the survivor (their vertices
+  // are at the far ends and remain valid).
+  if (r1.isBus && drop.groupConnections?.length) {
+    keep.groupConnections = [...(keep.groupConnections ?? []), ...drop.groupConnections];
+  }
+  removeConductor(design, drop);
+  removeVertexById(design, vertexId);
+  prunePath(design, keep);
 }
 
 // rigidWiring returns the wiring interior to a group move (FR-018c): the bend

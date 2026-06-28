@@ -27,6 +27,7 @@ import {
   shiftWiring,
   rigidWiring,
   typeIdentity,
+  joinFreeEnd,
 } from "./model/design.js";
 import { addSubDesignInstance } from "./model/subdesign.js";
 import { pasteFragment } from "./model/clipboard.js";
@@ -548,6 +549,8 @@ export function addWireCmd(specA, specB, bends = []) {
     const a = resolveSpec(design, specA);
     const b = resolveSpec(design, specB);
     addWire(design, a, b, bends);
+    // Completing on a dangling end joins the two wires into one (FR-034c).
+    for (const s of [a, b]) if (s.kind === "vertex") joinFreeEnd(design, s.id);
   });
 }
 
@@ -646,6 +649,8 @@ export function addBusCmd(specA, specB, width, snaps = [], bends = []) {
       const vid = s.end === "a" ? bus.path[0].v : bus.path[last].v;
       snapBusGroup(design, bus.id, vid, s.refdes, s.group);
     }
+    // Completing on a dangling end joins the two buses into one (FR-034c).
+    for (const s of [a, b]) if (s.kind === "vertex") joinFreeEnd(design, s.id);
   });
 }
 

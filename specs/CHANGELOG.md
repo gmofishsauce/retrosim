@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-28 — Beginning/completing a wire/bus on a dangling end joins them into one (FR-034c)
+What: Beginning or terminating a new wire (or bus) on an existing dangling endpoint used to create a junction (black connection dot) because the start/completion paths only saw the host segment and treated the click as a branch. Now danglingEndAt detects a free, non-snapped end of the same conductor type (same width for buses) on both the start and completion paths and returns a vertex source/target, and joinFreeEnd splices the two conductors into one continuous conductor — the shared point becomes a bend (pruned if collinear, FR-033c), no junction, no dangling mark. Width-mismatched bus joins are rejected (FR-039a); a wire on a dangling bus end still taps a bit (FR-043b). Scoped to the add commands, not global cleanup.
+Why: A dangling-end termination should merge wires, not stamp a connection dot.
+Touches: FR-034c (new); FR-027e (completion targets); design §6.6 (danglingEndAt/joinFreeEnd), §6.9 (join-on-dangling-end).
+
 ## 2026-06-28 — Fit to Screen command in the View menu (FR-022a)
 What: Added a View-menu "Fit to Screen" command that sets zoom and pan together so the whole design (components, wires, buses) fits the canvas with a small margin, centered; clamped to the zoom range and a no-op on an empty design. No keyboard accelerator (per user). Available while simulating, like the other zoom items.
 Touches: FR-022a (new); FR-004a, FR-004b (View menu listing / accelerators); design §6.11.

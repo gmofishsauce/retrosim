@@ -62,6 +62,7 @@ import {
   packageSiblings,
   rigidWiring,
   getVertex,
+  danglingEndAt,
   busGroupBrace,
   typeIdentity,
   NOTE_PAD,
@@ -710,6 +711,10 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     const world = worldOf(e);
     const ph = hitPin(store.design, world);
     if (ph) return { kind: "pin", refdes: ph.refdes, pin: ph.pin };
+    // A dangling wire end joins instead of branching a junction (FR-034c); checked
+    // before the segment hit, which would otherwise see the host wire's last leg.
+    const de = danglingEndAt(store.design, world, bendTol());
+    if (de && !de.isBus) return { kind: "vertex", id: de.vertex.id, x: de.vertex.x, y: de.vertex.y };
     const sh = hitSegment(store.design, world, segTol());
     if (sh) {
       const g = gridOf(e);
@@ -767,6 +772,13 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
   // bus segment > nearby group > component body > empty (§6.9).
   function busTargetAt(e, width) {
     const world = worldOf(e);
+    // A dangling bus end of matching width joins instead of branching (FR-034c);
+    // checked before the segment hit. A width mismatch falls through to the branch
+    // path, where the FR-039a check rejects it. (width == null = first endpoint.)
+    const de = danglingEndAt(store.design, world, bendTol());
+    if (de && de.isBus && (width == null || de.width === width)) {
+      return { kind: "vertex", id: de.vertex.id, x: de.vertex.x, y: de.vertex.y, busWidth: de.width };
+    }
     const bh = hitBusSegment(store.design, world, segTol());
     const g = gridOf(e);
     if (bh) {
@@ -1015,6 +1027,13 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
           startBreakout(bh, e); // async: pick bit, then await the destination click
           return;
         }
+        // Starting on a dangling wire end extends/joins it rather than branching a
+        // junction (FR-034c), mirroring the completion path (wireTargetAt).
+        const de = danglingEndAt(store.design, world, bendTol());
+        if (de && !de.isBus) {
+          wireSource = { kind: "vertex", id: de.vertex.id, x: de.vertex.x, y: de.vertex.y };
+          return;
+        }
         const sh = hitSegment(store.design, world, segTol());
         if (sh) {
           const g = gridOf(e);
@@ -1094,10 +1113,14 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
         wireWaypoints.push({ x: target.x, y: target.y });
         return;
       }
-      // Reject joining two buses of unequal width (FR-039a).
+      // Reject joining two buses of unequal width (FR-039a) — whether the target
+      // is a branch onto another bus or a join onto a dangling bus end (FR-034c).
+      const joinsBus = (s) => s.kind === "branch" || s.kind === "vertex";
       if (
-        wireSource.kind === "branch" &&
-        target.kind === "branch" &&
+        joinsBus(wireSource) &&
+        joinsBus(target) &&
+        wireSource.busWidth != null &&
+        target.busWidth != null &&
         wireSource.busWidth !== target.busWidth
       ) {
         showToast(

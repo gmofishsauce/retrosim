@@ -731,7 +731,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     branch point lands on an interior `bend` path-point, that point flips to a
     `node` referencing the new vertex), `breakoutBit` (FR-043a: create a
     `junction` vertex on a bus with `bit` set to the chosen lane, and start a
-    single-bit wire from it), `deleteWire` (decrements junction-vertex ref counts,
+    single-bit wire from it), `danglingEndAt` (FR-034c: find a free, non-snapped
+    endpoint vertex within tol of a point that is the end of exactly one conductor,
+    returning it with its conductor and width so the tool can target it),
+    `joinFreeEnd` (FR-034c: splice the two distinct same-type/equal-width
+    conductors meeting at a free vertex into one, the shared point becoming a bend,
+    pruning it if collinear per FR-033c; called by `addWire`/`addBus` commands for a
+    `vertex` endpoint), `deleteWire` (decrements junction-vertex ref counts,
     demoting to `free`/deleting per §3.3 G2; prunes all-`free` wires per FR-030),
     `deleteInstance` (converts the instance's `pin` vertices to `free`, then runs
     the FR-030 sweep; for a subunit instance it expands to **all** siblings
@@ -1059,6 +1065,22 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   conductor completes only on a real target; a bus can no longer end at a free
   point on an empty click (it may still *start* free). The commands and save
   format are unchanged — waypoints are just additional interior bends.
+- **Join on a dangling end (FR-034c):** before the segment/branch check, both the
+  start and completion paths — the wire-tool **start** handler, and the completion
+  resolvers `wireTargetAt`/`busTargetAt` (the bus start runs through `busTargetAt`
+  too) — call `danglingEndAt(design, pt, tol)` (§6.6) to detect a click on an
+  existing **free, unconnected** endpoint of the **same conductor type** (and, for
+  the bus tool, the same width); a hit returns a `kind:"vertex"` source/target
+  carrying that vertex id (and the bus width), so no `junction` is created. The bus completion handler rejects a width-mismatched
+  vertex target with the FR-039a toast, mirroring its bus↔bus branch check. After
+  `addWire`/`addBus`, the command calls `joinFreeEnd(design, vertexId)` (§6.6) for
+  any `vertex`-kind endpoint: when that vertex is now a free, non-snapped end
+  shared by exactly two **distinct same-type** conductors (equal width for buses),
+  it splices their paths into one — the shared point becoming an interior bend —
+  removes the vertex, and prunes the join bend if collinear (FR-033c). The result
+  is one conductor with no junction and no dangling mark. (Scoped to the
+  completion commands, not global `cleanup`, so deleting a component that leaves
+  two wires on a shared pin does not silently merge them.)
   Breakout taps (FR-043a) are excluded: they keep the straight preview and the
   two-point commit (`breakoutBitCmd` carries no bends), so their preview never
   promises a route the commit won't produce. (Reworked 2026-06-12; supersedes

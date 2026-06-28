@@ -95,7 +95,7 @@ The window has four regions plus a status bar:
 
 - **Menu bar** (top): the **File** menu (`New`, `Open`, `Save`, `Save As`,
   `Refresh Types`), the **Edit** menu (`Undo`, `Redo`, `Copy`, `Paste`), and the **View** menu
-  (`Zoom In`, `Zoom Out`), followed by the tool buttons `Select`, `Wire`, `Bus`
+  (`Zoom In`, `Zoom Out`, `Fit to Screen`), followed by the tool buttons `Select`, `Wire`, `Bus`
   and the `Run` button. Click a menu to open it; click an item to run it, or
   press `Esc` / click elsewhere to dismiss it. The current design name and tool
   mode are shown next to the buttons; an asterisk marks unsaved changes.
@@ -218,6 +218,8 @@ restart).
 
 - **Zoom:** mouse wheel (zooms toward the cursor), or the **View** menu's
   `Zoom In` / `Zoom Out` items (zoom about the canvas center).
+- **Fit to Screen:** the **View** menu's `Fit to Screen` item sizes and centers
+  the view so the whole design fits the canvas.
 - **Pan:** drag with the **middle** mouse button, or hold **Space** and drag with
   the left button.
 - **Recenter:** **right-click on empty canvas** — the clicked point becomes the
@@ -328,6 +330,11 @@ Wires are single-bit nets, drawn as thin black lines.
 - **Branching:** with the Wire tool active, clicking an existing wire segment
   starts a new branch from that point (an electrical junction, shown as a black
   dot). A single pin may also drive several wires (fan-out).
+- **Joining a dangling end:** starting or ending a wire **on an existing dangling
+  end** (the small red square left when, say, a component was deleted) joins the
+  two wires into one continuous wire — no junction dot appears and the red square
+  goes away. Buses join the same way when their widths match. (Ending a wire on a
+  dangling **bus** end still taps a single bit instead.)
 - **Moving a junction:** in Select mode, **drag a junction dot** to a new grid
   intersection. Because a junction is one shared connection point, every wire and
   bus that meets there follows it and the branch stays connected — the move
