@@ -1297,12 +1297,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Dependencies:** model.
 
 ### 6.11 JS: chrome widgets (`web/js/chrome/*.js`)
-- **Menu/tool bar (`toolbar.js`)** — Satisfies FR-004a, FR-004b, FR-026, FR-035, FR-022,
+- **Menu/tool bar (`toolbar.js`)** — Satisfies FR-004a, FR-004b, FR-026, FR-035, FR-022, FR-022a,
   FR-023, FR-024, FR-044, FR-046, FR-049, FR-052, FR-076, FR-087, FR-088. A
   single horizontal bar with pull-down menus on the left and always-visible
   buttons on the right (FR-004a). **Menus:** **File** — New, Open, Save, Save As,
   Refresh Types; **Edit** — Undo, Redo, Copy, Paste (FR-111/FR-112, §6.15);
-  **View** — Zoom In, Zoom Out. **Buttons:**
+  **View** — Zoom In, Zoom Out, Fit to Screen (FR-022a, `interaction.fitToScreen`). **Buttons:**
   Select, Wire, Bus (modal tools), then **Run/Stop**. (Pan has no control; it is
   space-drag/middle-drag or right-click-to-recenter on bare canvas —
   FR-023a/FR-023b; left-drag on bare canvas is rubber-band select, FR-016b.)
@@ -1332,8 +1332,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     `Ctrl/Cmd+-`→`zoomBy(0.8)`, each `preventDefault`-ing the browser default. Save
     and the zoom keys sit *above* the simulation-lock early-return (live while
     simulating, matching the menu, FR-087); Open sits *below* it (disabled while
-    simulating). New (`Ctrl/Cmd+N`, browser-reserved) and Refresh Types get no key
-    and no hint.
+    simulating). New (`Ctrl/Cmd+N`, browser-reserved), Refresh Types, and Fit to
+    Screen (FR-022a) get no key and no hint.
 - **Palette (`palette.js`)** — Satisfies FR-003, FR-005, FR-006, FR-008, FR-009,
   FR-009a. Renders one fixed-size tile per `ComponentType` in a 3-column CSS grid,
   sorted ascending by the numeric abbreviated part number (`Number(name.slice(2))`).

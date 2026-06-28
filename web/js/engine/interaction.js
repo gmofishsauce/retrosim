@@ -10,6 +10,8 @@ import {
   scaleFor,
   zoomAbout,
   centerViewportOn,
+  clampZoom,
+  PX_PER_UNIT_DEFAULT,
   rotateOffset,
   isRedundantBend,
   pruneCollinearBends,
@@ -22,6 +24,7 @@ import {
   hitJunction,
   hitBusSegment,
   marqueeHits,
+  componentBBox,
 } from "./hittest.js";
 import { sameRef } from "../store.js";
 import { proposeRoute } from "./router.js";
@@ -1680,5 +1683,58 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     );
   }
 
-  return { setTool, zoomBy, copySelection, startPaste, hasClipboard: () => !!clipboard };
+  // designBBox returns the world-space bounding box spanning every component,
+  // vertex, and conductor bend, or null when the design has no geometry (FR-022a).
+  function designBBox() {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    const grow = (x, y) => {
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    };
+    for (const inst of store.design.components) {
+      const b = componentBBox(inst);
+      grow(b.minX, b.minY);
+      grow(b.maxX, b.maxY);
+    }
+    for (const v of store.design.vertices) grow(v.x, v.y);
+    for (const c of [...store.design.wires, ...store.design.buses]) {
+      for (const pt of c.path) if (pt.t === "bend") grow(pt.x, pt.y);
+    }
+    return minX === Infinity ? null : { minX, minY, maxX, maxY };
+  }
+
+  // fitToScreen sets zoom and pan so the whole design fits the canvas, centered
+  // with a small margin (FR-022a). No-op on an empty design.
+  function fitToScreen() {
+    const box = designBBox();
+    if (!box) return;
+    const rect = canvas.getBoundingClientRect();
+    const margin = 0.9; // fraction of the canvas the design may occupy
+    const spanX = Math.max(box.maxX - box.minX, 1);
+    const spanY = Math.max(box.maxY - box.minY, 1);
+    const zoom = clampZoom(
+      Math.min(
+        (rect.width * margin) / (spanX * PX_PER_UNIT_DEFAULT),
+        (rect.height * margin) / (spanY * PX_PER_UNIT_DEFAULT),
+      ),
+    );
+    const center = { x: (box.minX + box.maxX) / 2, y: (box.minY + box.maxY) / 2 };
+    renderer.setViewport(
+      centerViewportOn({ pan: { x: 0, y: 0 }, zoom }, center, rect.width, rect.height),
+    );
+  }
+
+  return {
+    setTool,
+    zoomBy,
+    fitToScreen,
+    copySelection,
+    startPaste,
+    hasClipboard: () => !!clipboard,
+  };
 }

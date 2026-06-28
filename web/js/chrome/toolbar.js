@@ -73,6 +73,9 @@ export function initToolbar({ container, store, interaction, fileops, sim, libra
   const viewMenu = createMenu("View");
   addItem(viewMenu.panel, "Zoom In", "Zoom in", () => interaction.zoomBy(1.25), { key: "+" });
   addItem(viewMenu.panel, "Zoom Out", "Zoom out", () => interaction.zoomBy(0.8), { key: "-" });
+  addItem(viewMenu.panel, "Fit to Screen", "Fit the design to the canvas", () =>
+    interaction.fitToScreen(),
+  );
   container.appendChild(viewMenu.menu);
 
   // Simulate menu: the test-vector table editor (FR-115). Disabled while the

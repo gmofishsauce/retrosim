@@ -19,6 +19,10 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-06-28 — Fit to Screen command in the View menu (FR-022a)
+What: Added a View-menu "Fit to Screen" command that sets zoom and pan together so the whole design (components, wires, buses) fits the canvas with a small margin, centered; clamped to the zoom range and a no-op on an empty design. No keyboard accelerator (per user). Available while simulating, like the other zoom items.
+Touches: FR-022a (new); FR-004a, FR-004b (View menu listing / accelerators); design §6.11.
+
 ## 2026-06-27 — A multi-bit interface is a pin group, not a "wide" pin (FR-095/FR-099, OQ-010b)
 What: An embedded sub-design exposed a portN as a single pin carrying a width=8 attribute, which the bus tool (group-based snap) could not connect to. Resolved on the principle that a pin is always one bit — bit-width belongs to buses and pin groups, never a pin. synthTypeForInterface now expands a width-N interface signal into N one-bit pins (<label>0..<label>(N-1)) plus a pinGroups entry named <label>, so a matching bus snaps via the ordinary group machinery (FR-041/FR-042). Pins no longer carry a width attribute. The 1-wide port is now strictly one bit: its per-port width field and the properties-panel width control are removed (the long-standing "fat pin" confusion). OQ-010(b) resolved (was "single wide pin"); the 1-wide-port width field is superseded.
 Why: The wide port rendered as an unconnectable single pin in IC form; the root cause was treating a pin as having width.
