@@ -1,0 +1,22 @@
+id: "type-R8X8"
+type: "R8X8"
+description: "8×8 ROM (generated)"
+mem: { kind: rom, addressBits: 3, dataWidth: 8, locations: 8, romFile: "/Users/jeff/Documents/retrosim/rom381ctl.hex" }
+outline: [4, 10]
+pins:
+  - { name: "A0", side: left, pos: 1, dir: in }
+  - { name: "A1", side: left, pos: 2, dir: in }
+  - { name: "A2", side: left, pos: 3, dir: in }
+  - { name: "CE/", side: left, pos: 4, dir: in }
+  - { name: "OE/", side: left, pos: 5, dir: in }
+  - { name: "D0", side: right, pos: 1, dir: tristate }
+  - { name: "D1", side: right, pos: 2, dir: tristate }
+  - { name: "D2", side: right, pos: 3, dir: tristate }
+  - { name: "D3", side: right, pos: 4, dir: tristate }
+  - { name: "D4", side: right, pos: 5, dir: tristate }
+  - { name: "D5", side: right, pos: 6, dir: tristate }
+  - { name: "D6", side: right, pos: 7, dir: tristate }
+  - { name: "D7", side: right, pos: 8, dir: tristate }
+groups:
+  - { name: "ADDR", pins: ["A0", "A1", "A2"] }
+  - { name: "DATA", pins: ["D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7"] }
