@@ -11,6 +11,7 @@
 
 import { buildSimulation, SETTLE_BOUND } from "./sim.js";
 import { V0, V1 } from "./galasm.js";
+import { effectivePortDir } from "../model/subdesign.js";
 
 // FORMAT_VERSION is the `.tv` file format this client writes and understands
 // (§7.7); mirror persist.js — bump it and add a MIGRATIONS step on any change.
@@ -51,10 +52,16 @@ function refdesCompare(a, b) {
 // deriveColumns reads a design's bound I/O for the vector table (FR-115b): one
 // input column per input switch (its OUT pin), one output column per indicator
 // bit — a 1-wide indicator contributes its IN pin, an 8-wide contributes D0..D7.
-// Columns are sorted by refdes for a stable table layout.
+// Ports (FR-094 / multi-bit portN) are unioned in by effective direction
+// (FR-115f): an `in` port becomes an input column, an `out` port an output
+// column, each identified by the port's own (refdes, pin) — "P" for a 1-wide
+// port, "P"i for a portN bit (N columns, one per bit). A bidir port (no
+// override) cannot be a single column and is skipped with a non-fatal warning.
+// Columns are sorted by refdes/pin for a stable table layout.
 export function deriveColumns(design) {
   const inputs = [];
   const outputs = [];
+  const warnings = [];
   for (const c of design.components ?? []) {
     const rt = c.typeData?.renderType;
     const label = c.label ?? c.refdes;
@@ -66,11 +73,29 @@ export function deriveColumns(design) {
       for (let i = 0; i < 8; i++) {
         outputs.push({ refdes: c.refdes, pin: `D${i}`, label: `${label}.D${i}` });
       }
+    } else if (rt === "port" || rt === "portN") {
+      const dir = effectivePortDir(design, c.refdes);
+      if (dir === "bidir") {
+        warnings.push(
+          `port ${label} (${c.refdes}) is bidirectional; set its direction ` +
+            `override to bind it as a test-vector column`,
+        );
+        continue;
+      }
+      const bucket = dir === "out" ? outputs : inputs;
+      if (rt === "portN") {
+        const n = (c.typeData.pins ?? []).length;
+        for (let i = 0; i < n; i++) {
+          bucket.push({ refdes: c.refdes, pin: `P${i}`, label: `${label}${i}` });
+        }
+      } else {
+        bucket.push({ refdes: c.refdes, pin: "P", label });
+      }
     }
   }
   inputs.sort(refdesCompare);
   outputs.sort(refdesCompare);
-  return { inputs, outputs };
+  return { inputs, outputs, warnings };
 }
 
 // actualSymbol maps a settled four-state net value to its display symbol.
@@ -91,11 +116,20 @@ function captureSymbol(v) {
 function simulateRow(design, inputs, rowIn, romContent) {
   const clone = structuredClone(design);
   const byRefdes = new Map(clone.components.map((c) => [c.refdes, c]));
+  // A switch input is set via its per-instance state; a port input is driven by
+  // external stimulus on its own net (FR-115f) — no placed component.
+  const stimulus = [];
   inputs.forEach((col, j) => {
     const inst = byRefdes.get(col.refdes);
-    if (inst) inst.switchState = rowIn[j] === "1" ? "1" : "0";
+    if (!inst) return;
+    const rt = inst.typeData?.renderType;
+    if (rt === "port" || rt === "portN") {
+      stimulus.push({ refdes: col.refdes, pin: col.pin, value: rowIn[j] === "1" ? V1 : V0 });
+    } else {
+      inst.switchState = rowIn[j] === "1" ? "1" : "0";
+    }
   });
-  const sim = buildSimulation(clone, { romContent });
+  const sim = buildSimulation(clone, { romContent, stimulus });
   for (let i = 0; i < SETTLE_BOUND; i++) {
     sim.step();
     if (!sim.lastStepChanged()) break;

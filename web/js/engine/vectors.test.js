@@ -13,7 +13,14 @@ import {
   emptyRow,
   FORMAT_VERSION,
 } from "./vectors.js";
-import { BUILTINS } from "../builtins.js";
+import { BUILTINS, portNFields } from "../builtins.js";
+import { createDesign, addInstance, addWire } from "../model/design.js";
+
+const PORT = BUILTINS.find((b) => b.name === "port");
+const PORTN = BUILTINS.find((b) => b.name === "portN");
+const portNType = (width) => ({ ...PORTN, ...portNFields(width) });
+const wire = (d, a, p, b, q) =>
+  addWire(d, { kind: "pin", refdes: a, pin: p }, { kind: "pin", refdes: b, pin: q });
 
 // --- design fixtures (literal model shapes per §7.1a/§7.2), mirroring sim.test.js ---
 
@@ -216,4 +223,96 @@ test("emptyRow sizes to the columns with default 0 inputs and X outputs", () => 
     outputs: [{ refdes: "A-3", pin: "IN", label: "Q" }],
   };
   assert.deepEqual(emptyRow(cols), { in: ["0", "0"], out: ["X"] });
+});
+
+// BIDIR: a unit with one bidirectional pin, so a port on its net derives bidir.
+const BIDIR = {
+  name: "BID",
+  renderType: "unit",
+  pins: [{ name: "IO", side: "right", position: 1, direction: "bidir" }],
+};
+
+test("ports: a 1-wide in/out pair runs end to end (FR-115f)", () => {
+  const d = createDesign("t");
+  const u = addInstance(d, NOT, 10, 10, 0);
+  const pin = addInstance(d, PORT, 0, 0, 0);
+  pin.label = "IN";
+  const pout = addInstance(d, PORT, 0, 20, 0);
+  pout.label = "OUT";
+  wire(d, pin.refdes, "P", u.refdes, "A");
+  wire(d, u.refdes, "Y", pout.refdes, "P");
+
+  const cols = deriveColumns(d);
+  assert.deepEqual(cols.inputs.map((c) => [c.refdes, c.pin]), [[pin.refdes, "P"]]);
+  assert.deepEqual(cols.outputs.map((c) => [c.refdes, c.pin]), [[pout.refdes, "P"]]);
+
+  // Drive the input port via stimulus; read the output port off its own net.
+  const res = runVectors(d, {
+    ...cols,
+    rows: [{ in: ["1"], out: ["L"] }, { in: ["0"], out: ["H"] }],
+  });
+  assert.equal(res.passed, 2);
+});
+
+test("ports: a portN input expands to N columns and runs (FR-115f)", () => {
+  const d = createDesign("t");
+  const p = addInstance(d, portNType(2), 0, 0, 0);
+  p.label = "B";
+  const u0 = addInstance(d, NOT, 10, 0, 0);
+  const u1 = addInstance(d, NOT, 10, 10, 0);
+  const o0 = addInstance(d, PORT, 20, 0, 0);
+  o0.label = "O0";
+  const o1 = addInstance(d, PORT, 20, 10, 0);
+  o1.label = "O1";
+  wire(d, p.refdes, "P0", u0.refdes, "A");
+  wire(d, p.refdes, "P1", u1.refdes, "A");
+  wire(d, u0.refdes, "Y", o0.refdes, "P");
+  wire(d, u1.refdes, "Y", o1.refdes, "P");
+
+  const cols = deriveColumns(d);
+  assert.deepEqual(cols.inputs.map((c) => c.pin), ["P0", "P1"]);
+  assert.deepEqual(cols.inputs.map((c) => c.label), ["B0", "B1"]);
+  assert.deepEqual(cols.outputs.map((c) => c.label), ["O0", "O1"]);
+
+  // O0 = /P0 = /1 = 0 (L); O1 = /P1 = /0 = 1 (H).
+  const res = runVectors(d, { ...cols, rows: [{ in: ["1", "0"], out: ["L", "H"] }] });
+  assert.equal(res.passed, 1);
+});
+
+test("ports: a bidir port is skipped with a warning, bound when overridden (FR-115f)", () => {
+  const d = createDesign("t");
+  const u = addInstance(d, BIDIR, 10, 0, 0);
+  const p = addInstance(d, PORT, 0, 0, 0);
+  p.label = "BUS";
+  wire(d, u.refdes, "IO", p.refdes, "P");
+
+  let cols = deriveColumns(d);
+  assert.equal(cols.inputs.length, 0);
+  assert.equal(cols.outputs.length, 0);
+  assert.ok(cols.warnings.some((w) => w.includes("BUS")));
+
+  p.dirOverride = "out"; // opt the bidir port in as an output (FR-094d)
+  cols = deriveColumns(d);
+  assert.deepEqual(cols.outputs.map((c) => [c.refdes, c.pin]), [[p.refdes, "P"]]);
+  assert.equal(cols.warnings.length, 0);
+});
+
+test("ports: port columns union with switch/indicator columns (FR-115b/FR-115f)", () => {
+  const d = createDesign("t");
+  const sw = addInstance(d, builtin("switch"), 0, 0, 0);
+  const ind = addInstance(d, builtin("indicator"), 0, 10, 0);
+  const u = addInstance(d, NOT, 10, 0, 0);
+  const pin = addInstance(d, PORT, 0, 20, 0);
+  pin.label = "PIN";
+  const pout = addInstance(d, PORT, 0, 30, 0);
+  pout.label = "POUT";
+  wire(d, sw.refdes, "OUT", ind.refdes, "IN");
+  wire(d, pin.refdes, "P", u.refdes, "A");
+  wire(d, u.refdes, "Y", pout.refdes, "P");
+
+  const cols = deriveColumns(d);
+  assert.ok(cols.inputs.some((c) => c.pin === "OUT")); // switch
+  assert.ok(cols.inputs.some((c) => c.pin === "P")); // input port
+  assert.ok(cols.outputs.some((c) => c.pin === "IN")); // indicator
+  assert.ok(cols.outputs.some((c) => c.pin === "P")); // output port
 });
