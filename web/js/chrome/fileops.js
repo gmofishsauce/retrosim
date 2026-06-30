@@ -7,7 +7,7 @@ import {
   deserializeDesign,
   FORMAT_VERSION,
 } from "../model/persist.js";
-import { designInterface, resolveSubDesigns, portDirection } from "../model/subdesign.js";
+import { designInterface, resolveSubDesigns, effectivePortDir } from "../model/subdesign.js";
 import { placeSubDesign } from "../commands.js";
 import { saveDesign as apiSave, loadDesign as apiLoad } from "../api.js";
 import { openFileDialog, chooseRenderDialog } from "./dialogs.js";
@@ -90,13 +90,14 @@ export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {
           c.childPath = relPath(baseDir, c.childPath);
         }
       }
-      // Persist each port's derived direction (FR-094c) without mutating the
-      // live model: replace the port entries with copies carrying the value.
+      // Persist each port's effective direction (FR-094c/FR-094d) without
+      // mutating the live model: replace the port entries with copies carrying
+      // the value. The dirOverride itself round-trips verbatim (FR-094d).
       const portDir = new Map();
       for (const c of store.design.components) {
         const rt = c.typeData?.renderType;
         if (rt === "port" || rt === "portN") {
-          portDir.set(c.refdes, portDirection(store.design, c.refdes));
+          portDir.set(c.refdes, effectivePortDir(store.design, c.refdes));
         }
       }
       out.components = out.components.map((c) =>

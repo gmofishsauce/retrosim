@@ -237,11 +237,30 @@ export function initProperties({ container, store }) {
       labelRow.appendChild(labelInput);
       container.appendChild(labelRow);
 
-      // Direction is derived from the wiring (FR-094c), shown read-only; it
-      // updates live as the panel re-renders on each store change.
+      // Direction is derived from the wiring (FR-094c) and updates live as the
+      // panel re-renders on each store change. A definite (in/out) derivation is
+      // read-only; only the genuinely ambiguous bidir case is user-settable via
+      // the in/out/bidir override (FR-094d).
+      const derivedDir = portDirection(store.design, inst.refdes);
       const dirRow = el("div", "prop-row");
       dirRow.appendChild(el("label", "prop-label", "direction"));
-      dirRow.appendChild(el("span", "prop-value", portDirection(store.design, inst.refdes)));
+      if (derivedDir === "bidir") {
+        const select = el("select", "prop-input");
+        for (const val of ["in", "out", "bidir"]) {
+          const opt = el("option", null, val);
+          opt.value = val;
+          select.appendChild(opt);
+        }
+        select.value = inst.dirOverride ?? "bidir";
+        select.disabled = locked;
+        select.addEventListener("change", () => {
+          const v = select.value;
+          store.dispatch(setPortPropsCmd(inst.refdes, { dirOverride: v === "bidir" ? null : v }));
+        });
+        dirRow.appendChild(select);
+      } else {
+        dirRow.appendChild(el("span", "prop-value", derivedDir));
+      }
       container.appendChild(dirRow);
 
       // Only the multi-bit port has a width, fixed at placement (FR-071e), shown

@@ -7,6 +7,8 @@ import {
   synthTypeForInterface,
   addSubDesignInstance,
   resolveSubDesigns,
+  portDirection,
+  effectivePortDir,
 } from "./subdesign.js";
 import { serializeDesign, deserializeDesign } from "./persist.js";
 import { BUILTINS, portNFields } from "../builtins.js";
@@ -66,6 +68,50 @@ function childWithPorts() {
   );
   return d;
 }
+
+// A unit type exposing one bidirectional pin, so a port wired to it derives
+// "bidir" (FR-094c) — the only case the FR-094d override applies to.
+const BIDIR = {
+  name: "BID",
+  renderType: "unit",
+  pins: [{ name: "IO", side: "right", position: 1, direction: "bidir" }],
+};
+
+test("effectivePortDir applies the override only when derived is bidir (FR-094d)", () => {
+  const d = createDesign("t");
+  const u = addInstance(d, BIDIR, 10, 10, 0);
+  const p = addInstance(d, PORT, 0, 0, 0);
+  p.label = "BUS";
+  addWire(
+    d,
+    { kind: "pin", refdes: u.refdes, pin: "IO" },
+    { kind: "pin", refdes: p.refdes, pin: "P" },
+  );
+
+  assert.equal(portDirection(d, p.refdes), "bidir");
+  assert.equal(effectivePortDir(d, p.refdes), "bidir"); // no override yet
+  p.dirOverride = "out";
+  assert.equal(effectivePortDir(d, p.refdes), "out"); // bidir → override wins
+
+  // A definite (driven) derivation ignores any override.
+  const sw = addInstance(d, SWITCH, 0, 0, 0);
+  const q = addInstance(d, PORT, 0, 20, 0);
+  q.label = "Q";
+  addWire(
+    d,
+    { kind: "pin", refdes: sw.refdes, pin: "OUT" },
+    { kind: "pin", refdes: q.refdes, pin: "P" },
+  );
+  q.dirOverride = "in";
+  assert.equal(portDirection(d, q.refdes), "out");
+  assert.equal(effectivePortDir(d, q.refdes), "out"); // override ignored for definite
+});
+
+test("designInterface applies a bidir port's override (FR-094d)", () => {
+  const child = childWithPortN(8, "bidir");
+  child.components.find((c) => c.refdes === "A-4").dirOverride = "out";
+  assert.deepEqual(designInterface(child), [{ label: "b", dir: "out", width: 8 }]);
+});
 
 test("designInterface lists distinct ports, sorted by label (FR-095)", () => {
   const iface = designInterface(childWithPorts());

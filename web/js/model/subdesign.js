@@ -74,6 +74,24 @@ export function portDirection(design, portRefdes) {
   return classifyPortDir(nets, byRefdes, inst?.label);
 }
 
+// effectivePortDir returns a port's effective direction (FR-094d): its in/out
+// override when one is set *and* the derived direction (FR-094c) is bidir;
+// otherwise the derived direction itself. A definite derived direction ignores
+// any override (FR-094c's read-only guarantee), and an override on a port whose
+// derivation is no longer bidir lies dormant rather than going stale.
+export function effectivePortDir(design, portRefdes) {
+  const derived = portDirection(design, portRefdes);
+  if (derived !== "bidir") return derived;
+  const inst = (design.components ?? []).find((c) => c.refdes === portRefdes);
+  return inst?.dirOverride ?? derived;
+}
+
+// applyOverride folds a port instance's optional override into a derived
+// direction, with the same bidir-only rule as effectivePortDir (FR-094d).
+function applyOverride(dir, inst) {
+  return dir === "bidir" && inst?.dirOverride ? inst.dirOverride : dir;
+}
+
 // designInterface returns a child design's external interface (FR-095): one pin
 // per distinct port label — across both 1-wide `port`s and multi-bit `portN`s
 // (FR-071e) — carrying that label's width and its direction derived from the
@@ -102,14 +120,14 @@ export function designInterface(childDesign) {
       const pinNames = (c.typeData.pins ?? []).map((p) => p.name);
       byLabel.set(label, {
         label,
-        dir: classifyPortNDir(nets, byRefdes, c.refdes, pinNames),
+        dir: applyOverride(classifyPortNDir(nets, byRefdes, c.refdes, pinNames), c),
         width: pinNames.length,
       });
     } else {
       // A 1-wide port is always one bit (FR-094); it has no width field.
       byLabel.set(label, {
         label,
-        dir: classifyPortDir(nets, byRefdes, label),
+        dir: applyOverride(classifyPortDir(nets, byRefdes, label), c),
         width: 1,
       });
     }
