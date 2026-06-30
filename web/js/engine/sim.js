@@ -46,7 +46,10 @@ function effectiveProps(inst) {
 //   conflictedConductors()   Set of wire/bus ids on conflicted nets (FR-082)
 //   hasClocks()              sequential (FR-086) vs combinational (FR-085)
 //   unitsPerSecond()         pacing rate: max period × speed over clocks (FR-084)
-export function buildSimulation(design, { onMessage = () => {}, romContent = null } = {}) {
+export function buildSimulation(
+  design,
+  { onMessage = () => {}, romContent = null, stimulus = [] } = {},
+) {
   const nets = buildNets(design, onMessage);
 
   // (refdes, pin) → net index.
@@ -293,6 +296,12 @@ export function buildSimulation(design, { onMessage = () => {}, romContent = nul
       } else {
         for (const key of e.uPins) add(key, VU, false, key); // FR-080
       }
+    }
+    // External stimulus (FR-115f): strong-drive named nets by (refdes, pin)
+    // with no placed component, e.g. a test-vector input port.
+    for (const s of stimulus) {
+      const key = `${s.refdes}.${s.pin}`;
+      add(key, s.value, false, key);
     }
 
     let changed = false;

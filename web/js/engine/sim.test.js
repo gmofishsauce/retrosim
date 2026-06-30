@@ -429,3 +429,18 @@ test("a ROM seeded with content drives the loaded word on read (FR-114e)", () =>
   settle(sim);
   assert.equal(sim.valueOfPin("U1", "D0"), V1);
 });
+
+test("external stimulus strong-drives a net by (refdes, pin) (FR-115f)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("port"));
+  place(d, "U1", NOT);
+  place(d, "A-2", builtin("indicator"));
+  connect(d, ["A-1", "P"], ["U1", "A"]); // port pin shares U1's input net
+  connect(d, ["U1", "Y"], ["A-2", "IN"]); // observe U1.Y on a net
+
+  const sim = buildSimulation(d, { stimulus: [{ refdes: "A-1", pin: "P", value: V1 }] });
+  settle(sim);
+  // The forced net reads back through the port's own pin and inverts at U1.
+  assert.equal(sim.valueOfPin("A-1", "P"), V1);
+  assert.equal(sim.valueOfPin("U1", "Y"), V0);
+});
