@@ -144,10 +144,13 @@ export function buildNets(design, onWarn = (msg) => console.warn(msg)) {
   const lanesByLabel = new Map();
   for (const v of design.vertices) {
     if (v.kind !== "connector") continue;
-    const label = instById.get(v.ref)?.label;
-    if (label == null) continue;
     const wids = wiresByVertex.get(v.id) ?? [];
     if (!wids.length) continue;
+    // FR-094e: the connector's own pin is a net member, so its net is observable
+    // and drivable by the port's (refdes, pin) — independent of label.
+    attachments.push({ lane: wireLane(wids[0]), pin: `${v.ref}.${v.pin}` });
+    const label = instById.get(v.ref)?.label;
+    if (label == null) continue;
     if (!lanesByLabel.has(label)) lanesByLabel.set(label, []);
     lanesByLabel.get(label).push(wireLane(wids[0]));
   }

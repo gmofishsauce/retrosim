@@ -279,9 +279,31 @@ test("same-label ports join their nets across the sheet (FR-094a)", () => {
 
   const nets = buildNets(d);
   assert.equal(nets.length, 1);
-  assert.deepEqual(sorted(nets[0].pins), ["U1./Y0", "U2.A0"]);
+  // FR-094e: the port connectors' own pins are net members too.
+  assert.deepEqual(sorted(nets[0].pins), [
+    `${p1.refdes}.P`,
+    `${p2.refdes}.P`,
+    "U1./Y0",
+    "U2.A0",
+  ]);
   assert.deepEqual(sorted(nets[0].members), sorted([w1.id, w2.id]));
   assert.equal(nets[0].name, "CLK"); // the label names the net
+});
+
+test("a port pin is a queryable net member (FR-094e)", () => {
+  const d = createDesign("t");
+  addInstance(d, ty(), 10, 20, 0); // U1
+  const p = addInstance(d, PORT, 0, 0, 0); // A-1
+  p.label = "SIG";
+  addWire(
+    d,
+    { kind: "pin", refdes: "U1", pin: "A0" },
+    { kind: "pin", refdes: p.refdes, pin: "P" },
+  );
+
+  const nets = buildNets(d);
+  assert.equal(nets.length, 1);
+  assert.deepEqual(sorted(nets[0].pins), [`${p.refdes}.P`, "U1.A0"]);
 });
 
 test("differently-labeled ports stay separate nets", () => {
