@@ -1152,13 +1152,16 @@ export function testVectorsDialog({ store, dataDir }) {
     overlay.appendChild(box);
     box.appendChild(el("div", "dialog-title", "Test Vectors"));
 
-    // A design with no switches and no indicators has nothing to drive or observe.
+    // Nothing to drive or observe: no switches, no indicators, and no directional
+    // ports (a bidir-only design leaves warnings but no bindable columns).
     if (columns.inputs.length === 0 && columns.outputs.length === 0) {
+      const base =
+        "This design has no input switches, indicators, or directional ports to bind. Place input switches (inputs) and state indicators (outputs), or wire ports so their direction is definite (or override a bidir port), then reopen Test Vectors.";
       box.appendChild(
         el(
           "div",
           "vec-empty",
-          "This design has no input switches or indicators to bind. Place input switches (inputs) and state indicators (outputs), then reopen Test Vectors.",
+          columns.warnings.length ? `${base} (${columns.warnings.join("; ")})` : base,
         ),
       );
       const buttons = el("div", "dialog-buttons");
@@ -1395,6 +1398,11 @@ export function testVectorsDialog({ store, dataDir }) {
     }
 
     renderBody();
+    // Surface any port-binding warnings from column derivation (FR-115f), e.g. a
+    // bidir port skipped for want of a direction override.
+    if (columns.warnings.length) {
+      showNote(`${columns.warnings.length} port warning(s): ${columns.warnings.join("; ")}`);
+    }
     finish();
 
     function finish() {
