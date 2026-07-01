@@ -631,34 +631,65 @@ its value live and re-evaluates the simulation.
 Instead of toggling switches and reading indicators by hand, you can write a
 **table of test vectors** — input patterns paired with the outputs you expect —
 and have the simulator run and score them. Open it from **Simulate ▸ Test
-Vectors…**. (This first version covers **combinational** designs — those with no
-clock generator.)
+Vectors…**. Both combinational and clocked (sequential) designs are supported.
 
 The table's columns come from your design automatically:
 
 - one **input** column per [input switch](#11-built-in-components), holding `0` or `1`;
+- one **input** column per **clock generator**, holding `0`, `1`, or `C`
+  (sequential designs — see below);
+- your design's [ports](#12-sub-designs-and-ports) become **input or output
+  columns** according to their direction — an input port's cell drives its net,
+  an output port's cell is checked like an indicator; a multi-bit port
+  contributes one column per bit. A **bidirectional** port can't be a single
+  input-or-output column and is skipped with a warning; set its direction
+  override in the properties panel to include it.
 - one **output** column per [indicator](#11-built-in-components) — a single
   indicator is one column, an 8-wide indicator becomes eight columns `D0`…`D7` —
   holding the value you expect: **H** (logic 1), **L** (logic 0), or **X**
   (don't-test, i.e. ignore this output on this row).
 
-Each row is one independent case. Build the table and use the buttons:
+**Combinational designs** (no clock generator): each row is one **independent**
+case — its inputs are applied, the circuit settles, and the outputs are compared.
+
+**Sequential designs** (at least one clock generator): the dialog shows a notice
+that rows run **in order** on one continuous simulation — registers keep their
+state from each row to the next, so the table reads as a script. Each clock
+generator gets its own column:
+
+- **`C`** (the default in a new row) applies **one full clock pulse**: the row's
+  other inputs are applied and settled first, then the clock goes high and back
+  low, and the outputs are checked after the pulse — so one row is one clock
+  cycle.
+- **`0` / `1`** hold the clock at that level for the whole row (useful for
+  testing level-sensitive behavior). Raising a clock from `0` in one row to `1`
+  in the next is itself a rising edge, so half-cycles can be scripted with
+  level cells.
+
+If the design contains a [power-on reset](#11-built-in-components), a **power-on
+preamble** runs automatically before the first row: reset is held asserted while
+the clock is pulsed for the reset's `cycles` property, then released — the same
+power-up sequence the design sees in the interactive simulator. Registers still
+power up as U, so circuits without a reset start undefined until something is
+clocked in.
+
+Build the table and use the buttons:
 
 - **+ Row** adds a blank row; the **✕** at the end of a row deletes it.
-- **Run** drives the switches to each row's inputs, lets the circuit settle, and
-  compares the indicators to your expected values. Passing output cells turn
-  **green**; a mismatch turns **red** and shows what the circuit actually produced
-  (e.g. `got 1`). A summary line reads "N of M rows passed". A `U` or `Z` output
-  never matches `H` or `L`.
-- **Capture** fills in the expected-output cells of every row by running that row's
-  inputs through the simulator — a quick way to author a "golden" table from a
-  circuit you believe is correct, which you can then edit. (It records whatever the
-  circuit currently does, so eyeball the captured values; capturing a buggy circuit
-  bakes in the bug.)
+- **Run** drives each row's inputs (in table order for a clocked design), lets
+  the circuit settle, and compares the outputs to your expected values. Passing
+  output cells turn **green**; a mismatch turns **red** and shows what the
+  circuit actually produced (e.g. `got 1`). A summary line reads "N of M rows
+  passed". A `U` or `Z` output never matches `H` or `L`.
+- **Capture** fills in the expected-output cells of every row by running the
+  table through the simulator (in order, for a clocked design) — a quick way to
+  author a "golden" table from a circuit you believe is correct, which you can
+  then edit. (It records whatever the circuit currently does, so eyeball the
+  captured values; capturing a buggy circuit bakes in the bug.)
 - **Load** / **Save** read and write a **test-vector file** (`.tv`, stored beside
   your design) through the same file browser as Open. Columns are matched back to
-  your switches and indicators by their internal designators, so renaming a label
-  never breaks a saved file; if the design's switches or indicators have changed
+  your switches, clocks, ports, and indicators by their internal designators, so
+  renaming a label never breaks a saved file; if the design's columns have changed
   since the file was written, the mismatch is reported as a warning when you load.
 
 Running test vectors **does not change your design** — it neither marks it modified
