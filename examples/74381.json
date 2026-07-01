@@ -1866,8 +1866,8 @@
     {
       "refdes": "N-1",
       "type": "type-note",
-      "x": 21,
-      "y": 49,
+      "x": -81,
+      "y": 75,
       "rotation": 0,
       "typeData": {
         "id": "type-note",
@@ -1886,8 +1886,8 @@
     {
       "refdes": "N-2",
       "type": "type-note",
-      "x": 17,
-      "y": 44,
+      "x": -81,
+      "y": 72,
       "rotation": 0,
       "typeData": {
         "id": "type-note",
@@ -2717,8 +2717,8 @@
     {
       "refdes": "U16A",
       "type": "7400",
-      "x": 12,
-      "y": 42,
+      "x": 82,
+      "y": 39,
       "rotation": 0,
       "typeData": {
         "id": "type-7400",
@@ -2772,8 +2772,8 @@
     {
       "refdes": "U16B",
       "type": "7400",
-      "x": 16,
-      "y": 47,
+      "x": 82,
+      "y": 34,
       "rotation": 0,
       "typeData": {
         "id": "type-7400",
@@ -3371,6 +3371,78 @@
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT02.pdf"
         },
         "unit": "D"
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "N-3",
+      "type": "type-note",
+      "x": -46,
+      "y": 80,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-note",
+        "name": "note",
+        "builtin": true,
+        "title": "text note",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"3\" y=\"11\" width=\"30\" height=\"14\" fill=\"#fff\" stroke=\"#1565c0\" stroke-dasharray=\"3 2\"/><text x=\"18\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">NOTE</text></svg>",
+        "renderType": "note",
+        "width": 4,
+        "height": 2,
+        "pins": []
+      },
+      "overrides": {},
+      "text": "S==0"
+    },
+    {
+      "refdes": "A-30",
+      "type": "type-indicator",
+      "x": 35,
+      "y": 36,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-31",
+      "type": "type-indicator",
+      "x": 71,
+      "y": 40,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
       },
       "overrides": {}
     }
@@ -4315,8 +4387,13 @@
           "y": 66
         },
         {
+          "t": "bend",
+          "x": 86,
+          "y": 63
+        },
+        {
           "t": "node",
-          "v": "v693"
+          "v": "v802"
         },
         {
           "t": "node",
@@ -5347,62 +5424,6 @@
       ]
     },
     {
-      "id": "w324",
-      "path": [
-        {
-          "t": "node",
-          "v": "v653"
-        },
-        {
-          "t": "bend",
-          "x": -55,
-          "y": 50
-        },
-        {
-          "t": "bend",
-          "x": -3,
-          "y": 50
-        },
-        {
-          "t": "bend",
-          "x": -3,
-          "y": 62
-        },
-        {
-          "t": "node",
-          "v": "v654"
-        }
-      ]
-    },
-    {
-      "id": "w325",
-      "path": [
-        {
-          "t": "node",
-          "v": "v655"
-        },
-        {
-          "t": "bend",
-          "x": -54,
-          "y": 49
-        },
-        {
-          "t": "bend",
-          "x": -2,
-          "y": 49
-        },
-        {
-          "t": "bend",
-          "x": -2,
-          "y": 66
-        },
-        {
-          "t": "node",
-          "v": "v656"
-        }
-      ]
-    },
-    {
       "id": "w326",
       "path": [
         {
@@ -5589,77 +5610,31 @@
         },
         {
           "t": "bend",
-          "x": 11,
-          "y": 43
+          "x": 81,
+          "y": 40
+        },
+        {
+          "t": "bend",
+          "x": 81,
+          "y": 41
+        },
+        {
+          "t": "bend",
+          "x": 81,
+          "y": 41
         },
         {
           "t": "node",
-          "v": "v798"
+          "v": "v820"
         },
         {
           "t": "bend",
-          "x": 11,
-          "y": 44
-        },
-        {
-          "t": "bend",
-          "x": 11,
-          "y": 45
+          "x": 81,
+          "y": 42
         },
         {
           "t": "node",
           "v": "v688"
-        }
-      ]
-    },
-    {
-      "id": "w342",
-      "path": [
-        {
-          "t": "node",
-          "v": "v690"
-        },
-        {
-          "t": "bend",
-          "x": 41,
-          "y": 44
-        },
-        {
-          "t": "node",
-          "v": "v689"
-        }
-      ]
-    },
-    {
-      "id": "w343",
-      "path": [
-        {
-          "t": "node",
-          "v": "v692"
-        },
-        {
-          "t": "bend",
-          "x": 43,
-          "y": 49
-        },
-        {
-          "t": "bend",
-          "x": 43,
-          "y": 44
-        },
-        {
-          "t": "bend",
-          "x": 67,
-          "y": 44
-        },
-        {
-          "t": "bend",
-          "x": 67,
-          "y": 34
-        },
-        {
-          "t": "node",
-          "v": "v691"
         }
       ]
     },
@@ -5672,22 +5647,27 @@
         },
         {
           "t": "bend",
-          "x": 15,
-          "y": 48
-        },
-        {
-          "t": "bend",
-          "x": 15,
-          "y": 49
+          "x": 81,
+          "y": 35
         },
         {
           "t": "node",
-          "v": "v791"
+          "v": "v822"
         },
         {
           "t": "bend",
-          "x": 15,
-          "y": 50
+          "x": 81,
+          "y": 36
+        },
+        {
+          "t": "bend",
+          "x": 81,
+          "y": 36
+        },
+        {
+          "t": "bend",
+          "x": 81,
+          "y": 37
         },
         {
           "t": "node",
@@ -5776,15 +5756,7 @@
       "path": [
         {
           "t": "node",
-          "v": "v701"
-        },
-        {
-          "t": "node",
-          "v": "v780"
-        },
-        {
-          "t": "node",
-          "v": "v778"
+          "v": "v714"
         },
         {
           "t": "node",
@@ -5792,7 +5764,28 @@
         },
         {
           "t": "node",
-          "v": "v714"
+          "v": "v778"
+        },
+        {
+          "t": "node",
+          "v": "v780"
+        },
+        {
+          "t": "node",
+          "v": "v823"
+        },
+        {
+          "t": "node",
+          "v": "v821"
+        },
+        {
+          "t": "bend",
+          "x": 77,
+          "y": 61
+        },
+        {
+          "t": "node",
+          "v": "v802"
         }
       ]
     },
@@ -5982,12 +5975,7 @@
         {
           "t": "bend",
           "x": -73,
-          "y": 53
-        },
-        {
-          "t": "bend",
-          "x": 46,
-          "y": 53
+          "y": 45
         },
         {
           "t": "bend",
@@ -6209,41 +6197,6 @@
       ]
     },
     {
-      "id": "w400",
-      "path": [
-        {
-          "t": "node",
-          "v": "v699"
-        },
-        {
-          "t": "bend",
-          "x": 77,
-          "y": 37
-        },
-        {
-          "t": "node",
-          "v": "v697"
-        }
-      ]
-    },
-    {
-      "id": "w401",
-      "path": [
-        {
-          "t": "node",
-          "v": "v782"
-        },
-        {
-          "t": "node",
-          "v": "v701"
-        },
-        {
-          "t": "node",
-          "v": "v699"
-        }
-      ]
-    },
-    {
       "id": "w404",
       "path": [
         {
@@ -6311,74 +6264,6 @@
       ]
     },
     {
-      "id": "w409",
-      "path": [
-        {
-          "t": "node",
-          "v": "v792"
-        },
-        {
-          "t": "bend",
-          "x": -62,
-          "y": 48
-        },
-        {
-          "t": "bend",
-          "x": 4,
-          "y": 48
-        },
-        {
-          "t": "bend",
-          "x": 4,
-          "y": 49
-        },
-        {
-          "t": "node",
-          "v": "v791"
-        }
-      ]
-    },
-    {
-      "id": "w411",
-      "path": [
-        {
-          "t": "node",
-          "v": "v695"
-        },
-        {
-          "t": "bend",
-          "x": 77,
-          "y": 42
-        },
-        {
-          "t": "bend",
-          "x": 77,
-          "y": 63
-        },
-        {
-          "t": "node",
-          "v": "v693"
-        }
-      ]
-    },
-    {
-      "id": "w412",
-      "path": [
-        {
-          "t": "node",
-          "v": "v794"
-        },
-        {
-          "t": "node",
-          "v": "v697"
-        },
-        {
-          "t": "node",
-          "v": "v695"
-        }
-      ]
-    },
-    {
       "id": "w413",
       "path": [
         {
@@ -6406,11 +6291,122 @@
       ]
     },
     {
-      "id": "w415",
+      "id": "w420",
       "path": [
         {
           "t": "node",
-          "v": "v799"
+          "v": "v653"
+        },
+        {
+          "t": "bend",
+          "x": -55,
+          "y": 50
+        },
+        {
+          "t": "bend",
+          "x": 2,
+          "y": 50
+        },
+        {
+          "t": "bend",
+          "x": 2,
+          "y": 66
+        },
+        {
+          "t": "node",
+          "v": "v807"
+        }
+      ]
+    },
+    {
+      "id": "w427",
+      "path": [
+        {
+          "t": "node",
+          "v": "v655"
+        },
+        {
+          "t": "bend",
+          "x": -54,
+          "y": 49
+        },
+        {
+          "t": "bend",
+          "x": -1,
+          "y": 49
+        },
+        {
+          "t": "bend",
+          "x": -1,
+          "y": 62
+        },
+        {
+          "t": "node",
+          "v": "v811"
+        }
+      ]
+    },
+    {
+      "id": "w430",
+      "path": [
+        {
+          "t": "node",
+          "v": "v813"
+        },
+        {
+          "t": "bend",
+          "x": 72,
+          "y": 43
+        },
+        {
+          "t": "node",
+          "v": "v812"
+        }
+      ]
+    },
+    {
+      "id": "w431",
+      "path": [
+        {
+          "t": "node",
+          "v": "v815"
+        },
+        {
+          "t": "bend",
+          "x": 36,
+          "y": 39
+        },
+        {
+          "t": "node",
+          "v": "v814"
+        }
+      ]
+    },
+    {
+      "id": "w433",
+      "path": [
+        {
+          "t": "node",
+          "v": "v691"
+        },
+        {
+          "t": "bend",
+          "x": 67,
+          "y": 34
+        },
+        {
+          "t": "node",
+          "v": "v812"
+        },
+        {
+          "t": "bend",
+          "x": 67,
+          "y": 44
+        },
+        {
+          "t": "bend",
+          "x": 43,
+          "y": 44
         },
         {
           "t": "bend",
@@ -6419,7 +6415,65 @@
         },
         {
           "t": "node",
-          "v": "v798"
+          "v": "v799"
+        }
+      ]
+    },
+    {
+      "id": "w435",
+      "path": [
+        {
+          "t": "node",
+          "v": "v689"
+        },
+        {
+          "t": "node",
+          "v": "v814"
+        },
+        {
+          "t": "bend",
+          "x": 41,
+          "y": 43
+        },
+        {
+          "t": "bend",
+          "x": 40,
+          "y": 43
+        },
+        {
+          "t": "bend",
+          "x": -62,
+          "y": 43
+        },
+        {
+          "t": "node",
+          "v": "v824"
+        }
+      ]
+    },
+    {
+      "id": "w436",
+      "path": [
+        {
+          "t": "node",
+          "v": "v820"
+        },
+        {
+          "t": "node",
+          "v": "v821"
+        }
+      ]
+    },
+    {
+      "id": "w437",
+      "path": [
+        {
+          "t": "node",
+          "v": "v822"
+        },
+        {
+          "t": "node",
+          "v": "v823"
         }
       ]
     }
@@ -8511,28 +8565,12 @@
       "y": 10
     },
     {
-      "id": "v654",
-      "kind": "pin",
-      "ref": "U13",
-      "pin": "/1OE",
-      "x": -4,
-      "y": 62
-    },
-    {
       "id": "v655",
       "kind": "pin",
       "ref": "U14",
       "pin": "/Y5",
       "x": -54,
       "y": 10
-    },
-    {
-      "id": "v656",
-      "kind": "pin",
-      "ref": "U13",
-      "pin": "/2OE",
-      "x": -4,
-      "y": 66
     },
     {
       "id": "v657",
@@ -8681,56 +8719,10 @@
       "y": 33
     },
     {
-      "id": "v690",
-      "kind": "pin",
-      "ref": "U16A",
-      "pin": "1Y",
-      "x": 17,
-      "y": 44
-    },
-    {
       "id": "v691",
       "kind": "junction",
       "x": 65,
       "y": 34
-    },
-    {
-      "id": "v692",
-      "kind": "pin",
-      "ref": "U16B",
-      "pin": "2Y",
-      "x": 21,
-      "y": 49
-    },
-    {
-      "id": "v693",
-      "kind": "junction",
-      "x": 86,
-      "y": 63
-    },
-    {
-      "id": "v695",
-      "kind": "junction",
-      "x": 77,
-      "y": 42
-    },
-    {
-      "id": "v697",
-      "kind": "junction",
-      "x": 77,
-      "y": 40
-    },
-    {
-      "id": "v699",
-      "kind": "junction",
-      "x": 77,
-      "y": 37
-    },
-    {
-      "id": "v701",
-      "kind": "junction",
-      "x": 77,
-      "y": 35
     },
     {
       "id": "v703",
@@ -9077,12 +9069,6 @@
       "y": 30
     },
     {
-      "id": "v782",
-      "kind": "free",
-      "x": 77,
-      "y": 35
-    },
-    {
       "id": "v788",
       "kind": "pin",
       "ref": "U16C",
@@ -9103,26 +9089,6 @@
       "kind": "junction",
       "x": -62,
       "y": 18
-    },
-    {
-      "id": "v791",
-      "kind": "junction",
-      "x": 15,
-      "y": 49
-    },
-    {
-      "id": "v792",
-      "kind": "pin",
-      "ref": "U16C",
-      "pin": "3Y",
-      "x": -62,
-      "y": 25
-    },
-    {
-      "id": "v794",
-      "kind": "free",
-      "x": 77,
-      "y": 40
     },
     {
       "id": "v795",
@@ -9147,18 +9113,94 @@
       "y": 28
     },
     {
-      "id": "v798",
-      "kind": "junction",
-      "x": 11,
-      "y": 44
-    },
-    {
       "id": "v799",
       "kind": "pin",
       "ref": "U16D",
       "pin": "4Y",
       "x": -68,
       "y": 35
+    },
+    {
+      "id": "v802",
+      "kind": "junction",
+      "x": 86,
+      "y": 61
+    },
+    {
+      "id": "v807",
+      "kind": "pin",
+      "ref": "U13",
+      "pin": "/2OE",
+      "x": -4,
+      "y": 66
+    },
+    {
+      "id": "v811",
+      "kind": "pin",
+      "ref": "U13",
+      "pin": "/1OE",
+      "x": -4,
+      "y": 62
+    },
+    {
+      "id": "v812",
+      "kind": "junction",
+      "x": 67,
+      "y": 43
+    },
+    {
+      "id": "v813",
+      "kind": "pin",
+      "ref": "A-31",
+      "pin": "IN",
+      "x": 72,
+      "y": 42
+    },
+    {
+      "id": "v814",
+      "kind": "junction",
+      "x": 41,
+      "y": 39
+    },
+    {
+      "id": "v815",
+      "kind": "pin",
+      "ref": "A-30",
+      "pin": "IN",
+      "x": 36,
+      "y": 38
+    },
+    {
+      "id": "v820",
+      "kind": "junction",
+      "x": 81,
+      "y": 41
+    },
+    {
+      "id": "v821",
+      "kind": "junction",
+      "x": 77,
+      "y": 41
+    },
+    {
+      "id": "v822",
+      "kind": "junction",
+      "x": 81,
+      "y": 36
+    },
+    {
+      "id": "v823",
+      "kind": "junction",
+      "x": 77,
+      "y": 36
+    },
+    {
+      "id": "v824",
+      "kind": "pin",
+      "ref": "U16C",
+      "pin": "3Y",
+      "x": -62,
+      "y": 25
     }
   ],
   "nets": [
@@ -9168,7 +9210,8 @@
         "U6A.1A",
         "U3A.1A",
         "U2D.4B",
-        "A-2.D0"
+        "A-2.D0",
+        "A-17.P"
       ],
       "members": [
         "w1",
@@ -9193,7 +9236,8 @@
         "U3A.1B",
         "U2D.4A",
         "U5D.4B",
-        "A-2.D4"
+        "A-2.D4",
+        "A-21.P"
       ],
       "members": [
         "w2",
@@ -9218,7 +9262,8 @@
         "U6B.2A",
         "U3B.2A",
         "U2C.3B",
-        "A-2.D1"
+        "A-2.D1",
+        "A-18.P"
       ],
       "members": [
         "w3",
@@ -9243,7 +9288,8 @@
         "U3B.2B",
         "U2C.3A",
         "U5C.3B",
-        "A-2.D5"
+        "A-2.D5",
+        "A-22.P"
       ],
       "members": [
         "w4",
@@ -9268,7 +9314,8 @@
         "U6C.3A",
         "U3C.3A",
         "U2B.2B",
-        "A-2.D2"
+        "A-2.D2",
+        "A-19.P"
       ],
       "members": [
         "w5",
@@ -9293,7 +9340,8 @@
         "U3C.3B",
         "U2B.2A",
         "U5B.2B",
-        "A-2.D6"
+        "A-2.D6",
+        "A-23.P"
       ],
       "members": [
         "w6",
@@ -9318,7 +9366,8 @@
         "U6D.4A",
         "U3D.4A",
         "U2A.1B",
-        "A-2.D3"
+        "A-2.D3",
+        "A-20.P"
       ],
       "members": [
         "w7",
@@ -9343,7 +9392,8 @@
         "U3D.4B",
         "U2A.1A",
         "U5A.1B",
-        "A-2.D7"
+        "A-2.D7",
+        "A-24.P"
       ],
       "members": [
         "w8",
@@ -9368,16 +9418,18 @@
         "U5C.3A",
         "U5B.2A",
         "U5A.1A",
-        "U16B.2Y"
+        "A-31.IN",
+        "U16D.4Y"
       ],
       "members": [
         "w59",
         "w60",
         "w61",
-        "w343"
+        "w430",
+        "w433"
       ],
       "provenance": [],
-      "name": "2Y"
+      "name": "IN"
     },
     {
       "pins": [
@@ -9385,16 +9437,18 @@
         "U6B.2B",
         "U6C.3B",
         "U6D.4B",
-        "U16A.1Y"
+        "A-30.IN",
+        "U16C.3Y"
       ],
       "members": [
         "w70",
         "w71",
         "w72",
-        "w342"
+        "w431",
+        "w435"
       ],
       "provenance": [],
-      "name": "1Y"
+      "name": "IN"
     },
     {
       "pins": [
@@ -9491,6 +9545,10 @@
         "U11.2A2",
         "U11.2A1",
         "U11.2A0",
+        "U16A.1A",
+        "U16A.1B",
+        "U16B.2A",
+        "U16B.2B",
         "U17C.3A",
         "U17C.3B",
         "U17D.4A",
@@ -9509,6 +9567,8 @@
         "w185",
         "w186",
         "w187",
+        "w341",
+        "w350",
         "w351",
         "w352",
         "w353",
@@ -9521,10 +9581,8 @@
         "w389",
         "w398",
         "w399",
-        "w400",
-        "w401",
-        "w411",
-        "w412"
+        "w436",
+        "w437"
       ],
       "provenance": [],
       "name": "OUT"
@@ -9685,7 +9743,8 @@
         "U11.1Y0",
         "U10.2Y0",
         "U13.1Y0",
-        "U13.2Y0"
+        "U13.2Y0",
+        "A-26.P"
       ],
       "members": [
         "w265",
@@ -9719,7 +9778,8 @@
         "U11.1Y1",
         "U10.2Y1",
         "U13.1Y1",
-        "U13.2Y1"
+        "U13.2Y1",
+        "A-27.P"
       ],
       "members": [
         "w266",
@@ -9753,7 +9813,8 @@
         "U11.1Y2",
         "U10.2Y2",
         "U13.1Y2",
-        "U13.2Y2"
+        "U13.2Y2",
+        "A-28.P"
       ],
       "members": [
         "w267",
@@ -9787,7 +9848,8 @@
         "U11.1Y3",
         "U10.2Y3",
         "U13.1Y3",
-        "U13.2Y3"
+        "U13.2Y3",
+        "A-29.P"
       ],
       "members": [
         "w268",
@@ -9860,7 +9922,8 @@
     },
     {
       "pins": [
-        "U14.A0"
+        "U14.A0",
+        "A-11.P"
       ],
       "members": [
         "w318"
@@ -9870,7 +9933,8 @@
     },
     {
       "pins": [
-        "U14.A1"
+        "U14.A1",
+        "A-12.P"
       ],
       "members": [
         "w319"
@@ -9880,7 +9944,8 @@
     },
     {
       "pins": [
-        "U14.A2"
+        "U14.A2",
+        "A-13.P"
       ],
       "members": [
         "w320"
@@ -9911,28 +9976,6 @@
       ],
       "provenance": [],
       "name": "OUT"
-    },
-    {
-      "pins": [
-        "U14./Y6",
-        "U13./1OE"
-      ],
-      "members": [
-        "w324"
-      ],
-      "provenance": [],
-      "name": "/1OE"
-    },
-    {
-      "pins": [
-        "U14./Y5",
-        "U13./2OE"
-      ],
-      "members": [
-        "w325"
-      ],
-      "provenance": [],
-      "name": "/2OE"
     },
     {
       "pins": [
@@ -9984,32 +10027,6 @@
     },
     {
       "pins": [
-        "U16A.1A",
-        "U16A.1B",
-        "U16D.4Y"
-      ],
-      "members": [
-        "w341",
-        "w415"
-      ],
-      "provenance": [],
-      "name": "1A"
-    },
-    {
-      "pins": [
-        "U16B.2A",
-        "U16B.2B",
-        "U16C.3Y"
-      ],
-      "members": [
-        "w350",
-        "w409"
-      ],
-      "provenance": [],
-      "name": "2A"
-    },
-    {
-      "pins": [
         "U10./1OE",
         "U17A.1Y"
       ],
@@ -10043,7 +10060,8 @@
     },
     {
       "pins": [
-        "U7.CIN"
+        "U7.CIN",
+        "A-15.P"
       ],
       "members": [
         "w380"
@@ -10069,13 +10087,36 @@
     },
     {
       "pins": [
-        "U7.COUT"
+        "U7.COUT",
+        "A-16.P"
       ],
       "members": [
         "w395"
       ],
       "provenance": [],
       "name": "Cout"
+    },
+    {
+      "pins": [
+        "U14./Y6",
+        "U13./2OE"
+      ],
+      "members": [
+        "w420"
+      ],
+      "provenance": [],
+      "name": "/2OE"
+    },
+    {
+      "pins": [
+        "U14./Y5",
+        "U13./1OE"
+      ],
+      "members": [
+        "w427"
+      ],
+      "provenance": [],
+      "name": "/1OE"
     }
   ]
 }
