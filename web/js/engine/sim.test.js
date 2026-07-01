@@ -444,3 +444,21 @@ test("external stimulus strong-drives a net by (refdes, pin) (FR-115f)", () => {
   assert.equal(sim.valueOfPin("A-1", "P"), V1);
   assert.equal(sim.valueOfPin("U1", "Y"), V0);
 });
+
+test("scriptedClocks suppresses clock/reset behaviors; setStimulus drives their nets (FR-115e)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("clock"));
+  place(d, "A-2", builtin("indicator"));
+  connect(d, ["A-1", "OUT"], ["A-2", "IN"]);
+  const sim = buildSimulation(d, { scriptedClocks: true });
+  settle(sim);
+  // The clock's simTime square wave is suppressed: its net has no driver.
+  assert.equal(sim.valueOfPin("A-1", "OUT"), VZ);
+  // The caller owns the net through the (replaceable) stimulus list.
+  sim.setStimulus([{ refdes: "A-1", pin: "OUT", value: V1 }]);
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-1", "OUT"), V1);
+  sim.setStimulus([{ refdes: "A-1", pin: "OUT", value: V0 }]);
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-1", "OUT"), V0);
+});

@@ -5,12 +5,14 @@ import {
   deriveColumns,
   runVectors,
   captureRow,
+  captureVectors,
   validateVectors,
   serializeVectors,
   deserializeVectors,
   reconcileVectors,
   migrate,
   emptyRow,
+  hasClockGenerators,
   FORMAT_VERSION,
 } from "./vectors.js";
 import { BUILTINS, portNFields } from "../builtins.js";
@@ -182,17 +184,17 @@ test("serialize / deserialize round-trips a doc and stamps the format version", 
   assert.deepEqual(back, doc);
 });
 
-test("migrate: a versionless file is treated as v1 (already at target, returned as-is)", () => {
+test("migrate: a versionless file is treated as v1 and upgraded (identity) to v2", () => {
   const obj = { inputs: [], outputs: [], rows: [{ in: ["0"], out: ["L"] }] };
-  // At the current target there is nothing to upgrade, so migrate returns the
-  // object unchanged (serializeVectors is what stamps formatVersion on write).
-  assert.deepEqual(migrate(obj), obj);
+  // The v1→v2 step is the identity apart from the stamped formatVersion — the
+  // shape is unchanged, v2 only marks the sequential "C" symbol (FR-115e/§7.7).
+  assert.deepEqual(migrate(obj), { ...obj, formatVersion: 2 });
   // A run-through deserialize still yields a usable doc.
   assert.equal(deserializeVectors(obj).rows.length, 1);
   // An unknown future-version step throws a legible error.
   assert.throws(
-    () => migrate({ formatVersion: 1 }, { target: 2, migrations: {} }),
-    /no migration from version 1 to 2/,
+    () => migrate({ formatVersion: 2 }, { target: 3, migrations: {} }),
+    /no migration from version 2 to 3/,
   );
 });
 
@@ -315,4 +317,165 @@ test("ports: port columns union with switch/indicator columns (FR-115b/FR-115f)"
   assert.ok(cols.inputs.some((c) => c.pin === "P")); // input port
   assert.ok(cols.outputs.some((c) => c.pin === "IN")); // indicator
   assert.ok(cols.outputs.some((c) => c.pin === "P")); // output port
+});
+
+// --- clocked-design guard (FR-115g) ---
+
+test("hasClockGenerators: false for a combinational design (FR-115g)", () => {
+  assert.equal(hasClockGenerators(bufferDesign()), false);
+  assert.equal(hasClockGenerators({ name: "empty" }), false); // no components at all
+});
+
+test("hasClockGenerators: true when a clock built-in is placed (FR-115g)", () => {
+  const d = bufferDesign();
+  place(d, "A-3", builtin("clock"));
+  assert.equal(hasClockGenerators(d), true);
+});
+
+// --- sequential vectors (FR-115e) ---
+
+// DFF: registered output with declared clock (mirrors sim.test.js).
+const DFF = {
+  name: "DFFX",
+  renderType: "unit",
+  clock: "CP",
+  pins: [
+    { name: "D", side: "left", position: 1, direction: "in" },
+    { name: "CP", side: "left", position: 2, direction: "in" },
+    { name: "Q", side: "right", position: 1, direction: "out" },
+  ],
+  behavior: "Q.R = D\n",
+};
+
+// dff design: switch → D, clock → CP, Q → indicator.
+function dffDesign() {
+  const d = mkDesign();
+  place(d, "A-1", builtin("switch")); // D
+  place(d, "A-2", builtin("clock"));
+  place(d, "U1", DFF);
+  place(d, "A-3", builtin("indicator")); // Q
+  connect(d, ["A-1", "OUT"], ["U1", "D"]);
+  connect(d, ["A-2", "OUT"], ["U1", "CP"]);
+  connect(d, ["U1", "Q"], ["A-3", "IN"]);
+  return d;
+}
+
+test("deriveColumns: a clock generator is a kind:'clock' input column; emptyRow defaults it C (FR-115e)", () => {
+  const cols = deriveColumns(dffDesign());
+  // Sorted by refdes: A-1 switch, then A-2 clock.
+  assert.deepEqual(
+    cols.inputs.map((c) => [c.refdes, c.pin, c.kind ?? null]),
+    [["A-1", "OUT", null], ["A-2", "OUT", "clock"]],
+  );
+  const row = emptyRow(cols);
+  assert.deepEqual(row.in, ["0", "C"]);
+});
+
+test("sequential run: rows persist register state; C pulses, 0 holds (FR-115e)", () => {
+  const d = dffDesign();
+  const cols = deriveColumns(d); // inputs: [D switch, clock]
+  const rows = [
+    { in: ["1", "C"], out: ["H"] }, // pulse latches D=1
+    { in: ["0", "0"], out: ["H"] }, // clock held low: Q keeps its state
+    { in: ["0", "C"], out: ["L"] }, // pulse latches D=0
+  ];
+  const res = runVectors(d, { ...cols, rows });
+  assert.equal(res.passed, 3);
+  assert.equal(res.total, 3);
+});
+
+test("sequential run: a 0→1 clock level change between rows is a rising edge (FR-115e)", () => {
+  const d = dffDesign();
+  const cols = deriveColumns(d);
+  const rows = [
+    { in: ["1", "0"], out: ["X"] }, // clock low, D staged high
+    { in: ["1", "1"], out: ["H"] }, // level raised across rows: edge latches 1
+    { in: ["0", "1"], out: ["H"] }, // clock still high: no edge, Q unchanged
+  ];
+  assert.equal(runVectors(d, { ...cols, rows }).passed, 3);
+});
+
+test("sequential run: power-on preamble latches reset-driven state before row 1 (FR-115e)", () => {
+  // Reset R drives the DFF's D: during the asserted preamble the scripted
+  // pulses latch 1; after release, the first row's pulse latches 0.
+  const d = mkDesign();
+  place(d, "A-1", builtin("reset"));
+  place(d, "A-2", builtin("clock"));
+  place(d, "U1", DFF);
+  place(d, "A-3", builtin("indicator"));
+  connect(d, ["A-1", "R"], ["U1", "D"]);
+  connect(d, ["A-2", "OUT"], ["U1", "CP"]);
+  connect(d, ["U1", "Q"], ["A-3", "IN"]);
+  const cols = deriveColumns(d); // one input column: the clock
+  const rows = [
+    { in: ["0"], out: ["H"] }, // clock held: Q still carries the preamble's 1
+    { in: ["C"], out: ["L"] }, // reset released: this pulse latches 0
+  ];
+  assert.equal(runVectors(d, { ...cols, rows }).passed, 2);
+});
+
+test("captureVectors: sequential capture records each row's settled outputs in order (FR-115e)", () => {
+  const d = dffDesign();
+  const cols = deriveColumns(d);
+  const outs = captureVectors(d, cols, [["1", "C"], ["0", "0"], ["0", "C"]]);
+  assert.deepEqual(outs, [["H"], ["H"], ["L"]]);
+});
+
+test("captureVectors: combinational designs capture rows independently", () => {
+  const d = inverterDesign();
+  const cols = deriveColumns(d);
+  assert.deepEqual(captureVectors(d, cols, [["0"], ["1"]]), [["H"], ["L"]]);
+});
+
+test("sequential run does not mutate the live design (FR-115c isolation)", () => {
+  const d = dffDesign();
+  const before = JSON.stringify(d);
+  const cols = deriveColumns(d);
+  runVectors(d, { ...cols, rows: [{ in: ["1", "C"], out: ["H"] }] });
+  assert.equal(JSON.stringify(d), before);
+});
+
+test("validateVectors: C is legal only in a clock column (FR-115e)", () => {
+  const cols = {
+    inputs: [
+      { refdes: "A-1", pin: "OUT", label: "D" },
+      { refdes: "A-2", pin: "OUT", label: "CLK", kind: "clock" },
+    ],
+    outputs: [{ refdes: "A-3", pin: "IN", label: "Q" }],
+  };
+  const ok = validateVectors({ ...cols, rows: [{ in: ["0", "C"], out: ["X"] }] });
+  assert.equal(ok.ok, true);
+  const bad = validateVectors({ ...cols, rows: [{ in: ["C", "1"], out: ["X"] }] });
+  assert.equal(bad.ok, false);
+  assert.ok(bad.errors[0].includes("must be 0 or 1"));
+});
+
+test("serializeVectors: strips the live-only kind marker and stamps v2 (§7.7)", () => {
+  const doc = {
+    inputs: [{ refdes: "A-2", pin: "OUT", label: "CLK", kind: "clock" }],
+    outputs: [{ refdes: "A-3", pin: "IN", label: "Q" }],
+    rows: [{ in: ["C"], out: ["H"] }],
+  };
+  const file = serializeVectors(doc);
+  assert.equal(file.formatVersion, FORMAT_VERSION);
+  assert.deepEqual(file.inputs, [{ refdes: "A-2", pin: "OUT", label: "CLK" }]);
+});
+
+test("reconcileVectors: a clock column absent from the file defaults its cells to C", () => {
+  const fileDoc = deserializeVectors({
+    formatVersion: 2,
+    inputs: [{ refdes: "A-1", pin: "OUT", label: "D" }],
+    outputs: [],
+    rows: [{ in: ["1"], out: [] }],
+  });
+  const columns = {
+    inputs: [
+      { refdes: "A-1", pin: "OUT", label: "D" },
+      { refdes: "A-2", pin: "OUT", label: "CLK", kind: "clock" },
+    ],
+    outputs: [],
+  };
+  const { rows, warnings } = reconcileVectors(fileDoc, columns);
+  assert.deepEqual(rows[0].in, ["1", "C"]);
+  assert.equal(warnings.length, 1); // clock column in the design but not the file
 });

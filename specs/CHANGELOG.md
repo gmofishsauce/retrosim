@@ -19,6 +19,16 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-01 — Sequential test vectors (FR-115e implemented)
+What: Test vectors now cover clocked designs. A sequential vector set's rows run in order on a single simulation instance (state persists row to row) and the run owns the clock deterministically: clock/reset time-based behaviors are suppressed (buildSimulation scriptedClocks) and the runner drives their nets as scripted stimulus (setStimulus). Each clock generator contributes a 0/1/C input column in the classic PLD/JEDEC style (C = one positive pulse, the new-row default); each row settles to quiescence per phase (FR-085 bound). Before row 1 an implicit power-on preamble asserts every reset built-in for its own `cycles` worth of scripted pulses (stakeholder-chosen over scripted reset columns). Capture runs the same ordered pass. Combinational designs keep FR-115c unchanged; `.tv` bumps to formatVersion 2 (identity migration — shape unchanged, marks the C symbol). The FR-115g guard is removed (superseded).
+Why: FR-115e was the recorded deferred direction; refined here to settle-phases instead of a fixed step count per row (fixed counts are fragile against logic depth) and to a power-on preamble for reset (matches the interactive simulator's power-on feel, keeps tables small).
+Touches: FR-115e (reworked from deferred stub), FR-115/FR-115a/FR-115b/FR-115c (scope/columns cross-refs), FR-115g (superseded); design §6.13 (scriptedClocks, setStimulus), §6.16 (sequential runner, captureVectors, dialog), §7.7 (v2, C symbol), traceability table.
+
+## 2026-07-01 — Clocked-design guard in the Test Vectors dialog (FR-115g)
+What: The test-vector table editor now detects a design containing a clock generator and disables Run and Capture with a persistent notice; row editing, Load, and Save stay available.
+Why: Test vectors are combinational-only (FR-115) — a clocked design never quiesces, so each row burned the full 10,000-unit settle bound and produced meaningless results with no warning. Cheap footgun guard until sequential vectors (FR-115e) land, at which point it is superseded.
+Touches: FR-115g (new); design §6.16 (hasClockGenerators, dialog guard), traceability table.
+
 ## 2026-06-30 — Test vectors bind to ports by the port's own identity (FR-115f)
 What: Test vectors can now drive/observe a design's ports (FR-094/portN FR-071e), not just switches/indicators — the unit under test is always the design shown in the editor. A port column is identified by the port's OWN (refdes,pin) — (refdes,"P") for a 1-wide port, (refdes,"P"i) for a portN bit — the natural, stable identity an author writes by hand, so a .tv reconciles by (refdes,pin) and no helper components are synthesized. Ports bind by effective direction (FR-094c/FR-094d): in→input column, out→output column, bidir→skipped with a warning. portN expands uniformly into N one-bit columns. The runner drives input ports via the new simulator stimulus (FR-094e/§6.13) and reads output ports directly off their nets; port columns union with any switch/indicator columns.
 Why: An earlier wrapper scheme keyed columns by synthesized helper instances, which didn't match a hand-authored .tv (it keys by the port) and produced a flood of reconcile warnings. Binding by the port's own identity is what users expect and what existing .tv files use.

@@ -46,9 +46,16 @@ function effectiveProps(inst) {
 //   conflictedConductors()   Set of wire/bus ids on conflicted nets (FR-082)
 //   hasClocks()              sequential (FR-086) vs combinational (FR-085)
 //   unitsPerSecond()         pacing rate: max period × speed over clocks (FR-084)
+//   setStimulus(entries)     replace the external stimulus list between steps
+//
+// `scriptedClocks` (FR-115e): suppress the time-based built-in behaviors — the
+// clock's simTime square wave (FR-084) and the power-on reset's simTime window
+// (FR-071b) — so the caller (the sequential vector runner, §6.16) owns those
+// nets, driving them through the stimulus mechanism as scripted levels. The
+// live editor run never passes it.
 export function buildSimulation(
   design,
-  { onMessage = () => {}, romContent = null, stimulus = [] } = {},
+  { onMessage = () => {}, romContent = null, stimulus = [], scriptedClocks = false } = {},
 ) {
   const nets = buildNets(design, onMessage);
 
@@ -275,6 +282,10 @@ export function buildSimulation(
     };
     for (const e of entities) {
       if (e.kind === "builtin") {
+        // Scripted-clock mode (FR-115e): the clock and reset built-ins' simTime-
+        // based behaviors are suppressed; the caller drives their nets via the
+        // stimulus list instead.
+        if (scriptedClocks && (e.renderType === "clock" || e.renderType === "reset")) continue;
         const ctx = { props: e.props, simTime, clockPeriod, state: e.inst.switchState };
         for (const c of e.behave(ctx)) {
           add(`${e.refdes}.${c.pin}`, c.value, !!c.weak, `${e.refdes}.${c.pin}`);
@@ -340,6 +351,12 @@ export function buildSimulation(
       clocks.length
         ? Math.max(...clocks.map((c) => c.props.period * c.props.speed))
         : 0,
+    // setStimulus replaces the external stimulus list between steps (FR-115e):
+    // a long-lived sequential vector run re-drives its inputs row by row (and
+    // phase by phase within a C pulse) without rebuilding the simulation.
+    setStimulus(entries) {
+      stimulus = entries;
+    },
   };
 }
 

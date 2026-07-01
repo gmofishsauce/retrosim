@@ -460,6 +460,8 @@ body {
 .vec-summary.ok { color: #1a7f37; }
 .vec-summary.err { color: #b00; }
 .vec-note { font-size: 0.8rem; color: #555; white-space: pre-wrap; }
+/* Sequential-mode notice (FR-115e): persistent, informational blue. */
+.vec-mode { font-size: 0.8rem; color: #1f5a96; background: #e8f1fb; border: 1px solid #b9d4ef; border-radius: 3px; padding: 0.25rem 0.5rem; }
 
 .context-menu {
   position: fixed;

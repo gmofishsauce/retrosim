@@ -1,34 +1,38 @@
 # Test Vectors — open / deferred items
 
-Status as of 2026-06-26. Tracks what is **not** yet done in the test-vector
+Status as of 2026-07-01. Tracks what is **not** yet done in the test-vector
 feature (FR-115). For intended behavior see `specs/requirements.md` §3.19a and
 `specs/design.md` §6.16 / §7.7.
 
-## Shipped (v1, combinational)
+## Shipped
 
 - Simulate ▸ Test Vectors… modal table editor; columns auto-derived from the
   design's input switches (0/1) and indicators (H/L/X; 8-wide → 8 bit columns).
 - Run with per-cell pass/fail + "N of M rows passed"; Capture golden outputs;
   Load/Save a `.tv` JSON sibling file.
-- Pure runner/format in `web/js/engine/vectors.js` (11 unit tests). Runs on a
-  throwaway clone — never mutates/dirties/undoes the design.
+- Pure runner/format in `web/js/engine/vectors.js`. Runs on a throwaway clone —
+  never mutates/dirties/undoes the design.
+- ~~Clocked-design guard (FR-115g, 2026-07-01)~~ — superseded the same day by
+  sequential support; the guard is removed.
+- **Sequential test vectors (FR-115e, 2026-07-01).** A clocked design's rows run
+  in order on one simulation instance (state persists); each clock generator is
+  a 0/1/C input column (PLD/JEDEC style, C = one positive pulse, the new-row
+  default); every phase settles to quiescence (FR-085 bound); an implicit
+  power-on preamble asserts reset built-ins for their own `cycles` of scripted
+  pulses before row 1. Engine: `buildSimulation` `scriptedClocks` +
+  `setStimulus`. `.tv` bumps to formatVersion 2 (identity migration). Was
+  item #1 below.
 
 ## Deferred (intentional, recorded in specs)
 
-1. **Sequential / clocked designs — FR-115e.** The whole feature is
-   combinational-only. The intended direction is recorded: a sequential vector
-   set is a *time-ordered* sequence whose rows persist state, and the run *owns
-   the clock deterministically* (replacing FR-084 wall-clock pacing). Not built.
-   - Needs: row semantics (one row = one clock cycle? explicit clock column?),
-     reset handling, and persisting state between rows (no per-row clone).
+1. ~~**Sequential / clocked designs — FR-115e.**~~ **Done 2026-07-01** — see
+   Shipped above. Decisions taken: explicit 0/1/C clock column (JEDEC style),
+   settle-to-quiescence phases (not a fixed step count per row), reset via an
+   implicit power-on preamble (stakeholder-chosen over scripted reset columns).
 
-2. **No guard against running vectors on a clocked design.** Today the dialog
-   opens for any design and `runVectors` settles each row independently. A design
-   with a clock built-in never quiesces, so each row burns the full 10,000-step
-   `SETTLE_BOUND` and yields meaningless results, with **no warning**. v1 relies
-   on the user knowing it's combinational-only. Smallest fix: detect a clock
-   generator (`buildSimulation(...).hasClocks()` or scan `renderType === "clock"`)
-   and disable Run / show a notice. Worth doing before sequential lands.
+2. ~~**No guard against running vectors on a clocked design.**~~ **Done
+   2026-07-01 (FR-115g)**, then superseded the same day by sequential
+   vectors (#1); the guard is removed.
 
 3. **Binding only to switches + indicators, not ports (FR-094).** Chosen for v1.
    Ports (typed, named, directional external interface) are the natural binding
@@ -75,7 +79,7 @@ feature (FR-115). For intended behavior see `specs/requirements.md` §3.19a and
 
 ## Suggested next steps (rough order)
 
-1. Add the clocked-design guard (#2) — cheap, prevents a confusing footgun.
-2. Sequential vectors (#1, FR-115e) — the big one; decide row/clock semantics first.
+1. ~~Add the clocked-design guard (#2)~~ — done 2026-07-01 (FR-115g, since removed).
+2. ~~Sequential vectors (#1, FR-115e)~~ — done 2026-07-01.
 3. Whole-bus hex output cells (#6) and `Z`/`U` assertions (#7) — quality-of-life.
-4. Port binding (#3), then fast-engine stimulus (#4).
+4. Port binding (#3) — done 2026-06-30 (FR-115f); fast-engine stimulus (#4) remains.

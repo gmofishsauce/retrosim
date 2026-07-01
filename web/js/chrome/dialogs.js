@@ -7,12 +7,13 @@ import { loadRomContents } from "../engine/sim.js";
 import {
   deriveColumns,
   runVectors,
-  captureRow,
+  captureVectors,
   validateVectors,
   serializeVectors,
   deserializeVectors,
   reconcileVectors,
   emptyRow,
+  hasClockGenerators,
 } from "../engine/vectors.js";
 
 function el(tag, className, text) {
@@ -1135,15 +1136,20 @@ export function openFileDialog({ mode, startPath, defaultName = "", title, exts 
   });
 }
 
-// testVectorsDialog is the combinational test-vector table editor (§6.16, FR-115).
-// Columns are auto-derived from the open design (input switches → 0/1 cells;
-// indicator bits → H/L/X cells); the user fills rows, Runs them against the slow
-// simulator (pass/fail per cell, FR-115d), Captures golden outputs from a sim run,
-// and Loads/Saves a `.tv` sibling file (FR-115a). Resolves to null (no result).
+// testVectorsDialog is the test-vector table editor (§6.16, FR-115). Columns are
+// auto-derived from the open design (input switches → 0/1 cells; clock generators
+// → 0/1/C cells, FR-115e; indicator bits → H/L/X cells); the user fills rows, Runs
+// them against the slow simulator (pass/fail per cell, FR-115d), Captures golden
+// outputs from a sim run, and Loads/Saves a `.tv` sibling file (FR-115a). A
+// clocked design runs sequentially — rows in order, state persisting (FR-115e).
+// Resolves to null (no result).
 export function testVectorsDialog({ store, dataDir }) {
   return new Promise((resolve) => {
     const design = store.design;
     const columns = deriveColumns(design);
+    // Sequential mode (FR-115e): rows run in order with scripted clocks; the
+    // dialog shows a persistent notice and 0/1/C cells for clock columns.
+    const clocked = hasClockGenerators(design);
     const rows = [emptyRow(columns)]; // start with one blank row to fill
     let runResults = null; // [{ cells, pass }] aligned to rows, or null when stale
 
@@ -1172,6 +1178,16 @@ export function testVectorsDialog({ store, dataDir }) {
     }
 
     const summary = el("div", "vec-summary");
+    // Persistent sequential-mode notice (FR-115e); unlike noteEl it is never
+    // overwritten.
+    const modeEl = el(
+      "div",
+      "vec-mode",
+      "Sequential design: rows run in order on one simulation and state persists between rows. " +
+        "Clock cells take 0/1/C — C applies one clock pulse (the default for a new row). " +
+        "A power-on reset preamble runs before row 1.",
+    );
+    modeEl.hidden = !clocked;
     const noteEl = el("div", "vec-note");
     noteEl.hidden = true;
     const errEl = el("div", "galdlg-error");
@@ -1210,7 +1226,7 @@ export function testVectorsDialog({ store, dataDir }) {
 
     const tableWrap = el("div", "vec-tablewrap");
     tableWrap.appendChild(table);
-    box.append(tableWrap, summary, noteEl, errEl);
+    box.append(tableWrap, summary, modeEl, noteEl, errEl);
 
     function mkSelect(opts, value) {
       const s = el("select", "vec-select");
@@ -1230,7 +1246,8 @@ export function testVectorsDialog({ store, dataDir }) {
         tr.appendChild(el("td", "vec-rownum", String(ri + 1)));
         columns.inputs.forEach((col, ci) => {
           const td = el("td", "vec-cell");
-          const sel = mkSelect(["0", "1"], row.in[ci]);
+          // A clock column additionally offers C = one clock pulse (FR-115e).
+          const sel = mkSelect(col.kind === "clock" ? ["0", "1", "C"] : ["0", "1"], row.in[ci]);
           sel.addEventListener("change", () => {
             row.in[ci] = sel.value;
             clearResults();
@@ -1299,9 +1316,12 @@ export function testVectorsDialog({ store, dataDir }) {
       errEl.hidden = true;
       try {
         const romContent = await loadRomContents(design);
-        for (const row of rows) {
-          row.out = captureRow(design, columns, row.in, { romContent });
-        }
+        // Whole-table capture: an ordered pass for a sequential design (FR-115e),
+        // independent rows for a combinational one.
+        const outs = captureVectors(design, columns, rows.map((r) => r.in), { romContent });
+        rows.forEach((row, i) => {
+          row.out = outs[i];
+        });
         clearResults();
         renderBody();
       } catch (e) {
