@@ -34,18 +34,20 @@ feature (FR-115). For intended behavior see `specs/requirements.md` §3.19a and
    2026-07-01 (FR-115g)**, then superseded the same day by sequential
    vectors (#1); the guard is removed.
 
-3. **Binding only to switches + indicators, not ports (FR-094).** Chosen for v1.
-   Ports (typed, named, directional external interface) are the natural binding
-   surface for a reusable block and for the fast engine; not wired.
+3. ~~**Binding only to switches + indicators, not ports (FR-094).**~~ **Done
+   2026-06-30 (FR-115f)** — ports bind as columns by effective direction,
+   identified by the port's own (refdes, pin); bidir ports are skipped with a
+   warning unless a direction override is set (FR-094d).
 
 4. **Fast (generated C) simulator — OQ-011 / OQ-012.** The `.tv` format was
    designed so the same file can later feed the C engine as stimulus + golden,
    but nothing connects them yet. Open: result emission (VCD vs transcript), and
    running the `.tv` through generated C.
 
-5. **Input don't-cares / vector expansion.** Input cells are strictly `0`/`1`
-   (an input switch can only drive 0 or 1, FR-071c). No `X` on inputs, so no
-   automatic expansion of one row into the 2^k combinations it covers.
+5. **Input don't-cares / vector expansion.** Input cells are `0`/`1` (plus `C`
+   in a clock column, FR-115e); a switch or port can only drive 0 or 1
+   (FR-071c). No `X` don't-care on inputs, so no automatic expansion of one
+   row into the 2^k combinations it covers.
 
 6. **Multi-bit (hex) output entry.** An 8-wide indicator expands to eight per-bit
    `H/L/X` columns. There is no whole-bus hex/binary expected value (e.g. `A5`),
@@ -67,8 +69,9 @@ feature (FR-115). For intended behavior see `specs/requirements.md` §3.19a and
   could briefly block the UI. No progress indicator and no way to cancel a run.
 - **Capture is all-rows-only.** One Capture button fills every row's expected
   cells; there is no per-row capture.
-- **Fixed columns.** Columns are every switch/indicator, ordered by refdes —
-  no subset selection, manual reordering, or hiding.
+- **Fixed columns.** Columns are every switch, clock, directional port, and
+  indicator bit, ordered by refdes — no subset selection, manual reordering,
+  or hiding.
 - **No keyboard accelerator.** The Test Vectors… item has no shortcut
   (FR-004b was not extended).
 - **Results are not persisted** (by design, FR-115d) — the `.tv` file stores
