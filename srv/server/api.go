@@ -25,6 +25,7 @@ func NewRouter(lib *Library, dataDir, componentsDir, webDir string) http.Handler
 	api.HandleFunc("/api/v1/romfile", handleRomFile())
 	api.HandleFunc("/api/v1/design/load", handleDesignLoad())
 	api.HandleFunc("/api/v1/design/save", handleDesignSave())
+	api.HandleFunc("/api/v1/file/save", handleFileSave())
 	api.HandleFunc("/api/v1/ping", handlePing())
 	// Any other /api/ path is an API miss: answer with a JSON envelope, never
 	// the static handler's HTML.
@@ -202,6 +203,30 @@ func handleDesignSave() http.HandlerFunc {
 			return
 		}
 		if err := SaveDesign(body.Path, body.Design); err != nil {
+			writeStorageError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"path": body.Path})
+	}
+}
+
+// handleFileSave writes a verbatim text file atomically (§6.4): the C
+// generator's delivery path (FR-116). Unlike handleDesignSave the content is
+// not JSON and is written exactly as sent.
+func handleFileSave() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !requireMethod(w, r, http.MethodPost) {
+			return
+		}
+		var body struct {
+			Path    string `json:"path"`
+			Content string `json:"content"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		if err := SaveFile(body.Path, []byte(body.Content)); err != nil {
 			writeStorageError(w, err)
 			return
 		}

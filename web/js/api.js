@@ -101,6 +101,26 @@ export async function ping() {
   return request("/ping");
 }
 
+// saveTextFile writes verbatim text through POST /file/save (§6.4): the C
+// generator's delivery path (FR-116). The design-save endpoint carries only
+// valid JSON (the server re-indents it), so C source cannot ride it.
+export async function saveTextFile(path, content) {
+  const body = await request("/file/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, content }),
+  });
+  return body.path;
+}
+
+// fetchStaticText loads a static SPA asset as text — the C runtime pair
+// (/cgen/runtime.{h,c}) the generator copies beside its output (§6.17).
+export async function fetchStaticText(path) {
+  const resp = await fetch(path);
+  if (!resp.ok) throw new Error(`GET ${path}: HTTP ${resp.status}`);
+  return resp.text();
+}
+
 // saveDesign writes a design object to path (FR-046).
 export async function saveDesign(path, design) {
   const body = await request("/design/save", {

@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-02 — Verbatim-text save endpoint for C-generator delivery
+What: Added `POST /api/v1/file/save` ({path, content} → atomicWrite, no JSON interpretation) and corrected design §6.17 to use it for the three generated files.
+Why: Implementation revealed §6.17's plan to reuse `/design/save` was wrong — that endpoint requires a valid-JSON body (json.Indent), so C source cannot ride it.
+Touches: design §6.4, §6.17 (corrected)
+
 ## 2026-07-02 — Fast (generated C) simulator: design settled
 What: Specified the code generator's deliverable and I/O, resolving OQ-011 and the `gen-open.md` open items: Simulate ▸ Generate C… writes `<design>.c` plus a fixed, human-readable, documented `runtime.h`/`runtime.c` pair (two-file delivery, plain `cc` compile, no tool-invoked compilation); `.tv`-mirroring vector rows on stdin as the first batch mode; stdout transcript + stderr conflict reports (VCD as a later `--vcd` flag); byte-per-net four-state encoding; hierarchy refused in v1; ROM contents baked at generate time.
 Why: `.tv`-driven execution is the cheapest FR-107 parity harness (generator first, stimulus immediately after — see gen-open.md sequencing); a hand-written runtime keeps the re-expressed slow-sim semantics in one auditable, documentable place.

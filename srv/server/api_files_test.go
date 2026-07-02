@@ -121,6 +121,37 @@ func TestDesignSaveEndpoint(t *testing.T) {
 	postStatus(t, srv.URL+"/api/v1/design/save", "{not json", http.StatusBadRequest)
 }
 
+func TestFileSaveEndpoint(t *testing.T) {
+	dataDir := t.TempDir()
+	srv := newTestServer(t, dataDir)
+	target := filepath.Join(dataDir, "gen.c")
+
+	// Verbatim text (not JSON): written byte-for-byte (§6.4, FR-116).
+	content := "#include \"runtime.h\"\n/* not JSON: {][ */\nint x;\n"
+	reqBody, _ := json.Marshal(map[string]any{"path": target, "content": content})
+	resp, err := http.Post(srv.URL+"/api/v1/file/save", "application/json", strings.NewReader(string(reqBody)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != content {
+		t.Fatalf("content = %q, want %q", got, content)
+	}
+
+	// Relative path -> 400.
+	rel, _ := json.Marshal(map[string]any{"path": "relative.c", "content": "x"})
+	postStatus(t, srv.URL+"/api/v1/file/save", string(rel), http.StatusBadRequest)
+	// Non-JSON body -> 400.
+	postStatus(t, srv.URL+"/api/v1/file/save", "{not json", http.StatusBadRequest)
+}
+
 // --- helpers ---
 
 func getJSON(t *testing.T, url string, wantStatus int, v any) {

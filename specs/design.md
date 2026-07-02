@@ -649,11 +649,20 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | `GET /api/v1/romfile?path=<p>` | query `path` (abs, `.bin`/`.hex`) | raw bytes (`application/octet-stream`), capped at `MaxRomBytes` 64 MiB | 400 bad/!bin·hex, 404 missing, 500 too large |
   | `GET /api/v1/design/load?path=<p>` | query `path` | `{"design":Design}` | 400, 404, 422 malformed JSON |
   | `POST /api/v1/design/save` | `{"path":"<abs>","design":Design}` | `{"path":"<abs>"}` | 400 bad body, 409/500 write failure |
+  | `POST /api/v1/file/save` | `{"path":"<abs>","content":"<text>"}` | `{"path":"<abs>"}` | 400 bad body/path, 500 write failure |
   | `GET /api/v1/ping` | – | `{"ok":true}` | – (FR-089 heartbeat; no side effects) |
 
   Directory entries: subdirectories plus the files whose extension is in `exts`
   (default `.json`; the ROM picker passes `bin,hex`, FR-114e); the response
   includes `parent` so the dialog can offer "up".
+
+  `POST /api/v1/file/save` writes **verbatim text** — the same absolute-path
+  validation and `atomicWrite` as a design save, but no JSON interpretation or
+  re-indenting. Added for the C generator's delivery (FR-116: `<design>.c` +
+  `runtime.c`/`runtime.h`), which `/design/save` cannot carry: that endpoint
+  requires a valid-JSON body (it `json.Indent`s it), fine for `.json`/`.tv` but
+  a discovered flaw in §6.17's original "ride the design-save endpoint" plan
+  (corrected 2026-07-02).
 - **Behavior:** decode JSON, delegate to `storage.go`/`components.go`, encode
   JSON. All responses `Content-Type: application/json`. `POST /api/v1/components`
   (FR-007a) parses the submitted YAML through the same `yamlparse.go` path as a
@@ -1947,7 +1956,7 @@ no sequential part could ever leave U.)
   - **Built-ins/memory:** instance tables (type, nets, effective properties, switch's persisted state as its baked drive level — overridable by a vector input column); ROM contents from `romContent` baked as initialized arrays (FR-116a); RAM starts all-U.
   - **Preflight/refusals:** same compile errors as `buildSimulation` (parse failure, `.R` without `clock:`), plus the FR-116 deferred-scope refusals — sub-design instances or off-sheet connectors present → generation fails with a message; behavior-less types generate U-drivers with a warning (FR-080 analogue).
 
-**Chrome wiring (`chrome/toolbar.js`, `app.js`).** The Simulate menu (§6.16) gains a **Generate C…** item (`onGenerateC`), disabled while `state.simulating` or `state.vectorPanelOpen` (FR-116). `app.js` handles it: `loadRomContents(design)` (§6.13) → fetch `/cgen/runtime.h` + `/cgen/runtime.c` → `generateC(...)` → `openFileDialog` in save mode with a `.c` extension (the `saveExt` generalization of §6.16) seeded at `dirOf(savePath)` with default `<base>.c` → write all three files through the existing design-save API (§6.4; the endpoints neither interpret nor extension-check the body). Failures/warnings post via the message tray (FR-074).
+**Chrome wiring (`chrome/toolbar.js`, `app.js`).** The Simulate menu (§6.16) gains a **Generate C…** item (`onGenerateC`), disabled while `state.simulating` or `state.vectorPanelOpen` (FR-116). `app.js` handles it: `loadRomContents(design)` (§6.13) → fetch `/cgen/runtime.h` + `/cgen/runtime.c` → `generateC(...)` → `openFileDialog` in save mode with a `.c` extension (the `saveExt` generalization of §6.16) seeded at `dirOf(savePath)` with default `<base>.c` → write all three files through `POST /api/v1/file/save` (§6.4), the verbatim-text endpoint added for this purpose (the design-save endpoint requires a valid-JSON body — `json.Indent` — so C source cannot ride it; corrected 2026-07-02 from the original "reuse `/design/save`" plan). Failures/warnings post via the message tray (FR-074).
 
 **Milestones.** (Sequencing per the 2026-07-02 discussion recorded in `gen-open.md`.)
   1. **M1 — runtime + minimal generator, combinational:** runtime pair, `cgen.js` for GALasm parts + switch/indicator/pulls, Generate-C menu flow; settle-and-stop; conflict reports. No compiler is invoked by any tool — the user compiles by hand (`cc <design>.c runtime.c`).

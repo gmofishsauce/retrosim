@@ -3,8 +3,15 @@
 // only then removes the loading overlay so the canvas is not interactable until
 // the library is ready (FR-003).
 
-import { getComponents, getDefaults, createComponent } from "./api.js";
-import { newGalPartDialog, memDeviceDialog, memDeviceYaml, testVectorsPanel } from "./chrome/dialogs.js";
+import { getComponents, getDefaults, createComponent, saveTextFile, fetchStaticText } from "./api.js";
+import {
+  newGalPartDialog,
+  memDeviceDialog,
+  memDeviceYaml,
+  testVectorsPanel,
+  openFileDialog,
+} from "./chrome/dialogs.js";
+import { generateC } from "./engine/cgen.js";
 import { BUILTINS, memDeviceType } from "./builtins.js";
 import { createDesign, typeIdentity } from "./model/design.js";
 import { createStore } from "./store.js";
@@ -290,6 +297,47 @@ async function main() {
     // §6.16); opening it imposes the read-only lock (FR-115h).
     const vecPanel = testVectorsPanel({ store, dataDir: defaults.dataDir });
     const onTestVectors = () => (vecPanel.isOpen() ? vecPanel.close() : vecPanel.open());
+    // Simulate ▸ Generate C… (FR-116/§6.17): emit the standalone C simulator —
+    // the generated <design>.c plus verbatim copies of the fixed runtime pair —
+    // into a user-chosen directory. Generation is read-only; refusals and
+    // generator warnings post to the message tray (FR-074).
+    const dirOf = (p) => p.replace(/\/[^/]*$/, "") || "/";
+    const baseName = (p) => p.slice(p.lastIndexOf("/") + 1);
+    const onGenerateC = async () => {
+      let out;
+      try {
+        out = generateC(store.design);
+      } catch (e) {
+        postMessage(`cannot generate: ${e.message}`);
+        return;
+      }
+      const sp = store.state.savePath;
+      const res = await openFileDialog({
+        mode: "save",
+        startPath: sp ? dirOf(sp) : defaults.dataDir,
+        defaultName: (sp ? baseName(sp).replace(/\.[^.]*$/, "") : "design") + ".c",
+        title: "Generate C simulator (.c)",
+        exts: ["c"],
+        saveExt: "c",
+      });
+      if (!res) return;
+      try {
+        const dir = dirOf(res.path);
+        const [h, c] = await Promise.all([
+          fetchStaticText("/cgen/runtime.h"),
+          fetchStaticText("/cgen/runtime.c"),
+        ]);
+        await saveTextFile(res.path, out.code);
+        await saveTextFile(`${dir}/runtime.h`, h);
+        await saveTextFile(`${dir}/runtime.c`, c);
+        for (const w of out.warnings) postMessage(w);
+        postMessage(
+          `generated ${baseName(res.path)} + runtime.c/runtime.h — compile: cc ${baseName(res.path)} runtime.c`,
+        );
+      } catch (e) {
+        postMessage(`cannot generate: ${e.message}`);
+      }
+    };
     initToolbar({
       container: document.getElementById("tools"),
       store,
@@ -298,6 +346,7 @@ async function main() {
       sim,
       library, // for the Refresh Types action (FR-088)
       onTestVectors, // FR-115: Simulate ▸ Test Vectors…
+      onGenerateC, // FR-116: Simulate ▸ Generate C…
     });
     initProperties({ container: document.getElementById("properties"), store });
     overlay.classList.add("hidden");

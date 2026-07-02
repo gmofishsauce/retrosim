@@ -26,7 +26,7 @@ function accelLabel({ key, shift }) {
     : `Ctrl+${shift ? "Shift+" : ""}${key}`;
 }
 
-export function initToolbar({ container, store, interaction, fileops, sim, library, onTestVectors }) {
+export function initToolbar({ container, store, interaction, fileops, sim, library, onTestVectors, onGenerateC }) {
   const tools = [
     { tool: "select", label: "Select" },
     { tool: "wire", icon: WIRE_ICON },
@@ -86,6 +86,13 @@ export function initToolbar({ container, store, interaction, fileops, sim, libra
     "Test Vectors…",
     "Author and run combinational test vectors",
     () => onTestVectors?.(),
+  );
+  // Generate C… emits the standalone C simulator (FR-116/§6.17).
+  const generateItem = addItem(
+    simMenu.panel,
+    "Generate C…",
+    "Generate a standalone C simulator for this design",
+    () => onGenerateC?.(),
   );
   container.appendChild(simMenu.menu);
 
@@ -216,6 +223,9 @@ export function initToolbar({ container, store, interaction, fileops, sim, libra
     // panel is open (to close it); only a running simulation disables it
     // (FR-115b).
     vectorsItem.disabled = simming;
+    // Generate C… is disabled under either lock (FR-116): while simulating
+    // and while the vector panel is open.
+    generateItem.disabled = locked;
     // Run and the panel are mutually exclusive (FR-115h): Run is disabled while
     // the panel is open. Stop stays usable while simulating.
     runBtn.disabled = panelOpen;

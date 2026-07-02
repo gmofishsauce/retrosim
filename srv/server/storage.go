@@ -131,6 +131,17 @@ func SaveDesign(path string, design json.RawMessage) error {
 	return atomicWrite(path, pretty.Bytes())
 }
 
+// SaveFile writes verbatim text to path atomically (same temp-file+rename as
+// SaveDesign, §6.5) with no interpretation of the content. Added for the C
+// generator's delivery (§6.4/§6.17, FR-116): generated C source is not JSON,
+// so it cannot ride SaveDesign's json.Indent path. path must be absolute.
+func SaveFile(path string, content []byte) error {
+	if path == "" || !filepath.IsAbs(path) {
+		return fmt.Errorf("%q: %w", path, ErrInvalidPath)
+	}
+	return atomicWrite(path, content)
+}
+
 // atomicWrite writes data to path via a temp file in the same directory, fsynced
 // and renamed over the destination, so a failure never truncates an existing file
 // (§6.5). Shared by SaveDesign (FR-046–FR-049) and component create (FR-007a).
