@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-02 — Fast (generated C) simulator: design settled
+What: Specified the code generator's deliverable and I/O, resolving OQ-011 and the `gen-open.md` open items: Simulate ▸ Generate C… writes `<design>.c` plus a fixed, human-readable, documented `runtime.h`/`runtime.c` pair (two-file delivery, plain `cc` compile, no tool-invoked compilation); `.tv`-mirroring vector rows on stdin as the first batch mode; stdout transcript + stderr conflict reports (VCD as a later `--vcd` flag); byte-per-net four-state encoding; hierarchy refused in v1; ROM contents baked at generate time.
+Why: `.tv`-driven execution is the cheapest FR-107 parity harness (generator first, stimulus immediately after — see gen-open.md sequencing); a hand-written runtime keeps the re-expressed slow-sim semantics in one auditable, documentable place.
+Touches: FR-110, FR-116, FR-116a, FR-117, FR-118 (new); OQ-011 (resolved), OQ-012 (updated); design §6.17 (new), §8, §9, §10, §11.1, §12
+
 ## 2026-07-02 — Fast-engine sequencing: `.tv` as the first batch stimulus mode (advice)
 What: Recorded the recommended ordering for the not-yet-written fast (generated-C) simulator. Fast-C stimulus cannot precede the generator (it is the generated program's force/read ABI, gated on OQ-011 and batch run-control), but `.tv`-driven verification should be the generator's first batch milestone — ahead of the memory-as-stimulus/CPU direction — because diffing one `.tv` through both engines is the cheapest FR-107 parity harness and reuses existing infra (FR-115/FR-115f/FR-094e). Advisory only; no behavior or code change.
 Touches: OQ-012 (inline update); gen-open.md (new "Sequencing" section). No FR/design changes.

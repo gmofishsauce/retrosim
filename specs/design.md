@@ -1925,6 +1925,40 @@ no sequential part could ever leave U.)
 
 ---
 
+### 6.17 JS: fast (generated C) simulator (`web/js/engine/cgen.js` + `web/cgen/runtime.{h,c}` + chrome wiring)
+
+- **Purpose:** emit, from the current design, a standalone C program that simulates that one design with bit-for-bit slow-simulator semantics — the "fast" engine of `sim-vision.md`, realized as a code generator per §3.23.
+- **Satisfies:** FR-106, FR-107, FR-108, FR-109, FR-110, FR-116, FR-116a, FR-117, FR-118; extends FR-004a (new Simulate-menu item).
+
+**Architecture — runtime owns control flow, generated code is data + lowered logic (FR-116a).** The emitted program is two translation units. `runtime.c` contains `main()`, flag parsing, the settle/step loops, net resolution, the vector runner, and all reporting; it calls into a small **`gen_` interface** declared in `runtime.h` and implemented by the generated `<design>.c`. The generated file is therefore mostly tables plus straight-line lowered logic, and every subtle semantic lives in the hand-written, auditable runtime.
+
+**Runtime (`web/cgen/runtime.h` / `web/cgen/runtime.c`).** Checked-in, human-readable C (C99, no dependencies beyond libc), served as static assets by the existing Go static handler and fetched by the client at generate time. `runtime.h` is the documented API (comments written as future user documentation); `runtime.c` carries FR-number references at each semantic re-expression, mirroring `sim.js`'s comment style. Core pieces:
+  - **Four-state type:** `typedef enum { RT_0, RT_1, RT_U, RT_Z } rt_val;` — numerically identical to `V0`/`V1`/`VU`/`VZ` (§6.13). One byte per net (`rt_val curr[]`/`next[]`, double-buffered, FR-078); bit-packing is a deliberately deferred optimization.
+  - **Combination ops:** `rt_and`, `rt_or`, `rt_not`, `rt_xor` implementing FR-077 selective pessimism (`0 AND x = 0`, `1 OR x = 1`, other U → U; Z reads as U), used by the generated evaluate functions.
+  - **Contribution + resolution:** the generated per-step code deposits driver contributions (`rt_contrib(net, val, weak, label_index)`); `rt_resolve_nets()` re-expresses `resolveNet` from `sim.js` — enabled strong drivers win, weak pulls decide only when every strong driver is Z, 0-vs-1 disagreement → U with a conflict report to stderr naming both drivers on onset (FR-081–FR-083, FR-108/FR-118).
+  - **Step/settle:** `rt_step()` (latch phase → contributions → resolve → swap, FR-078/FR-110) and `rt_settle()` (step to quiescence under `RT_SETTLE_BOUND` 10000, FR-085's bound).
+  - **Built-ins:** behaviors for clock, power-on reset, input switch, pulls, and memory (FR-116a), driven from generated instance tables; indicators and ports are observation entries in the column tables. In vector mode clocks/resets are scripted exactly as `scriptedClocks` mode (§6.13/FR-115e).
+  - **Vector runner:** reads whitespace-separated rows from stdin (`0`/`1`/`C` inputs `|` `H`/`L`/`X` expected, positional against the baked columns, FR-117), branches combinational/sequential exactly as `runVectors` (§6.16) — independent rows vs. ordered rows with reset preamble and shared `C` pulses — and prints the per-row transcript + summary to stdout (FR-118); exit status 0 iff all rows passed.
+  - The runtime compiles standalone (a `RT_NO_GEN` test harness or equivalent), so its ops and resolver are natively unit-testable without a generated design.
+
+**Generator (`web/js/engine/cgen.js`).** Pure, DOM-free ES module (unit-tested under `node:test` like `vectors.js`). `generateC(design, { romContent }) → { code, warnings }` produces the `<design>.c` text. It **reuses** the existing single-source modules (FR-109): `compileBehavior` (§6.13 `galasm.js`) for behavior lowering, `buildNets` (§6.6 `netlist.js`) for connectivity, `deriveColumns` (§6.16 `vectors.js`) for the baked column tables, and the `effectiveProps` merge (FR-020b) for built-in property values. Emission:
+  - **Net table:** nets indexed as in `buildNets` order; a string table of `refdes.pin` labels for conflict messages (FR-108).
+  - **GALasm entities:** each compiled output's term/sum tree is lowered to a C expression/function over `curr[]` using the `rt_*` ops — plain, `.T` (enable gating), and `.R` outputs; register state as static `rt_val` arrays; global-clock and per-output `.CLK` edge detection mirroring `updateRegisters`/`evalOutput` (§6.13, FR-079/FR-079a). Subunit packages union their siblings' pins exactly as `makeGalasmEntity`.
+  - **Built-ins/memory:** instance tables (type, nets, effective properties, switch's persisted state as its baked drive level — overridable by a vector input column); ROM contents from `romContent` baked as initialized arrays (FR-116a); RAM starts all-U.
+  - **Preflight/refusals:** same compile errors as `buildSimulation` (parse failure, `.R` without `clock:`), plus the FR-116 deferred-scope refusals — sub-design instances or off-sheet connectors present → generation fails with a message; behavior-less types generate U-drivers with a warning (FR-080 analogue).
+
+**Chrome wiring (`chrome/toolbar.js`, `app.js`).** The Simulate menu (§6.16) gains a **Generate C…** item (`onGenerateC`), disabled while `state.simulating` or `state.vectorPanelOpen` (FR-116). `app.js` handles it: `loadRomContents(design)` (§6.13) → fetch `/cgen/runtime.h` + `/cgen/runtime.c` → `generateC(...)` → `openFileDialog` in save mode with a `.c` extension (the `saveExt` generalization of §6.16) seeded at `dirOf(savePath)` with default `<base>.c` → write all three files through the existing design-save API (§6.4; the endpoints neither interpret nor extension-check the body). Failures/warnings post via the message tray (FR-074).
+
+**Milestones.** (Sequencing per the 2026-07-02 discussion recorded in `gen-open.md`.)
+  1. **M1 — runtime + minimal generator, combinational:** runtime pair, `cgen.js` for GALasm parts + switch/indicator/pulls, Generate-C menu flow; settle-and-stop; conflict reports. No compiler is invoked by any tool — the user compiles by hand (`cc <design>.c runtime.c`).
+  2. **M2 — `.tv` stimulus + parity harness:** stdin vector rows (FR-117), transcript (FR-118); a Node-based parity harness that generates, compiles (`cc`), runs corpus design+`.tv` pairs and diffs the transcript against `runVectors` (§6.16) — the FR-107 check. Harness location TBD (§12).
+  3. **M3 — sequential + memory:** registers incl. per-output `.CLK`, scripted clocks/reset preamble, baked ROM/RAM.
+  4. **M4 — free-run + VCD:** `--cycles N` free-running mode (toward OQ-012 memory-as-stimulus) and the `--vcd` four-state trace of the observable set (FR-118).
+
+- **Dependencies:** `engine/galasm.js` (`compileBehavior`, compiled-output shape), `model/netlist.js` (`buildNets`), `engine/vectors.js` (`deriveColumns`), `engine/sim.js` (`loadRomContents`; semantic reference for the runtime), `engine/memory.js` (memory semantics reference), `chrome/dialogs.js` (`openFileDialog`), `chrome/fileops.js` (`dirOf`), `api.js` (save + static fetch), `chrome/toolbar.js`, `app.js`.
+
+---
+
 ## 7. Data Model
 
 ### 7.1 `ComponentType` (server in-memory + `/components` JSON + copied into saves)
@@ -2401,6 +2435,8 @@ read/written through the same `/api/v1/design/{load,save}` endpoints as a design
 | Clock pin for `.R` outputs | Name convention (CP/CLK/CK); infer from equations | **Explicit `clock:` YAML key (FR-062d)** | Unambiguous and parser-validated; makes the 74574's named-clock convention machine-readable; additive per FR-066 |
 | Expressing parts beyond flat SOP / one clock (74HC74, 165, 283, 595, …) | (a) integrate a full **Verilog** parser + 4-state event simulator; (b) a bare `galasm: strict` boolean; (c) hand-coded **native-JS** behaviors for the hard parts (the `BEHAVIORS` escape hatch already used by built-ins); (d) compose hard parts as **sub-designs** of primitive built-ins (§6.14 hierarchy) | **Device-named dialect: `gal: <device>` ⇒ strict that device; omit ⇒ extended (union of the four GAL dialects, capacity lifted, plus XOR) — FR-066a/FR-079a/FR-079b** | Verilog is an order of magnitude more code than the whole engine, imports a worldview that clashes with the unit-delay SOP model, and the stakeholder dislikes it — disproportionate for ~5 parts. A boolean can't say "fits *what*", and breaks the moment a second device matters; naming the device makes strict a real "would this burn?" gate and gives *extended* a principled definition (the GAL20RA10's per-output `.CLK` is real GALasm, so independent clock domains aren't invented syntax). Strict is a pure accept/reject gate, never a second evaluator. The native-JS (c) and sub-design (d) paths remain available for behaviors no GAL can express (74HC165 async variable load) — they sit *outside* the `gal:` flag and are out of scope for this change |
 | API versioning | Unversioned routes | **`/api/v1/` prefix** | New endpoints (future transpiler) added without breaking clients (NFR-004) |
+| Fast-engine deliverable & runtime split (FR-116/FR-116a) | Single emitted `.c` with the runtime text prepended; server-side compile and/or run; generated-only program with no fixed runtime | **Two-file delivery: a fixed, hand-written, documented `runtime.h`/`runtime.c` pair copied verbatim beside the thin generated `<design>.c`; user compiles with plain `cc`** | Stakeholder-chosen (2026-07-02). A human-readable runtime with a documentable API keeps every subtle semantic (FR-077/FR-081–083/FR-078/FR-115c/e) in one auditable, natively-testable C file; the generator stays small (tables + lowered expressions); no toolchain dependency enters the product — compilation is the user's step |
+| Fast-engine batch I/O (FR-117/FR-118) | Teach the C program to parse `.tv` JSON; bake vector rows into the emitted source; VCD as the primary output | **Columns baked at generate time (they derive from the design), rows as plain whitespace text on stdin; stdout transcript + stderr conflicts; VCD as a later `--vcd` flag** | Avoids a JSON parser in C; rows-on-stdin lets vectors change without regenerating; a line-oriented transcript is directly diffable against `runVectors` output — the cheapest FR-107 parity harness (`gen-open.md` sequencing) |
 | Sub-design embedding & off-sheet connectors (FR-094–FR-103) | (a) embed a copy of the child like FR-057; (b) two separate primitives (a port object and a distinct connector object); (c) compute multi-sheet/hierarchical nets in the editor at edit time | **One `port` built-in (a new `connector` vertex kind) serving both roles; a sub-design instance is a live relative-path reference whose interface is resolved to a synthetic in-memory `ComponentType`; flatten + cross-file label-union composed only at Run** | The synthetic type lets the whole pin/vertex/wire/netlist/render pipeline serve hierarchy unchanged — only render style, navigation, and flatten are new; a live reference keeps one source of truth (no stale copy, supersedes FR-057 here); the junction-identity decision already reserved a single `connector` vertex kind for this; composing cross-file nets only at Run keeps single-sheet editing fast and local (NFR-005); render style is deliberately cosmetic so simulation semantics never depend on a symbol toggle (stakeholder-confirmed) |
 
 ---
@@ -2439,6 +2475,9 @@ sim/
     js/engine/router.js     CREATE  Manhattan route proposal (§6.9a)
     js/engine/galasm.js     CREATE  GALasm behavior compiler/evaluator (§6.13)
     js/engine/sim.js        CREATE  slow simulator engine + scheduler (§6.13)
+    js/engine/cgen.js       CREATE  fast-engine C code generator (§6.17)
+    cgen/runtime.h          CREATE  fast-engine C runtime API, documented (§6.17)
+    cgen/runtime.c          CREATE  fast-engine C runtime implementation (§6.17)
     js/chrome/toolbar.js    CREATE  toolbar (§6.11)
     js/chrome/palette.js    CREATE  palette tiles (§6.11)
     js/chrome/dialogs.js    CREATE  save/open dialogs (§6.11)
@@ -2523,6 +2562,7 @@ No files are modified (greenfield).
 | FR-114e | §6.4, §6.13 | `engine/memory.js`, `sim.js`, `api.js`, `storage.go`, `api.go`, `dialogs.js` |
 | FR-114f, FR-007a | §6.4, §6.11, §7.6 | `dialogs.js` (`memDeviceYaml`), `app.js`, `api.js`, `components.go`, `yamlparse.go`, `types.go` |
 | FR-115, FR-115a–h | §6.13, §6.16, §7.7 | `engine/vectors.js`, `engine/sim.js`, `chrome/dialogs.js`, `chrome/toolbar.js`, `chrome/properties.js`, `store.js`, `app.js`, `index.html`, `style.css` |
+| FR-106–FR-110, FR-116, FR-116a, FR-117, FR-118 | §6.17 | `engine/cgen.js`, `web/cgen/runtime.h`, `web/cgen/runtime.c`, `chrome/toolbar.js`, `app.js` |
 | FR-072, FR-073, FR-074 | §6.11 | `statusbar.js`, `index.html`, `style.css` |
 | FR-089, FR-090, FR-091 | §6.4, §6.11, §6.12a | `api.go`, `connection.js`, `statusbar.js`, `api.js` |
 | FR-092, FR-093 | §6.12, §6.12a | `backup.js`, `app.js`, `model/persist.js` |
@@ -2647,6 +2687,16 @@ snap FR-041–043) are fully designed so they are additive when implemented.
   default 3 cycles spans the first three rising edges. Dispatch refused while
   `simulating` (FR-087);
   `state.sim` retained at stop, cleared on next dispatch (FR-085).
+- **JS `cgen` (§6.17, FR-116a/FR-117):** `generateC` structure tests under
+  `node:test` — emitted text contains the expected net table, column tables,
+  labels, and lowered expressions for small designs; refusal cases (sub-design
+  instance, off-sheet connector, behavior parse error, `.R` without `clock:`).
+  The C **runtime** is natively testable standalone (ops/resolver truth tables
+  mirroring the JS `sim` cases above). The **parity harness** (M2) generates,
+  compiles (`cc`), and runs corpus design+`.tv` pairs, diffing the stdout
+  transcript against `runVectors` (§6.16) — the FR-107 check; it is run
+  explicitly, not as part of the compiler-free unit-test sweep (location TBD,
+  §12).
 
 ### 11.2 Integration / end-to-end (Chrome + Firefox, manual or Playwright)
 - Startup blocks canvas until palette loads (FR-003); empty design named
@@ -2748,6 +2798,12 @@ only the noted slices.
   note), and the overlay font only **approximates** the canvas metrics. Aligning
   the overlay with a rotated note is intentionally deferred and not currently
   planned. (Raised 2026-06-22; resolved 2026-06-22.)
+
+- **Fast-engine parity-harness location (§6.17 M2).** The FR-107 parity harness
+  shells out to a C compiler, so it should not sit where the ordinary
+  compiler-free `node:test` sweep would pick it up. Candidate: a separate
+  `test/parity/` (or `tools/`) tree, run explicitly. Deliberately deferred to
+  the M2 milestone per stakeholder discussion (2026-07-02); gates nothing in M1.
 
 None of the above prevent starting the server skeleton, the canvas engine, the
 store/undo pipeline, or the chrome. Only the YAML **parser body** and the **bus
