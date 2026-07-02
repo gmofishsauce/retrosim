@@ -49,6 +49,9 @@ rt_val rt_not(rt_val a) {
   return a == RT_0 ? RT_1 : RT_0;
 }
 
+/* Non-inverting buffer: just the read normalization (see norm above). */
+rt_val rt_buf(rt_val a) { return norm(a); }
+
 /* XOR (extended dialect, FR-079a): no controlling value, so any U
  * operand → U (full pessimism); else equal → 0, differ → 1. Mirrors
  * galasm.js xorValues. */
@@ -88,7 +91,7 @@ static int *head;    /* per net */
 static int ncontrib; /* used entries in contribs[] this step */
 
 static void *xalloc(size_t n) {
-  void *p = malloc(n);
+  void *p = malloc(n ? n : 1); /* degenerate (empty) designs: never malloc(0) */
   if (!p) {
     fprintf(stderr, "out of memory\n");
     exit(2);
@@ -349,7 +352,8 @@ static void apply_inputs(const char *in_syms, unsigned char *pulse) {
 static int score_row(int rowno, const char *out_syms) {
   int fails = 0;
   for (int i = 0; i < gen_outcol_count; i++) {
-    rt_val v = curr_buf[gen_outcols[i].net];
+    /* An unwired probe (net -1) reads Z, like the slow sim's valueOfPin. */
+    rt_val v = gen_outcols[i].net >= 0 ? curr_buf[gen_outcols[i].net] : RT_Z;
     char e = out_syms[i];
     int ok = e == 'X' || (e == 'H' && v == RT_1) || (e == 'L' && v == RT_0);
     if (!ok) {

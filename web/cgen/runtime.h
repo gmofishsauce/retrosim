@@ -45,6 +45,11 @@ rt_val rt_or(rt_val a, rt_val b);
 rt_val rt_not(rt_val a);
 rt_val rt_xor(rt_val a, rt_val b); /* extended-dialect XOR (FR-079a) */
 
+/* rt_buf is the read normalization alone (a non-inverting buffer): Z reads
+ * as U, 0/1/U pass through. Generated code applies it to a bare positive
+ * literal, where no other combinator would normalize the net value. */
+rt_val rt_buf(rt_val a);
+
 /* ------------------------------------------------------------------ *
  *  Net state and the unit step (FR-078, FR-110)
  * ------------------------------------------------------------------ */
