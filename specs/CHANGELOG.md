@@ -19,6 +19,10 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-02 — Fix paste refdes remap for sub-design and note series
+What: Copy/paste of a sub-design IC threw "cannot remap reference designator X1" — the clipboard's X series regex expected a hyphenated `X-<n>` while sub-design instances are `X<n>` (FR-098a); also added the missing `N-<n>` note series so pasting a selection containing a text note no longer throws. Corrected design.md's stray `X-<n>` prose to match FR-098a and the code.
+Touches: FR-098a; design §6.14, §6.15
+
 ## 2026-07-02 — M2 note: tv2txt must reconcile; generator to bake column identities
 What: Captured the 74381-run lesson — a naive positional .tv dump fails when the file asserts a column subset; the M2 tv2txt converter must reconcile by (refdes,pin) like the panel, and the generator will bake each column's (refdes,pin) identity into the emitted .c with a tooling-readable dump.
 Touches: design §6.17 (M2 milestone); gen-open.md (Still open)

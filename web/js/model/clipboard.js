@@ -105,7 +105,8 @@ function translatePathPoint(p, vMap, dx, dy) {
 const REFDES_SERIES = [
   { test: /^U(\d+)([A-Z]*)$/, scan: /^U(\d+)[A-Z]*$/, fmt: (n, suf) => `U${n}${suf}` },
   { test: /^A-(\d+)$/, scan: /^A-(\d+)$/, fmt: (n) => `A-${n}` },
-  { test: /^X-(\d+)$/, scan: /^X-(\d+)$/, fmt: (n) => `X-${n}` },
+  { test: /^N-(\d+)$/, scan: /^N-(\d+)$/, fmt: (n) => `N-${n}` },
+  { test: /^X(\d+)$/, scan: /^X(\d+)$/, fmt: (n) => `X${n}` },
 ];
 
 // pasteFragment instantiates `fragment` into `design`, offset by (dx,dy) whole
