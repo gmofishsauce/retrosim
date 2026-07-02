@@ -1136,27 +1136,60 @@ export function openFileDialog({ mode, startPath, defaultName = "", title, exts 
   });
 }
 
-// testVectorsDialog is the test-vector table editor (§6.16, FR-115). Columns are
-// auto-derived from the open design (input switches → 0/1 cells; clock generators
-// → 0/1/C cells, FR-115e; indicator bits → H/L/X cells); the user fills rows, Runs
-// them against the slow simulator (pass/fail per cell, FR-115d), Captures golden
-// outputs from a sim run, and Loads/Saves a `.tv` sibling file (FR-115a). A
-// clocked design runs sequentially — rows in order, state persisting (FR-115e).
-// Resolves to null (no result).
-export function testVectorsDialog({ store, dataDir }) {
-  return new Promise((resolve) => {
+// testVectorsPanel is the test-vector table editor (§6.16, FR-115): a docked,
+// modeless panel in the bottom third of the canvas area (FR-115b) — not a modal.
+// Columns are auto-derived from the open design (input switches → 0/1 cells; clock
+// generators → 0/1/C cells, FR-115e; indicator bits → H/L/X cells; ports by
+// direction, FR-115f); the user fills rows, Runs them against the slow simulator
+// (pass/fail per cell, FR-115d), Captures golden outputs, and Loads/Saves a `.tv`
+// sibling file (FR-115a). A clocked design runs sequentially (FR-115e). While the
+// panel is open the design is read-only (FR-115h). Returns { open, close, isOpen }.
+export function testVectorsPanel({ store, dataDir }) {
+  const host = document.getElementById("vec-panel");
+  let openFlag = false;
+  const isOpen = () => openFlag;
+
+  function open() {
+    if (openFlag) return;
+    openFlag = true;
+    host.hidden = false;
+    store.setVectorPanelOpen(true); // impose the read-only lock (FR-115h)
+    build();
+  }
+
+  function close() {
+    if (!openFlag) return;
+    openFlag = false;
+    host.replaceChildren();
+    host.hidden = true;
+    store.setVectorPanelOpen(false);
+  }
+
+  // build (re)populates the panel from the current design. Called on open; the
+  // design cannot change while open (FR-115h), so the derived columns are a
+  // stable snapshot for the panel's lifetime.
+  function build() {
     const design = store.design;
     const columns = deriveColumns(design);
     // Sequential mode (FR-115e): rows run in order with scripted clocks; the
-    // dialog shows a persistent notice and 0/1/C cells for clock columns.
+    // panel shows a persistent notice and 0/1/C cells for clock columns.
     const clocked = hasClockGenerators(design);
     const rows = [emptyRow(columns)]; // start with one blank row to fill
     let runResults = null; // [{ cells, pass }] aligned to rows, or null when stale
 
-    const overlay = el("div", "dialog-overlay");
-    const box = el("div", "dialog vec-dialog");
-    overlay.appendChild(box);
-    box.appendChild(el("div", "dialog-title", "Test Vectors"));
+    host.replaceChildren();
+    // Header: title + ✕ close. No Escape-to-close — Escape stays a canvas gesture
+    // (FR-115b); the panel is dismissed by ✕ or by re-toggling the menu item.
+    const header = el("div", "vec-header");
+    header.appendChild(el("div", "vec-title", "Test Vectors"));
+    const closeBtn = button("✕", close);
+    closeBtn.classList.add("vec-close");
+    closeBtn.title = "Close Test Vectors";
+    header.appendChild(closeBtn);
+    host.appendChild(header);
+
+    const box = el("div", "vec-body");
+    host.appendChild(box);
 
     // Nothing to drive or observe: no switches, no indicators, and no directional
     // ports (a bidir-only design leaves warnings but no bindable columns).
@@ -1170,10 +1203,6 @@ export function testVectorsDialog({ store, dataDir }) {
           columns.warnings.length ? `${base} (${columns.warnings.join("; ")})` : base,
         ),
       );
-      const buttons = el("div", "dialog-buttons");
-      buttons.append(button("Close", () => done()));
-      box.appendChild(buttons);
-      finish();
       return;
     }
 
@@ -1391,7 +1420,6 @@ export function testVectorsDialog({ store, dataDir }) {
       button("Run", onRun),
       button("Load", onLoad),
       button("Save", onSave),
-      button("Close", () => done()),
     );
     box.appendChild(buttons);
 
@@ -1423,22 +1451,7 @@ export function testVectorsDialog({ store, dataDir }) {
     if (columns.warnings.length) {
       showNote(`${columns.warnings.length} port warning(s): ${columns.warnings.join("; ")}`);
     }
-    finish();
+  }
 
-    function finish() {
-      document.addEventListener("keydown", onKey, true);
-      document.body.appendChild(overlay);
-    }
-    function done() {
-      overlay.remove();
-      document.removeEventListener("keydown", onKey, true);
-      resolve(null);
-    }
-    function onKey(e) {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        done();
-      }
-    }
-  });
+  return { open, close, isOpen };
 }

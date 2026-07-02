@@ -631,7 +631,17 @@ its value live and re-evaluates the simulation.
 Instead of toggling switches and reading indicators by hand, you can write a
 **table of test vectors** — input patterns paired with the outputs you expect —
 and have the simulator run and score them. Open it from **Simulate ▸ Test
-Vectors…**. Both combinational and clocked (sequential) designs are supported.
+Vectors…**, which toggles a **panel docked across the bottom third of the
+canvas**. The schematic stays visible above it, so you can pan and zoom to see
+which switches, indicators, and ports the columns correspond to. Choosing
+**Simulate ▸ Test Vectors…** again, or the **✕** in the panel's header, closes
+it. Both combinational and clocked (sequential) designs are supported.
+
+While the panel is open the design is **read-only**: you can pan, zoom, and
+Save, but the editing commands (placing, wiring, moving, deleting, undo/redo,
+paste, property edits) are disabled — as they are while a simulation runs. The
+**Run/Stop** button is disabled too, since the panel and a live simulation are
+mutually exclusive. Close the panel to edit or run the design again.
 
 The table's columns come from your design automatically:
 
@@ -652,7 +662,7 @@ The table's columns come from your design automatically:
 **Combinational designs** (no clock generator): each row is one **independent**
 case — its inputs are applied, the circuit settles, and the outputs are compared.
 
-**Sequential designs** (at least one clock generator): the dialog shows a notice
+**Sequential designs** (at least one clock generator): the panel shows a notice
 that rows run **in order** on one continuous simulation — registers keep their
 state from each row to the next, so the table reads as a script. Each clock
 generator gets its own column:

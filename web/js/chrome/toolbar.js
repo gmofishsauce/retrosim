@@ -196,21 +196,29 @@ export function initToolbar({ container, store, interaction, fileops, sim, libra
 
   function refresh() {
     const simming = store.state.simulating;
+    const panelOpen = store.state.vectorPanelOpen;
+    const locked = store.isReadonly(); // simming || panelOpen (FR-087/FR-115h)
     for (const t of tools) {
       toolEls[t.tool].classList.toggle("active", store.state.tool === t.tool);
-      // Wire/Bus arm design mutations; Select stays usable (FR-087).
-      if (t.tool !== "select") toolEls[t.tool].disabled = simming;
+      // Wire/Bus arm design mutations; Select stays usable (FR-087/FR-115h).
+      if (t.tool !== "select") toolEls[t.tool].disabled = locked;
     }
-    undoItem.disabled = simming || !store.canUndo();
-    redoItem.disabled = simming || !store.canRedo();
-    // Copy is read-only (allowed while simulating, FR-111); enabled when a
-    // component is selected. Paste needs a non-empty clipboard and no run.
+    undoItem.disabled = locked || !store.canUndo();
+    redoItem.disabled = locked || !store.canRedo();
+    // Copy is read-only (allowed under either lock, FR-111); enabled when a
+    // component is selected. Paste mutates: needs a clipboard and no lock.
     copyItem.disabled = !store.state.selection.some((r) => r.kind === "component");
-    pasteItem.disabled = simming || !interaction.hasClipboard();
-    newItem.disabled = simming;
-    openItem.disabled = simming;
-    refreshItem.disabled = simming;
+    pasteItem.disabled = locked || !interaction.hasClipboard();
+    newItem.disabled = locked;
+    openItem.disabled = locked;
+    refreshItem.disabled = locked;
+    // The Test Vectors item toggles the panel, so it stays enabled while the
+    // panel is open (to close it); only a running simulation disables it
+    // (FR-115b).
     vectorsItem.disabled = simming;
+    // Run and the panel are mutually exclusive (FR-115h): Run is disabled while
+    // the panel is open. Stop stays usable while simulating.
+    runBtn.disabled = panelOpen;
     runBtn.textContent = simming ? "Stop" : "Run";
     runBtn.title = simming ? "Stop the simulation" : "Run the simulation";
   }

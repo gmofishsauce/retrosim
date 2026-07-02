@@ -39,6 +39,9 @@ export function createStore(initial = {}) {
     // next design modification.
     simulating: false,
     sim: null,
+    // While `vectorPanelOpen` the design is read-only too (FR-115h), sharing the
+    // simulation lock's condition via isReadonly(); never persisted.
+    vectorPanelOpen: false,
   };
 
   const undoStack = [];
@@ -64,10 +67,21 @@ export function createStore(initial = {}) {
     for (const fn of subscribers) fn(state);
   }
 
-  // blocked refuses design mutations while simulating (FR-087).
+  // isReadonly reports the read-only condition shared by the interactive
+  // simulator (FR-087) and the open test-vector panel (FR-115h): the design
+  // cannot be edited under either.
+  function isReadonly() {
+    return state.simulating || state.vectorPanelOpen;
+  }
+
+  // blocked refuses design mutations while the design is read-only
+  // (FR-087/FR-115h), naming the active cause.
   function blocked(what) {
-    if (!state.simulating) return false;
-    onBlocked(`${what} is disabled while simulating — press Stop first`);
+    if (!isReadonly()) return false;
+    const why = state.simulating
+      ? "the simulator is running — press Stop first"
+      : "the Test Vectors panel is open — close it first";
+    onBlocked(`${what} is disabled while ${why}`);
     return true;
   }
 
@@ -213,6 +227,17 @@ export function createStore(initial = {}) {
       state.simulating = flag;
       notify();
     },
+
+    // setVectorPanelOpen flips the read-only test-vector-panel mode (FR-115h);
+    // the panel owns the transitions (§6.16). Notifies so chrome can react.
+    setVectorPanelOpen(flag) {
+      state.vectorPanelOpen = flag;
+      notify();
+    },
+
+    // isReadonly is the shared edit-lock predicate (FR-087/FR-115h): true while
+    // simulating or while the test-vector panel is open.
+    isReadonly,
 
     // setSim publishes (or clears) the simulator's display view (§6.13); the
     // view survives a stop (FR-085) until the next design modification.

@@ -90,6 +90,8 @@ import { postMessage } from "../chrome/statusbar.js";
 // LOCKED_MSG is posted when a click attempts to select an item while the
 // simulator is running (FR-087): editing — including selection — is locked.
 const LOCKED_MSG = "Editor is locked while the simulator is running";
+// VEC_LOCKED_MSG is the same notice for the open test-vector panel (FR-115h).
+const VEC_LOCKED_MSG = "Editor is locked while the Test Vectors panel is open";
 
 const DEFAULT_BUS_WIDTH = 8;
 
@@ -562,7 +564,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
   // clipboard. The canvas note is hidden (renderer.setEditingNote) so only the
   // overlay shows. The overlay is unrotated regardless of the note's rotation.
   function startNoteEdit(inst) {
-    if (store.state.simulating) return; // editing is locked during a run (FR-087)
+    if (store.isReadonly()) return; // editing is locked (FR-087/FR-115h)
     commitNoteEdit(); // close any prior edit first
     select({ kind: "component", refdes: inst.refdes });
 
@@ -686,7 +688,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
   // floating ghost follows the pointer until a click drops it. Disabled while
   // simulating (FR-087); a no-op when the clipboard is empty.
   function startPaste() {
-    if (store.state.simulating) return;
+    if (store.isReadonly()) return;
     if (!clipboard) return;
     pasteFrag = clipboard;
     pasteAnchor = fragmentAnchor(pasteFrag);
@@ -947,7 +949,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
 
   // --- palette: click to arm PLACE, or drag a tile onto the canvas ---
   palette.addEventListener("click", (e) => {
-    if (store.state.simulating) return; // placement disabled (FR-087)
+    if (store.isReadonly()) return; // placement disabled (FR-087/FR-115h)
     const tile = e.target.closest(".palette-tile");
     if (!tile) return;
     if (tile.dataset.type === "add") return setTool("place", ADD_TYPE); // §6.14
@@ -963,7 +965,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
   canvas.addEventListener("dragover", (e) => e.preventDefault());
   canvas.addEventListener("drop", (e) => {
     e.preventDefault();
-    if (store.state.simulating) return; // placement disabled (FR-087)
+    if (store.isReadonly()) return; // placement disabled (FR-087/FR-115h)
     const data = e.dataTransfer.getData("text/plain");
     if (data === "add") {
       placeType = ADD_TYPE;
@@ -995,10 +997,12 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     // hotspots included), no placement, and no selection. The lone exception is
     // a click on an interactive built-in (FR-087b), which applies its input
     // action; any other click that would select an item posts the lock message.
-    if (store.state.simulating) {
+    if (store.isReadonly()) {
       const world = worldOf(e);
       const comp = hitComponent(store.design, world);
-      if (comp) {
+      // The live-sim switch-click (FR-087a) requires a running simulation; under
+      // the panel lock (FR-115h, not simulating) it does not apply.
+      if (comp && store.state.simulating) {
         const inst = store.design.components.find((c) => c.refdes === comp.refdes);
         const interact = inst && INTERACTIONS[inst.type];
         if (interact) return interactDuringSim(inst, interact);
@@ -1009,7 +1013,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
         comp ||
         hitSegment(store.design, world, segTol()) ||
         hitBusSegment(store.design, world, segTol());
-      if (onItem) postMessage(LOCKED_MSG);
+      if (onItem) postMessage(store.state.simulating ? LOCKED_MSG : VEC_LOCKED_MSG);
       return;
     }
 
@@ -1249,7 +1253,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
   // save-or-lose Open, so it is suppressed while simulating (a design swap mid-
   // sim would be jarring; consistent with the menu actions below).
   canvas.addEventListener("dblclick", (e) => {
-    if (store.state.simulating) return;
+    if (store.isReadonly()) return;
     const world = worldOf(e);
     const sub = subDesignAt(world);
     if (sub && onOpenSubDesign) {
@@ -1286,7 +1290,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       pendingZoomAnchor = { x: rect.width / 2, y: rect.height / 2 };
       return;
     }
-    if (store.state.simulating) return; // menu actions mutate (FR-087)
+    if (store.isReadonly()) return; // menu actions mutate (FR-087/FR-115h)
     const items = [];
 
     if (bend) {
@@ -1645,9 +1649,10 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       return;
     }
 
-    // Simulation lock (FR-087): Space (pan) and Escape stay; every shortcut
-    // below mutates the design or arms a mutating tool.
-    if (store.state.simulating) return;
+    // Read-only lock (FR-087/FR-115h): Space (pan) and Escape stay; every
+    // shortcut below mutates the design or arms a mutating tool. Save (Ctrl/Cmd+S,
+    // above) stays enabled under both locks.
+    if (store.isReadonly()) return;
 
     // Open (Ctrl/Cmd+O) is below the lock, so it is disabled while simulating
     // (FR-004b), matching its menu item.

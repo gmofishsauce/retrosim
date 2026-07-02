@@ -188,12 +188,62 @@ body {
   line-height: 1.05;
 }
 
+/* A flex column: the canvas host fills it, and the test-vector panel (FR-115b),
+   when open, docks as a fixed bottom third. Shrinking the canvas host shrinks
+   the canvas box, which the ResizeObserver refits at the unchanged viewport
+   (§6.13) — content is not rescaled, only its visible extent (FR-115h). */
 #canvas-area {
   flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#canvas-host {
+  flex: 1 1 auto;
+  min-height: 0;
   position: relative;
   overflow: hidden;
   background: #fafafa;
 }
+
+/* Docked test-vector panel (FR-115b): bottom third of the canvas area, its own
+   vertical scroll. `display` here overrides the [hidden] UA rule, so the
+   explicit [hidden] selector below re-hides it. */
+#vec-panel {
+  flex: 0 0 33%;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #f3f3f3;
+  border-top: 2px solid #bbb;
+}
+
+/* Header stays pinned (flex:0); the body below scrolls (§6.16). */
+.vec-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.5rem;
+  background: #e7e7e7;
+  border-bottom: 1px solid #ccc;
+}
+.vec-title { font-weight: 600; font-size: 0.9rem; }
+.vec-close { padding: 0 0.45rem; }
+.vec-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  overflow: hidden;
+}
+
+#vec-panel[hidden] { display: none; }
 
 #properties {
   flex: 0 0 14rem;

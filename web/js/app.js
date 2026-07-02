@@ -4,7 +4,7 @@
 // the library is ready (FR-003).
 
 import { getComponents, getDefaults, createComponent } from "./api.js";
-import { newGalPartDialog, memDeviceDialog, memDeviceYaml, testVectorsDialog } from "./chrome/dialogs.js";
+import { newGalPartDialog, memDeviceDialog, memDeviceYaml, testVectorsPanel } from "./chrome/dialogs.js";
 import { BUILTINS, memDeviceType } from "./builtins.js";
 import { createDesign, typeIdentity } from "./model/design.js";
 import { createStore } from "./store.js";
@@ -286,8 +286,10 @@ async function main() {
     offerRecovery(store);
     startBackup(store);
     const sim = createSim({ store, renderer }); // slow simulator (§6.13)
-    // Open the combinational test-vector editor (FR-115, §6.16).
-    const onTestVectors = () => testVectorsDialog({ store, dataDir: defaults.dataDir });
+    // Simulate ▸ Test Vectors toggles the docked test-vector panel (FR-115b/
+    // §6.16); opening it imposes the read-only lock (FR-115h).
+    const vecPanel = testVectorsPanel({ store, dataDir: defaults.dataDir });
+    const onTestVectors = () => (vecPanel.isOpen() ? vecPanel.close() : vecPanel.open());
     initToolbar({
       container: document.getElementById("tools"),
       store,
