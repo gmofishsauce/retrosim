@@ -72,3 +72,51 @@ OQ-012) alongside the ones not yet in the specs.
   instances and unions off-sheet peer sheets before emitting C, matching the
   slow sim (FR-102/FR-103). Flattening helpers (`model/subdesign.js`) are
   reusable; not yet asserted as a fast-sim requirement.
+
+## Sequencing — where does test-vector (`.tv`) stimulus fit?
+
+Question raised 2026-07-02: should the **fast-C stimulus** (feeding a `.tv` file
+into the generated C as inputs + golden, `vec-open.md` #4) be built before or
+after the code generator itself?
+
+**It cannot come first.** "Fast-C stimulus" is really the *ABI of the generated
+program* — how a caller forces a value onto a net and reads one back. That ABI
+is an *output* of the generator's design, not an independent artifact, and it
+depends on three still-open questions above: the output mechanism (OQ-011), the
+observable/drivable point set (OQ-011), and batch run-control / termination.
+Building the harness against an interface that does not exist yet is backwards.
+So: **generator first, stimulus after.**
+
+**But `.tv`-driven verification should be the generator's *first* milestone** —
+ahead of the file-backed-memory / run-a-CPU direction OQ-012 currently leans
+toward — because:
+
+1. It is the cheapest possible **FR-107 parity harness**: run the same `.tv`
+   through the slow sim and the generated C and diff the results. That is
+   exactly the "golden corpus diffed through both engines" the *Semantic-parity
+   strategy* bullet calls for, and parity is the single biggest correctness risk
+   of a second engine.
+2. The infrastructure already exists — the `.tv` format, input/output columns,
+   and golden capture (FR-115); the slow sim's per-pin external **stimulus** hook
+   (`setStimulus`, FR-115f) and ports-as-net-members (FR-094e). The generated C
+   only needs the analogous *force-net* / *read-net* entry points over the same
+   probe set (indicators + ports, the same OQ-011 observable set), onto which the
+   `.tv` columns map directly.
+3. It is small and bounded (a few combinational rows or a short clocked sequence)
+   versus booting a CPU program — a far better bring-up target.
+
+**Recommended order.**
+
+1. Settle the generator's I/O contract (OQ-011 output mechanism + a force/read
+   stimulus ABI) with `.tv` as the motivating batch mode, plus a termination
+   rule (combinational → settle-and-stop like the slow sim's settling episode;
+   clocked → run N cycles).
+2. Build a minimal generator that emits a compilable C program honoring that
+   contract for a trivial design.
+3. Wire `.tv` through it as stimulus + golden, and stand up the slow-vs-fast diff
+   as the parity test. *This* is fast-C stimulus (`vec-open.md` #4) — cheap by
+   this point.
+
+Net: fast-C stimulus lands right after a minimal generator, not before it and
+not deferred behind the memory-as-stimulus CPU work. Memory-as-stimulus (OQ-012)
+remains the complementary route for driving a whole running program later.

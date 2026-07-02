@@ -19,6 +19,10 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-02 — Fast-engine sequencing: `.tv` as the first batch stimulus mode (advice)
+What: Recorded the recommended ordering for the not-yet-written fast (generated-C) simulator. Fast-C stimulus cannot precede the generator (it is the generated program's force/read ABI, gated on OQ-011 and batch run-control), but `.tv`-driven verification should be the generator's first batch milestone — ahead of the memory-as-stimulus/CPU direction — because diffing one `.tv` through both engines is the cheapest FR-107 parity harness and reuses existing infra (FR-115/FR-115f/FR-094e). Advisory only; no behavior or code change.
+Touches: OQ-012 (inline update); gen-open.md (new "Sequencing" section). No FR/design changes.
+
 ## 2026-07-02 — Test-vector editor: modal dialog → docked bottom panel
 What: The Test Vectors editor moves from a `.dialog-overlay` modal to a modeless panel docked in the bottom third of the canvas area, so the schematic stays visible and navigable (pan/zoom) while authoring vectors. The Simulate ▸ Test Vectors item toggles it open/closed. While the panel is open the design is read-only, generalizing the FR-087 simulation lock to `simulating || vectorPanelOpen` (new `store.isReadonly()`): canvas mutations and design-modifying commands are disabled and the interactive Run button is disabled (panel ↔ live-sim mutual exclusion), but Select, pan, zoom, and Fit remain. The canvas keeps its viewport and aspect ratio — only its visible extent shrinks (ResizeObserver refit, no rescale). Runner/format/`.tv` unchanged; columns are a stable snapshot since the design can't change while open.
 Why: The modal covered the schematic the user needs to see (to correlate columns with switches/indicators/ports and sanity-check Capture).
