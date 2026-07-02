@@ -69,6 +69,19 @@ history; the specs are the source of truth.
   separate `test/parity/` or `tools/` tree, run explicitly. Deliberately
   deferred to M2 (design §12).
 
+- **`tv2txt` must reconcile, and the program must expose column identities
+  (M2; noted in design §6.17 M2).** First real M1 use (74381, 2026-07-02)
+  showed a naive `.tv`-rows dump (`jq`) fails whenever the file asserts only a
+  subset of the design's derived columns: the program's stdin rows are
+  positional against the full baked column set (FR-117), so the arity check
+  rejects the row. The panel never hits this because it reconciles by
+  `(refdes,pin)` on load (FR-115a). So the M2 converter reconciles like
+  `reconcileVectors` — `X` for unasserted design columns, warnings for file
+  columns the program lacks — and, so it can work from the emitted `.c` alone,
+  the generator bakes each column's `(refdes,pin)` identity alongside its
+  display label (today only port columns carry it), with a tooling-readable
+  column dump (parse the tables, or a runtime `--columns` mode — pick at M2).
+
 - **Memory-as-stimulus free-run mode (OQ-012, M4+).** Run-length/termination
   flags for the free-running mode (`--cycles N`, settle-and-stop), and whether a
   later version re-adds runtime-read memory contents so a program can be swapped
