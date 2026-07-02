@@ -25,7 +25,7 @@ KiCad-like.
 10. [Files](#10-files)
 11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
-13. [Simulation](#13-simulation) — including [Test vectors](#test-vectors)
+13. [Simulation](#13-simulation) — including [Test vectors](#test-vectors) and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
 14. [If the server disconnects](#14-if-the-server-disconnects)
 15. [Keyboard and mouse reference](#15-keyboard-and-mouse-reference)
 
@@ -706,6 +706,57 @@ Running test vectors **does not change your design** — it neither marks it mod
 nor disturbs an in-progress edit — and is separate from the **Run/Stop** button.
 The **Test Vectors…** command is unavailable while a normal simulation is running;
 press Stop first.
+
+### Generating a standalone C simulator
+
+**Simulate ▸ Generate C…** turns the current design into a self-contained C
+program — the "fast" engine. A file dialog asks where to put it (defaulting to
+your design's folder); three files are written there:
+
+- `<design>.c` — generated from your design; regenerate rather than edit it.
+- `runtime.c` / `runtime.h` — a fixed, documented support library, copied
+  alongside every generated file.
+
+Compile them with any C compiler, no flags needed:
+
+```
+cc -o mydesign mydesign.c runtime.c
+```
+
+The program is a **test-vector runner** with exactly the debug simulator's
+semantics — the same four values, unit-delay timing, settling behavior, and
+bus-conflict detection — so the two engines produce the same results for the
+same design. It reads rows from standard input as plain text, one row per line:
+the input symbols (`0`/`1`, or `C` to pulse a clock column), a `|`, then the
+expected outputs (`H`/`L`/`X`), separated by spaces. Blank lines and lines
+starting with `#` are skipped. For example, two rows for a two-switch,
+one-indicator design:
+
+```
+0 1 | H
+1 1 | L
+```
+
+Each row prints `row N: pass` or `row N: FAIL` naming the failing columns and
+the values actually observed, followed by a `passed R of T rows` summary; the
+program exits 0 only if every row passed. Bus conflicts and
+failure-to-settle reports go to standard error, like the message tray during a
+debug run.
+
+**Column order matters.** The rows are positional against the design's full
+derived column set — the same columns the test-vector panel shows, in the same
+order — which is baked into the generated program (readable in the
+`gen_incols[]` / `gen_outcols[]` tables near the top of the `.c` file). A `.tv`
+file that asserts only *some* of the design's outputs cannot be piped in
+directly; a converter that reconciles a `.tv` against the program's columns is
+planned. Until then, supply `X` for the output columns your rows don't assert.
+
+Generation never modifies the design, and works whether or not it has been
+saved. Current limits: designs containing registered (`.R`) parts, memory
+devices, or sub-designs are refused with a message — these are planned
+extensions — and combinational designs are the tested territory today. The
+menu item is unavailable while a simulation is running or the test-vector
+panel is open.
 
 ---
 
