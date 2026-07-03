@@ -128,6 +128,27 @@ int rt_settle(void);
  * exits 0 iff everything passed). */
 int rt_run_vectors(void);
 
+/* ------------------------------------------------------------------ *
+ *  Free-running mode (--cycles N, FR-117a)
+ * ------------------------------------------------------------------ */
+
+/* rt_run_free runs the design free — no vector rows, standard input
+ * untouched. The clock and power-on-reset built-ins are time-driven,
+ * exactly as in the editor's interactive run: each clock emits its FR-084
+ * square wave at its own effective period (low the first half of each
+ * period, so the first rising edge lands half a period in), and each
+ * reset asserts R=1,/R=0 while simulated time < cycles × clockPeriod
+ * (FR-071b; clockPeriod is the lone clock's period when the design has
+ * exactly one clock generator, else the 100 ns default). Switches drive
+ * their baked levels; ports are undriven.
+ *
+ * The run advances exactly `cycles` × clockPeriod unit steps — no settle
+ * loop — then writes one line per observable column (FR-118 set: the
+ * input columns, then the output columns, in column order) to standard
+ * output as "LABEL=v", v the four-state value 0/1/U/Z. Bus conflicts
+ * report to standard error as ever (FR-108). */
+void rt_run_free(long cycles);
+
 /* ==================================================================== *
  *  The gen_* interface — implemented by the generated <design>.c
  * ==================================================================== */
@@ -194,10 +215,11 @@ extern rt_switch gen_switches[];
 extern const int gen_switch_count;
 
 /* Clock generator (FR-071/FR-071a). In vector mode the runner scripts
- * `level` (0/1/C semantics, FR-115e); the free-running mode driven by
- * `period_ns` is a later milestone (design §6.17 M4). gen_clock_count > 0
- * is the sequential/combinational split (FR-086). Mutable: the runner
- * sets `level`. */
+ * `level` (0/1/C semantics, FR-115e); in free-running mode (FR-117a)
+ * `level` is ignored and the runtime computes the FR-084 square wave
+ * from `period_ns` and simulated time. gen_clock_count > 0 is the
+ * sequential/combinational split (FR-086). Mutable: the runner sets
+ * `level`. */
 typedef struct {
   int net;
   rt_val level;

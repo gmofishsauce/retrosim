@@ -723,10 +723,13 @@ Compile them with any C compiler, no flags needed:
 cc -o mydesign mydesign.c runtime.c
 ```
 
-The program is a **test-vector runner** with exactly the debug simulator's
-semantics — the same four values, unit-delay timing, settling behavior, and
-bus-conflict detection — so the two engines produce the same results for the
-same design. It reads rows from standard input as plain text, one row per line:
+The program has exactly the debug simulator's semantics — the same four
+values, unit-delay timing, settling behavior, and bus-conflict detection — so
+the two engines produce the same results for the same design. It runs in one
+of two modes: a **test-vector runner** (the default) or a **free-running
+simulation** (`--cycles`, below).
+
+As a vector runner it reads rows from standard input as plain text, one row per line:
 the input symbols (`0`/`1`, or `C` to pulse a clock column), a `|`, then the
 expected outputs (`H`/`L`/`X`), separated by spaces. Blank lines and lines
 starting with `#` are skipped. For example, two rows for a two-switch,
@@ -745,17 +748,35 @@ debug run.
 
 **Column order matters.** The rows are positional against the design's full
 derived column set — the same columns the test-vector panel shows, in the same
-order — which is baked into the generated program (readable in the
-`gen_incols[]` / `gen_outcols[]` tables near the top of the `.c` file). A `.tv`
-file that asserts only *some* of the design's outputs cannot be piped in
-directly; a converter that reconciles a `.tv` against the program's columns is
-planned. Until then, supply `X` for the output columns your rows don't assert.
+order — which is baked into the generated program (run it with `--columns` to
+print the set, one column per line). A `.tv` file saved from the test-vector
+panel need not assert every column; the `tv2txt` converter reconciles it
+against the program's columns and emits ready-to-pipe rows:
+
+```
+node web/tools/tv2txt.js ./mydesign mydesign.tv | ./mydesign
+```
+
+**Free-running mode.** `--cycles N` runs the design free for `N` clock periods
+instead of reading vectors: the clock generator produces its real square wave
+(per its `period` property), the power-on reset asserts and releases exactly as
+in a debug run, switches hold the positions they were in when you generated,
+and after the last cycle the program prints each observable point (the same
+column set) as a `LABEL=value` line — values `0`, `1`, `U`, or `Z`. This is
+the mode for letting a design — a ROM-driven circuit, a counter, eventually a
+CPU — simply run.
+
+**Waveform traces.** In either mode, `--vcd trace.vcd` also writes a VCD
+waveform trace of the observable columns over simulated time (1 ns per unit
+step), viewable in any VCD viewer such as GTKWave. Undefined shows as `x`,
+undriven as `z`.
 
 Generation never modifies the design, and works whether or not it has been
-saved. Current limits: designs containing registered (`.R`) parts, memory
-devices, or sub-designs are refused with a message — these are planned
-extensions — and combinational designs are the tested territory today. The
-menu item is unavailable while a simulation is running or the test-vector
+saved. Registered (`.R`) parts, independent per-output clocks, and RAM/ROM
+devices are all supported; a ROM's contents are baked into the generated `.c`
+at generate time, so regenerate after changing the `.hex` file. The one
+remaining limit: designs containing sub-designs are refused with a message.
+The menu item is unavailable while a simulation is running or the test-vector
 panel is open.
 
 ---

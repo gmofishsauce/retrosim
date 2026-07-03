@@ -19,6 +19,16 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-03 — M4 landed: free-run --cycles and --vcd, completing M4
+What: runtime.c only, per the M4 design (no generator change). Free run (FR-117a): a sim_time counter (incremented in rt_step, mirroring sim.js simTime), a freerun branch in drive_builtins computing the clock's FR-084 square wave from period_ns and the reset's FR-071b window from cycles × clockPeriod, rt_run_free (N × clockPeriod bare steps, then the LABEL=v observable dump), and --cycles N flag parsing (positive-int validated, stdin untouched). VCD (FR-118): --vcd FILE in both modes — $timescale 1ns header, one scalar per observable column, #0 power-up $dumpvars, change-only records sampled by rt_step every unit step, 0/1/U/Z → 0/1/x/z. Free run parity-checked against the slow simulator run free on examples/counter and examples/simple174; full suite green. docs/user.md §"Generating a standalone C simulator" updated (verification waived by user) — including stale M2/M3 limits text (tv2txt/--columns; only sub-designs refused now).
+Why: M4 implementation per design §6.17 milestones; completes the generator milestone plan M1–M4.
+Touches: FR-117a, FR-118; design §6.17 (M4 milestone); docs/user.md
+
+## 2026-07-03 — M4 scoped: free-run --cycles and --vcd specified
+What: Specs only (implementation follows). New FR-117a: free-running batch mode — `--cycles N`, time-driven clock/reset built-ins mirroring the slow simulator's simTime evaluation (FR-084/FR-071b), run N × clockPeriod unit steps, final LABEL=v observable dump on stdout. FR-118 edited in place: `--vcd <file>` specified — both batch modes, $timescale 1ns, one signal per observable column, per-step value changes, 0/1/U/Z → 0/1/x/z. FR-110/FR-117/OQ-012 cross-references updated; design §6.17 M4 milestone expanded (runtime-only change; gen tables already bake period_ns/cycles).
+Why: M4 scoping per design §6.17 milestones; resolves OQ-012's open run-length/termination flags (runtime-read memory contents stay open).
+Touches: FR-117a (new), FR-118, FR-110, FR-117, OQ-012; design §6.17 (M4 milestone)
+
 ## 2026-07-03 — M3 step 3: memory (RAM/ROM), completing M3
 What: The memory core (memory.js) is re-expressed in runtime.c (mem_decode/mem_write_all/mem_drive_all/mem_reset), runtime-owned and driven from a generated gen_mems[] table (const wiring + baked ROM bytes; per-instance store lives in the runtime). RAM WE/-edge writes latch in the step's latch phase, data drive in the contribution phase; RAM powers up U, ROM seeds from baked contents (FR-116a). cgen.js emits gen_mems and bakes ROM from the romContent map; only sub-design instances remain refused. parity.js gained fs-based ROM loading (loadRomContentsFs) for both engines. New parity pairs examples/rom-demo (ROM + rom-demo.hex) and examples/ram-demo (1-bit RAM + tri-state data buffer + dummy clock); parity clean fast-vs-slow. M3 complete.
 Why: M3 final step per design §6.17 milestones — the fast engine now covers memory.

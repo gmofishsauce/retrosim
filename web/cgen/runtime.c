@@ -106,6 +106,7 @@ static rt_val *port_stim;
 
 static void mem_alloc(void); /* memory store allocation (FR-114d) */
 static void mem_reset(void); /* memory power-up: RAM U, ROM baked bytes */
+static void vcd_sample(void); /* per-step VCD change dump (--vcd, FR-118) */
 
 /* reset_state returns every net to power-up Z and all generated state to
  * power-up via gen_init() — the C analogue of the slow simulator building
@@ -207,11 +208,32 @@ static rt_val resolve_net(int n) {
  *  generated tables)
  * ------------------------------------------------------------------ */
 
+/* Simulated time in unit steps (1 ns each, FR-110), incremented by
+ * rt_step exactly as sim.js's simTime: behaviors evaluate at the current
+ * time, whose result lands in the next step's values (unit delay). Never
+ * reset — monotonic over the whole run. */
+static long sim_time;
+
+/* freerun selects the time-driven built-in behaviors (FR-117a) over the
+ * scripted vector-mode levels (FR-115e); set once by main(). */
+static int freerun;
+
+/* clock_period_eff is FR-071b's clockPeriod rule: the lone clock's
+ * effective period when the design has exactly one clock generator, else
+ * the 100 ns FR-071a default (sim.js §6.13, resolved once at Run). */
+static int clock_period_eff(void) {
+  return gen_clock_count == 1 ? gen_clocks[0].period_ns : 100;
+}
+
 /* drive_builtins deposits the runtime-owned drivers each step: weak pulls
  * (FR-083), input switches at their current level (FR-071c/FR-087a —
- * strong, never U or Z), clock generators at their scripted level
- * (FR-115e; the vector runner owns `level`), and power-on resets
- * (FR-071b: R=1,/R=0 while asserting, the inverse once released). */
+ * strong, never U or Z), clock generators, and power-on resets. In vector
+ * mode clocks drive their scripted level and resets their released flag
+ * (FR-115e; the vector runner owns both); in free-running mode (FR-117a)
+ * both are computed from simulated time, mirroring builtins.js — the
+ * clock's FR-084 square wave (low the first half of each period, period
+ * clamped to ≥ 2 whole ns) and the reset's FR-071b window (asserted while
+ * sim_time < cycles × clockPeriod). */
 static void drive_builtins(void) {
   for (int i = 0; i < gen_pull_count; i++) {
     const rt_pull *p = &gen_pulls[i];
@@ -223,12 +245,20 @@ static void drive_builtins(void) {
   }
   for (int i = 0; i < gen_clock_count; i++) {
     const rt_clock *c = &gen_clocks[i];
-    rt_contrib(c->net, c->level, 0, c->label);
+    if (freerun) {
+      int period = c->period_ns < 2 ? 2 : c->period_ns;
+      rt_contrib(c->net, sim_time % period < period / 2 ? RT_0 : RT_1, 0,
+                 c->label);
+    } else {
+      rt_contrib(c->net, c->level, 0, c->label);
+    }
   }
   for (int i = 0; i < gen_reset_count; i++) {
     const rt_reset *r = &gen_resets[i];
-    rt_contrib(r->r_net, r->released ? RT_0 : RT_1, 0, r->r_label);
-    rt_contrib(r->rn_net, r->released ? RT_1 : RT_0, 0, r->rn_label);
+    int active = freerun ? sim_time < (long)r->cycles * clock_period_eff()
+                         : !r->released;
+    rt_contrib(r->r_net, active ? RT_1 : RT_0, 0, r->r_label);
+    rt_contrib(r->rn_net, active ? RT_0 : RT_1, 0, r->rn_label);
   }
   for (int i = 0; i < gen_incol_count; i++) {
     if (gen_incols[i].kind == RT_COL_PORT && port_stim[i] != RT_Z) {
@@ -386,6 +416,8 @@ int rt_step(void) {
   rt_val *t = curr_buf;
   curr_buf = next_buf;
   next_buf = t;
+  sim_time++;
+  vcd_sample();
   return changed;
 }
 
@@ -578,6 +610,135 @@ int rt_run_vectors(void) {
 }
 
 /* ------------------------------------------------------------------ *
+ *  Free-running mode (--cycles N, FR-117a)
+ * ------------------------------------------------------------------ */
+
+/* incol_net resolves an input column to the net it observes: a switch or
+ * clock column reads its instance's output net, a port column is the net
+ * itself. */
+static int incol_net(const rt_incol *c) {
+  switch (c->kind) {
+    case RT_COL_SWITCH: return gen_switches[c->ref].net;
+    case RT_COL_CLOCK:  return gen_clocks[c->ref].net;
+    case RT_COL_PORT:   return c->ref;
+  }
+  return -1;
+}
+
+void rt_run_free(long cycles) {
+  freerun = 1;
+  long total = cycles * (long)clock_period_eff();
+  for (long i = 0; i < total; i++) rt_step();
+
+  /* Final observable dump (FR-117a): the FR-118 observable set — input
+   * columns then output columns, in column order. An unwired probe reads
+   * Z, as in the vector runner. */
+  for (int i = 0; i < gen_incol_count; i++) {
+    int n = incol_net(&gen_incols[i]);
+    printf("%s=%c\n", gen_incols[i].name, valchar(n >= 0 ? curr_buf[n] : RT_Z));
+  }
+  for (int i = 0; i < gen_outcol_count; i++) {
+    int n = gen_outcols[i].net;
+    printf("%s=%c\n", gen_outcols[i].name, valchar(n >= 0 ? curr_buf[n] : RT_Z));
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ *  VCD trace (--vcd <file>, FR-118)
+ * ------------------------------------------------------------------ *
+ * A four-state VCD trace of the observable set — one scalar wire per
+ * column (inputs then outputs), $timescale 1ns (one unit step, FR-110),
+ * 0/1/U/Z mapped onto VCD 0/1/x/z. Works in both batch modes: rt_step
+ * calls vcd_sample() every unit step, so the trace records every value
+ * change at its simulated time. */
+
+static FILE *vcd_fp;      /* open trace, or NULL (no --vcd) */
+static rt_val *vcd_prev;  /* last dumped value per column */
+static int vcd_ncols;     /* gen_incol_count + gen_outcol_count */
+
+static char vcd_valchar(rt_val v) {
+  switch (v) {
+    case RT_0: return '0';
+    case RT_1: return '1';
+    case RT_Z: return 'z';
+    default:   return 'x'; /* U */
+  }
+}
+
+/* vcd_col_val reads observable column i (inputs first, then outputs);
+ * an unwired column reads Z, as everywhere else. */
+static rt_val vcd_col_val(int i) {
+  int n = i < gen_incol_count ? incol_net(&gen_incols[i])
+                              : gen_outcols[i - gen_incol_count].net;
+  return n >= 0 ? curr_buf[n] : RT_Z;
+}
+
+/* vcd_id renders column index i as a VCD identifier code (bijective
+ * base-94 over the printable characters '!'..'~'). */
+static const char *vcd_id(int i) {
+  static char buf[8];
+  int k = 0;
+  buf[k++] = (char)(33 + i % 94);
+  for (i /= 94; i > 0; i /= 94) {
+    i--;
+    buf[k++] = (char)(33 + i % 94);
+  }
+  buf[k] = '\0';
+  return buf;
+}
+
+/* vcd_name writes a column's display label as a VCD signal name,
+ * whitespace replaced by '_' (a VCD identifier cannot contain spaces). */
+static void vcd_name(const char *s) {
+  for (; *s; s++) fputc(*s == ' ' || *s == '\t' ? '_' : *s, vcd_fp);
+}
+
+/* vcd_open writes the header — timescale, one $var per observable column
+ * — and the initial #0 $dumpvars section with the power-up values. Called
+ * after rt_init, before any step. Exits 2 when the file cannot be opened. */
+static void vcd_open(const char *path) {
+  vcd_fp = fopen(path, "w");
+  if (!vcd_fp) {
+    fprintf(stderr, "--vcd: cannot open %s\n", path);
+    exit(2);
+  }
+  vcd_ncols = gen_incol_count + gen_outcol_count;
+  vcd_prev = xalloc((size_t)(vcd_ncols > 0 ? vcd_ncols : 1));
+  fprintf(vcd_fp, "$timescale 1ns $end\n");
+  fprintf(vcd_fp, "$scope module design $end\n");
+  for (int i = 0; i < vcd_ncols; i++) {
+    fprintf(vcd_fp, "$var wire 1 %s ", vcd_id(i));
+    vcd_name(i < gen_incol_count ? gen_incols[i].name
+                                 : gen_outcols[i - gen_incol_count].name);
+    fprintf(vcd_fp, " $end\n");
+  }
+  fprintf(vcd_fp, "$upscope $end\n$enddefinitions $end\n#0\n$dumpvars\n");
+  for (int i = 0; i < vcd_ncols; i++) {
+    vcd_prev[i] = vcd_col_val(i);
+    fprintf(vcd_fp, "%c%s\n", vcd_valchar(vcd_prev[i]), vcd_id(i));
+  }
+  fprintf(vcd_fp, "$end\n");
+}
+
+/* vcd_sample dumps every column whose value changed this step, under a
+ * #<time> stamp. Called by rt_step after the buffer swap, so curr_buf
+ * holds the values at sim_time. No-op without --vcd. */
+static void vcd_sample(void) {
+  if (!vcd_fp) return;
+  int stamped = 0;
+  for (int i = 0; i < vcd_ncols; i++) {
+    rt_val v = vcd_col_val(i);
+    if (v == vcd_prev[i]) continue;
+    if (!stamped) {
+      fprintf(vcd_fp, "#%ld\n", sim_time);
+      stamped = 1;
+    }
+    vcd_prev[i] = v;
+    fprintf(vcd_fp, "%c%s\n", vcd_valchar(v), vcd_id(i));
+  }
+}
+
+/* ------------------------------------------------------------------ *
  * Column dump (--columns, FR-115a / design §6.17 M2)                   *
  * ------------------------------------------------------------------ *
  * Prints the baked column set so tooling (tv2txt) can reconcile a .tv
@@ -611,10 +772,37 @@ static void rt_dump_columns(void) {
 }
 
 int main(int argc, char **argv) {
-  if (argc == 2 && strcmp(argv[1], "--columns") == 0) {
-    rt_dump_columns();
-    return 0;
+  long cycles = -1;            /* -1 = vector mode (no --cycles flag) */
+  const char *vcd_path = NULL; /* --vcd trace file, or NULL */
+  for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "--columns") == 0) {
+      rt_dump_columns();
+      return 0;
+    } else if (strcmp(argv[i], "--cycles") == 0 && i + 1 < argc) {
+      char *end;
+      cycles = strtol(argv[++i], &end, 10);
+      if (*end != '\0' || cycles <= 0) {
+        fprintf(stderr, "--cycles: N must be a positive integer\n");
+        return 2;
+      }
+    } else if (strcmp(argv[i], "--vcd") == 0 && i + 1 < argc) {
+      vcd_path = argv[++i];
+    } else {
+      fprintf(stderr,
+              "usage: %s [--columns | [--vcd FILE] [--cycles N]] (vector rows on stdin otherwise)\n",
+              argv[0]);
+      return 2;
+    }
   }
   rt_init();
-  return rt_run_vectors() ? 1 : 0;
+  if (vcd_path) vcd_open(vcd_path); /* both modes trace (FR-118) */
+  int status;
+  if (cycles > 0) { /* free-running mode (FR-117a): stdin untouched */
+    rt_run_free(cycles);
+    status = 0;
+  } else {
+    status = rt_run_vectors() ? 1 : 0;
+  }
+  if (vcd_fp) fclose(vcd_fp);
+  return status;
 }
