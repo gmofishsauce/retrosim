@@ -1,0 +1,147 @@
+{
+  "formatVersion": 2,
+  "inputs": [
+    {
+      "refdes": "A-1",
+      "pin": "OUT",
+      "label": "A-1"
+    },
+    {
+      "refdes": "A-2",
+      "pin": "OUT",
+      "label": "A-2"
+    },
+    {
+      "refdes": "A-3",
+      "pin": "OUT",
+      "label": "A-3"
+    },
+    {
+      "refdes": "A-4",
+      "pin": "OUT",
+      "label": "A-4"
+    },
+    {
+      "refdes": "A-5",
+      "pin": "OUT",
+      "label": "A-5"
+    },
+    {
+      "refdes": "A-6",
+      "pin": "OUT",
+      "label": "A-6"
+    },
+    {
+      "refdes": "A-7",
+      "pin": "OUT",
+      "label": "A-7"
+    }
+  ],
+  "outputs": [
+    {
+      "refdes": "A-10",
+      "pin": "IN",
+      "label": "A-10"
+    },
+    {
+      "refdes": "A-11",
+      "pin": "IN",
+      "label": "A-11"
+    },
+    {
+      "refdes": "A-12",
+      "pin": "IN",
+      "label": "A-12"
+    },
+    {
+      "refdes": "A-13",
+      "pin": "IN",
+      "label": "A-13"
+    },
+    {
+      "refdes": "A-14",
+      "pin": "IN",
+      "label": "A-14"
+    },
+    {
+      "refdes": "A-15",
+      "pin": "IN",
+      "label": "A-15"
+    },
+    {
+      "refdes": "A-16",
+      "pin": "IN",
+      "label": "A-16"
+    },
+    {
+      "refdes": "A-17",
+      "pin": "IN",
+      "label": "A-17"
+    }
+  ],
+  "rows": [
+    {
+      "in": [
+        "C",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0"
+      ],
+      "out": [
+        "L",
+        "L",
+        "L",
+        "L",
+        "L",
+        "L",
+        "X",
+        "X"
+      ]
+    },
+    {
+      "in": [
+        "C",
+        "1",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0"
+      ],
+      "out": [
+        "H",
+        "L",
+        "L",
+        "L",
+        "L",
+        "L",
+        "X",
+        "X"
+      ]
+    },
+    {
+      "in": [
+        "C",
+        "1",
+        "1",
+        "1",
+        "1",
+        "1",
+        "1"
+      ],
+      "out": [
+        "H",
+        "H",
+        "H",
+        "H",
+        "H",
+        "H",
+        "X",
+        "X"
+      ]
+    }
+  ]
+}

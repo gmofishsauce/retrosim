@@ -1,0 +1,1354 @@
+{
+  "formatVersion": 2,
+  "name": "simple174",
+  "components": [
+    {
+      "refdes": "U1",
+      "type": "type-74174",
+      "x": -6,
+      "y": 34,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-74174",
+        "name": "74174",
+        "renderType": "unit",
+        "width": 6,
+        "height": 14,
+        "pins": [
+          {
+            "name": "D0",
+            "side": "left",
+            "position": 2,
+            "direction": "in",
+            "number": 3,
+            "desc": "data input bit 0"
+          },
+          {
+            "name": "D1",
+            "side": "left",
+            "position": 3,
+            "direction": "in",
+            "number": 4,
+            "desc": "data input bit 1"
+          },
+          {
+            "name": "D2",
+            "side": "left",
+            "position": 4,
+            "direction": "in",
+            "number": 6,
+            "desc": "data input bit 2"
+          },
+          {
+            "name": "D3",
+            "side": "left",
+            "position": 5,
+            "direction": "in",
+            "number": 11,
+            "desc": "data input bit 3"
+          },
+          {
+            "name": "D4",
+            "side": "left",
+            "position": 6,
+            "direction": "in",
+            "number": 13,
+            "desc": "data input bit 4"
+          },
+          {
+            "name": "D5",
+            "side": "left",
+            "position": 7,
+            "direction": "in",
+            "number": 14,
+            "desc": "data input bit 5"
+          },
+          {
+            "name": "Q0",
+            "side": "right",
+            "position": 2,
+            "direction": "out",
+            "number": 2,
+            "desc": "registered output bit 0"
+          },
+          {
+            "name": "Q1",
+            "side": "right",
+            "position": 3,
+            "direction": "out",
+            "number": 5,
+            "desc": "registered output bit 1"
+          },
+          {
+            "name": "Q2",
+            "side": "right",
+            "position": 4,
+            "direction": "out",
+            "number": 7,
+            "desc": "registered output bit 2"
+          },
+          {
+            "name": "Q3",
+            "side": "right",
+            "position": 5,
+            "direction": "out",
+            "number": 10,
+            "desc": "registered output bit 3"
+          },
+          {
+            "name": "Q4",
+            "side": "right",
+            "position": 6,
+            "direction": "out",
+            "number": 12,
+            "desc": "registered output bit 4"
+          },
+          {
+            "name": "Q5",
+            "side": "right",
+            "position": 7,
+            "direction": "out",
+            "number": 15,
+            "desc": "registered output bit 5"
+          },
+          {
+            "name": "CP",
+            "side": "top",
+            "position": 2,
+            "direction": "in",
+            "number": 9,
+            "desc": "clock input, rising-edge triggered"
+          },
+          {
+            "name": "/MR",
+            "side": "top",
+            "position": 5,
+            "direction": "in",
+            "number": 1,
+            "desc": "active-low asynchronous master reset"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "D",
+            "pins": [
+              "D0",
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5"
+            ]
+          },
+          {
+            "name": "Q",
+            "pins": [
+              "Q0",
+              "Q1",
+              "Q2",
+              "Q3",
+              "Q4",
+              "Q5"
+            ]
+          }
+        ],
+        "delays": {
+          "th": 3,
+          "tpd_cp": 20,
+          "tpd_mr": 16,
+          "tsu": 12
+        },
+        "behavior": "; 74174 — hex D-type flip-flop with a common asynchronous master reset.\n; Derived from the function table (datasheet Table 3): while /MR is LOW all\n; six outputs are forced LOW asynchronously; otherwise each output Qn loads\n; the value of Dn at the LOW-to-HIGH transition of CP.\n;\n; SEQUENTIAL-PART CLOCK CONVENTION (74574.yaml): GALasm's .R registered\n; outputs are clocked by the GAL22V10's dedicated pin-1 clock\n; (galasmManual.txt section 3.4). That pin-1 clock role is played by the\n; part's named clock pin — here CP, rising-edge triggered. CP therefore does\n; NOT appear as a term in any equation below; the .R suffix implies it.\n;\n; The asynchronous master reset uses GALasm's global AR (galasmManual.txt\n; section 3.6): while its term is true every register is held at 0,\n; independent of the clock. Pin /MR is active LOW, so AR = /MR.\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (pin /MR is GAL signal MR, so '/MR' means \"pin /MR is LOW\").\nAR   = /MR\nQ0.R = D0\nQ1.R = D1\nQ2.R = D2\nQ3.R = D3\nQ4.R = D4\nQ5.R = D5\n",
+        "clock": "CP",
+        "description": "Hex D flip-flop with common async reset, positive edge-trigger",
+        "datasheet": {
+          "vendor": "Nexperia",
+          "title": "74HC174; 74HCT174 Hex D-type flip-flop with reset; positive-edge trigger",
+          "rev": "Rev. 7, 14 March 2024",
+          "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT174.pdf"
+        }
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-1",
+      "type": "type-clock",
+      "x": -14,
+      "y": 26,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-clock",
+        "name": "clock",
+        "builtin": true,
+        "title": "clock",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"3\" y=\"11\" width=\"30\" height=\"14\" fill=\"#fff\" stroke=\"#333\"/><text x=\"18\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"10\" fill=\"#000\">CLK</text></svg>",
+        "renderType": "clock",
+        "width": 3,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ],
+        "properties": [
+          {
+            "name": "period",
+            "unit": "ns",
+            "default": 100
+          },
+          {
+            "name": "speed",
+            "unit": "Hz",
+            "default": 1
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-2",
+      "type": "type-switch",
+      "x": -19,
+      "y": 35,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-3",
+      "type": "type-switch",
+      "x": -19,
+      "y": 39,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-4",
+      "type": "type-switch",
+      "x": -19,
+      "y": 42,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-5",
+      "type": "type-switch",
+      "x": -19,
+      "y": 45,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-6",
+      "type": "type-switch",
+      "x": -19,
+      "y": 48,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-7",
+      "type": "type-switch",
+      "x": -19,
+      "y": 51,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-9",
+      "type": "type-reset",
+      "x": -1,
+      "y": 26,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-reset",
+        "name": "reset",
+        "builtin": true,
+        "title": "power-on reset",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"3\" y=\"11\" width=\"30\" height=\"14\" fill=\"#fff\" stroke=\"#333\"/><text x=\"18\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"10\" fill=\"#000\">RST</text></svg>",
+        "renderType": "reset",
+        "width": 3,
+        "height": 3,
+        "pins": [
+          {
+            "name": "R",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          },
+          {
+            "name": "/R",
+            "side": "right",
+            "position": 2,
+            "direction": "out"
+          }
+        ],
+        "properties": [
+          {
+            "name": "cycles",
+            "unit": "cycles",
+            "default": 3
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-10",
+      "type": "type-indicator",
+      "x": 12,
+      "y": 30,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-11",
+      "type": "type-indicator",
+      "x": 16,
+      "y": 30,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-12",
+      "type": "type-indicator",
+      "x": 19,
+      "y": 30,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-13",
+      "type": "type-indicator",
+      "x": 23,
+      "y": 30,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-14",
+      "type": "type-indicator",
+      "x": 28,
+      "y": 30,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-15",
+      "type": "type-indicator",
+      "x": 32,
+      "y": 30,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-16",
+      "type": "type-indicator",
+      "x": -5,
+      "y": 19,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-17",
+      "type": "type-indicator",
+      "x": 4,
+      "y": 17,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1"
+        },
+        {
+          "t": "bend",
+          "x": -4,
+          "y": 27
+        },
+        {
+          "t": "node",
+          "v": "v29"
+        },
+        {
+          "t": "node",
+          "v": "v2"
+        }
+      ]
+    },
+    {
+      "id": "w2",
+      "path": [
+        {
+          "t": "node",
+          "v": "v3"
+        },
+        {
+          "t": "bend",
+          "x": 5,
+          "y": 28
+        },
+        {
+          "t": "node",
+          "v": "v31"
+        },
+        {
+          "t": "bend",
+          "x": 5,
+          "y": 32
+        },
+        {
+          "t": "bend",
+          "x": -1,
+          "y": 32
+        },
+        {
+          "t": "node",
+          "v": "v4"
+        }
+      ]
+    },
+    {
+      "id": "w3",
+      "path": [
+        {
+          "t": "node",
+          "v": "v5"
+        },
+        {
+          "t": "node",
+          "v": "v6"
+        }
+      ]
+    },
+    {
+      "id": "w4",
+      "path": [
+        {
+          "t": "node",
+          "v": "v7"
+        },
+        {
+          "t": "bend",
+          "x": -15,
+          "y": 40
+        },
+        {
+          "t": "bend",
+          "x": -15,
+          "y": 37
+        },
+        {
+          "t": "node",
+          "v": "v8"
+        }
+      ]
+    },
+    {
+      "id": "w5",
+      "path": [
+        {
+          "t": "node",
+          "v": "v9"
+        },
+        {
+          "t": "bend",
+          "x": -16,
+          "y": 38
+        },
+        {
+          "t": "bend",
+          "x": -16,
+          "y": 43
+        },
+        {
+          "t": "node",
+          "v": "v10"
+        }
+      ]
+    },
+    {
+      "id": "w6",
+      "path": [
+        {
+          "t": "node",
+          "v": "v11"
+        },
+        {
+          "t": "bend",
+          "x": -14,
+          "y": 39
+        },
+        {
+          "t": "bend",
+          "x": -14,
+          "y": 46
+        },
+        {
+          "t": "node",
+          "v": "v12"
+        }
+      ]
+    },
+    {
+      "id": "w7",
+      "path": [
+        {
+          "t": "node",
+          "v": "v13"
+        },
+        {
+          "t": "bend",
+          "x": -15,
+          "y": 40
+        },
+        {
+          "t": "bend",
+          "x": -15,
+          "y": 49
+        },
+        {
+          "t": "node",
+          "v": "v14"
+        }
+      ]
+    },
+    {
+      "id": "w8",
+      "path": [
+        {
+          "t": "node",
+          "v": "v15"
+        },
+        {
+          "t": "bend",
+          "x": -13,
+          "y": 41
+        },
+        {
+          "t": "bend",
+          "x": -13,
+          "y": 52
+        },
+        {
+          "t": "node",
+          "v": "v16"
+        }
+      ]
+    },
+    {
+      "id": "w9",
+      "path": [
+        {
+          "t": "node",
+          "v": "v17"
+        },
+        {
+          "t": "bend",
+          "x": 13,
+          "y": 36
+        },
+        {
+          "t": "node",
+          "v": "v18"
+        }
+      ]
+    },
+    {
+      "id": "w10",
+      "path": [
+        {
+          "t": "node",
+          "v": "v19"
+        },
+        {
+          "t": "bend",
+          "x": 17,
+          "y": 37
+        },
+        {
+          "t": "node",
+          "v": "v20"
+        }
+      ]
+    },
+    {
+      "id": "w11",
+      "path": [
+        {
+          "t": "node",
+          "v": "v21"
+        },
+        {
+          "t": "bend",
+          "x": 20,
+          "y": 38
+        },
+        {
+          "t": "node",
+          "v": "v22"
+        }
+      ]
+    },
+    {
+      "id": "w12",
+      "path": [
+        {
+          "t": "node",
+          "v": "v23"
+        },
+        {
+          "t": "bend",
+          "x": 24,
+          "y": 39
+        },
+        {
+          "t": "node",
+          "v": "v24"
+        }
+      ]
+    },
+    {
+      "id": "w13",
+      "path": [
+        {
+          "t": "node",
+          "v": "v25"
+        },
+        {
+          "t": "bend",
+          "x": 29,
+          "y": 40
+        },
+        {
+          "t": "node",
+          "v": "v26"
+        }
+      ]
+    },
+    {
+      "id": "w14",
+      "path": [
+        {
+          "t": "node",
+          "v": "v27"
+        },
+        {
+          "t": "bend",
+          "x": 33,
+          "y": 41
+        },
+        {
+          "t": "node",
+          "v": "v28"
+        }
+      ]
+    },
+    {
+      "id": "w15",
+      "path": [
+        {
+          "t": "node",
+          "v": "v30"
+        },
+        {
+          "t": "node",
+          "v": "v29"
+        }
+      ]
+    },
+    {
+      "id": "w16",
+      "path": [
+        {
+          "t": "node",
+          "v": "v32"
+        },
+        {
+          "t": "node",
+          "v": "v31"
+        }
+      ]
+    }
+  ],
+  "buses": [],
+  "vertices": [
+    {
+      "id": "v1",
+      "kind": "pin",
+      "ref": "A-1",
+      "pin": "OUT",
+      "x": -32,
+      "y": 27
+    },
+    {
+      "id": "v2",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "CP",
+      "x": -4,
+      "y": 34
+    },
+    {
+      "id": "v3",
+      "kind": "pin",
+      "ref": "A-9",
+      "pin": "/R",
+      "x": 2,
+      "y": 28
+    },
+    {
+      "id": "v4",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "/MR",
+      "x": -1,
+      "y": 34
+    },
+    {
+      "id": "v5",
+      "kind": "pin",
+      "ref": "A-2",
+      "pin": "OUT",
+      "x": -17,
+      "y": 36
+    },
+    {
+      "id": "v6",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D0",
+      "x": -6,
+      "y": 36
+    },
+    {
+      "id": "v7",
+      "kind": "pin",
+      "ref": "A-3",
+      "pin": "OUT",
+      "x": -17,
+      "y": 40
+    },
+    {
+      "id": "v8",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D1",
+      "x": -6,
+      "y": 37
+    },
+    {
+      "id": "v9",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D2",
+      "x": -6,
+      "y": 38
+    },
+    {
+      "id": "v10",
+      "kind": "pin",
+      "ref": "A-4",
+      "pin": "OUT",
+      "x": -17,
+      "y": 43
+    },
+    {
+      "id": "v11",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D3",
+      "x": -6,
+      "y": 39
+    },
+    {
+      "id": "v12",
+      "kind": "pin",
+      "ref": "A-5",
+      "pin": "OUT",
+      "x": -17,
+      "y": 46
+    },
+    {
+      "id": "v13",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D4",
+      "x": -6,
+      "y": 40
+    },
+    {
+      "id": "v14",
+      "kind": "pin",
+      "ref": "A-6",
+      "pin": "OUT",
+      "x": -17,
+      "y": 49
+    },
+    {
+      "id": "v15",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D5",
+      "x": -6,
+      "y": 41
+    },
+    {
+      "id": "v16",
+      "kind": "pin",
+      "ref": "A-7",
+      "pin": "OUT",
+      "x": -17,
+      "y": 52
+    },
+    {
+      "id": "v17",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Q0",
+      "x": 0,
+      "y": 36
+    },
+    {
+      "id": "v18",
+      "kind": "pin",
+      "ref": "A-10",
+      "pin": "IN",
+      "x": 13,
+      "y": 32
+    },
+    {
+      "id": "v19",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Q1",
+      "x": 0,
+      "y": 37
+    },
+    {
+      "id": "v20",
+      "kind": "pin",
+      "ref": "A-11",
+      "pin": "IN",
+      "x": 17,
+      "y": 32
+    },
+    {
+      "id": "v21",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Q2",
+      "x": 0,
+      "y": 38
+    },
+    {
+      "id": "v22",
+      "kind": "pin",
+      "ref": "A-12",
+      "pin": "IN",
+      "x": 20,
+      "y": 32
+    },
+    {
+      "id": "v23",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Q3",
+      "x": 0,
+      "y": 39
+    },
+    {
+      "id": "v24",
+      "kind": "pin",
+      "ref": "A-13",
+      "pin": "IN",
+      "x": 24,
+      "y": 32
+    },
+    {
+      "id": "v25",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Q4",
+      "x": 0,
+      "y": 40
+    },
+    {
+      "id": "v26",
+      "kind": "pin",
+      "ref": "A-14",
+      "pin": "IN",
+      "x": 29,
+      "y": 32
+    },
+    {
+      "id": "v27",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Q5",
+      "x": 0,
+      "y": 41
+    },
+    {
+      "id": "v28",
+      "kind": "pin",
+      "ref": "A-15",
+      "pin": "IN",
+      "x": 33,
+      "y": 32
+    },
+    {
+      "id": "v29",
+      "kind": "junction",
+      "x": -4,
+      "y": 27
+    },
+    {
+      "id": "v30",
+      "kind": "pin",
+      "ref": "A-16",
+      "pin": "IN",
+      "x": -4,
+      "y": 21
+    },
+    {
+      "id": "v31",
+      "kind": "junction",
+      "x": 5,
+      "y": 28
+    },
+    {
+      "id": "v32",
+      "kind": "pin",
+      "ref": "A-17",
+      "pin": "IN",
+      "x": 6,
+      "y": 19
+    }
+  ],
+  "nets": [
+    {
+      "pins": [
+        "A-1.OUT",
+        "U1.CP",
+        "A-16.IN"
+      ],
+      "members": [
+        "w1",
+        "w15"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-9./R",
+        "U1./MR",
+        "A-17.IN"
+      ],
+      "members": [
+        "w2",
+        "w16"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "A-2.OUT",
+        "U1.D0"
+      ],
+      "members": [
+        "w3"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-3.OUT",
+        "U1.D1"
+      ],
+      "members": [
+        "w4"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U1.D2",
+        "A-4.OUT"
+      ],
+      "members": [
+        "w5"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U1.D3",
+        "A-5.OUT"
+      ],
+      "members": [
+        "w6"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U1.D4",
+        "A-6.OUT"
+      ],
+      "members": [
+        "w7"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U1.D5",
+        "A-7.OUT"
+      ],
+      "members": [
+        "w8"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U1.Q0",
+        "A-10.IN"
+      ],
+      "members": [
+        "w9"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.Q1",
+        "A-11.IN"
+      ],
+      "members": [
+        "w10"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.Q2",
+        "A-12.IN"
+      ],
+      "members": [
+        "w11"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.Q3",
+        "A-13.IN"
+      ],
+      "members": [
+        "w12"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.Q4",
+        "A-14.IN"
+      ],
+      "members": [
+        "w13"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.Q5",
+        "A-15.IN"
+      ],
+      "members": [
+        "w14"
+      ],
+      "provenance": [],
+      "name": "IN"
+    }
+  ]
+}

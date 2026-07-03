@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-03 — M3 step 1: registered (.R) outputs on the global clock
+What: cgen.js now lowers global-clock .R registered outputs (incl. global AR/SP) instead of refusing them — per-instance reg_<refdes>[] state, rising-edge latch in gen_latch mirroring sim.js updateRegisters, drive reads back the register. Runtime unchanged (sequential vector path already existed). Refusal narrowed to per-output .CLK/.ARST/.APRST (step 2) and memory (step 3). New sequential parity pair examples/simple174 (74174); parity clean fast-vs-slow.
+Why: M3 first step per design §6.17 milestones — sequential support, smallest slice first.
+Touches: FR-079; design §6.17 (M3 milestone)
+
 ## 2026-07-03 — M2: fast-vs-slow parity harness (FR-107 check)
 What: Added web/tools/parity.js — for each examples/ design+.tv pair it loads the design (deserializeDesign), reconciles the .tv to deriveColumns, runs runVectors (JS) and generateC+cc (C) on the same reconciled rows, and diffs the compiled program's stdout transcript against the JS result rendered into the identical FR-118 format. Generator refusals (memory/sub-design/.R, M3+) report as skips; exits nonzero on any diff. Resolves the §12 harness-location open item (web/tools/parity.js).
 Touches: design §6.17 (M2), §9 file manifest, §12 (open item resolved)

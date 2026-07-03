@@ -144,21 +144,34 @@ test("generateC: pulls, unwired probes, and empty tables", () => {
   assert.match(code, /const int gen_switch_count = 0;/);
 });
 
-test("generateC: refuses registered outputs until M3", () => {
-  const DFF = {
-    name: "DFFX",
-    renderType: "unit",
-    clock: "CP",
-    pins: [
-      { name: "D", side: "left", position: 1, direction: "in" },
-      { name: "CP", side: "left", position: 2, direction: "in" },
-      { name: "Q", side: "right", position: 1, direction: "out" },
-    ],
-    behavior: "Q.R = D\n",
-  };
+const DFF = {
+  name: "DFFX",
+  renderType: "unit",
+  clock: "CP",
+  pins: [
+    { name: "D", side: "left", position: 1, direction: "in" },
+    { name: "CP", side: "left", position: 2, direction: "in" },
+    { name: "Q", side: "right", position: 1, direction: "out" },
+  ],
+  behavior: "Q.R = D\n",
+};
+
+test("generateC: global-clock .R output emits register state and latch (M3 step 1)", () => {
   const d = mkDesign();
   place(d, "U1", DFF);
-  assert.throws(() => generateC(d), /registered \(\.R\) outputs are not yet supported/);
+  const { code } = generateC(d);
+  assert.match(code, /static rt_val reg_U1\[1\];/);
+  assert.match(code, /static rt_val prevClk_U1;/);
+  assert.match(code, /int rose = \(prevClk_U1 == RT_0 && clk == RT_1\);/);
+  assert.match(code, /reg_U1\[0\] = rt_buf/); // latches D on the rising edge
+  assert.match(code, /v = reg_U1\[0\]; \/\* latched \*\//); // drive reads the register
+});
+
+test("generateC: refuses per-output .CLK registered outputs (M3 step 2)", () => {
+  const CLKFF = { ...DFF, behavior: "Q.R = D\nQ.CLK = CP\n" };
+  const d = mkDesign();
+  place(d, "U1", CLKFF);
+  assert.throws(() => generateC(d), /per-output \.CLK\/\.ARST\/\.APRST/);
 });
 
 test("generateC: refuses memory devices and sub-design instances", () => {

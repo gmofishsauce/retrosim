@@ -9,9 +9,10 @@
 // tables plus straight-line lowered logic — every runtime semantic lives in
 // runtime.c (FR-116a).
 //
-// M1 scope (design §6.17): combinational designs. Registered outputs (.R)
-// and memory devices are refused until M3; sub-design instances are refused
-// per FR-116 deferred scope (fast-engine flattening is a later change).
+// M3 step 1 scope (design §6.17): combinational designs plus registered
+// outputs (.R) on the global clock: pin, incl. global AR/SP (FR-079). Still
+// refused: per-output .CLK/.ARST/.APRST (M3 step 2) and memory devices (M3);
+// sub-design instances are refused per FR-116 deferred scope.
 
 import { compileBehavior } from "./galasm.js";
 import { buildNets } from "../model/netlist.js";
@@ -69,6 +70,7 @@ export function generateC(design, { romContent = null } = {}) {
   const switches = [];
   const clocks = [];
   const resets = [];
+  const regUnits = []; // registered galasm entities, global-clock family (FR-079)
   const switchIdx = new Map(); // refdes → gen_switches index
   const clockIdx = new Map(); // refdes → gen_clocks index
   const compileCache = new Map(); // type name → CompiledBehavior|null
@@ -124,10 +126,11 @@ export function generateC(design, { romContent = null } = {}) {
       return;
     }
 
+    const hasReg = c.outputs.some((o) => o.kind === "R");
     for (const out of c.outputs) {
-      if (out.kind === "R") {
+      if (out.kind === "R" && (out.clk || out.arst || out.aprst)) {
         errors.push(
-          `${typeName}: registered (.R) outputs are not yet supported by the C generator (design §6.17 M3)`,
+          `${typeName}: per-output .CLK/.ARST/.APRST registered outputs are not yet supported by the C generator (design §6.17 M3 step 2)`,
         );
         return;
       }
@@ -148,6 +151,41 @@ export function generateC(design, { romContent = null } = {}) {
     // OR of a sum's terms; the empty sum (GND) is false.
     const sumExpr = (terms) =>
       terms.length === 0 ? "RT_0" : terms.map(termExpr).reduce((a, b) => `rt_or(${a}, ${b})`);
+    // evalCombinational (galasm.js): the sum folded with its :+: XOR groups,
+    // without the LHS-negation (applied at drive time by evalOutput/xorLow).
+    const combExpr = (out) =>
+      (out.xor ?? []).reduce((acc, g) => `rt_xor(${acc}, ${sumExpr(g)})`, sumExpr(out.terms));
+
+    // Registered (.R) outputs, global-clock family: collect per-instance
+    // register state (mirrors sim.js updateRegisters). The D input latched
+    // here is combExpr; the drive block below reads back reg_<tag>[k].
+    let regTag = null;
+    const regIdxOf = new Map(); // .R signal → its slot in reg_<tag>[]
+    if (hasReg) {
+      regTag = insts[0].refdes.replace(/[^A-Za-z0-9_]/g, "_");
+      const clockPin = td0.clock;
+      let clockNet = -1;
+      if (!clockPin) {
+        errors.push(`${typeName}: behavior uses .R but the type declares no clock: pin (FR-062d)`);
+      } else {
+        const owner = insts.find((i) => i.typeData.pins.some((p) => p.name === clockPin));
+        clockNet = netOf(`${owner?.refdes}.${clockPin}`);
+      }
+      const dExprs = [];
+      for (const out of c.outputs) {
+        if (out.kind !== "R") continue;
+        regIdxOf.set(out.signal, dExprs.length);
+        dExprs.push(combExpr(out));
+      }
+      regUnits.push({
+        tag: regTag,
+        clockNet,
+        count: dExprs.length,
+        dExprs,
+        spExpr: c.sp ? termExpr(c.sp) : null,
+        arExpr: c.ar ? termExpr(c.ar) : null,
+      });
+    }
 
     const lines = [`  /* ${refdesList}: ${typeName} */`];
     for (const out of c.outputs) {
@@ -156,9 +194,13 @@ export function generateC(design, { romContent = null } = {}) {
       const net = netOf(key);
       lines.push(`  { /* ${key} */`);
       const body = [];
-      body.push(`v = ${sumExpr(out.terms)};`);
-      for (const group of out.xor ?? []) {
-        body.push(`v = rt_xor(v, ${sumExpr(group)}); /* :+: */`);
+      if (out.kind === "R") {
+        body.push(`v = reg_${regTag}[${regIdxOf.get(out.signal)}]; /* latched */`);
+      } else {
+        body.push(`v = ${sumExpr(out.terms)};`);
+        for (const group of out.xor ?? []) {
+          body.push(`v = rt_xor(v, ${sumExpr(group)}); /* :+: */`);
+        }
       }
       if (out.lhsLow) body.push(`v = rt_not(v); /* declared active-low */`);
       if (out.enable) {
@@ -365,15 +407,51 @@ export function generateC(design, { romContent = null } = {}) {
   L.push(`const int gen_outcol_count = ${outcols.length};`);
   L.push(``);
 
+  L.push(`/* --- registered state (FR-079: global-clock .R outputs) --- */`);
+  for (const u of regUnits) {
+    L.push(`static rt_val reg_${u.tag}[${u.count}];`);
+    L.push(`static rt_val prevClk_${u.tag};`);
+  }
+  if (regUnits.length) L.push(``);
+
   L.push(`/* --- power-up state (FR-116a; reapplied per combinational row) --- */`);
   L.push(`void gen_init(void) {`);
   switches.forEach((s, i) => L.push(`  gen_switches[${i}].level = ${s.level}; /* ${s.refdes} baked state */`));
   clocks.forEach((c, i) => L.push(`  gen_clocks[${i}].level = RT_0;`));
   resets.forEach((r, i) => L.push(`  gen_resets[${i}].released = 0;`));
+  for (const u of regUnits) {
+    for (let k = 0; k < u.count; k++) L.push(`  reg_${u.tag}[${k}] = RT_U; /* power-up U (FR-079) */`);
+    L.push(`  prevClk_${u.tag} = RT_U;`);
+  }
   L.push(`}`);
   L.push(``);
-  L.push(`/* --- registered/memory state: none in this design (M1) --- */`);
-  L.push(`void gen_latch(const rt_val *curr) { (void)curr; }`);
+  L.push(`/* --- registered latch: global-clock .R outputs (FR-079, sim.js updateRegisters) --- */`);
+  L.push(`void gen_latch(const rt_val *curr) {`);
+  if (!regUnits.length) L.push(`  (void)curr;`);
+  for (const u of regUnits) {
+    const clk = u.clockNet >= 0 ? `curr[${u.clockNet}]` : `RT_Z`;
+    L.push(`  {`);
+    L.push(`    rt_val clk = ${clk};`);
+    L.push(`    int rose = (prevClk_${u.tag} == RT_0 && clk == RT_1);`);
+    L.push(`    if (rose) {`);
+    u.dExprs.forEach((d, k) => L.push(`      reg_${u.tag}[${k}] = ${d};`));
+    L.push(`    }`);
+    if (u.spExpr) {
+      L.push(`    if (rose) { rt_val s = ${u.spExpr}; /* global SP */`);
+      L.push(`      if (s != RT_0) for (int k = 0; k < ${u.count}; k++)`);
+      L.push(`        reg_${u.tag}[k] = (s == RT_1) ? RT_1 : RT_U;`);
+      L.push(`    }`);
+    }
+    if (u.arExpr) {
+      L.push(`    { rt_val a = ${u.arExpr}; /* global AR (async) */`);
+      L.push(`      if (a != RT_0) for (int k = 0; k < ${u.count}; k++)`);
+      L.push(`        reg_${u.tag}[k] = (a == RT_1) ? RT_0 : RT_U;`);
+      L.push(`    }`);
+    }
+    L.push(`    prevClk_${u.tag} = clk;`);
+    L.push(`  }`);
+  }
+  L.push(`}`);
   L.push(``);
   L.push(`/* --- strong drivers, one fragment per instance (FR-081) --- */`);
   L.push(`void gen_drive(const rt_val *curr) {`);
