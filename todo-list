@@ -35,18 +35,28 @@ continuous and on a single side.
 
 FIXED 2mm of garbage at the bottom of the drawing canvas.
 
-DONE needs keyboard accelerators
+needs more keyboard accelerators
 
 DONE Straight line bend points should disappear.
 
 DONE Wires need property sheets explaining the endpoints.
 
-A way for AIs to design (use the app).
+A way for AIs to design (use the app). - see specs/ai-open.md
 
-Simulator support for test vectors and a Claude skill for creating them.
+DONE Simulator support for test vectors and a Claude skill for creating them.
 
 DONE Persistence for memory designs and gal designs.
 
-Improve labeling of + GAL button and MEM button.
+DONEa Improve labeling of + GAL button and MEM button.
 
 Fit to screen and crnter-zoom zoom operations
+
+UX: buttons and indicators are too similar looking.
+
+UX: auto router needs corner avoidance.
+
+Slow down and single step the clock in the slow simulator.
+
+New row in test vector generator should be a copy of the previous row.
+
+After test vectors are saved, the design should be clean unless changes were made to the schematic.
