@@ -771,13 +771,28 @@ waveform trace of the observable columns over simulated time (1 ns per unit
 step), viewable in any VCD viewer such as GTKWave. Undefined shows as `x`,
 undriven as `z`.
 
+**ROM contents.** A ROM's contents are **not** baked into the program: it
+reads each ROM's content file when it starts, just as the editor reads it at
+Run — so you can edit a `.hex` or `.bin` file and re-run without regenerating
+or recompiling. By default the program uses the file path recorded in the ROM
+device, trying it as recorded and then by filename in the directory you run
+from (handy when the program was generated on another machine — put the file
+next to where you run it). To point a ROM somewhere else, pass
+`--rom REFDES=FILE` (once per ROM), for example:
+
+```
+./mydesign --rom U1=program2.hex --cycles 1000
+```
+
+A content file that is missing, unreadable, or malformed stops the program
+with a message rather than running with empty memory; the message names the
+ROM and shows the `--rom` option to use.
+
 Generation never modifies the design, and works whether or not it has been
 saved. Registered (`.R`) parts, independent per-output clocks, and RAM/ROM
-devices are all supported; a ROM's contents are baked into the generated `.c`
-at generate time, so regenerate after changing the `.hex` file. The one
-remaining limit: designs containing sub-designs are refused with a message.
-The menu item is unavailable while a simulation is running or the test-vector
-panel is open.
+devices are all supported. The one remaining limit: designs containing
+sub-designs are refused with a message. The menu item is unavailable while a
+simulation is running or the test-vector panel is open.
 
 ---
 

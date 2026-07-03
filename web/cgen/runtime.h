@@ -245,12 +245,21 @@ extern const int gen_reset_count;
 
 /* Memory device (RAM/ROM, FR-114/FR-114d; behavior in runtime.c, memory.js
  * core). The runtime owns a per-instance mutable store (2^abits × width
- * rt_val, RAM power-up U, ROM seeded from `rom` bytes) plus WE/-edge state;
- * this table is the const wiring. `addr`/`data`/`data_label` point at abits-
- * and width-long net-index / label arrays baked in the generated file; a
- * control net is -1 when unwired (reads U). `we` is -1 for a ROM. `rom` is
- * the baked content bytes (little-endian, ceil(width/8) per word, FR-114e)
- * or NULL; `rom_len` is that byte count. */
+ * rt_val, RAM power-up U, ROM seeded from its loaded contents) plus
+ * WE/-edge state; this table is the const wiring. `addr`/`data`/
+ * `data_label` point at abits- and width-long net-index / label arrays
+ * baked in the generated file; a control net is -1 when unwired (reads U).
+ * `we` is -1 for a ROM.
+ *
+ * A ROM's contents are NOT baked: the runtime reads them at startup
+ * (FR-117b), so a content file can change without regenerating. Per ROM,
+ * the source is a `--rom REFDES=FILE` command-line override when given,
+ * else `rom_file` — the content-file path recorded in the device's mem
+ * block (FR-114f), tried as recorded and then by basename in the current
+ * working directory. Format by extension per FR-114e (`.bin` raw bytes,
+ * `.hex` whitespace-separated hex byte tokens), packed little-endian
+ * ceil(width/8) bytes per word. Any load failure reports to stderr and
+ * exits 2. `refdes` names the instance for --rom matching and messages. */
 typedef enum { RT_MEM_ROM = 0, RT_MEM_RAM = 1 } rt_mem_kind;
 typedef struct {
   int kind;   /* rt_mem_kind */
@@ -262,8 +271,8 @@ typedef struct {
   int ce;                /* CE/ net index (active low), or -1 */
   int oe;                /* OE/ net index (active low), or -1 */
   int we;                /* WE/ net index (active low, RAM), or -1 */
-  const unsigned char *rom; /* baked ROM bytes, or NULL */
-  int rom_len;              /* rom byte count */
+  const char *refdes;    /* instance refdes (--rom matching, messages) */
+  const char *rom_file;  /* recorded content-file path (ROM), or NULL */
 } rt_mem;
 extern const rt_mem gen_mems[];
 extern const int gen_mem_count;

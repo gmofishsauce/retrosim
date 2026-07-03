@@ -210,12 +210,12 @@ const ROM4x2 = {
   ],
 };
 
-test("generateC: ROM device bakes contents into a gen_mems entry (M3 step 3)", () => {
+test("generateC: ROM device bakes refdes + content-file path, not bytes (M5, FR-117b)", () => {
   const d = mkDesign();
   place(d, "U1", ROM4x2);
-  const { code } = generateC(d, { romContent: new Map([["r.hex", Uint8Array.from([0xab, 0xcd])]]) });
-  assert.match(code, /static const unsigned char mem_rom_U1\[\] = \{ 171, 205 \};/);
-  assert.match(code, /\{ RT_MEM_ROM, 2, 2, mem_addr_U1, mem_data_U1, mem_dlbl_U1, [^,]+, [^,]+, -1, mem_rom_U1, 2 \}/);
+  const { code } = generateC(d);
+  assert.match(code, /\{ RT_MEM_ROM, 2, 2, mem_addr_U1, mem_data_U1, mem_dlbl_U1, [^,]+, [^,]+, -1, "U1", "r\.hex" \}/);
+  assert.doesNotMatch(code, /mem_rom_U1/);
   assert.match(code, /const int gen_mem_count = 1;/);
 });
 
@@ -235,16 +235,17 @@ test("generateC: RAM device emits a gen_mems entry with a WE/ net and no ROM (M3
   const d = mkDesign();
   place(d, "U1", RAM);
   const { code } = generateC(d);
-  assert.match(code, /\{ RT_MEM_RAM, 2, 1, mem_addr_U1, mem_data_U1, mem_dlbl_U1, [^,]+, [^,]+, [^,]+, 0, 0 \}/);
+  assert.match(code, /\{ RT_MEM_RAM, 2, 1, mem_addr_U1, mem_data_U1, mem_dlbl_U1, [^,]+, [^,]+, [^,]+, "U1", 0 \}/);
   assert.doesNotMatch(code, /mem_rom_U1/);
 });
 
-test("generateC: ROM with no available content warns and bakes nothing", () => {
+test("generateC: ROM with no recorded content file bakes a NULL rom_file (M5)", () => {
+  const NOFILE = { ...ROM4x2, name: "ROMNF", mem: { kind: "rom", addressBits: 2, dataWidth: 2 } };
   const d = mkDesign();
-  place(d, "U1", ROM4x2);
-  const { code, warnings } = generateC(d); // no romContent
-  assert.equal(warnings.filter((w) => w.includes("ROM content")).length, 1);
-  assert.match(code, /\{ RT_MEM_ROM, 2, 2, [^}]+, 0, 0 \}/);
+  place(d, "U1", NOFILE);
+  const { code, warnings } = generateC(d);
+  assert.equal(warnings.filter((w) => w.includes("ROM content")).length, 0);
+  assert.match(code, /\{ RT_MEM_ROM, 2, 2, [^}]+, "U1", 0 \}/);
 });
 
 test("generateC: refuses sub-design instances", () => {

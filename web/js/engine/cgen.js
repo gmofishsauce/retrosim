@@ -39,10 +39,10 @@ function cstr(s) {
 // generateC compiles the design into the C source of its generated
 // translation unit. Returns { code, warnings }; throws Error on a refusal
 // (sub-design instance, behavior compile error) with all collected reasons,
-// like buildSimulation's preflight. `romContent` is the Map(romFile → bytes)
-// from loadRomContents (§6.13); a ROM's content is baked into the emitted
-// source (FR-116a), all-U when its file is absent.
-export function generateC(design, { romContent = null } = {}) {
+// like buildSimulation's preflight. ROM contents are NOT baked: the emitted
+// program reads each ROM's content file at startup (FR-117b), so only the
+// instance's refdes and recorded content-file path are emitted.
+export function generateC(design) {
   const warnings = [];
   const errors = [];
 
@@ -240,8 +240,10 @@ export function generateC(design, { romContent = null } = {}) {
         `${inst.refdes}: sub-design instances are not supported by the C generator (FR-116)`,
       );
     } else if (inst.typeData.mem) {
-      // Memory device (FR-114d): collect wiring + baked ROM. The runtime owns
-      // the behavior (runtime.c mem core), driven from this gen_mems entry.
+      // Memory device (FR-114d): collect wiring. The runtime owns the
+      // behavior (runtime.c mem core), driven from this gen_mems entry; a
+      // ROM's contents are read by the program at startup from its recorded
+      // content-file path (FR-117b), not baked here.
       const mem = inst.typeData.mem;
       const refdes = inst.refdes;
       const isRam = mem.kind === "ram";
@@ -252,13 +254,6 @@ export function generateC(design, { romContent = null } = {}) {
       for (let i = 0; i < mem.dataWidth; i++) {
         data.push(netOf(`${refdes}.D${i}`));
         dataLabel.push(intern(`${refdes}.D${i}`));
-      }
-      const romBytes =
-        !isRam && mem.romFile && romContent && romContent.has(mem.romFile)
-          ? romContent.get(mem.romFile)
-          : null;
-      if (!isRam && mem.romFile && !romBytes) {
-        warnings.push(`${refdes}: ROM content "${mem.romFile}" unavailable; contents are U (FR-114e)`);
       }
       mems.push({
         tag: refdes.replace(/[^A-Za-z0-9_]/g, "_"),
@@ -271,7 +266,8 @@ export function generateC(design, { romContent = null } = {}) {
         ce: netOf(`${refdes}.CE/`),
         oe: netOf(`${refdes}.OE/`),
         we: isRam ? netOf(`${refdes}.WE/`) : -1,
-        romBytes,
+        refdes,
+        romFile: !isRam && mem.romFile ? mem.romFile : null,
       });
       driverCount += mem.dataWidth; // drives up to w data pins
     } else if (inst.typeData.builtin) {
@@ -426,23 +422,20 @@ export function generateC(design, { romContent = null } = {}) {
   L.push(`const int gen_reset_count = ${resets.length};`);
   L.push(``);
 
-  // Memory devices (FR-114d): per-instance pin-net/label/ROM arrays, then the
-  // gen_mems table referencing them. ROM contents baked here (FR-116a).
+  // Memory devices (FR-114d): per-instance pin-net/label arrays, then the
+  // gen_mems table referencing them. A ROM's refdes + content-file path are
+  // baked for the runtime's startup load (FR-117b); no contents are baked.
   for (const m of mems) {
     L.push(`static const int mem_addr_${m.tag}[] = { ${m.addr.join(", ")} };`);
     L.push(`static const int mem_data_${m.tag}[] = { ${m.data.join(", ")} };`);
     L.push(`static const int mem_dlbl_${m.tag}[] = { ${m.dataLabel.join(", ")} };`);
-    if (m.romBytes) {
-      L.push(`static const unsigned char mem_rom_${m.tag}[] = { ${Array.from(m.romBytes).join(", ")} };`);
-    }
   }
   if (mems.length) {
     L.push(`const rt_mem gen_mems[] = {`);
     for (const m of mems) {
-      const rom = m.romBytes ? `mem_rom_${m.tag}` : "0";
-      const romLen = m.romBytes ? m.romBytes.length : 0;
+      const romFile = m.romFile ? cstr(m.romFile) : "0";
       L.push(
-        `  { ${m.kind}, ${m.n}, ${m.w}, mem_addr_${m.tag}, mem_data_${m.tag}, mem_dlbl_${m.tag}, ${m.ce}, ${m.oe}, ${m.we}, ${rom}, ${romLen} }, /* ${m.tag} */`,
+        `  { ${m.kind}, ${m.n}, ${m.w}, mem_addr_${m.tag}, mem_data_${m.tag}, mem_dlbl_${m.tag}, ${m.ce}, ${m.oe}, ${m.we}, ${cstr(m.refdes)}, ${romFile} }, /* ${m.tag} */`,
       );
     }
     L.push(`};`);

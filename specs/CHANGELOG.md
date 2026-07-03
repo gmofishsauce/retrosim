@@ -19,6 +19,16 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-03 — M5 landed: runtime ROM loading (--rom)
+What: runtime.c/h — rt_mem gains refdes/rom_file, loses rom/rom_len (interface change: pre-M5 programs regenerate once); mem_load_all in rt_init resolves each ROM (--rom REFDES=FILE override, else recorded path, else basename in cwd; every failure exits 2 with the FR-117b messages), rom_read_file parses per FR-114e (.bin raw, .hex whitespace-separated byte tokens), mem_reset seeds from the loaded bytes. cgen.js: generateC(design) — refdes + content-file path baked, no bytes, no generate-time warning; cgen tests updated. parity.js: romArgsFs passes --rom overrides on both legs (JS engine keeps loadRomContentsFs). app.js needed no change — the §6.17 loadRomContents preload was discovered never wired in (latent all-U-ROM bug in app-generated programs, mooted by FR-117b); design §6.17 corrected. Verified: one binary served the original and a swapped rom-demo.hex via --rom; error paths and basename fallback exercised; full suite green.
+Why: implement FR-117b per the M5 scope; the discrepancy fix keeps design §6.17 truthful to the code.
+Touches: FR-117b; design §6.17 (M5 milestone, chrome wiring); web/cgen/runtime.{c,h}, web/js/engine/cgen.js, web/js/engine/cgen.test.js, web/tools/parity.js; docs/user.md (verification waived by user)
+
+## 2026-07-03 — M5 scoped: runtime ROM loading (--rom) specified
+What: Specs only (implementation follows). New FR-117b: the generated program reads each ROM's contents at startup — generator bakes refdes + content-file path instead of bytes (supersedes FR-116a's bake-the-bytes clause); source priority --rom REFDES=FILE (repeatable) else baked path as recorded else basename in cwd; every load failure exits 2 (unresolvable baked path names the refdes and describes --rom); format/packing per FR-114e. FR-116a edited in place (self-contained to compile; content file needed at run time). OQ-012 marked RESOLVED (nothing remains open). design §6.17: generateC(design) signature, built-ins/memory bullet, chrome wiring (loadRomContents preload dropped), dependencies, new M5 milestone (rt_mem gains refdes/rom_file, loses rom/rom_len — interface change, pre-M5 programs regenerate once; mem_load_all in rt_init; parity uses --rom).
+Why: change request — swap a ROM backing file without rebuilding generated simulators; resolves OQ-012's last sub-question.
+Touches: FR-117b (new), FR-116a, OQ-012; design §6.17 (generator, chrome wiring, dependencies, M5 milestone)
+
 ## 2026-07-03 — parity.js free-run leg
 What: parity.js additionally checks FR-117a for every examples/*.json design the generator accepts (with or without a .tv): slow simulator run free for 8 × clockPeriod unit steps (FR-071b single-clock rule), observable columns rendered as the FR-117a LABEL=v dump, line-diffed against the compiled program's --cycles 8 stdout.
 Why: the M4 free-run verification was a throwaway script; this makes it a regression check.

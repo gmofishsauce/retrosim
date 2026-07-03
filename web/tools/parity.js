@@ -103,6 +103,30 @@ function loadRomContentsFs(design, dir) {
   return content;
 }
 
+// romArgsFs builds the --rom REFDES=FILE arguments pointing the compiled
+// program at the same content files the JS engine loads (FR-117b). The
+// program could resolve its baked path itself, but parity always passes
+// explicit overrides — machine-independent, and it exercises the --rom
+// path. Candidates as in loadRomContentsFs; an unresolvable file passes no
+// override (the program falls back to its baked path).
+function romArgsFs(design, dir) {
+  const args = [];
+  for (const inst of design.components ?? []) {
+    const mem = inst.typeData?.mem;
+    if (!mem || mem.kind !== "rom" || !mem.romFile) continue;
+    for (const p of [mem.romFile, join(dir, basename(mem.romFile))]) {
+      try {
+        readFileSync(p); // existence probe
+        args.push("--rom", `${inst.refdes}=${p}`);
+        break;
+      } catch {
+        /* try next candidate */
+      }
+    }
+  }
+  return args;
+}
+
 function checkPair(jsonPath, tvPath) {
   const name = basename(jsonPath, ".json");
   const design = deserializeDesign(JSON.parse(readFileSync(jsonPath, "utf8")));
@@ -110,7 +134,7 @@ function checkPair(jsonPath, tvPath) {
 
   let gen;
   try {
-    gen = generateC(design, { romContent });
+    gen = generateC(design);
   } catch (e) {
     return { name, status: "skip", detail: e.message };
   }
@@ -124,7 +148,7 @@ function checkPair(jsonPath, tvPath) {
     columns.outputs,
   );
   const stdin = rows.map((r) => `${r.in.join(" ")} | ${r.out.join(" ")}`).join("\n") + "\n";
-  const actual = runFast(gen.code, stdin);
+  const actual = runFast(gen.code, stdin, romArgsFs(design, dirname(jsonPath)));
 
   if (actual === expected) return { name, status: "ok", detail: `${rows.length} rows` };
   return { name, status: "diff", detail: diff(expected, actual) };
@@ -144,7 +168,7 @@ function checkFree(jsonPath) {
 
   let gen;
   try {
-    gen = generateC(design, { romContent });
+    gen = generateC(design);
   } catch (e) {
     return { name, status: "skip", detail: e.message };
   }
@@ -170,7 +194,11 @@ function checkFree(jsonPath) {
   const expected = [...cols.inputs, ...cols.outputs]
     .map((c) => `${c.label}=${SYM[sim.valueOfPin(c.refdes, c.pin)]}`)
     .join("\n");
-  const actual = runFast(gen.code, "", ["--cycles", String(FREE_CYCLES)]);
+  const actual = runFast(gen.code, "", [
+    ...romArgsFs(design, dirname(jsonPath)),
+    "--cycles",
+    String(FREE_CYCLES),
+  ]);
 
   if (actual === expected) return { name, status: "ok", detail: `free run, ${FREE_CYCLES} cycles` };
   return { name, status: "diff", detail: diff(expected, actual) };

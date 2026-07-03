@@ -11,6 +11,7 @@
 
 #include "runtime.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -105,7 +106,8 @@ static void *xalloc(size_t n) {
 static rt_val *port_stim;
 
 static void mem_alloc(void); /* memory store allocation (FR-114d) */
-static void mem_reset(void); /* memory power-up: RAM U, ROM baked bytes */
+static void mem_load_all(void); /* startup ROM content read (FR-117b) */
+static void mem_reset(void); /* memory power-up: RAM U, ROM loaded bytes */
 static void vcd_sample(void); /* per-step VCD change dump (--vcd, FR-118) */
 
 /* reset_state returns every net to power-up Z and all generated state to
@@ -129,6 +131,7 @@ void rt_init(void) {
   port_stim = xalloc((size_t)(gen_incol_count > 0 ? gen_incol_count : 1));
   memset(port_stim, RT_Z, (size_t)(gen_incol_count > 0 ? gen_incol_count : 1));
   mem_alloc();
+  mem_load_all();
   reset_state();
 }
 
@@ -277,6 +280,8 @@ static void drive_builtins(void) {
 static struct mem_state {
   rt_val *store;  /* (2^abits) * width, addressed word-major */
   rt_val prev_we; /* WE/ rising-edge detection (RAM) */
+  unsigned char *bytes; /* ROM contents loaded at startup (FR-117b), or NULL */
+  long nbytes;          /* loaded byte count */
 } *mem_states;
 
 /* mem_rd reads a memory pin's net from curr, normalizing Z→U and treating
@@ -306,27 +311,186 @@ static void mem_alloc(void) {
   for (int i = 0; i < gen_mem_count; i++) {
     size_t cells = ((size_t)1 << gen_mems[i].abits) * (size_t)gen_mems[i].width;
     mem_states[i].store = xalloc(cells);
+    mem_states[i].bytes = NULL;
+    mem_states[i].nbytes = 0;
   }
 }
 
-/* mem_reset restores power-up: RAM all-U, ROM seeded from its baked bytes
- * (little-endian, B=ceil(width/8) per word; memory.js loadBytes, FR-114e),
- * WE/ history unknown. Called per fresh state (per combinational row). */
+/* ------------------------------------------------------------------ *
+ *  ROM content loading at startup (--rom, FR-117b)
+ * ------------------------------------------------------------------ *
+ * ROM contents are not baked into the generated file: each ROM instance
+ * is loaded here, once, before the first step — so a content file can
+ * change without regenerating the program. Per ROM the source is a
+ * --rom REFDES=FILE override when given, else the recorded content-file
+ * path (rt_mem.rom_file) tried as recorded and then by basename in the
+ * current working directory. Any failure reports to stderr and exits 2. */
+
+/* --rom REFDES=FILE arguments, collected verbatim by main() before
+ * rt_init and resolved by mem_load_all. */
+static const char **rom_args;
+static int rom_arg_count;
+
+/* rom_read_file reads one content file per FR-114e: format by extension
+ * (".bin" raw bytes; ".hex" whitespace-separated hex byte tokens, each
+ * one or two hex digits), returning a malloc'd byte buffer. Returns NULL
+ * only when the file cannot be opened; a format problem is a hard error
+ * (exit 2) naming `who` — the flag or ROM the request came from. */
+static unsigned char *rom_read_file(const char *path, long *out_len, const char *who) {
+  const char *ext = strrchr(path, '.');
+  int hex = ext && strcmp(ext, ".hex") == 0;
+  if (!hex && !(ext && strcmp(ext, ".bin") == 0)) {
+    fprintf(stderr, "%s: \"%s\" must end in .bin or .hex (FR-114e)\n", who, path);
+    exit(2);
+  }
+  FILE *f = fopen(path, "rb");
+  if (!f) return NULL;
+  /* Read the whole file (contents are small: at most 2^abits words). */
+  long cap = 4096, len = 0;
+  unsigned char *raw = xalloc((size_t)cap);
+  size_t got;
+  while ((got = fread(raw + len, 1, (size_t)(cap - len), f)) > 0) {
+    len += (long)got;
+    if (len == cap) {
+      unsigned char *grown = xalloc((size_t)cap * 2);
+      memcpy(grown, raw, (size_t)len);
+      free(raw);
+      raw = grown;
+      cap *= 2;
+    }
+  }
+  fclose(f);
+  if (!hex) {
+    *out_len = len;
+    return raw;
+  }
+  /* Hex text: whitespace-separated byte tokens (FR-114e). Parse in place —
+   * the byte stream is never longer than the text. */
+  unsigned char *bytes = xalloc((size_t)(len > 0 ? len : 1));
+  long n = 0, i = 0;
+  while (i < len) {
+    if (isspace(raw[i])) {
+      i++;
+      continue;
+    }
+    int v = 0, digits = 0;
+    while (i < len && !isspace(raw[i])) {
+      int c = raw[i];
+      int d = c >= '0' && c <= '9'   ? c - '0'
+              : c >= 'a' && c <= 'f' ? c - 'a' + 10
+              : c >= 'A' && c <= 'F' ? c - 'A' + 10
+                                     : -1;
+      if (d < 0 || digits >= 2) {
+        fprintf(stderr, "%s: malformed hex byte token in \"%s\"\n", who, path);
+        exit(2);
+      }
+      v = v * 16 + d;
+      digits++;
+      i++;
+    }
+    bytes[n++] = (unsigned char)v;
+  }
+  free(raw);
+  *out_len = n;
+  return bytes;
+}
+
+/* mem_load_all resolves and loads every ROM's contents (FR-117b), and
+ * validates every --rom argument. Called once by rt_init. */
+static void mem_load_all(void) {
+  /* Match each --rom REFDES=FILE to its ROM instance. */
+  const char **override = xalloc((size_t)(gen_mem_count > 0 ? gen_mem_count : 1) * sizeof *override);
+  for (int i = 0; i < gen_mem_count; i++) override[i] = NULL;
+  for (int a = 0; a < rom_arg_count; a++) {
+    const char *eq = strchr(rom_args[a], '=');
+    if (!eq || eq == rom_args[a] || eq[1] == '\0') {
+      fprintf(stderr, "--rom %s: expected REFDES=FILE\n", rom_args[a]);
+      exit(2);
+    }
+    size_t rlen = (size_t)(eq - rom_args[a]);
+    int found = -1;
+    for (int i = 0; i < gen_mem_count; i++) {
+      if (strncmp(gen_mems[i].refdes, rom_args[a], rlen) == 0 &&
+          gen_mems[i].refdes[rlen] == '\0') {
+        found = i;
+        break;
+      }
+    }
+    if (found < 0 || gen_mems[found].kind != RT_MEM_ROM) {
+      fprintf(stderr, "--rom %s: no ROM instance \"%.*s\"\n", rom_args[a],
+              (int)rlen, rom_args[a]);
+      exit(2);
+    }
+    override[found] = eq + 1;
+  }
+
+  for (int i = 0; i < gen_mem_count; i++) {
+    const rt_mem *m = &gen_mems[i];
+    if (m->kind != RT_MEM_ROM) continue;
+    char who[256];
+    long len = 0;
+    unsigned char *bytes;
+    if (override[i]) {
+      snprintf(who, sizeof who, "--rom %s=%s", m->refdes, override[i]);
+      bytes = rom_read_file(override[i], &len, who);
+      if (!bytes) {
+        fprintf(stderr, "%s: cannot read \"%s\"\n", who, override[i]);
+        exit(2);
+      }
+    } else if (m->rom_file) {
+      /* The recorded path as-is, then its basename in the cwd (the file
+       * placed beside where the program runs). */
+      snprintf(who, sizeof who, "ROM %s", m->refdes);
+      bytes = rom_read_file(m->rom_file, &len, who);
+      const char *slash = strrchr(m->rom_file, '/');
+      const char *base = slash ? slash + 1 : m->rom_file;
+      if (!bytes && slash) bytes = rom_read_file(base, &len, who);
+      if (!bytes) {
+        fprintf(stderr,
+                "ROM %s: cannot read \"%s\"%s%s%s; use --rom %s=FILE to supply the contents\n",
+                m->refdes, m->rom_file, slash ? " or \"" : "", slash ? base : "",
+                slash ? "\"" : "", m->refdes);
+        exit(2);
+      }
+    } else {
+      fprintf(stderr, "ROM %s: no content file recorded; use --rom %s=FILE to supply one\n",
+              m->refdes, m->refdes);
+      exit(2);
+    }
+    /* Over-capacity content is reported and ignored (FR-114e); mem_reset
+     * truncates when seeding. */
+    int nb = (m->width + 7) / 8;
+    long capacity = 1L << m->abits;
+    if (len / nb > capacity) {
+      fprintf(stderr, "ROM %s: content exceeds capacity (%ld of %ld words used)\n",
+              m->refdes, capacity, len / nb);
+    }
+    mem_states[i].bytes = bytes;
+    mem_states[i].nbytes = len;
+  }
+  free(override);
+}
+
+/* mem_reset restores power-up: RAM all-U, ROM seeded from its loaded
+ * contents (mem_load_all, FR-117b; little-endian, B=ceil(width/8) per
+ * word; memory.js loadBytes, FR-114e), WE/ history unknown. Called per
+ * fresh state (per combinational row) — it re-seeds from the bytes loaded
+ * once at startup, never re-reading the file. */
 static void mem_reset(void) {
   for (int i = 0; i < gen_mem_count; i++) {
     const rt_mem *m = &gen_mems[i];
     size_t cells = ((size_t)1 << m->abits) * (size_t)m->width;
     memset(mem_states[i].store, RT_U, cells);
     mem_states[i].prev_we = RT_U;
-    if (m->rom) {
+    if (mem_states[i].bytes) {
       int nbytes = (m->width + 7) / 8; /* B = ceil(width/8) */
       long capacity = 1L << m->abits;
-      long file_words = m->rom_len / nbytes;
+      long file_words = mem_states[i].nbytes / nbytes;
       long loaded = file_words < capacity ? file_words : capacity;
       for (long k = 0; k < loaded; k++) {
         rt_val *word = &mem_states[i].store[(size_t)k * m->width];
         for (int b = 0; b < m->width; b++) {
-          unsigned char byte = m->rom[k * nbytes + (b >> 3)];
+          unsigned char byte = mem_states[i].bytes[k * nbytes + (b >> 3)];
           word[b] = (byte >> (b % 8)) & 1 ? RT_1 : RT_0;
         }
       }
@@ -774,6 +938,7 @@ static void rt_dump_columns(void) {
 int main(int argc, char **argv) {
   long cycles = -1;            /* -1 = vector mode (no --cycles flag) */
   const char *vcd_path = NULL; /* --vcd trace file, or NULL */
+  rom_args = xalloc((size_t)argc * sizeof *rom_args);
   for (int i = 1; i < argc; i++) {
     if (strcmp(argv[i], "--columns") == 0) {
       rt_dump_columns();
@@ -787,9 +952,11 @@ int main(int argc, char **argv) {
       }
     } else if (strcmp(argv[i], "--vcd") == 0 && i + 1 < argc) {
       vcd_path = argv[++i];
+    } else if (strcmp(argv[i], "--rom") == 0 && i + 1 < argc) {
+      rom_args[rom_arg_count++] = argv[++i]; /* resolved by mem_load_all (FR-117b) */
     } else {
       fprintf(stderr,
-              "usage: %s [--columns | [--vcd FILE] [--cycles N]] (vector rows on stdin otherwise)\n",
+              "usage: %s [--columns | [--vcd FILE] [--rom REFDES=FILE] [--cycles N]] (vector rows on stdin otherwise)\n",
               argv[0]);
       return 2;
     }
