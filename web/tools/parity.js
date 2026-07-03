@@ -5,10 +5,17 @@
 //   slow (JS): runVectors (§6.16), rendered into the FR-118 transcript format
 //   fast (C):  generateC → cc → feed rows on stdin → read stdout transcript
 // A per-row / summary line-diff is the FR-107 check. Designs the generator
-// refuses (memory/sub-design/.R — M3+ scope) are reported as skips.
+// refuses (sub-design scope, FR-116) are reported as skips.
+//
+// A second, free-run leg (FR-117a, design §6.17 M4) checks every
+// examples/*.json design the generator accepts, `.tv` or not: the slow
+// simulator runs free (time-driven built-ins) for 8 × clockPeriod unit steps
+// — 8 cycles clears the default 3-cycle reset window (FR-071b) — its
+// observable columns are rendered as the FR-117a "LABEL=v" dump, and the
+// compiled program's `--cycles 8` stdout is line-diffed against it.
 //
 // Run explicitly:  node web/tools/parity.js
-// Exits 0 iff every processed pair matched.
+// Exits 0 iff every processed check matched.
 
 import { spawnSync } from "node:child_process";
 import { readFileSync, readdirSync, mkdtempSync, writeFileSync, copyFileSync, rmSync } from "node:fs";
@@ -19,6 +26,7 @@ import { fileURLToPath } from "node:url";
 import { deserializeDesign } from "../js/model/persist.js";
 import { generateC } from "../js/engine/cgen.js";
 import { parseRomBytes } from "../js/engine/memory.js";
+import { buildSimulation } from "../js/engine/sim.js";
 import {
   deriveColumns,
   deserializeVectors,
@@ -52,8 +60,8 @@ function renderExpected(result, outputs) {
 }
 
 // runFast generates <design>.c, compiles it against the runtime pair in a
-// temp dir, feeds `stdin`, and returns the program's stdout transcript.
-function runFast(code, stdin) {
+// temp dir, runs it with `args` feeding `stdin`, and returns its stdout.
+function runFast(code, stdin, args = []) {
   const dir = mkdtempSync(join(tmpdir(), "parity-"));
   try {
     writeFileSync(join(dir, "design.c"), code);
@@ -61,7 +69,7 @@ function runFast(code, stdin) {
     copyFileSync(join(RT_DIR, "runtime.h"), join(dir, "runtime.h"));
     const cc = spawnSync("cc", ["design.c", "runtime.c", "-o", "sim"], { cwd: dir, encoding: "utf8" });
     if (cc.status !== 0) throw new Error(`cc failed:\n${cc.stderr}`);
-    const run = spawnSync(join(dir, "sim"), [], { input: stdin, encoding: "utf8" });
+    const run = spawnSync(join(dir, "sim"), args, { input: stdin, encoding: "utf8" });
     if (run.stderr) process.stderr.write(run.stderr); // FR-108 conflict reports
     return run.stdout.trimEnd();
   } finally {
@@ -122,6 +130,52 @@ function checkPair(jsonPath, tvPath) {
   return { name, status: "diff", detail: diff(expected, actual) };
 }
 
+// Free-run cycle count: past the reset built-in's default 3-cycle window
+// (FR-071b), so post-reset behavior is exercised too.
+const FREE_CYCLES = 8;
+
+// checkFree runs the free-run leg (FR-117a) on one design: the slow simulator
+// stepped FREE_CYCLES × clockPeriod units with its time-driven built-ins,
+// rendered as the "LABEL=v" observable dump, vs the program's --cycles output.
+function checkFree(jsonPath) {
+  const name = basename(jsonPath, ".json");
+  const design = deserializeDesign(JSON.parse(readFileSync(jsonPath, "utf8")));
+  const romContent = loadRomContentsFs(design, dirname(jsonPath));
+
+  let gen;
+  try {
+    gen = generateC(design, { romContent });
+  } catch (e) {
+    return { name, status: "skip", detail: e.message };
+  }
+
+  // clockPeriod (FR-071b): the lone clock's effective period when the design
+  // has exactly one clock generator, else the 100 ns default (sim.js §6.13).
+  const clocks = (design.components ?? []).filter((c) => c.typeData?.renderType === "clock");
+  const period =
+    clocks.length === 1
+      ? clocks[0].overrides?.props?.period ??
+        clocks[0].typeData?.properties?.find((p) => p.name === "period")?.default ??
+        100
+      : 100;
+
+  const sim = buildSimulation(design, { onMessage: () => {}, romContent });
+  for (let i = 0; i < FREE_CYCLES * period; i++) sim.step();
+
+  // Render the observable dump exactly as runtime.c rt_run_free prints it:
+  // input columns then output columns, LABEL=v. The value codes are identical
+  // on both sides (V0/V1/VU/VZ == RT_0/RT_1/RT_U/RT_Z == 0..3).
+  const SYM = ["0", "1", "U", "Z"];
+  const cols = deriveColumns(design);
+  const expected = [...cols.inputs, ...cols.outputs]
+    .map((c) => `${c.label}=${SYM[sim.valueOfPin(c.refdes, c.pin)]}`)
+    .join("\n");
+  const actual = runFast(gen.code, "", ["--cycles", String(FREE_CYCLES)]);
+
+  if (actual === expected) return { name, status: "ok", detail: `free run, ${FREE_CYCLES} cycles` };
+  return { name, status: "diff", detail: diff(expected, actual) };
+}
+
 function diff(expected, actual) {
   const e = expected.split("\n");
   const a = actual.split("\n");
@@ -144,9 +198,12 @@ const pairs = readdirSync(EXAMPLES)
     }
   });
 
+const designs = readdirSync(EXAMPLES)
+  .filter((f) => f.endsWith(".json"))
+  .map((f) => join(EXAMPLES, f));
+
 let failed = 0;
-for (const p of pairs) {
-  const r = checkPair(p.json, p.tv);
+function report(r) {
   if (r.status === "ok") console.log(`OK   ${r.name} (${r.detail})`);
   else if (r.status === "skip") console.log(`SKIP ${r.name}: ${r.detail}`);
   else {
@@ -154,5 +211,8 @@ for (const p of pairs) {
     console.log(`DIFF ${r.name}:\n${r.detail}`);
   }
 }
-console.log(`\n${pairs.length} pairs, ${failed} mismatched`);
+
+for (const p of pairs) report(checkPair(p.json, p.tv));
+for (const d of designs) report(checkFree(d));
+console.log(`\n${pairs.length + designs.length} checks, ${failed} mismatched`);
 process.exit(failed ? 1 : 0);

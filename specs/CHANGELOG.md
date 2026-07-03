@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-03 — parity.js free-run leg
+What: parity.js additionally checks FR-117a for every examples/*.json design the generator accepts (with or without a .tv): slow simulator run free for 8 × clockPeriod unit steps (FR-071b single-clock rule), observable columns rendered as the FR-117a LABEL=v dump, line-diffed against the compiled program's --cycles 8 stdout.
+Why: the M4 free-run verification was a throwaway script; this makes it a regression check.
+Touches: design §6.17 (M4 milestone); web/tools/parity.js
+
 ## 2026-07-03 — M4 landed: free-run --cycles and --vcd, completing M4
 What: runtime.c only, per the M4 design (no generator change). Free run (FR-117a): a sim_time counter (incremented in rt_step, mirroring sim.js simTime), a freerun branch in drive_builtins computing the clock's FR-084 square wave from period_ns and the reset's FR-071b window from cycles × clockPeriod, rt_run_free (N × clockPeriod bare steps, then the LABEL=v observable dump), and --cycles N flag parsing (positive-int validated, stdin untouched). VCD (FR-118): --vcd FILE in both modes — $timescale 1ns header, one scalar per observable column, #0 power-up $dumpvars, change-only records sampled by rt_step every unit step, 0/1/U/Z → 0/1/x/z. Free run parity-checked against the slow simulator run free on examples/counter and examples/simple174; full suite green. docs/user.md §"Generating a standalone C simulator" updated (verification waived by user) — including stale M2/M3 limits text (tv2txt/--columns; only sub-designs refused now).
 Why: M4 implementation per design §6.17 milestones; completes the generator milestone plan M1–M4.
