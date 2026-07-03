@@ -238,8 +238,10 @@ typedef enum {
 typedef struct {
   rt_col_kind kind;
   int ref;
-  const char *name; /* column display label, for the transcript */
-  int label;        /* gen_labels index for the stimulus driver */
+  const char *name;   /* column display label, for the transcript */
+  const char *refdes; /* column identity: instance ref (FR-115a, --columns) */
+  const char *pin;    /* column identity: pin name (FR-115a, --columns) */
+  int label;          /* gen_labels index for the stimulus driver */
 } rt_incol;
 extern const rt_incol gen_incols[];
 extern const int gen_incol_count;
@@ -248,6 +250,8 @@ extern const int gen_incol_count;
 typedef struct {
   int net;
   const char *name;
+  const char *refdes; /* column identity: instance ref (FR-115a, --columns) */
+  const char *pin;    /* column identity: pin name (FR-115a, --columns) */
 } rt_outcol;
 extern const rt_outcol gen_outcols[];
 extern const int gen_outcol_count;

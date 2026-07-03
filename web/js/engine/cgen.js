@@ -250,25 +250,29 @@ export function generateC(design, { romContent = null } = {}) {
   warnings.push(...cols.warnings);
   const instByRefdes = new Map(design.components.map((c) => [c.refdes, c]));
   const incols = cols.inputs.map((col) => {
-    const name = cstr(col.label);
+    // (refdes,pin) identity baked alongside the label so tv2txt can
+    // reconcile a .tv file to the row format via --columns (design §6.17 M2).
+    const id = { name: cstr(col.label), refdes: cstr(col.refdes), pin: cstr(col.pin) };
     if (col.kind === "clock") {
-      return { kind: "RT_COL_CLOCK", ref: clockIdx.get(col.refdes), name, label: 0 };
+      return { kind: "RT_COL_CLOCK", ref: clockIdx.get(col.refdes), ...id, label: 0 };
     }
     if (instByRefdes.get(col.refdes)?.typeData?.renderType === "switch") {
-      return { kind: "RT_COL_SWITCH", ref: switchIdx.get(col.refdes), name, label: 0 };
+      return { kind: "RT_COL_SWITCH", ref: switchIdx.get(col.refdes), ...id, label: 0 };
     }
     // A port column forces its net directly (FR-115f external stimulus).
     driverCount++;
     return {
       kind: "RT_COL_PORT",
       ref: netOf(`${col.refdes}.${col.pin}`),
-      name,
+      ...id,
       label: intern(`${col.refdes}.${col.pin}`),
     };
   });
   const outcols = cols.outputs.map((col) => ({
     net: netOf(`${col.refdes}.${col.pin}`),
     name: cstr(col.label),
+    refdes: cstr(col.refdes),
+    pin: cstr(col.pin),
   }));
 
   driverCount += pulls.length + switches.length + clocks.length + resets.length * 2;
@@ -342,19 +346,21 @@ export function generateC(design, { romContent = null } = {}) {
   L.push(`/* --- vector columns (FR-117; column order is the row format) --- */`);
   if (incols.length) {
     L.push(`const rt_incol gen_incols[] = {`);
-    for (const c of incols) L.push(`  { ${c.kind}, ${c.ref}, ${c.name}, ${c.label} },`);
+    for (const c of incols) {
+      L.push(`  { ${c.kind}, ${c.ref}, ${c.name}, ${c.refdes}, ${c.pin}, ${c.label} },`);
+    }
     L.push(`};`);
   } else {
-    L.push(`const rt_incol gen_incols[] = { { RT_COL_SWITCH, -1, "", 0 } }; /* none */`);
+    L.push(`const rt_incol gen_incols[] = { { RT_COL_SWITCH, -1, "", "", "", 0 } }; /* none */`);
   }
   L.push(`const int gen_incol_count = ${incols.length};`);
   L.push(``);
   if (outcols.length) {
     L.push(`const rt_outcol gen_outcols[] = {`);
-    for (const c of outcols) L.push(`  { ${c.net}, ${c.name} },`);
+    for (const c of outcols) L.push(`  { ${c.net}, ${c.name}, ${c.refdes}, ${c.pin} },`);
     L.push(`};`);
   } else {
-    L.push(`const rt_outcol gen_outcols[] = { { -1, "" } }; /* none */`);
+    L.push(`const rt_outcol gen_outcols[] = { { -1, "", "", "" } }; /* none */`);
   }
   L.push(`const int gen_outcol_count = ${outcols.length};`);
   L.push(``);

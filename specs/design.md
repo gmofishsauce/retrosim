@@ -1960,7 +1960,7 @@ no sequential part could ever leave U.)
 
 **Milestones.** (Sequencing per the 2026-07-02 discussion recorded in `gen-open.md`.)
   1. **M1 — runtime + minimal generator, combinational:** runtime pair, `cgen.js` for GALasm parts + switch/indicator/pulls, Generate-C menu flow; settle-and-stop; conflict reports. No compiler is invoked by any tool — the user compiles by hand (`cc <design>.c runtime.c`).
-  2. **M2 — `.tv` stimulus + parity harness:** stdin vector rows (FR-117), transcript (FR-118); a Node-based parity harness that generates, compiles (`cc`), runs corpus design+`.tv` pairs and diffs the transcript against `runVectors` (§6.16) — the FR-107 check. Harness location TBD (§12). M2 also delivers the **`tv2txt` converter** (`.tv` JSON → stdin row text), which must **reconcile**, not just dump: a `.tv` may assert only a subset of the design's derived columns (FR-115a reconciliation handles this in the panel), while the program's row format is positional against the **full baked column set** (FR-117) — discovered on first real use (74381, 2026-07-02), where a naive positional dump was rejected for arity. `tv2txt` therefore matches file columns to program columns by `(refdes,pin)` — exactly `reconcileVectors` (§6.16) — emitting `X` for design columns the file does not assert and warning on file columns the program lacks. To let it work from the emitted program alone (no design file needed), the generator shall bake each column's **`(refdes,pin)` identity** into `<design>.c` alongside its display label (the identity is already interned for port columns; this extends it to every column), either as extra `rt_incol`/`rt_outcol` fields or a parallel table, plus a way for tooling to read the column set (parse the tables from the `.c` text, or a `--columns` dump mode in the runtime — chosen at M2).
+  2. **M2 — `.tv` stimulus + parity harness:** stdin vector rows (FR-117), transcript (FR-118); a Node-based parity harness (`web/tools/parity.js`) that, for each corpus design+`.tv` pair under `examples/`, loads the design (`deserializeDesign`), reconciles the `.tv` to the design's `deriveColumns` (§6.16), runs `runVectors` (§6.16) for the JS side, `generateC` + `cc` for the C side, feeds the same reconciled rows to the compiled program's stdin, and **diffs** the program's stdout transcript against the JS result **rendered into the identical FR-118 transcript format** (per-row `pass`/`FAIL <label>=<actual>` lines, `0/1/U/Z` actuals shared by both engines, plus the summary line) — the FR-107 check. Pairs the generator refuses (memory/sub-design/`.R`, M3+ scope) are reported as skipped, not failures. Run explicitly (`node web/tools/parity.js`); exits nonzero on any diff. M2 also delivers the **`tv2txt` converter** (`.tv` JSON → stdin row text), which must **reconcile**, not just dump: a `.tv` may assert only a subset of the design's derived columns (FR-115a reconciliation handles this in the panel), while the program's row format is positional against the **full baked column set** (FR-117) — discovered on first real use (74381, 2026-07-02), where a naive positional dump was rejected for arity. `tv2txt` therefore matches file columns to program columns by `(refdes,pin)` — exactly `reconcileVectors` (§6.16) — emitting `X` for design columns the file does not assert and warning on file columns the program lacks. To let it work from the emitted program alone (no design file needed), the generator shall bake each column's **`(refdes,pin)` identity** into `<design>.c` alongside its display label (the identity is already interned for port columns; this extends it to every column). **Chosen at M2 (2026-07-03):** the identity rides as extra **`refdes`/`pin` string fields on `rt_incol`/`rt_outcol`** (not a parallel table), and tooling reads the baked column set through a runtime **`--columns` dump mode** (the program prints its full column set — one line per column, `DIR KIND REFDES PIN LABEL…`, in row-format order — to stdout and exits), so `tv2txt` works from the compiled program alone with no `.c` text parsing. **`tv2txt` (`web/tools/tv2txt.js`, ESM, outside the `web/js/` `node:test` sweep):** `node tv2txt.js <program> <file.tv>` runs `<program> --columns`, parses the column set, and **reuses `deserializeVectors` + `reconcileVectors` (§6.16)** directly (single-source, FR-109) to align the file's `(refdes,pin)` columns to the program's positional order — inputs default `0` (clock columns `C`), outputs `X` — then writes the plain-text rows (`in… | out…`) to stdout and reconciliation warnings to stderr, so `node tv2txt.js ./sim d.tv | ./sim` runs the vectors.
   3. **M3 — sequential + memory:** registers incl. per-output `.CLK`, scripted clocks/reset preamble, baked ROM/RAM.
   4. **M4 — free-run + VCD:** `--cycles N` free-running mode (toward OQ-012 memory-as-stimulus) and the `--vcd` four-state trace of the observable set (FR-118).
 
@@ -2487,6 +2487,8 @@ sim/
     js/engine/cgen.js       CREATE  fast-engine C code generator (§6.17)
     cgen/runtime.h          CREATE  fast-engine C runtime API, documented (§6.17)
     cgen/runtime.c          CREATE  fast-engine C runtime implementation (§6.17)
+    tools/tv2txt.js         CREATE  .tv → generated-program stdin rows (§6.17 M2)
+    tools/parity.js         CREATE  fast-vs-slow FR-107 parity harness (§6.17 M2)
     js/chrome/toolbar.js    CREATE  toolbar (§6.11)
     js/chrome/palette.js    CREATE  palette tiles (§6.11)
     js/chrome/dialogs.js    CREATE  save/open dialogs (§6.11)
@@ -2808,11 +2810,11 @@ only the noted slices.
   the overlay with a rotated note is intentionally deferred and not currently
   planned. (Raised 2026-06-22; resolved 2026-06-22.)
 
-- **Fast-engine parity-harness location (§6.17 M2).** The FR-107 parity harness
-  shells out to a C compiler, so it should not sit where the ordinary
-  compiler-free `node:test` sweep would pick it up. Candidate: a separate
-  `test/parity/` (or `tools/`) tree, run explicitly. Deliberately deferred to
-  the M2 milestone per stakeholder discussion (2026-07-02); gates nothing in M1.
+- **Fast-engine parity-harness location (§6.17 M2) — RESOLVED (2026-07-03).**
+  The FR-107 parity harness shells out to a C compiler, so it must not sit where
+  the ordinary compiler-free `node:test` sweep would pick it up. It lives at
+  **`web/tools/parity.js`** alongside `tv2txt`, run explicitly (`node
+  web/tools/parity.js`), never in the `web/js/` sweep.
 
 None of the above prevent starting the server skeleton, the canvas engine, the
 store/undo pipeline, or the chrome. Only the YAML **parser body** and the **bus

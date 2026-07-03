@@ -84,8 +84,11 @@ test("generateC: inverter emits nets, tables, columns, and lowered logic", () =>
   assert.match(code, /const int gen_net_count = 2;/);
   // Switch table with baked level, indexed by the input column.
   assert.match(code, /rt_switch gen_switches\[\] = \{\n  \{ \d+, RT_0, \d+ \}, \/\* A-1 \*\//);
-  assert.match(code, /\{ RT_COL_SWITCH, 0, "A-1", 0 \}/);
+  // Input column: baked (refdes,pin) identity alongside the label (M2).
+  assert.match(code, /\{ RT_COL_SWITCH, 0, "A-1", "A-1", "OUT", 0 \}/);
   assert.match(code, /const int gen_incol_count = 1;/);
+  // Output column carries its (refdes,pin) identity too.
+  assert.match(code, /\{ \d+, "A-2", "A-2", "IN" \}/);
   assert.match(code, /const int gen_outcol_count = 1;/);
   // Lowered Y = /A: a negated literal and a contribution for U1.Y.
   assert.match(code, /rt_not\(curr\[\d+\]\)/);

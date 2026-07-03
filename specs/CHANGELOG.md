@@ -19,6 +19,18 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-03 — M2: fast-vs-slow parity harness (FR-107 check)
+What: Added web/tools/parity.js — for each examples/ design+.tv pair it loads the design (deserializeDesign), reconciles the .tv to deriveColumns, runs runVectors (JS) and generateC+cc (C) on the same reconciled rows, and diffs the compiled program's stdout transcript against the JS result rendered into the identical FR-118 format. Generator refusals (memory/sub-design/.R, M3+) report as skips; exits nonzero on any diff. Resolves the §12 harness-location open item (web/tools/parity.js).
+Touches: design §6.17 (M2), §9 file manifest, §12 (open item resolved)
+
+## 2026-07-03 — M2: tv2txt (.tv → generated-program stdin rows)
+What: Added web/tools/tv2txt.js — `node tv2txt.js <program> <file.tv>` reads the program's baked column set via `--columns`, reuses deserializeVectors + reconcileVectors (§6.16) to align the file's (refdes,pin) columns to the program's positional row order (inputs default 0/clock C, outputs X; warnings for one-sided columns), and writes plain-text rows to stdout so `tv2txt … | ./sim` runs the vectors. Establishes web/tools/ as the fast-engine dev-tooling home.
+Touches: design §6.17 (M2), §9 file manifest, §12 (harness-location open item)
+
+## 2026-07-03 — M2: settle column-identity encoding and readout mechanism
+What: Resolved the two M2 sub-decisions the design left open: each column's (refdes,pin) identity rides as extra refdes/pin string fields on rt_incol/rt_outcol (not a parallel table), and tooling reads the baked column set via a runtime --columns dump mode (no .c parsing). Unblocks tv2txt.
+Touches: design §6.17 (M2 milestone)
+
 ## 2026-07-02 — Fix paste refdes remap for sub-design and note series
 What: Copy/paste of a sub-design IC threw "cannot remap reference designator X1" — the clipboard's X series regex expected a hyphenated `X-<n>` while sub-design instances are `X<n>` (FR-098a); also added the missing `N-<n>` note series so pasting a selection containing a text note no longer throws. Corrected design.md's stray `X-<n>` prose to match FR-098a and the code.
 Touches: FR-098a; design §6.14, §6.15

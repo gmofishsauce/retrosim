@@ -447,7 +447,44 @@ int rt_run_vectors(void) {
   return failed;
 }
 
-int main(void) {
+/* ------------------------------------------------------------------ *
+ * Column dump (--columns, FR-115a / design §6.17 M2)                   *
+ * ------------------------------------------------------------------ *
+ * Prints the baked column set so tooling (tv2txt) can reconcile a .tv
+ * file's columns to this program's positional row format (FR-117) by
+ * (refdes,pin) — exactly reconcileVectors (§6.16) — without parsing the
+ * generated .c or the design. One line per column, in row-format order:
+ *
+ *   DIR KIND REFDES PIN LABEL...
+ *
+ * DIR is IN or OUT; KIND is SWITCH/CLOCK/PORT (inputs) or PROBE (outputs);
+ * REFDES and PIN are the column identity; LABEL is the display label — the
+ * remainder of the line, so it may contain spaces. */
+static const char *col_kind_name(rt_col_kind k) {
+  switch (k) {
+    case RT_COL_SWITCH: return "SWITCH";
+    case RT_COL_CLOCK:  return "CLOCK";
+    case RT_COL_PORT:   return "PORT";
+  }
+  return "?";
+}
+
+static void rt_dump_columns(void) {
+  for (int i = 0; i < gen_incol_count; i++) {
+    const rt_incol *c = &gen_incols[i];
+    printf("IN %s %s %s %s\n", col_kind_name(c->kind), c->refdes, c->pin, c->name);
+  }
+  for (int i = 0; i < gen_outcol_count; i++) {
+    const rt_outcol *c = &gen_outcols[i];
+    printf("OUT PROBE %s %s %s\n", c->refdes, c->pin, c->name);
+  }
+}
+
+int main(int argc, char **argv) {
+  if (argc == 2 && strcmp(argv[1], "--columns") == 0) {
+    rt_dump_columns();
+    return 0;
+  }
   rt_init();
   return rt_run_vectors() ? 1 : 0;
 }
