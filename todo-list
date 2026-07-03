@@ -60,3 +60,5 @@ Slow down and single step the clock in the slow simulator.
 New row in test vector generator should be a copy of the previous row.
 
 After test vectors are saved, the design should be clean unless changes were made to the schematic.
+
+Need to add a concept of per project memory and gal types. Need to change the creation functions to save types in the project.
