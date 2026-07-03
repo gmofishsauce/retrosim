@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-03 — M3 step 2: per-output .CLK with async .ARST/.APRST
+What: cgen.js now lowers per-output-clocked .R outputs (FR-079a) alongside the global-clock family in one part — each self-clocked output edge-detects its own .CLK against a per-output prevClk and applies async .APRST (preset) then .ARST (reset, wins); global AR/SP restricted to the global-clock register indices. Refusal narrowed to memory only (step 3). Runtime unchanged. New sequential parity pair examples/2-bit-SR (7474 dual D-FF); parity clean fast-vs-slow.
+Why: M3 second step per design §6.17 milestones — independent clock domains and async set/reset.
+Touches: FR-079a; design §6.17 (M3 milestone)
+
 ## 2026-07-03 — M3 step 1: registered (.R) outputs on the global clock
 What: cgen.js now lowers global-clock .R registered outputs (incl. global AR/SP) instead of refusing them — per-instance reg_<refdes>[] state, rising-edge latch in gen_latch mirroring sim.js updateRegisters, drive reads back the register. Runtime unchanged (sequential vector path already existed). Refusal narrowed to per-output .CLK/.ARST/.APRST (step 2) and memory (step 3). New sequential parity pair examples/simple174 (74174); parity clean fast-vs-slow.
 Why: M3 first step per design §6.17 milestones — sequential support, smallest slice first.

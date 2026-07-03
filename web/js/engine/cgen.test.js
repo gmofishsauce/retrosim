@@ -162,16 +162,39 @@ test("generateC: global-clock .R output emits register state and latch (M3 step 
   const { code } = generateC(d);
   assert.match(code, /static rt_val reg_U1\[1\];/);
   assert.match(code, /static rt_val prevClk_U1;/);
-  assert.match(code, /int rose = \(prevClk_U1 == RT_0 && clk == RT_1\);/);
+  assert.match(code, /int grose = \(prevClk_U1 == RT_0 && gclk == RT_1\);/);
   assert.match(code, /reg_U1\[0\] = rt_buf/); // latches D on the rising edge
   assert.match(code, /v = reg_U1\[0\]; \/\* latched \*\//); // drive reads the register
 });
 
-test("generateC: refuses per-output .CLK registered outputs (M3 step 2)", () => {
+test("generateC: per-output .CLK registered output latches on its own clock (M3 step 2)", () => {
   const CLKFF = { ...DFF, behavior: "Q.R = D\nQ.CLK = CP\n" };
   const d = mkDesign();
   place(d, "U1", CLKFF);
-  assert.throws(() => generateC(d), /per-output \.CLK\/\.ARST\/\.APRST/);
+  const { code } = generateC(d);
+  assert.match(code, /static rt_val prevClk_U1_0;/);
+  assert.doesNotMatch(code, /static rt_val prevClk_U1;/); // no global clock for a self-clocked reg
+  assert.match(code, /if \(prevClk_U1_0 == RT_0 && clk == RT_1\) reg_U1\[0\] = /);
+  assert.match(code, /v = reg_U1\[0\]; \/\* latched \*\//);
+});
+
+test("generateC: async .APRST/.ARST lower to per-step preset/reset (M3 step 2)", () => {
+  const AFF = {
+    ...DFF,
+    pins: [
+      { name: "D", side: "left", position: 1, direction: "in" },
+      { name: "CP", side: "left", position: 2, direction: "in" },
+      { name: "/S", side: "left", position: 3, direction: "in" },
+      { name: "/R", side: "left", position: 4, direction: "in" },
+      { name: "Q", side: "right", position: 1, direction: "out" },
+    ],
+    behavior: "Q.R = D\nQ.CLK = CP\nQ.APRST = /S\nQ.ARST = /R\n",
+  };
+  const d = mkDesign();
+  place(d, "U1", AFF);
+  const { code } = generateC(d);
+  assert.match(code, /if \(p != RT_0\) reg_U1\[0\] = \(p == RT_1\) \? RT_1 : RT_U; \} \/\* \.APRST \*\//);
+  assert.match(code, /if \(a != RT_0\) reg_U1\[0\] = \(a == RT_1\) \? RT_0 : RT_U; \} \/\* \.ARST wins \*\//);
 });
 
 test("generateC: refuses memory devices and sub-design instances", () => {

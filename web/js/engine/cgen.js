@@ -9,10 +9,10 @@
 // tables plus straight-line lowered logic — every runtime semantic lives in
 // runtime.c (FR-116a).
 //
-// M3 step 1 scope (design §6.17): combinational designs plus registered
-// outputs (.R) on the global clock: pin, incl. global AR/SP (FR-079). Still
-// refused: per-output .CLK/.ARST/.APRST (M3 step 2) and memory devices (M3);
-// sub-design instances are refused per FR-116 deferred scope.
+// M3 step 2 scope (design §6.17): combinational designs plus registered
+// outputs (.R) — both the global clock: pin (incl. global AR/SP, FR-079) and
+// per-output .CLK with async .ARST/.APRST (FR-079a). Still refused: memory
+// devices (M3 step 3); sub-design instances per FR-116 deferred scope.
 
 import { compileBehavior } from "./galasm.js";
 import { buildNets } from "../model/netlist.js";
@@ -127,14 +127,6 @@ export function generateC(design, { romContent = null } = {}) {
     }
 
     const hasReg = c.outputs.some((o) => o.kind === "R");
-    for (const out of c.outputs) {
-      if (out.kind === "R" && (out.clk || out.arst || out.aprst)) {
-        errors.push(
-          `${typeName}: per-output .CLK/.ARST/.APRST registered outputs are not yet supported by the C generator (design §6.17 M3 step 2)`,
-        );
-        return;
-      }
-    }
 
     // Expression lowering. A literal reads its net from curr: bare literals
     // normalize Z→U via rt_buf (galasm.js litValue), negated ones via rt_not;
@@ -156,32 +148,48 @@ export function generateC(design, { romContent = null } = {}) {
     const combExpr = (out) =>
       (out.xor ?? []).reduce((acc, g) => `rt_xor(${acc}, ${sumExpr(g)})`, sumExpr(out.terms));
 
-    // Registered (.R) outputs, global-clock family: collect per-instance
-    // register state (mirrors sim.js updateRegisters). The D input latched
-    // here is combExpr; the drive block below reads back reg_<tag>[k].
+    // Registered (.R) outputs: collect per-instance register state (mirrors
+    // sim.js updateRegisters). Two families may coexist in one part (FR-079a):
+    //   • global-clock — no .CLK; latch on the rising edge of the type's
+    //     clock: pin; global AR/SP apply (FR-079).
+    //   • per-output-clock — a .CLK term; latch on its own edge; async
+    //     .APRST/.ARST apply every step (FR-079a). Global AR/SP do not touch it.
+    // The D input latched is combExpr; the drive block reads back reg_<tag>[k].
     let regTag = null;
     const regIdxOf = new Map(); // .R signal → its slot in reg_<tag>[]
     if (hasReg) {
       regTag = insts[0].refdes.replace(/[^A-Za-z0-9_]/g, "_");
-      const clockPin = td0.clock;
+      // Global clock net — needed only if some .R output uses the global clock.
+      const needsGlobal = c.outputs.some((o) => o.kind === "R" && !o.clk);
       let clockNet = -1;
-      if (!clockPin) {
-        errors.push(`${typeName}: behavior uses .R but the type declares no clock: pin (FR-062d)`);
-      } else {
-        const owner = insts.find((i) => i.typeData.pins.some((p) => p.name === clockPin));
-        clockNet = netOf(`${owner?.refdes}.${clockPin}`);
+      if (needsGlobal) {
+        const clockPin = td0.clock;
+        if (!clockPin) {
+          errors.push(`${typeName}: behavior uses .R but the type declares no clock: pin (FR-062d)`);
+        } else {
+          const owner = insts.find((i) => i.typeData.pins.some((p) => p.name === clockPin));
+          clockNet = netOf(`${owner?.refdes}.${clockPin}`);
+        }
       }
-      const dExprs = [];
+      const regs = []; // one per .R output, in output order
       for (const out of c.outputs) {
         if (out.kind !== "R") continue;
-        regIdxOf.set(out.signal, dExprs.length);
-        dExprs.push(combExpr(out));
+        const k = regs.length;
+        regIdxOf.set(out.signal, k);
+        regs.push({
+          k,
+          dExpr: combExpr(out),
+          clkExpr: out.clk ? termExpr(out.clk) : null, // per-output .CLK (FR-079a)
+          aprstExpr: out.aprst ? termExpr(out.aprst) : null, // async preset
+          arstExpr: out.arst ? termExpr(out.arst) : null, // async reset (wins over preset)
+        });
       }
       regUnits.push({
         tag: regTag,
         clockNet,
-        count: dExprs.length,
-        dExprs,
+        hasGlobal: needsGlobal,
+        regs,
+        globalIdxs: regs.filter((r) => !r.clkExpr).map((r) => r.k),
         spExpr: c.sp ? termExpr(c.sp) : null,
         arExpr: c.ar ? termExpr(c.ar) : null,
       });
@@ -407,10 +415,11 @@ export function generateC(design, { romContent = null } = {}) {
   L.push(`const int gen_outcol_count = ${outcols.length};`);
   L.push(``);
 
-  L.push(`/* --- registered state (FR-079: global-clock .R outputs) --- */`);
+  L.push(`/* --- registered state (FR-079/FR-079a .R outputs) --- */`);
   for (const u of regUnits) {
-    L.push(`static rt_val reg_${u.tag}[${u.count}];`);
-    L.push(`static rt_val prevClk_${u.tag};`);
+    L.push(`static rt_val reg_${u.tag}[${u.regs.length}];`);
+    if (u.hasGlobal) L.push(`static rt_val prevClk_${u.tag};`);
+    for (const r of u.regs) if (r.clkExpr) L.push(`static rt_val prevClk_${u.tag}_${r.k};`);
   }
   if (regUnits.length) L.push(``);
 
@@ -420,35 +429,47 @@ export function generateC(design, { romContent = null } = {}) {
   clocks.forEach((c, i) => L.push(`  gen_clocks[${i}].level = RT_0;`));
   resets.forEach((r, i) => L.push(`  gen_resets[${i}].released = 0;`));
   for (const u of regUnits) {
-    for (let k = 0; k < u.count; k++) L.push(`  reg_${u.tag}[${k}] = RT_U; /* power-up U (FR-079) */`);
-    L.push(`  prevClk_${u.tag} = RT_U;`);
+    for (const r of u.regs) L.push(`  reg_${u.tag}[${r.k}] = RT_U; /* power-up U (FR-079) */`);
+    if (u.hasGlobal) L.push(`  prevClk_${u.tag} = RT_U;`);
+    for (const r of u.regs) if (r.clkExpr) L.push(`  prevClk_${u.tag}_${r.k} = RT_U;`);
   }
   L.push(`}`);
   L.push(``);
-  L.push(`/* --- registered latch: global-clock .R outputs (FR-079, sim.js updateRegisters) --- */`);
+  L.push(`/* --- registered latch: .R outputs (FR-079/FR-079a, sim.js updateRegisters) --- */`);
   L.push(`void gen_latch(const rt_val *curr) {`);
   if (!regUnits.length) L.push(`  (void)curr;`);
   for (const u of regUnits) {
-    const clk = u.clockNet >= 0 ? `curr[${u.clockNet}]` : `RT_Z`;
     L.push(`  {`);
-    L.push(`    rt_val clk = ${clk};`);
-    L.push(`    int rose = (prevClk_${u.tag} == RT_0 && clk == RT_1);`);
-    L.push(`    if (rose) {`);
-    u.dExprs.forEach((d, k) => L.push(`      reg_${u.tag}[${k}] = ${d};`));
-    L.push(`    }`);
-    if (u.spExpr) {
-      L.push(`    if (rose) { rt_val s = ${u.spExpr}; /* global SP */`);
-      L.push(`      if (s != RT_0) for (int k = 0; k < ${u.count}; k++)`);
-      L.push(`        reg_${u.tag}[k] = (s == RT_1) ? RT_1 : RT_U;`);
+    if (u.hasGlobal) {
+      const clk = u.clockNet >= 0 ? `curr[${u.clockNet}]` : `RT_Z`;
+      L.push(`    rt_val gclk = ${clk}; /* global clock: pin */`);
+      L.push(`    int grose = (prevClk_${u.tag} == RT_0 && gclk == RT_1);`);
+      L.push(`    if (grose) {`);
+      for (const k of u.globalIdxs) L.push(`      reg_${u.tag}[${k}] = ${u.regs[k].dExpr};`);
+      L.push(`    }`);
+      if (u.spExpr) {
+        L.push(`    if (grose) { rt_val s = ${u.spExpr}; if (s != RT_0) { /* global SP */`);
+        for (const k of u.globalIdxs) L.push(`      reg_${u.tag}[${k}] = (s == RT_1) ? RT_1 : RT_U;`);
+        L.push(`    } }`);
+      }
+      if (u.arExpr) {
+        L.push(`    { rt_val a = ${u.arExpr}; if (a != RT_0) { /* global AR (async) */`);
+        for (const k of u.globalIdxs) L.push(`      reg_${u.tag}[${k}] = (a == RT_1) ? RT_0 : RT_U;`);
+        L.push(`    } }`);
+      }
+      L.push(`    prevClk_${u.tag} = gclk;`);
+    }
+    for (const r of u.regs) {
+      if (!r.clkExpr) continue;
+      L.push(`    { rt_val clk = ${r.clkExpr}; /* per-output .CLK */`);
+      L.push(`      if (prevClk_${u.tag}_${r.k} == RT_0 && clk == RT_1) reg_${u.tag}[${r.k}] = ${r.dExpr};`);
+      L.push(`      prevClk_${u.tag}_${r.k} = clk;`);
+      if (r.aprstExpr)
+        L.push(`      { rt_val p = ${r.aprstExpr}; if (p != RT_0) reg_${u.tag}[${r.k}] = (p == RT_1) ? RT_1 : RT_U; } /* .APRST */`);
+      if (r.arstExpr)
+        L.push(`      { rt_val a = ${r.arstExpr}; if (a != RT_0) reg_${u.tag}[${r.k}] = (a == RT_1) ? RT_0 : RT_U; } /* .ARST wins */`);
       L.push(`    }`);
     }
-    if (u.arExpr) {
-      L.push(`    { rt_val a = ${u.arExpr}; /* global AR (async) */`);
-      L.push(`      if (a != RT_0) for (int k = 0; k < ${u.count}; k++)`);
-      L.push(`        reg_${u.tag}[k] = (a == RT_1) ? RT_0 : RT_U;`);
-      L.push(`    }`);
-    }
-    L.push(`    prevClk_${u.tag} = clk;`);
     L.push(`  }`);
   }
   L.push(`}`);
