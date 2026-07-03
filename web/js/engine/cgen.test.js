@@ -197,11 +197,57 @@ test("generateC: async .APRST/.ARST lower to per-step preset/reset (M3 step 2)",
   assert.match(code, /if \(a != RT_0\) reg_U1\[0\] = \(a == RT_1\) \? RT_0 : RT_U; \} \/\* \.ARST wins \*\//);
 });
 
-test("generateC: refuses memory devices and sub-design instances", () => {
-  const d = mkDesign();
-  place(d, "U1", { name: "ROMX", renderType: "unit", pins: [], mem: { kind: "rom" } });
-  assert.throws(() => generateC(d), /memory devices are not yet supported/);
+const ROM4x2 = {
+  name: "ROM4x2",
+  mem: { kind: "rom", addressBits: 2, dataWidth: 2, romFile: "r.hex" },
+  pins: [
+    { name: "A0", side: "left", position: 1, direction: "in" },
+    { name: "A1", side: "left", position: 2, direction: "in" },
+    { name: "CE/", side: "left", position: 3, direction: "in" },
+    { name: "OE/", side: "left", position: 4, direction: "in" },
+    { name: "D0", side: "right", position: 1, direction: "out" },
+    { name: "D1", side: "right", position: 2, direction: "out" },
+  ],
+};
 
+test("generateC: ROM device bakes contents into a gen_mems entry (M3 step 3)", () => {
+  const d = mkDesign();
+  place(d, "U1", ROM4x2);
+  const { code } = generateC(d, { romContent: new Map([["r.hex", Uint8Array.from([0xab, 0xcd])]]) });
+  assert.match(code, /static const unsigned char mem_rom_U1\[\] = \{ 171, 205 \};/);
+  assert.match(code, /\{ RT_MEM_ROM, 2, 2, mem_addr_U1, mem_data_U1, mem_dlbl_U1, [^,]+, [^,]+, -1, mem_rom_U1, 2 \}/);
+  assert.match(code, /const int gen_mem_count = 1;/);
+});
+
+test("generateC: RAM device emits a gen_mems entry with a WE/ net and no ROM (M3 step 3)", () => {
+  const RAM = {
+    name: "RAM4x1",
+    mem: { kind: "ram", addressBits: 2, dataWidth: 1 },
+    pins: [
+      { name: "A0", side: "left", position: 1, direction: "in" },
+      { name: "A1", side: "left", position: 2, direction: "in" },
+      { name: "CE/", side: "left", position: 3, direction: "in" },
+      { name: "OE/", side: "left", position: 4, direction: "in" },
+      { name: "WE/", side: "left", position: 5, direction: "in" },
+      { name: "D0", side: "right", position: 1, direction: "bidir" },
+    ],
+  };
+  const d = mkDesign();
+  place(d, "U1", RAM);
+  const { code } = generateC(d);
+  assert.match(code, /\{ RT_MEM_RAM, 2, 1, mem_addr_U1, mem_data_U1, mem_dlbl_U1, [^,]+, [^,]+, [^,]+, 0, 0 \}/);
+  assert.doesNotMatch(code, /mem_rom_U1/);
+});
+
+test("generateC: ROM with no available content warns and bakes nothing", () => {
+  const d = mkDesign();
+  place(d, "U1", ROM4x2);
+  const { code, warnings } = generateC(d); // no romContent
+  assert.equal(warnings.filter((w) => w.includes("ROM content")).length, 1);
+  assert.match(code, /\{ RT_MEM_ROM, 2, 2, [^}]+, 0, 0 \}/);
+});
+
+test("generateC: refuses sub-design instances", () => {
   const d2 = mkDesign();
   place(d2, "X1", { name: "sub", renderType: "unit", pins: [] }, { childPath: "/tmp/child.json" });
   assert.throws(() => generateC(d2), /sub-design instances are not supported/);

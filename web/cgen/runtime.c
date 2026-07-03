@@ -104,6 +104,9 @@ static void *xalloc(size_t n) {
  * these row by row; drive_builtins deposits them each step. */
 static rt_val *port_stim;
 
+static void mem_alloc(void); /* memory store allocation (FR-114d) */
+static void mem_reset(void); /* memory power-up: RAM U, ROM baked bytes */
+
 /* reset_state returns every net to power-up Z and all generated state to
  * power-up via gen_init() — the C analogue of the slow simulator building
  * a fresh simulation, which the combinational vector path does per row
@@ -113,6 +116,7 @@ static void reset_state(void) {
   memset(next_buf, RT_Z, (size_t)gen_net_count);
   memset(conflicted, 0, (size_t)gen_net_count);
   gen_init();
+  mem_reset();
 }
 
 void rt_init(void) {
@@ -123,6 +127,7 @@ void rt_init(void) {
   head = xalloc((size_t)gen_net_count * sizeof head[0]);
   port_stim = xalloc((size_t)(gen_incol_count > 0 ? gen_incol_count : 1));
   memset(port_stim, RT_Z, (size_t)(gen_incol_count > 0 ? gen_incol_count : 1));
+  mem_alloc();
   reset_state();
 }
 
@@ -233,19 +238,144 @@ static void drive_builtins(void) {
 }
 
 /* ------------------------------------------------------------------ *
+ *  Memory devices (FR-114d; memory.js createMemoryCore re-expressed).
+ *  Runtime-owned: gen_mems is const wiring + baked ROM bytes; the mutable
+ *  store (2^abits × width, RAM power-up U, ROM seeded) and WE/-edge state
+ *  live here.
+ * ------------------------------------------------------------------ */
+
+static struct mem_state {
+  rt_val *store;  /* (2^abits) * width, addressed word-major */
+  rt_val prev_we; /* WE/ rising-edge detection (RAM) */
+} *mem_states;
+
+/* mem_rd reads a memory pin's net from curr, normalizing Z→U and treating
+ * an unwired pin (net -1) as U (FR-077), exactly like memory.js's read. */
+static rt_val mem_rd(const rt_val *curr, int net) {
+  return net < 0 ? RT_U : norm(curr[net]);
+}
+
+/* mem_decode resolves A0(LSB)..A(abits-1) to an address, or -1 when any
+ * address bit is not a clean 0/1 (undecodable, memory.js decodeAddr). */
+static long mem_decode(const rt_mem *m, const rt_val *curr) {
+  long addr = 0;
+  for (int i = 0; i < m->abits; i++) {
+    rt_val b = mem_rd(curr, m->addr[i]);
+    if (b != RT_0 && b != RT_1) return -1;
+    if (b == RT_1) addr += 1L << i;
+  }
+  return addr;
+}
+
+static void mem_alloc(void) {
+  if (gen_mem_count <= 0) {
+    mem_states = NULL;
+    return;
+  }
+  mem_states = xalloc((size_t)gen_mem_count * sizeof mem_states[0]);
+  for (int i = 0; i < gen_mem_count; i++) {
+    size_t cells = ((size_t)1 << gen_mems[i].abits) * (size_t)gen_mems[i].width;
+    mem_states[i].store = xalloc(cells);
+  }
+}
+
+/* mem_reset restores power-up: RAM all-U, ROM seeded from its baked bytes
+ * (little-endian, B=ceil(width/8) per word; memory.js loadBytes, FR-114e),
+ * WE/ history unknown. Called per fresh state (per combinational row). */
+static void mem_reset(void) {
+  for (int i = 0; i < gen_mem_count; i++) {
+    const rt_mem *m = &gen_mems[i];
+    size_t cells = ((size_t)1 << m->abits) * (size_t)m->width;
+    memset(mem_states[i].store, RT_U, cells);
+    mem_states[i].prev_we = RT_U;
+    if (m->rom) {
+      int nbytes = (m->width + 7) / 8; /* B = ceil(width/8) */
+      long capacity = 1L << m->abits;
+      long file_words = m->rom_len / nbytes;
+      long loaded = file_words < capacity ? file_words : capacity;
+      for (long k = 0; k < loaded; k++) {
+        rt_val *word = &mem_states[i].store[(size_t)k * m->width];
+        for (int b = 0; b < m->width; b++) {
+          unsigned char byte = m->rom[k * nbytes + (b >> 3)];
+          word[b] = (byte >> (b % 8)) & 1 ? RT_1 : RT_0;
+        }
+      }
+    }
+  }
+}
+
+/* mem_write_all latches each RAM's data bus into the addressed cell on a
+ * WE/ 0→1 edge (FR-114d; memory.js writeStep), sampling this step's values.
+ * Called in the latch phase, before any contribution. A ROM never writes. */
+static void mem_write_all(const rt_val *curr) {
+  for (int i = 0; i < gen_mem_count; i++) {
+    const rt_mem *m = &gen_mems[i];
+    if (m->kind != RT_MEM_RAM) continue;
+    rt_val we = mem_rd(curr, m->we);
+    if (mem_states[i].prev_we == RT_0 && we == RT_1) {
+      long addr = mem_decode(m, curr);
+      if (addr >= 0) {
+        rt_val *word = &mem_states[i].store[(size_t)addr * m->width];
+        for (int b = 0; b < m->width; b++) word[b] = mem_rd(curr, m->data[b]);
+      }
+    }
+    mem_states[i].prev_we = we;
+  }
+}
+
+/* mem_drive_all deposits each memory's data-bus drive (FR-114d; memory.js
+ * dataDrive): the CE//OE//WE/ gating deciding Z (drive nothing), the
+ * addressed word (unwritten cells read U), or pessimistic U. Called in the
+ * contribution phase. */
+static void mem_drive_all(const rt_val *curr) {
+  for (int i = 0; i < gen_mem_count; i++) {
+    const rt_mem *m = &gen_mems[i];
+    rt_val ce = mem_rd(curr, m->ce);
+    rt_val oe = mem_rd(curr, m->oe);
+    rt_val we = m->kind == RT_MEM_RAM ? mem_rd(curr, m->we) : RT_1;
+    const rt_val *word = NULL; /* a word to drive, or... */
+    int drive_u = 0;           /* ...drive U on every data pin, else Z (neither) */
+    if (ce == RT_1) {
+      /* deselected → Z (drive nothing) */
+    } else if (ce != RT_0) {
+      drive_u = 1; /* CE/ uncertain */
+    } else if (m->kind == RT_MEM_RAM && we == RT_0) {
+      /* write in progress: outputs disabled → Z */
+    } else if (oe == RT_1) {
+      /* output disabled → Z */
+    } else if (oe == RT_0 && (m->kind == RT_MEM_ROM || we == RT_1)) {
+      long addr = mem_decode(m, curr);
+      if (addr < 0) drive_u = 1; /* undecodable → U */
+      else word = &mem_states[i].store[(size_t)addr * m->width];
+    } else {
+      drive_u = 1; /* OE//WE/ uncertain */
+    }
+    if (word) {
+      for (int b = 0; b < m->width; b++)
+        rt_contrib(m->data[b], word[b], 0, m->data_label[b]);
+    } else if (drive_u) {
+      for (int b = 0; b < m->width; b++)
+        rt_contrib(m->data[b], RT_U, 0, m->data_label[b]);
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ *
  *  The unit step and settling (FR-078, FR-085, FR-110; sim.js step/settle)
  * ------------------------------------------------------------------ */
 
 int rt_step(void) {
-  /* (1) Latch registered/memory state from the previous step's values,
-   * before any contribution is evaluated (FR-079/FR-114d). */
+  /* (1) Latch registered (.R) and memory (RAM WE/) state from the previous
+   * step's values, before any contribution is evaluated (FR-079/FR-114d). */
   gen_latch(curr_buf);
+  mem_write_all(curr_buf);
 
   /* (2) Gather every driver's contribution, all computed from curr. */
   ncontrib = 0;
   memset(head, -1, (size_t)gen_net_count * sizeof head[0]);
   gen_drive(curr_buf);
   drive_builtins();
+  mem_drive_all(curr_buf);
 
   /* (3) Resolve every net into next; (4) swap. */
   int changed = 0;

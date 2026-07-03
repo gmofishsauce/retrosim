@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 
 import { deserializeDesign } from "../js/model/persist.js";
 import { generateC } from "../js/engine/cgen.js";
+import { parseRomBytes } from "../js/engine/memory.js";
 import {
   deriveColumns,
   deserializeVectors,
@@ -68,13 +69,40 @@ function runFast(code, stdin) {
   }
 }
 
+// loadRomContentsFs is the Node analogue of sim.js loadRomContents (FR-114e):
+// it reads each ROM's content file from disk (the browser loader's fetch is
+// unavailable here). A romFile is tried as given, then by basename in the
+// design's own directory, so an example stays testable regardless of the
+// absolute path baked in its type. A missing/unreadable file is skipped (that
+// ROM reads U on both engines, so parity still holds).
+function loadRomContentsFs(design, dir) {
+  const content = new Map();
+  for (const inst of design.components ?? []) {
+    const mem = inst.typeData?.mem;
+    if (!mem || mem.kind !== "rom" || !mem.romFile || content.has(mem.romFile)) continue;
+    const lower = mem.romFile.toLowerCase();
+    const format = lower.endsWith(".bin") ? "bin" : lower.endsWith(".hex") ? "hex" : null;
+    if (!format) continue;
+    for (const p of [mem.romFile, join(dir, basename(mem.romFile))]) {
+      try {
+        content.set(mem.romFile, parseRomBytes(readFileSync(p), format));
+        break;
+      } catch {
+        /* try next candidate */
+      }
+    }
+  }
+  return content;
+}
+
 function checkPair(jsonPath, tvPath) {
   const name = basename(jsonPath, ".json");
   const design = deserializeDesign(JSON.parse(readFileSync(jsonPath, "utf8")));
+  const romContent = loadRomContentsFs(design, dirname(jsonPath));
 
   let gen;
   try {
-    gen = generateC(design);
+    gen = generateC(design, { romContent });
   } catch (e) {
     return { name, status: "skip", detail: e.message };
   }
@@ -84,7 +112,7 @@ function checkPair(jsonPath, tvPath) {
   const { rows } = reconcileVectors(fileDoc, columns);
 
   const expected = renderExpected(
-    runVectors(design, { inputs: columns.inputs, outputs: columns.outputs, rows }),
+    runVectors(design, { inputs: columns.inputs, outputs: columns.outputs, rows }, { romContent }),
     columns.outputs,
   );
   const stdin = rows.map((r) => `${r.in.join(" ")} | ${r.out.join(" ")}`).join("\n") + "\n";

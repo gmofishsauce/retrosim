@@ -1,0 +1,973 @@
+{
+  "formatVersion": 2,
+  "name": "rom-demo",
+  "components": [
+    {
+      "refdes": "U1",
+      "type": "type-R8X8",
+      "x": 20,
+      "y": 8,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-R8X8",
+        "name": "R8X8",
+        "mem": {
+          "kind": "rom",
+          "addressBits": 3,
+          "dataWidth": 8,
+          "locations": 8,
+          "romFile": "/Users/jeff/go/src/github.com/gmofishsauce/retrosim/examples/rom-demo.hex"
+        },
+        "pins": [
+          {
+            "name": "A0",
+            "side": "left",
+            "pos": 1,
+            "direction": "in"
+          },
+          {
+            "name": "A1",
+            "side": "left",
+            "pos": 2,
+            "direction": "in"
+          },
+          {
+            "name": "A2",
+            "side": "left",
+            "pos": 3,
+            "direction": "in"
+          },
+          {
+            "name": "CE/",
+            "side": "left",
+            "pos": 4,
+            "direction": "in"
+          },
+          {
+            "name": "OE/",
+            "side": "left",
+            "pos": 5,
+            "direction": "in"
+          },
+          {
+            "name": "D0",
+            "side": "right",
+            "pos": 1,
+            "direction": "tristate"
+          },
+          {
+            "name": "D1",
+            "side": "right",
+            "pos": 2,
+            "direction": "tristate"
+          },
+          {
+            "name": "D2",
+            "side": "right",
+            "pos": 3,
+            "direction": "tristate"
+          },
+          {
+            "name": "D3",
+            "side": "right",
+            "pos": 4,
+            "direction": "tristate"
+          },
+          {
+            "name": "D4",
+            "side": "right",
+            "pos": 5,
+            "direction": "tristate"
+          },
+          {
+            "name": "D5",
+            "side": "right",
+            "pos": 6,
+            "direction": "tristate"
+          },
+          {
+            "name": "D6",
+            "side": "right",
+            "pos": 7,
+            "direction": "tristate"
+          },
+          {
+            "name": "D7",
+            "side": "right",
+            "pos": 8,
+            "direction": "tristate"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-1",
+      "type": "type-switch",
+      "x": 2,
+      "y": 6,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-2",
+      "type": "type-switch",
+      "x": 2,
+      "y": 9,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-3",
+      "type": "type-switch",
+      "x": 2,
+      "y": 12,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-4",
+      "type": "type-pulldown",
+      "x": 2,
+      "y": 15,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-pulldown",
+        "name": "pulldown",
+        "builtin": true,
+        "title": "pull down",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"none\" stroke=\"#000\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"4\" x2=\"18\" y2=\"28\"/><line x1=\"8\" y1=\"28\" x2=\"28\" y2=\"28\"/></svg>",
+        "renderType": "pulldown",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "top",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-5",
+      "type": "type-pulldown",
+      "x": 6,
+      "y": 15,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-pulldown",
+        "name": "pulldown",
+        "builtin": true,
+        "title": "pull down",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"none\" stroke=\"#000\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"4\" x2=\"18\" y2=\"28\"/><line x1=\"8\" y1=\"28\" x2=\"28\" y2=\"28\"/></svg>",
+        "renderType": "pulldown",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "top",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-6",
+      "type": "type-indicator",
+      "x": 40,
+      "y": 6,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-7",
+      "type": "type-indicator",
+      "x": 40,
+      "y": 8,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-8",
+      "type": "type-indicator",
+      "x": 40,
+      "y": 10,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-9",
+      "type": "type-indicator",
+      "x": 40,
+      "y": 12,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-10",
+      "type": "type-indicator",
+      "x": 40,
+      "y": 14,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-11",
+      "type": "type-indicator",
+      "x": 40,
+      "y": 16,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-12",
+      "type": "type-indicator",
+      "x": 40,
+      "y": 18,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-13",
+      "type": "type-indicator",
+      "x": 40,
+      "y": 20,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    }
+  ],
+  "wires": [
+    {
+      "id": "w3",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1"
+        },
+        {
+          "t": "node",
+          "v": "v2"
+        }
+      ]
+    },
+    {
+      "id": "w6",
+      "path": [
+        {
+          "t": "node",
+          "v": "v4"
+        },
+        {
+          "t": "node",
+          "v": "v5"
+        }
+      ]
+    },
+    {
+      "id": "w9",
+      "path": [
+        {
+          "t": "node",
+          "v": "v7"
+        },
+        {
+          "t": "node",
+          "v": "v8"
+        }
+      ]
+    },
+    {
+      "id": "w12",
+      "path": [
+        {
+          "t": "node",
+          "v": "v10"
+        },
+        {
+          "t": "node",
+          "v": "v11"
+        }
+      ]
+    },
+    {
+      "id": "w15",
+      "path": [
+        {
+          "t": "node",
+          "v": "v13"
+        },
+        {
+          "t": "node",
+          "v": "v14"
+        }
+      ]
+    },
+    {
+      "id": "w18",
+      "path": [
+        {
+          "t": "node",
+          "v": "v16"
+        },
+        {
+          "t": "node",
+          "v": "v17"
+        }
+      ]
+    },
+    {
+      "id": "w21",
+      "path": [
+        {
+          "t": "node",
+          "v": "v19"
+        },
+        {
+          "t": "node",
+          "v": "v20"
+        }
+      ]
+    },
+    {
+      "id": "w24",
+      "path": [
+        {
+          "t": "node",
+          "v": "v22"
+        },
+        {
+          "t": "node",
+          "v": "v23"
+        }
+      ]
+    },
+    {
+      "id": "w27",
+      "path": [
+        {
+          "t": "node",
+          "v": "v25"
+        },
+        {
+          "t": "node",
+          "v": "v26"
+        }
+      ]
+    },
+    {
+      "id": "w30",
+      "path": [
+        {
+          "t": "node",
+          "v": "v28"
+        },
+        {
+          "t": "node",
+          "v": "v29"
+        }
+      ]
+    },
+    {
+      "id": "w33",
+      "path": [
+        {
+          "t": "node",
+          "v": "v31"
+        },
+        {
+          "t": "node",
+          "v": "v32"
+        }
+      ]
+    },
+    {
+      "id": "w36",
+      "path": [
+        {
+          "t": "node",
+          "v": "v34"
+        },
+        {
+          "t": "node",
+          "v": "v35"
+        }
+      ]
+    },
+    {
+      "id": "w39",
+      "path": [
+        {
+          "t": "node",
+          "v": "v37"
+        },
+        {
+          "t": "node",
+          "v": "v38"
+        }
+      ]
+    }
+  ],
+  "buses": [],
+  "vertices": [
+    {
+      "id": "v1",
+      "kind": "pin",
+      "ref": "A-1",
+      "pin": "OUT",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v2",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "A0",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v4",
+      "kind": "pin",
+      "ref": "A-2",
+      "pin": "OUT",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v5",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "A1",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v7",
+      "kind": "pin",
+      "ref": "A-3",
+      "pin": "OUT",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v8",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "A2",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v10",
+      "kind": "pin",
+      "ref": "A-4",
+      "pin": "OUT",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v11",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "CE/",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v13",
+      "kind": "pin",
+      "ref": "A-5",
+      "pin": "OUT",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v14",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "OE/",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v16",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D0",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v17",
+      "kind": "pin",
+      "ref": "A-6",
+      "pin": "IN",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v19",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D1",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v20",
+      "kind": "pin",
+      "ref": "A-7",
+      "pin": "IN",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v22",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D2",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v23",
+      "kind": "pin",
+      "ref": "A-8",
+      "pin": "IN",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v25",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D3",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v26",
+      "kind": "pin",
+      "ref": "A-9",
+      "pin": "IN",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v28",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D4",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v29",
+      "kind": "pin",
+      "ref": "A-10",
+      "pin": "IN",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v31",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D5",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v32",
+      "kind": "pin",
+      "ref": "A-11",
+      "pin": "IN",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v34",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D6",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v35",
+      "kind": "pin",
+      "ref": "A-12",
+      "pin": "IN",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v37",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D7",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "v38",
+      "kind": "pin",
+      "ref": "A-13",
+      "pin": "IN",
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "nets": [
+    {
+      "pins": [
+        "A-1.OUT",
+        "U1.A0"
+      ],
+      "members": [
+        "w3"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-2.OUT",
+        "U1.A1"
+      ],
+      "members": [
+        "w6"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-3.OUT",
+        "U1.A2"
+      ],
+      "members": [
+        "w9"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-4.OUT",
+        "U1.CE/"
+      ],
+      "members": [
+        "w12"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-5.OUT",
+        "U1.OE/"
+      ],
+      "members": [
+        "w15"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U1.D0",
+        "A-6.IN"
+      ],
+      "members": [
+        "w18"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.D1",
+        "A-7.IN"
+      ],
+      "members": [
+        "w21"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.D2",
+        "A-8.IN"
+      ],
+      "members": [
+        "w24"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.D3",
+        "A-9.IN"
+      ],
+      "members": [
+        "w27"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.D4",
+        "A-10.IN"
+      ],
+      "members": [
+        "w30"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.D5",
+        "A-11.IN"
+      ],
+      "members": [
+        "w33"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.D6",
+        "A-12.IN"
+      ],
+      "members": [
+        "w36"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.D7",
+        "A-13.IN"
+      ],
+      "members": [
+        "w39"
+      ],
+      "provenance": [],
+      "name": "IN"
+    }
+  ]
+}

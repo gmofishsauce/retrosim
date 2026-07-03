@@ -9,10 +9,11 @@
 // tables plus straight-line lowered logic — every runtime semantic lives in
 // runtime.c (FR-116a).
 //
-// M3 step 2 scope (design §6.17): combinational designs plus registered
-// outputs (.R) — both the global clock: pin (incl. global AR/SP, FR-079) and
-// per-output .CLK with async .ARST/.APRST (FR-079a). Still refused: memory
-// devices (M3 step 3); sub-design instances per FR-116 deferred scope.
+// M3 scope (design §6.17): combinational designs, registered outputs (.R) —
+// both the global clock: pin (incl. global AR/SP, FR-079) and per-output .CLK
+// with async .ARST/.APRST (FR-079a) — and memory devices (RAM/ROM, FR-114d,
+// contents baked at generate time). Sub-design instances are refused per
+// FR-116 deferred scope (fast-engine flattening is a later change).
 
 import { compileBehavior } from "./galasm.js";
 import { buildNets } from "../model/netlist.js";
@@ -37,11 +38,11 @@ function cstr(s) {
 
 // generateC compiles the design into the C source of its generated
 // translation unit. Returns { code, warnings }; throws Error on a refusal
-// (sub-design/memory/.R in M1 scope, behavior compile error) with all
-// collected reasons, like buildSimulation's preflight. `romContent` is
-// accepted for signature stability but unused until memory devices land (M3).
+// (sub-design instance, behavior compile error) with all collected reasons,
+// like buildSimulation's preflight. `romContent` is the Map(romFile → bytes)
+// from loadRomContents (§6.13); a ROM's content is baked into the emitted
+// source (FR-116a), all-U when its file is absent.
 export function generateC(design, { romContent = null } = {}) {
-  void romContent; // M3: baked ROM contents (FR-116a)
   const warnings = [];
   const errors = [];
 
@@ -71,6 +72,7 @@ export function generateC(design, { romContent = null } = {}) {
   const clocks = [];
   const resets = [];
   const regUnits = []; // registered galasm entities, global-clock family (FR-079)
+  const mems = []; // memory devices (RAM/ROM, FR-114d)
   const switchIdx = new Map(); // refdes → gen_switches index
   const clockIdx = new Map(); // refdes → gen_clocks index
   const compileCache = new Map(); // type name → CompiledBehavior|null
@@ -238,9 +240,40 @@ export function generateC(design, { romContent = null } = {}) {
         `${inst.refdes}: sub-design instances are not supported by the C generator (FR-116)`,
       );
     } else if (inst.typeData.mem) {
-      errors.push(
-        `${inst.refdes}: memory devices are not yet supported by the C generator (design §6.17 M3)`,
-      );
+      // Memory device (FR-114d): collect wiring + baked ROM. The runtime owns
+      // the behavior (runtime.c mem core), driven from this gen_mems entry.
+      const mem = inst.typeData.mem;
+      const refdes = inst.refdes;
+      const isRam = mem.kind === "ram";
+      const addr = [];
+      for (let i = 0; i < mem.addressBits; i++) addr.push(netOf(`${refdes}.A${i}`));
+      const data = [];
+      const dataLabel = [];
+      for (let i = 0; i < mem.dataWidth; i++) {
+        data.push(netOf(`${refdes}.D${i}`));
+        dataLabel.push(intern(`${refdes}.D${i}`));
+      }
+      const romBytes =
+        !isRam && mem.romFile && romContent && romContent.has(mem.romFile)
+          ? romContent.get(mem.romFile)
+          : null;
+      if (!isRam && mem.romFile && !romBytes) {
+        warnings.push(`${refdes}: ROM content "${mem.romFile}" unavailable; contents are U (FR-114e)`);
+      }
+      mems.push({
+        tag: refdes.replace(/[^A-Za-z0-9_]/g, "_"),
+        kind: isRam ? "RT_MEM_RAM" : "RT_MEM_ROM",
+        n: mem.addressBits,
+        w: mem.dataWidth,
+        addr,
+        data,
+        dataLabel,
+        ce: netOf(`${refdes}.CE/`),
+        oe: netOf(`${refdes}.OE/`),
+        we: isRam ? netOf(`${refdes}.WE/`) : -1,
+        romBytes,
+      });
+      driverCount += mem.dataWidth; // drives up to w data pins
     } else if (inst.typeData.builtin) {
       const rt = inst.typeData.renderType;
       const refdes = inst.refdes;
@@ -391,6 +424,32 @@ export function generateC(design, { romContent = null } = {}) {
     L.push(`rt_reset gen_resets[] = { { -1, -1, 0, 0, 0, 0 } }; /* none */`);
   }
   L.push(`const int gen_reset_count = ${resets.length};`);
+  L.push(``);
+
+  // Memory devices (FR-114d): per-instance pin-net/label/ROM arrays, then the
+  // gen_mems table referencing them. ROM contents baked here (FR-116a).
+  for (const m of mems) {
+    L.push(`static const int mem_addr_${m.tag}[] = { ${m.addr.join(", ")} };`);
+    L.push(`static const int mem_data_${m.tag}[] = { ${m.data.join(", ")} };`);
+    L.push(`static const int mem_dlbl_${m.tag}[] = { ${m.dataLabel.join(", ")} };`);
+    if (m.romBytes) {
+      L.push(`static const unsigned char mem_rom_${m.tag}[] = { ${Array.from(m.romBytes).join(", ")} };`);
+    }
+  }
+  if (mems.length) {
+    L.push(`const rt_mem gen_mems[] = {`);
+    for (const m of mems) {
+      const rom = m.romBytes ? `mem_rom_${m.tag}` : "0";
+      const romLen = m.romBytes ? m.romBytes.length : 0;
+      L.push(
+        `  { ${m.kind}, ${m.n}, ${m.w}, mem_addr_${m.tag}, mem_data_${m.tag}, mem_dlbl_${m.tag}, ${m.ce}, ${m.oe}, ${m.we}, ${rom}, ${romLen} }, /* ${m.tag} */`,
+      );
+    }
+    L.push(`};`);
+  } else {
+    L.push(`const rt_mem gen_mems[] = { { 0, 0, 0, 0, 0, 0, -1, -1, -1, 0, 0 } }; /* none */`);
+  }
+  L.push(`const int gen_mem_count = ${mems.length};`);
   L.push(``);
 
   L.push(`/* --- vector columns (FR-117; column order is the row format) --- */`);

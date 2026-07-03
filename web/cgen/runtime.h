@@ -150,25 +150,25 @@ extern const int gen_max_contribs;
 
 /* --- Lowered design logic --- */
 
-/* gen_init resets all generated state to power-up: registers and RAM
- * contents to U (FR-079), ROM contents to their baked bytes (FR-116a),
- * switches to their baked levels. Called once before any step. */
+/* gen_init resets all generated state to power-up: registers to U (FR-079)
+ * and switches to their baked levels. Memory contents are reset by the
+ * runtime (rt reset of the gen_mems store, FR-114/FR-116a), not here.
+ * Called once before any step. */
 void gen_init(void);
 
 /* gen_latch updates registered state from the previous step's net values
  * (`curr`): .R register latching on each relevant clock's 0→1 edge
- * (FR-079/FR-079a) and memory write ports (FR-114d). Called by rt_step
- * before any contribution is evaluated, so latching sees the pre-step
- * values, exactly like the slow simulator. Empty in a purely
- * combinational design. */
+ * (FR-079/FR-079a). Called by rt_step before any contribution is
+ * evaluated, so latching sees the pre-step values, exactly like the slow
+ * simulator. Empty in a purely combinational design. (Memory write ports
+ * are latched by the runtime from gen_mems, FR-114d, not here.) */
 void gen_latch(const rt_val *curr);
 
 /* gen_drive computes every generated strong driver from `curr` and
  * deposits it via rt_contrib: each GALasm output (plain, .T-gated, or
- * registered, FR-079), each memory data pin when its read path is
- * enabled (FR-114d), and each behavior-less type's U-driving output
- * (FR-080). The runtime's own built-in drivers (below) are not gen_drive's
- * concern. */
+ * registered, FR-079) and each behavior-less type's U-driving output
+ * (FR-080). The runtime's own built-in drivers, including memory data
+ * pins (below, from gen_mems), are not gen_drive's concern. */
 void gen_drive(const rt_val *curr);
 
 /* --- Built-in instances (behaviors live in runtime.c, FR-116a) --- */
@@ -221,9 +221,30 @@ typedef struct {
 extern rt_reset gen_resets[];
 extern const int gen_reset_count;
 
-/* Memory devices (RAM/ROM, FR-114): interface lands with milestone M3
- * (design §6.17); until then gen_latch/gen_drive of a memory-bearing
- * design are not generated. */
+/* Memory device (RAM/ROM, FR-114/FR-114d; behavior in runtime.c, memory.js
+ * core). The runtime owns a per-instance mutable store (2^abits × width
+ * rt_val, RAM power-up U, ROM seeded from `rom` bytes) plus WE/-edge state;
+ * this table is the const wiring. `addr`/`data`/`data_label` point at abits-
+ * and width-long net-index / label arrays baked in the generated file; a
+ * control net is -1 when unwired (reads U). `we` is -1 for a ROM. `rom` is
+ * the baked content bytes (little-endian, ceil(width/8) per word, FR-114e)
+ * or NULL; `rom_len` is that byte count. */
+typedef enum { RT_MEM_ROM = 0, RT_MEM_RAM = 1 } rt_mem_kind;
+typedef struct {
+  int kind;   /* rt_mem_kind */
+  int abits;  /* address lines A0(LSB)..A(abits-1) */
+  int width;  /* data lines D0..D(width-1) */
+  const int *addr;       /* abits net indices */
+  const int *data;       /* width net indices */
+  const int *data_label; /* width gen_labels indices (conflict reports) */
+  int ce;                /* CE/ net index (active low), or -1 */
+  int oe;                /* OE/ net index (active low), or -1 */
+  int we;                /* WE/ net index (active low, RAM), or -1 */
+  const unsigned char *rom; /* baked ROM bytes, or NULL */
+  int rom_len;              /* rom byte count */
+} rt_mem;
+extern const rt_mem gen_mems[];
+extern const int gen_mem_count;
 
 /* --- Vector columns (FR-117) --- */
 

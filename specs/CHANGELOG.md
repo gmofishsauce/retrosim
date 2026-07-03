@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-03 — M3 step 3: memory (RAM/ROM), completing M3
+What: The memory core (memory.js) is re-expressed in runtime.c (mem_decode/mem_write_all/mem_drive_all/mem_reset), runtime-owned and driven from a generated gen_mems[] table (const wiring + baked ROM bytes; per-instance store lives in the runtime). RAM WE/-edge writes latch in the step's latch phase, data drive in the contribution phase; RAM powers up U, ROM seeds from baked contents (FR-116a). cgen.js emits gen_mems and bakes ROM from the romContent map; only sub-design instances remain refused. parity.js gained fs-based ROM loading (loadRomContentsFs) for both engines. New parity pairs examples/rom-demo (ROM + rom-demo.hex) and examples/ram-demo (1-bit RAM + tri-state data buffer + dummy clock); parity clean fast-vs-slow. M3 complete.
+Why: M3 final step per design §6.17 milestones — the fast engine now covers memory.
+Touches: FR-114d, FR-116a; design §6.17 (M3 milestone, M2 parity harness)
+
 ## 2026-07-03 — M3 step 2: per-output .CLK with async .ARST/.APRST
 What: cgen.js now lowers per-output-clocked .R outputs (FR-079a) alongside the global-clock family in one part — each self-clocked output edge-detects its own .CLK against a per-output prevClk and applies async .APRST (preset) then .ARST (reset, wins); global AR/SP restricted to the global-clock register indices. Refusal narrowed to memory only (step 3). Runtime unchanged. New sequential parity pair examples/2-bit-SR (7474 dual D-FF); parity clean fast-vs-slow.
 Why: M3 second step per design §6.17 milestones — independent clock domains and async set/reset.
