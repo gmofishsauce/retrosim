@@ -43,6 +43,21 @@ route around it — `cmd > /Users/jeff/tmp/out.txt 2>&1` and read the file back
 with the Read tool. The condition is sticky per conversation; a fresh
 conversation clears it.
 
+## Testing
+
+**`./runtests.sh` (repo root) runs every test — use it for regression and
+pre-commit checks instead of hunting for the suites.** It runs, and reports
+pass/fail per suite (nonzero exit if any fails):
+1. JavaScript unit tests — `node --test 'web/js/**/*.test.js'` (all `.test.js`
+   live under `web/js/`).
+2. Go server tests — `go test ./...` run from `srv/` (module root; `go.mod` is
+   `srv/go.mod`, not the repo root).
+3. C-generator parity — `node web/tools/parity.js` (compiles generated C with
+   `cc`; the fast-vs-slow FR-107 check).
+
+`./runtests.sh --quick` skips only the parity step (the slow `cc` one) for a
+fast unit-only loop.
+
 ## Git
 
 Single-contributor repo; GitHub is just a backup. **Never create branches** —
