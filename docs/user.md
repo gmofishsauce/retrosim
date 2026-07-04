@@ -723,6 +723,23 @@ Compile them with any C compiler, no flags needed:
 cc -o mydesign mydesign.c runtime.c
 ```
 
+**Command line at a glance:**
+
+```
+./mydesign                      run test vectors from standard input (default mode)
+./mydesign --cycles N           free-run N clock cycles, then print final values
+./mydesign --columns            print the vector column set, one per line, and exit
+
+Options for either run mode:
+--vcd FILE                      also write a VCD waveform trace to FILE
+--rom REFDES=FILE               read ROM REFDES's contents from FILE instead of
+                                its recorded path
+```
+
+Any unrecognized flag prints this usage and exits with status 2. The exit
+status is 0 for a vector run in which every row passed, or for a completed
+free run; each flag is described in detail below.
+
 The program has exactly the debug simulator's semantics — the same four
 values, unit-delay timing, settling behavior, and bus-conflict detection — so
 the two engines produce the same results for the same design. It runs in one
@@ -768,8 +785,8 @@ CPU — simply run.
 
 **Waveform traces.** In either mode, `--vcd trace.vcd` also writes a VCD
 waveform trace of the observable columns over simulated time (1 ns per unit
-step), viewable in any VCD viewer such as GTKWave. Undefined shows as `x`,
-undriven as `z`.
+step). VCD is a standard format; any VCD viewer works (examples include
+Surfer and GTKWave). Undefined shows as `x`, undriven as `z`.
 
 **ROM contents.** A ROM's contents are **not** baked into the program: it
 reads each ROM's content file when it starts, just as the editor reads it at

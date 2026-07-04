@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-04 — user manual: generated-simulator command-line reference
+What: docs only. Added a "command line at a glance" synopsis (all four flags — default vector mode, --cycles, --columns; --vcd and --rom as either-mode options — plus the usage/exit-status behavior) to the "Generating a standalone C simulator" section; the flags were previously mentioned only mid-paragraph. Also made the viewer mention tool-neutral: no recommendation, just examples (Surfer, GTKWave).
+Why: user request — a command-line program's manual should lead with its flags; verified by the user (VCD flow driven end-to-end with Surfer).
+Touches: docs/user.md only (no FR or design-section changes)
+
 ## 2026-07-03 — M5 landed: runtime ROM loading (--rom)
 What: runtime.c/h — rt_mem gains refdes/rom_file, loses rom/rom_len (interface change: pre-M5 programs regenerate once); mem_load_all in rt_init resolves each ROM (--rom REFDES=FILE override, else recorded path, else basename in cwd; every failure exits 2 with the FR-117b messages), rom_read_file parses per FR-114e (.bin raw, .hex whitespace-separated byte tokens), mem_reset seeds from the loaded bytes. cgen.js: generateC(design) — refdes + content-file path baked, no bytes, no generate-time warning; cgen tests updated. parity.js: romArgsFs passes --rom overrides on both legs (JS engine keeps loadRomContentsFs). app.js needed no change — the §6.17 loadRomContents preload was discovered never wired in (latent all-U-ROM bug in app-generated programs, mooted by FR-117b); design §6.17 corrected. Verified: one binary served the original and a swapped rom-demo.hex via --rom; error paths and basename fallback exercised; full suite green.
 Why: implement FR-117b per the M5 scope; the discrepancy fix keeps design §6.17 truthful to the code.
