@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-04 — cgen: missing FR-116 off-sheet-connector refusal added
+What: code-to-spec fix, no spec change. FR-116 requires the generator to refuse designs containing off-sheet connectors (FR-101) as well as sub-design instances, but cgen.js only checked childPath — a port carrying an off-sheet target would have generated with the cross-file link silently ignored. Added the refusal (inst.target → error, same shape as the sub-design refusal) plus a test. Currently defensive: the target field is not yet settable in the model (FR-101 phase 4 unimplemented), so no existing design trips it.
+Why: discrepancy found while assessing sub-design support; specs win (CLAUDE.md).
+Touches: FR-116 (conformance only); web/js/engine/cgen.js, web/js/engine/cgen.test.js
+
 ## 2026-07-04 — user manual: generated-simulator command-line reference
 What: docs only. Added a "command line at a glance" synopsis (all four flags — default vector mode, --cycles, --columns; --vcd and --rom as either-mode options — plus the usage/exit-status behavior) to the "Generating a standalone C simulator" section; the flags were previously mentioned only mid-paragraph. Also made the viewer mention tool-neutral: no recommendation, just examples (Surfer, GTKWave).
 Why: user request — a command-line program's manual should lead with its flags; verified by the user (VCD flow driven end-to-end with Surfer).

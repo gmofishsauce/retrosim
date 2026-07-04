@@ -254,6 +254,12 @@ test("generateC: refuses sub-design instances", () => {
   assert.throws(() => generateC(d2), /sub-design instances are not supported/);
 });
 
+test("generateC: refuses off-sheet connectors (a port with a target, FR-116)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("port"), { label: "X", target: { file: "other.json", label: "X" } });
+  assert.throws(() => generateC(d), /off-sheet connectors are not supported/);
+});
+
 test("generateC: behavior parse error propagates as a throw", () => {
   const BAD = { ...NOT, name: "BADX", behavior: "Y = %\n" };
   const d = mkDesign();

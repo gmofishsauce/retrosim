@@ -239,6 +239,12 @@ export function generateC(design) {
       errors.push(
         `${inst.refdes}: sub-design instances are not supported by the C generator (FR-116)`,
       );
+    } else if (inst.target) {
+      // FR-116 deferred scope: no fast-engine cross-file composition (FR-101a);
+      // silently ignoring the link would give wrong results, so refuse.
+      errors.push(
+        `${inst.refdes}: off-sheet connectors are not supported by the C generator (FR-116)`,
+      );
     } else if (inst.typeData.mem) {
       // Memory device (FR-114d): collect wiring. The runtime owns the
       // behavior (runtime.c mem core), driven from this gen_mems entry; a
