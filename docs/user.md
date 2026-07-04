@@ -858,8 +858,20 @@ ROM and shows the `--rom` option to use.
 
 Generation never modifies the design, and works whether or not it has been
 saved. Registered (`.R`) parts, independent per-output clocks, and RAM/ROM
-devices are all supported. The one remaining limit: designs containing
-sub-designs are refused with a message. The menu item is unavailable while a
+devices are all supported.
+
+**Hierarchical designs** generate too: like Run and the test-vector panel,
+generation **flattens** the design first (see
+[Simulating a hierarchical design](#12-sub-designs-and-ports)), so anything
+that would stop a flattened Run — an embedding cycle, or a sub-design file
+that can't be loaded — stops generation with the same message. The program's
+vector columns come from the **top sheet only**, exactly as in the test-vector
+panel. A clock generator inside a sub-design follows the panel's rule,
+enforced when the program runs: vector mode refuses at startup (naming the
+clock and pointing at `--cycles`, exit status 2), while `--cycles` free-runs
+such clocks normally.
+
+The menu item is unavailable while a
 simulation is running or the test-vector panel is open.
 
 ---
