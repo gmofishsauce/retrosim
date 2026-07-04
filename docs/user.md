@@ -463,6 +463,10 @@ design.
   has unsaved changes.
 - **Open** — browse the server's filesystem (a dialog backed by the server, not the
   browser's native picker) and open a design. You're warned about unsaved changes.
+  The dialog opens in the folder you last viewed in any file dialog — remembered
+  across sessions — so you don't re-navigate every time. (If that folder no longer
+  exists, it falls back to the designs root.) The ROM-content and test-vector
+  pickers share the same memory.
 - **Save** — the first save prompts for a filename (pre-filled with the design
   name); later saves overwrite the same file silently. Saving under a different
   file name renames the design to that file's base name.

@@ -1,0 +1,60 @@
+{
+ "formatVersion": 2,
+ "inputs": [
+  {
+   "refdes": "A-1",
+   "pin": "OUT",
+   "label": "inA"
+  },
+  {
+   "refdes": "A-2",
+   "pin": "OUT",
+   "label": "inB"
+  }
+ ],
+ "outputs": [
+  {
+   "refdes": "A-3",
+   "pin": "IN",
+   "label": "andOut"
+  }
+ ],
+ "rows": [
+  {
+   "in": [
+    "0",
+    "0"
+   ],
+   "out": [
+    "L"
+   ]
+  },
+  {
+   "in": [
+    "0",
+    "1"
+   ],
+   "out": [
+    "L"
+   ]
+  },
+  {
+   "in": [
+    "1",
+    "0"
+   ],
+   "out": [
+    "L"
+   ]
+  },
+  {
+   "in": [
+    "1",
+    "1"
+   ],
+   "out": [
+    "H"
+   ]
+  }
+ ]
+}

@@ -19,7 +19,10 @@ import { compileBehavior } from "./galasm.js";
 import { buildNets } from "../model/netlist.js";
 import { deriveColumns } from "./vectors.js";
 
-const SUBUNIT_PKG_RE = /^(U\d+)[A-Z]$/;
+// Hierarchical-prefix tolerant (FR-102/§6.14, mirroring sim.js): a flattened
+// child's subunit `X1/U3A` groups under the full prefixed stem `X1/U3`, so a
+// package never groups across sub-design instances.
+const SUBUNIT_PKG_RE = /^((?:.*\/)?U\d+)[A-Z]$/;
 
 // effectiveProps merges a type's declared property defaults with the
 // instance's overrides (FR-020b); mirrors sim.js.
@@ -38,11 +41,17 @@ function cstr(s) {
 
 // generateC compiles the design into the C source of its generated
 // translation unit. Returns { code, warnings }; throws Error on a refusal
-// (sub-design instance, behavior compile error) with all collected reasons,
-// like buildSimulation's preflight. ROM contents are NOT baked: the emitted
-// program reads each ROM's content file at startup (FR-117b), so only the
-// instance's refdes and recorded content-file path are emitted.
-export function generateC(design) {
+// (behavior compile error, unflattened input) with all collected reasons,
+// like buildSimulation's preflight. `design` is the FlatDesign (§6.14) when
+// the source is hierarchical — the caller flattens (FR-116 hierarchy) —
+// and `columnsFrom` is the root design the baked column tables derive from:
+// the root-for-columns / flat-for-netlist split the vector panel uses, so a
+// top-sheet port's direction derives from the root wiring and a child's
+// ports/switches/indicators never become columns. ROM contents are NOT
+// baked: the emitted program reads each ROM's content file at startup
+// (FR-117b), so only the instance's refdes and recorded content-file path
+// are emitted.
+export function generateC(design, { columnsFrom = design } = {}) {
   const warnings = [];
   const errors = [];
 
@@ -235,15 +244,15 @@ export function generateC(design) {
 
   for (const inst of design.components) {
     if (inst.childPath) {
-      // FR-116 deferred scope: no fast-engine flattening yet.
+      // Internal guard (FR-116 hierarchy): the caller flattens before
+      // generating, so an X-instance here means an unflattened design.
       errors.push(
-        `${inst.refdes}: sub-design instances are not supported by the C generator (FR-116)`,
+        `${inst.refdes}: sub-design instance reached the generator unflattened (FR-116)`,
       );
     } else if (inst.target) {
-      // FR-116 deferred scope: no fast-engine cross-file composition (FR-101a);
-      // silently ignoring the link would give wrong results, so refuse.
+      // Internal guard, as above: flatten resolves off-sheet links (FR-103).
       errors.push(
-        `${inst.refdes}: off-sheet connectors are not supported by the C generator (FR-116)`,
+        `${inst.refdes}: off-sheet connector reached the generator unflattened (FR-116)`,
       );
     } else if (inst.typeData.mem) {
       // Memory device (FR-114d): collect wiring. The runtime owns the
@@ -330,8 +339,9 @@ export function generateC(design) {
 
   if (errors.length) throw new Error(errors.join("; "));
 
-  // --- Vector columns (FR-117; the FR-115b/FR-115f derivation) ---
-  const cols = deriveColumns(design);
+  // --- Vector columns (FR-117; the FR-115b/FR-115f derivation, from the
+  // root design so only the top sheet contributes, FR-116 hierarchy) ---
+  const cols = deriveColumns(columnsFrom);
   warnings.push(...cols.warnings);
   const instByRefdes = new Map(design.components.map((c) => [c.refdes, c]));
   const incols = cols.inputs.map((col) => {

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { generateC } from "./cgen.js";
 import { BUILTINS } from "../builtins.js";
+import { flatten } from "../model/subdesign.js";
 
 // --- design fixtures (literal model shapes per §7.1a/§7.2), mirroring
 // vectors.test.js ---
@@ -248,16 +249,53 @@ test("generateC: ROM with no recorded content file bakes a NULL rom_file (M5)", 
   assert.match(code, /\{ RT_MEM_ROM, 2, 2, [^}]+, "U1", 0 \}/);
 });
 
-test("generateC: refuses sub-design instances", () => {
+test("generateC: guards against an unflattened sub-design instance (FR-116)", () => {
   const d2 = mkDesign();
   place(d2, "X1", { name: "sub", renderType: "unit", pins: [] }, { childPath: "/tmp/child.json" });
-  assert.throws(() => generateC(d2), /sub-design instances are not supported/);
+  assert.throws(() => generateC(d2), /reached the generator unflattened/);
 });
 
-test("generateC: refuses off-sheet connectors (a port with a target, FR-116)", () => {
+test("generateC: guards against an unflattened off-sheet connector (FR-116)", () => {
   const d = mkDesign();
   place(d, "A-1", builtin("port"), { label: "X", target: { file: "other.json", label: "X" } });
-  assert.throws(() => generateC(d), /off-sheet connectors are not supported/);
+  assert.throws(() => generateC(d), /reached the generator unflattened/);
+});
+
+test("generateC: hierarchical design generates from the FlatDesign, columns from the root (FR-116)", async () => {
+  // Child: port IN → inverter → port OUT (plus its own indicator, which must
+  // NOT become a column). Parent: switch → X1.IN, X1.OUT → indicator.
+  const child = mkDesign();
+  place(child, "A-1", builtin("port"), { label: "IN" });
+  place(child, "A-2", builtin("port"), { label: "OUT" });
+  place(child, "A-3", builtin("indicator"), { label: "inner" });
+  place(child, "U1", NOT);
+  connect(child, ["A-1", "P"], ["U1", "A"]);
+  connect(child, ["U1", "Y"], ["A-2", "P"]);
+  connect(child, ["U1", "Y"], ["A-3", "IN"]);
+
+  const parent = mkDesign();
+  place(parent, "A-1", builtin("switch"));
+  place(parent, "A-2", builtin("indicator"));
+  const ifacePins = [
+    { name: "IN", side: "left", position: 1, direction: "in" },
+    { name: "OUT", side: "right", position: 1, direction: "out" },
+  ];
+  place(parent, "X1", { name: "inv", renderType: "unit", pins: ifacePins }, {
+    kind: "subdesign",
+    childPath: "/lib/inv.json",
+  });
+  connect(parent, ["A-1", "OUT"], ["X1", "IN"]);
+  connect(parent, ["X1", "OUT"], ["A-2", "IN"]);
+
+  const flat = await flatten(parent, async () => child);
+  const { code, warnings } = generateC(flat, { columnsFrom: parent });
+  assert.equal(warnings.length, 0);
+  assert.match(code, /X1\/U1\.Y/); // child logic present, hierarchical label
+  // Columns are the top sheet's only: 1 in (parent switch), 1 out (parent
+  // indicator) — the child's indicator contributes no column.
+  assert.match(code, /const int gen_incol_count = 1;/);
+  assert.match(code, /const int gen_outcol_count = 1;/);
+  assert.ok(!code.includes('"inner"'));
 });
 
 test("generateC: behavior parse error propagates as a throw", () => {

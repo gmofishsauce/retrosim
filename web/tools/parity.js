@@ -4,8 +4,9 @@
 // rows through both engines and require identical results:
 //   slow (JS): runVectors (§6.16), rendered into the FR-118 transcript format
 //   fast (C):  generateC → cc → feed rows on stdin → read stdout transcript
-// A per-row / summary line-diff is the FR-107 check. Designs the generator
-// refuses (sub-design scope, FR-116) are reported as skips.
+// A per-row / summary line-diff is the FR-107 check. Both engines run the
+// FLATTENED design (FR-116 hierarchy; columns derive from the root); a design
+// that fails to flatten or generate is reported as a skip.
 //
 // A second, free-run leg (FR-117a, design §6.17 M4) checks every
 // examples/*.json design the generator accepts, `.tv` or not: the slow
@@ -24,6 +25,7 @@ import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { deserializeDesign } from "../js/model/persist.js";
+import { flatten } from "../js/model/subdesign.js";
 import { generateC } from "../js/engine/cgen.js";
 import { parseRomBytes } from "../js/engine/memory.js";
 import { buildSimulation } from "../js/engine/sim.js";
@@ -127,28 +129,35 @@ function romArgsFs(design, dir) {
   return args;
 }
 
-function checkPair(jsonPath, tvPath) {
+// loadChildFs reads a child/peer sheet from disk for flatten (FR-102/FR-103);
+// the Node analogue of the browser's /design/load reader.
+const loadChildFs = async (p) => JSON.parse(readFileSync(p, "utf8"));
+
+async function checkPair(jsonPath, tvPath) {
   const name = basename(jsonPath, ".json");
   const design = deserializeDesign(JSON.parse(readFileSync(jsonPath, "utf8")));
-  const romContent = loadRomContentsFs(design, dirname(jsonPath));
 
-  let gen;
+  // Flatten sub-designs/peer sheets for both engines (FR-116 hierarchy);
+  // columns still derive from the root design (root-for-columns split).
+  let flat, gen;
   try {
-    gen = generateC(design);
+    flat = await flatten(design, loadChildFs, { rootPath: jsonPath });
+    gen = generateC(flat, { columnsFrom: design });
   } catch (e) {
     return { name, status: "skip", detail: e.message };
   }
+  const romContent = loadRomContentsFs(flat, dirname(jsonPath));
 
   const columns = deriveColumns(design);
   const fileDoc = deserializeVectors(JSON.parse(readFileSync(tvPath, "utf8")));
   const { rows } = reconcileVectors(fileDoc, columns);
 
   const expected = renderExpected(
-    runVectors(design, { inputs: columns.inputs, outputs: columns.outputs, rows }, { romContent }),
+    runVectors(flat, { inputs: columns.inputs, outputs: columns.outputs, rows }, { romContent }),
     columns.outputs,
   );
   const stdin = rows.map((r) => `${r.in.join(" ")} | ${r.out.join(" ")}`).join("\n") + "\n";
-  const actual = runFast(gen.code, stdin, romArgsFs(design, dirname(jsonPath)));
+  const actual = runFast(gen.code, stdin, romArgsFs(flat, dirname(jsonPath)));
 
   if (actual === expected) return { name, status: "ok", detail: `${rows.length} rows` };
   return { name, status: "diff", detail: diff(expected, actual) };
@@ -161,21 +170,24 @@ const FREE_CYCLES = 8;
 // checkFree runs the free-run leg (FR-117a) on one design: the slow simulator
 // stepped FREE_CYCLES × clockPeriod units with its time-driven built-ins,
 // rendered as the "LABEL=v" observable dump, vs the program's --cycles output.
-function checkFree(jsonPath) {
+async function checkFree(jsonPath) {
   const name = basename(jsonPath, ".json");
   const design = deserializeDesign(JSON.parse(readFileSync(jsonPath, "utf8")));
-  const romContent = loadRomContentsFs(design, dirname(jsonPath));
 
-  let gen;
+  let flat, gen;
   try {
-    gen = generateC(design);
+    flat = await flatten(design, loadChildFs, { rootPath: jsonPath });
+    gen = generateC(flat, { columnsFrom: design });
   } catch (e) {
     return { name, status: "skip", detail: e.message };
   }
+  const romContent = loadRomContentsFs(flat, dirname(jsonPath));
 
   // clockPeriod (FR-071b): the lone clock's effective period when the design
   // has exactly one clock generator, else the 100 ns default (sim.js §6.13).
-  const clocks = (design.components ?? []).filter((c) => c.typeData?.renderType === "clock");
+  // From the FLAT design — the runtime's clock_period reads gen_clocks, which
+  // includes flattened child clocks.
+  const clocks = (flat.components ?? []).filter((c) => c.typeData?.renderType === "clock");
   const period =
     clocks.length === 1
       ? clocks[0].overrides?.props?.period ??
@@ -183,7 +195,7 @@ function checkFree(jsonPath) {
         100
       : 100;
 
-  const sim = buildSimulation(design, { onMessage: () => {}, romContent });
+  const sim = buildSimulation(flat, { onMessage: () => {}, romContent });
   for (let i = 0; i < FREE_CYCLES * period; i++) sim.step();
 
   // Render the observable dump exactly as runtime.c rt_run_free prints it:
@@ -240,7 +252,7 @@ function report(r) {
   }
 }
 
-for (const p of pairs) report(checkPair(p.json, p.tv));
-for (const d of designs) report(checkFree(d));
+for (const p of pairs) report(await checkPair(p.json, p.tv));
+for (const d of designs) report(await checkFree(d));
 console.log(`\n${pairs.length + designs.length} checks, ${failed} mismatched`);
 process.exit(failed ? 1 : 0);

@@ -3,7 +3,8 @@
 // only then removes the loading overlay so the canvas is not interactable until
 // the library is ready (FR-003).
 
-import { getComponents, getDefaults, createComponent, saveTextFile, fetchStaticText } from "./api.js";
+import { getComponents, getDefaults, createComponent, saveTextFile, fetchStaticText, loadDesign } from "./api.js";
+import { flatten } from "./model/subdesign.js";
 import {
   newGalPartDialog,
   memDeviceDialog,
@@ -306,7 +307,12 @@ async function main() {
     const onGenerateC = async () => {
       let out;
       try {
-        out = generateC(store.design);
+        // Flatten sub-designs/peer sheets first (FR-116 hierarchy, §6.14);
+        // columns still derive from the top sheet (columnsFrom).
+        const flat = await flatten(store.design, loadDesign, {
+          rootPath: store.state.savePath,
+        });
+        out = generateC(flat, { columnsFrom: store.design });
       } catch (e) {
         postMessage(`cannot generate: ${e.message}`);
         return;

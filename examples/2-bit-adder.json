@@ -1,0 +1,1000 @@
+{
+  "formatVersion": 2,
+  "name": "2-bit-adder",
+  "components": [
+    {
+      "refdes": "X1",
+      "type": "full-adder",
+      "kind": "subdesign",
+      "childPath": "full-adder.json",
+      "render": "ic",
+      "iface": [
+        {
+          "label": "A-12",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "A-13",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "A-14",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "Cin",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "Cout",
+          "dir": "out",
+          "width": 1
+        },
+        {
+          "label": "inA0",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "inB0",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "sum",
+          "dir": "out",
+          "width": 1
+        }
+      ],
+      "x": -6,
+      "y": -7,
+      "rotation": 0
+    },
+    {
+      "refdes": "X2",
+      "type": "full-adder",
+      "kind": "subdesign",
+      "childPath": "full-adder.json",
+      "render": "ic",
+      "iface": [
+        {
+          "label": "A-12",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "A-13",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "A-14",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "Cin",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "Cout",
+          "dir": "out",
+          "width": 1
+        },
+        {
+          "label": "inA0",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "inB0",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "sum",
+          "dir": "out",
+          "width": 1
+        }
+      ],
+      "x": -6,
+      "y": 2,
+      "rotation": 0
+    },
+    {
+      "refdes": "A-5",
+      "type": "type-indicator",
+      "x": 14,
+      "y": -18,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "bit0out"
+    },
+    {
+      "refdes": "A-6",
+      "type": "type-indicator",
+      "x": 17,
+      "y": -18,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "bit1out"
+    },
+    {
+      "refdes": "A-7",
+      "type": "type-indicator",
+      "x": 22,
+      "y": -18,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "carryout"
+    },
+    {
+      "refdes": "A-8",
+      "type": "type-port",
+      "x": 16,
+      "y": -25,
+      "rotation": 90,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "bit0out",
+      "portDir": "out"
+    },
+    {
+      "refdes": "A-9",
+      "type": "type-port",
+      "x": 19,
+      "y": -25,
+      "rotation": 90,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "bit1out",
+      "portDir": "out"
+    },
+    {
+      "refdes": "A-10",
+      "type": "type-port",
+      "x": 24,
+      "y": -25,
+      "rotation": 90,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "carryout",
+      "portDir": "out"
+    },
+    {
+      "refdes": "A-11",
+      "type": "type-switch",
+      "x": -18,
+      "y": -6,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "1",
+      "label": "inA0"
+    },
+    {
+      "refdes": "A-12",
+      "type": "type-switch",
+      "x": -18,
+      "y": -3,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "1",
+      "label": "inB0"
+    },
+    {
+      "refdes": "A-13",
+      "type": "type-switch",
+      "x": -18,
+      "y": 3,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "1",
+      "label": "inA1"
+    },
+    {
+      "refdes": "A-14",
+      "type": "type-switch",
+      "x": -18,
+      "y": 7,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "1",
+      "label": "inB1"
+    },
+    {
+      "refdes": "A-15",
+      "type": "type-switch",
+      "x": -18,
+      "y": -12,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "1"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1"
+        },
+        {
+          "t": "bend",
+          "x": 2,
+          "y": -6
+        },
+        {
+          "t": "bend",
+          "x": 2,
+          "y": 1
+        },
+        {
+          "t": "bend",
+          "x": -7,
+          "y": 1
+        },
+        {
+          "t": "bend",
+          "x": -7,
+          "y": 6
+        },
+        {
+          "t": "node",
+          "v": "v2"
+        }
+      ]
+    },
+    {
+      "id": "w6",
+      "path": [
+        {
+          "t": "node",
+          "v": "v11"
+        },
+        {
+          "t": "bend",
+          "x": 15,
+          "y": -5
+        },
+        {
+          "t": "node",
+          "v": "v17"
+        },
+        {
+          "t": "node",
+          "v": "v12"
+        }
+      ]
+    },
+    {
+      "id": "w7",
+      "path": [
+        {
+          "t": "node",
+          "v": "v13"
+        },
+        {
+          "t": "bend",
+          "x": 18,
+          "y": 4
+        },
+        {
+          "t": "node",
+          "v": "v19"
+        },
+        {
+          "t": "node",
+          "v": "v14"
+        }
+      ]
+    },
+    {
+      "id": "w8",
+      "path": [
+        {
+          "t": "node",
+          "v": "v15"
+        },
+        {
+          "t": "bend",
+          "x": 23,
+          "y": 3
+        },
+        {
+          "t": "node",
+          "v": "v21"
+        },
+        {
+          "t": "node",
+          "v": "v16"
+        }
+      ]
+    },
+    {
+      "id": "w9",
+      "path": [
+        {
+          "t": "node",
+          "v": "v17"
+        },
+        {
+          "t": "bend",
+          "x": 13,
+          "y": -13
+        },
+        {
+          "t": "bend",
+          "x": 13,
+          "y": -22
+        },
+        {
+          "t": "bend",
+          "x": 15,
+          "y": -22
+        },
+        {
+          "t": "node",
+          "v": "v18"
+        }
+      ]
+    },
+    {
+      "id": "w10",
+      "path": [
+        {
+          "t": "node",
+          "v": "v19"
+        },
+        {
+          "t": "bend",
+          "x": 20,
+          "y": -13
+        },
+        {
+          "t": "bend",
+          "x": 20,
+          "y": -22
+        },
+        {
+          "t": "bend",
+          "x": 18,
+          "y": -22
+        },
+        {
+          "t": "node",
+          "v": "v20"
+        }
+      ]
+    },
+    {
+      "id": "w11",
+      "path": [
+        {
+          "t": "node",
+          "v": "v21"
+        },
+        {
+          "t": "bend",
+          "x": 25,
+          "y": -13
+        },
+        {
+          "t": "bend",
+          "x": 25,
+          "y": -21
+        },
+        {
+          "t": "bend",
+          "x": 23,
+          "y": -21
+        },
+        {
+          "t": "node",
+          "v": "v22"
+        }
+      ]
+    },
+    {
+      "id": "w24",
+      "path": [
+        {
+          "t": "node",
+          "v": "v40"
+        },
+        {
+          "t": "bend",
+          "x": -12,
+          "y": 4
+        },
+        {
+          "t": "bend",
+          "x": -12,
+          "y": 7
+        },
+        {
+          "t": "node",
+          "v": "v49"
+        }
+      ]
+    },
+    {
+      "id": "w25",
+      "path": [
+        {
+          "t": "node",
+          "v": "v36"
+        },
+        {
+          "t": "bend",
+          "x": -10,
+          "y": -2
+        },
+        {
+          "t": "bend",
+          "x": -10,
+          "y": -1
+        },
+        {
+          "t": "node",
+          "v": "v48"
+        }
+      ]
+    },
+    {
+      "id": "w26",
+      "path": [
+        {
+          "t": "node",
+          "v": "v38"
+        },
+        {
+          "t": "bend",
+          "x": -9,
+          "y": -5
+        },
+        {
+          "t": "bend",
+          "x": -9,
+          "y": -2
+        },
+        {
+          "t": "node",
+          "v": "v47"
+        }
+      ]
+    },
+    {
+      "id": "w30",
+      "path": [
+        {
+          "t": "node",
+          "v": "v50"
+        },
+        {
+          "t": "node",
+          "v": "v51"
+        }
+      ]
+    },
+    {
+      "id": "w31",
+      "path": [
+        {
+          "t": "node",
+          "v": "v52"
+        },
+        {
+          "t": "bend",
+          "x": -8,
+          "y": -3
+        },
+        {
+          "t": "bend",
+          "x": -8,
+          "y": -11
+        },
+        {
+          "t": "node",
+          "v": "v54"
+        }
+      ]
+    }
+  ],
+  "buses": [],
+  "vertices": [
+    {
+      "id": "v1",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "Cout",
+      "x": 0,
+      "y": -3
+    },
+    {
+      "id": "v2",
+      "kind": "pin",
+      "ref": "X2",
+      "pin": "Cin",
+      "x": -6,
+      "y": 3
+    },
+    {
+      "id": "v11",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "sum",
+      "x": 0,
+      "y": -2
+    },
+    {
+      "id": "v12",
+      "kind": "pin",
+      "ref": "A-5",
+      "pin": "IN",
+      "x": 15,
+      "y": -16
+    },
+    {
+      "id": "v13",
+      "kind": "pin",
+      "ref": "X2",
+      "pin": "sum",
+      "x": 0,
+      "y": 7
+    },
+    {
+      "id": "v14",
+      "kind": "pin",
+      "ref": "A-6",
+      "pin": "IN",
+      "x": 18,
+      "y": -15
+    },
+    {
+      "id": "v15",
+      "kind": "pin",
+      "ref": "X2",
+      "pin": "Cout",
+      "x": 0,
+      "y": 6
+    },
+    {
+      "id": "v16",
+      "kind": "pin",
+      "ref": "A-7",
+      "pin": "IN",
+      "x": 23,
+      "y": -16
+    },
+    {
+      "id": "v17",
+      "kind": "junction",
+      "x": 15,
+      "y": -13
+    },
+    {
+      "id": "v18",
+      "kind": "connector",
+      "ref": "A-8",
+      "pin": "P",
+      "x": 15,
+      "y": -23
+    },
+    {
+      "id": "v19",
+      "kind": "junction",
+      "x": 18,
+      "y": -13
+    },
+    {
+      "id": "v20",
+      "kind": "connector",
+      "ref": "A-9",
+      "pin": "P",
+      "x": 18,
+      "y": -23
+    },
+    {
+      "id": "v21",
+      "kind": "junction",
+      "x": 23,
+      "y": -13
+    },
+    {
+      "id": "v22",
+      "kind": "connector",
+      "ref": "A-10",
+      "pin": "P",
+      "x": 23,
+      "y": -23
+    },
+    {
+      "id": "v36",
+      "kind": "pin",
+      "ref": "A-12",
+      "pin": "OUT",
+      "x": -16,
+      "y": -2
+    },
+    {
+      "id": "v38",
+      "kind": "pin",
+      "ref": "A-11",
+      "pin": "OUT",
+      "x": -16,
+      "y": -5
+    },
+    {
+      "id": "v40",
+      "kind": "pin",
+      "ref": "A-13",
+      "pin": "OUT",
+      "x": -16,
+      "y": 4
+    },
+    {
+      "id": "v47",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "inA0",
+      "x": -6,
+      "y": -2
+    },
+    {
+      "id": "v48",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "inB0",
+      "x": -6,
+      "y": -1
+    },
+    {
+      "id": "v49",
+      "kind": "pin",
+      "ref": "X2",
+      "pin": "inA0",
+      "x": -6,
+      "y": 7
+    },
+    {
+      "id": "v50",
+      "kind": "pin",
+      "ref": "X2",
+      "pin": "inB0",
+      "x": -6,
+      "y": 8
+    },
+    {
+      "id": "v51",
+      "kind": "pin",
+      "ref": "A-14",
+      "pin": "OUT",
+      "x": -16,
+      "y": 8
+    },
+    {
+      "id": "v52",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "Cin",
+      "x": -6,
+      "y": -3
+    },
+    {
+      "id": "v54",
+      "kind": "pin",
+      "ref": "A-15",
+      "pin": "OUT",
+      "x": -15,
+      "y": -11
+    }
+  ],
+  "nets": [
+    {
+      "pins": [
+        "X1.Cout",
+        "X2.Cin"
+      ],
+      "members": [
+        "w1"
+      ],
+      "provenance": [],
+      "name": "Cout"
+    },
+    {
+      "pins": [
+        "X1.sum",
+        "A-5.IN",
+        "A-8.P"
+      ],
+      "members": [
+        "w6",
+        "w9"
+      ],
+      "provenance": [],
+      "name": "bit0out"
+    },
+    {
+      "pins": [
+        "X2.sum",
+        "A-6.IN",
+        "A-9.P"
+      ],
+      "members": [
+        "w7",
+        "w10"
+      ],
+      "provenance": [],
+      "name": "bit1out"
+    },
+    {
+      "pins": [
+        "X2.Cout",
+        "A-7.IN",
+        "A-10.P"
+      ],
+      "members": [
+        "w8",
+        "w11"
+      ],
+      "provenance": [],
+      "name": "carryout"
+    },
+    {
+      "pins": [
+        "A-13.OUT",
+        "X2.inA0"
+      ],
+      "members": [
+        "w24"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-12.OUT",
+        "X1.inB0"
+      ],
+      "members": [
+        "w25"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-11.OUT",
+        "X1.inA0"
+      ],
+      "members": [
+        "w26"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "X2.inB0",
+        "A-14.OUT"
+      ],
+      "members": [
+        "w30"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "X1.Cin",
+        "A-15.OUT"
+      ],
+      "members": [
+        "w31"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    }
+  ]
+}

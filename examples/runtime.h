@@ -219,7 +219,10 @@ extern const int gen_switch_count;
  * `level` is ignored and the runtime computes the FR-084 square wave
  * from `period_ns` and simulated time. gen_clock_count > 0 is the
  * sequential/combinational split (FR-086). Mutable: the runner sets
- * `level`. */
+ * `level`. A clock whose label contains '/' sits inside a flattened
+ * sub-design (FR-116 hierarchy): no vector column can script it, so
+ * vector mode refuses such a design at startup (exit 2) while
+ * free-running mode drives it normally. */
 typedef struct {
   int net;
   rt_val level;

@@ -1,15 +1,14 @@
 {
   "formatVersion": 2,
-  "name": "adder",
+  "name": "full-adder",
   "components": [
     {
       "refdes": "U1A",
-      "type": "7486",
-      "x": 5,
-      "y": -4,
+      "type": "type-7486",
+      "x": 15,
+      "y": 14,
       "rotation": 0,
       "typeData": {
-        "id": "type-7486",
         "name": "7486",
         "renderType": "subunit",
         "numUnits": 4,
@@ -46,18 +45,18 @@
           "tpd": 14
         },
         "behavior": "; 7486 — quad 2-input EXCLUSIVE-OR gate. Derived from the function table\n; (datasheet Table 3): each output nY is HIGH when its two inputs differ and\n; LOW when they are equal.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: xor fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). The XOR output is active-high and\n; written as the two differing-input product terms: nY = nA*/nB + /nA*nB.\n1Y = 1A * /1B + /1A * 1B\n2Y = 2A * /2B + /2A * 2B\n3Y = 3A * /3B + /3A * 3B\n4Y = 4A * /4B + /4A * 4B\n",
-        "unit": "A"
+        "unit": "A",
+        "id": "type-7486"
       },
       "overrides": {}
     },
     {
       "refdes": "U1B",
-      "type": "7486",
-      "x": 5,
-      "y": 1,
+      "type": "type-7486",
+      "x": 25,
+      "y": 15,
       "rotation": 0,
       "typeData": {
-        "id": "type-7486",
         "name": "7486",
         "renderType": "subunit",
         "numUnits": 4,
@@ -94,18 +93,18 @@
           "tpd": 14
         },
         "behavior": "; 7486 — quad 2-input EXCLUSIVE-OR gate. Derived from the function table\n; (datasheet Table 3): each output nY is HIGH when its two inputs differ and\n; LOW when they are equal.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: xor fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). The XOR output is active-high and\n; written as the two differing-input product terms: nY = nA*/nB + /nA*nB.\n1Y = 1A * /1B + /1A * 1B\n2Y = 2A * /2B + /2A * 2B\n3Y = 3A * /3B + /3A * 3B\n4Y = 4A * /4B + /4A * 4B\n",
-        "unit": "B"
+        "unit": "B",
+        "id": "type-7486"
       },
       "overrides": {}
     },
     {
       "refdes": "U1C",
-      "type": "7486",
-      "x": -26,
-      "y": -30,
+      "type": "type-7486",
+      "x": 4,
+      "y": 35,
       "rotation": 0,
       "typeData": {
-        "id": "type-7486",
         "name": "7486",
         "renderType": "subunit",
         "numUnits": 4,
@@ -142,18 +141,18 @@
           "tpd": 14
         },
         "behavior": "; 7486 — quad 2-input EXCLUSIVE-OR gate. Derived from the function table\n; (datasheet Table 3): each output nY is HIGH when its two inputs differ and\n; LOW when they are equal.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: xor fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). The XOR output is active-high and\n; written as the two differing-input product terms: nY = nA*/nB + /nA*nB.\n1Y = 1A * /1B + /1A * 1B\n2Y = 2A * /2B + /2A * 2B\n3Y = 3A * /3B + /3A * 3B\n4Y = 4A * /4B + /4A * 4B\n",
-        "unit": "C"
+        "unit": "C",
+        "id": "type-7486"
       },
       "overrides": {}
     },
     {
       "refdes": "U1D",
-      "type": "7486",
-      "x": -16,
-      "y": -29,
+      "type": "type-7486",
+      "x": 4,
+      "y": 40,
       "rotation": 0,
       "typeData": {
-        "id": "type-7486",
         "name": "7486",
         "renderType": "subunit",
         "numUnits": 4,
@@ -190,18 +189,18 @@
           "tpd": 14
         },
         "behavior": "; 7486 — quad 2-input EXCLUSIVE-OR gate. Derived from the function table\n; (datasheet Table 3): each output nY is HIGH when its two inputs differ and\n; LOW when they are equal.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: xor fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). The XOR output is active-high and\n; written as the two differing-input product terms: nY = nA*/nB + /nA*nB.\n1Y = 1A * /1B + /1A * 1B\n2Y = 2A * /2B + /2A * 2B\n3Y = 3A * /3B + /3A * 3B\n4Y = 4A * /4B + /4A * 4B\n",
-        "unit": "D"
+        "unit": "D",
+        "id": "type-7486"
       },
       "overrides": {}
     },
     {
-      "refdes": "A-1",
+      "refdes": "A-3",
       "type": "type-indicator",
-      "x": 2,
-      "y": -31,
+      "x": 9,
+      "y": 6,
       "rotation": 0,
       "typeData": {
-        "id": "type-indicator",
         "name": "indicator",
         "builtin": true,
         "title": "State indicator",
@@ -216,99 +215,73 @@
             "position": 1,
             "direction": "in"
           }
-        ]
-      },
-      "overrides": {}
-    },
-    {
-      "refdes": "A-2",
-      "type": "type-switch",
-      "x": -40,
-      "y": -33,
-      "rotation": 0,
-      "typeData": {
-        "id": "type-switch",
-        "name": "switch",
-        "builtin": true,
-        "title": "input switch",
-        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
-        "renderType": "switch",
-        "width": 2,
-        "height": 2,
-        "pins": [
-          {
-            "name": "OUT",
-            "side": "right",
-            "position": 1,
-            "direction": "out"
-          }
-        ]
+        ],
+        "id": "type-indicator"
       },
       "overrides": {},
-      "switchState": "1"
-    },
-    {
-      "refdes": "A-3",
-      "type": "type-switch",
-      "x": -40,
-      "y": -25,
-      "rotation": 0,
-      "typeData": {
-        "id": "type-switch",
-        "name": "switch",
-        "builtin": true,
-        "title": "input switch",
-        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
-        "renderType": "switch",
-        "width": 2,
-        "height": 2,
-        "pins": [
-          {
-            "name": "OUT",
-            "side": "right",
-            "position": 1,
-            "direction": "out"
-          }
-        ]
-      },
-      "overrides": {},
-      "switchState": "1"
+      "label": "in0copy"
     },
     {
       "refdes": "A-4",
-      "type": "type-switch",
-      "x": -43,
-      "y": -28,
+      "type": "type-indicator",
+      "x": 11,
+      "y": 6,
       "rotation": 0,
       "typeData": {
-        "id": "type-switch",
-        "name": "switch",
+        "name": "indicator",
         "builtin": true,
-        "title": "input switch",
-        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
-        "renderType": "switch",
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
         "width": 2,
         "height": 2,
         "pins": [
           {
-            "name": "OUT",
-            "side": "right",
+            "name": "IN",
+            "side": "bottom",
             "position": 1,
-            "direction": "out"
+            "direction": "in"
           }
-        ]
+        ],
+        "id": "type-indicator"
       },
       "overrides": {},
-      "switchState": "1"
+      "label": "in1copy"
+    },
+    {
+      "refdes": "A-6",
+      "type": "type-indicator",
+      "x": 22,
+      "y": 6,
+      "rotation": 0,
+      "typeData": {
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ],
+        "id": "type-indicator"
+      },
+      "overrides": {},
+      "label": "Cincopy"
     },
     {
       "refdes": "U2A",
-      "type": "7408",
-      "x": -27,
-      "y": -23,
+      "type": "type-7408",
+      "x": 25,
+      "y": 23,
       "rotation": 0,
       "typeData": {
-        "id": "type-7408",
         "name": "7408",
         "renderType": "subunit",
         "numUnits": 4,
@@ -352,18 +325,18 @@
           "rev": "Rev. 9, 16 February 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT08.pdf"
         },
-        "unit": "A"
+        "unit": "A",
+        "id": "type-7408"
       },
       "overrides": {}
     },
     {
       "refdes": "U2B",
-      "type": "7408",
-      "x": -27,
-      "y": -18,
+      "type": "type-7408",
+      "x": 25,
+      "y": 28,
       "rotation": 0,
       "typeData": {
-        "id": "type-7408",
         "name": "7408",
         "renderType": "subunit",
         "numUnits": 4,
@@ -407,18 +380,18 @@
           "rev": "Rev. 9, 16 February 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT08.pdf"
         },
-        "unit": "B"
+        "unit": "B",
+        "id": "type-7408"
       },
       "overrides": {}
     },
     {
       "refdes": "U2C",
-      "type": "7408",
-      "x": -27,
-      "y": 8,
+      "type": "type-7408",
+      "x": 16,
+      "y": 34,
       "rotation": 0,
       "typeData": {
-        "id": "type-7408",
         "name": "7408",
         "renderType": "subunit",
         "numUnits": 4,
@@ -462,18 +435,18 @@
           "rev": "Rev. 9, 16 February 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT08.pdf"
         },
-        "unit": "C"
+        "unit": "C",
+        "id": "type-7408"
       },
       "overrides": {}
     },
     {
       "refdes": "U2D",
-      "type": "7408",
-      "x": -27,
-      "y": 13,
+      "type": "type-7408",
+      "x": 16,
+      "y": 39,
       "rotation": 0,
       "typeData": {
-        "id": "type-7408",
         "name": "7408",
         "renderType": "subunit",
         "numUnits": 4,
@@ -517,18 +490,18 @@
           "rev": "Rev. 9, 16 February 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT08.pdf"
         },
-        "unit": "D"
+        "unit": "D",
+        "id": "type-7408"
       },
       "overrides": {}
     },
     {
       "refdes": "U3A",
-      "type": "7432",
-      "x": -18,
-      "y": -21,
+      "type": "type-7432",
+      "x": 35,
+      "y": 25,
       "rotation": 0,
       "typeData": {
-        "id": "type-7432",
         "name": "7432",
         "renderType": "subunit",
         "numUnits": 4,
@@ -572,18 +545,18 @@
           "rev": "Rev. 10, 30 April 2025",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT32.pdf"
         },
-        "unit": "A"
+        "unit": "A",
+        "id": "type-7432"
       },
       "overrides": {}
     },
     {
       "refdes": "U3B",
-      "type": "7432",
-      "x": -25,
-      "y": 6,
+      "type": "type-7432",
+      "x": -8,
+      "y": 35,
       "rotation": 0,
       "typeData": {
-        "id": "type-7432",
         "name": "7432",
         "renderType": "subunit",
         "numUnits": 4,
@@ -627,18 +600,18 @@
           "rev": "Rev. 10, 30 April 2025",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT32.pdf"
         },
-        "unit": "B"
+        "unit": "B",
+        "id": "type-7432"
       },
       "overrides": {}
     },
     {
       "refdes": "U3C",
-      "type": "7432",
-      "x": -25,
-      "y": 11,
+      "type": "type-7432",
+      "x": -8,
+      "y": 40,
       "rotation": 0,
       "typeData": {
-        "id": "type-7432",
         "name": "7432",
         "renderType": "subunit",
         "numUnits": 4,
@@ -682,18 +655,18 @@
           "rev": "Rev. 10, 30 April 2025",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT32.pdf"
         },
-        "unit": "C"
+        "unit": "C",
+        "id": "type-7432"
       },
       "overrides": {}
     },
     {
       "refdes": "U3D",
-      "type": "7432",
-      "x": -25,
-      "y": 16,
+      "type": "type-7432",
+      "x": -8,
+      "y": 45,
       "rotation": 0,
       "typeData": {
-        "id": "type-7432",
         "name": "7432",
         "renderType": "subunit",
         "numUnits": 4,
@@ -737,18 +710,18 @@
           "rev": "Rev. 10, 30 April 2025",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT32.pdf"
         },
-        "unit": "D"
+        "unit": "D",
+        "id": "type-7432"
       },
       "overrides": {}
     },
     {
-      "refdes": "A-5",
+      "refdes": "A-7",
       "type": "type-indicator",
-      "x": 2,
-      "y": -23,
+      "x": 35,
+      "y": 6,
       "rotation": 0,
       "typeData": {
-        "id": "type-indicator",
         "name": "indicator",
         "builtin": true,
         "title": "State indicator",
@@ -762,6 +735,285 @@
             "side": "bottom",
             "position": 1,
             "direction": "in"
+          }
+        ],
+        "id": "type-indicator"
+      },
+      "overrides": {},
+      "label": "sumbit"
+    },
+    {
+      "refdes": "A-8",
+      "type": "type-indicator",
+      "x": 42,
+      "y": 6,
+      "rotation": 0,
+      "typeData": {
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ],
+        "id": "type-indicator"
+      },
+      "overrides": {},
+      "label": "Cout"
+    },
+    {
+      "refdes": "A-9",
+      "type": "type-port",
+      "x": -8,
+      "y": 13,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "inA0",
+      "portDir": "in"
+    },
+    {
+      "refdes": "A-10",
+      "type": "type-port",
+      "x": -8,
+      "y": 16,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "inB0",
+      "portDir": "in"
+    },
+    {
+      "refdes": "A-11",
+      "type": "type-port",
+      "x": -8,
+      "y": 19,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "Cin",
+      "portDir": "in"
+    },
+    {
+      "refdes": "A-12",
+      "type": "type-port",
+      "x": 11,
+      "y": 0,
+      "rotation": 90,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "A-12",
+      "portDir": "in"
+    },
+    {
+      "refdes": "A-13",
+      "type": "type-port",
+      "x": 13,
+      "y": 0,
+      "rotation": 90,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "A-13",
+      "portDir": "in"
+    },
+    {
+      "refdes": "A-14",
+      "type": "type-port",
+      "x": 24,
+      "y": 0,
+      "rotation": 90,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "A-14",
+      "portDir": "in"
+    },
+    {
+      "refdes": "A-15",
+      "type": "type-port",
+      "x": 37,
+      "y": 0,
+      "rotation": 90,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "sum",
+      "portDir": "out"
+    },
+    {
+      "refdes": "A-16",
+      "type": "type-port",
+      "x": 44,
+      "y": 0,
+      "rotation": 90,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "Cout",
+      "portDir": "out"
+    },
+    {
+      "refdes": "A-17",
+      "type": "type-pulldown",
+      "x": -9,
+      "y": 52,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-pulldown",
+        "name": "pulldown",
+        "builtin": true,
+        "title": "pull down",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"none\" stroke=\"#000\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"4\" x2=\"18\" y2=\"28\"/><line x1=\"8\" y1=\"28\" x2=\"28\" y2=\"28\"/></svg>",
+        "renderType": "pulldown",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "top",
+            "position": 1,
+            "direction": "out"
           }
         ]
       },
@@ -778,7 +1030,7 @@
         },
         {
           "t": "node",
-          "v": "v11"
+          "v": "v18"
         },
         {
           "t": "node",
@@ -791,16 +1043,34 @@
       "path": [
         {
           "t": "node",
-          "v": "v3"
-        },
-        {
-          "t": "bend",
-          "x": 3,
-          "y": -27
+          "v": "v4"
         },
         {
           "t": "node",
-          "v": "v4"
+          "v": "v20"
+        },
+        {
+          "t": "node",
+          "v": "v7"
+        },
+        {
+          "t": "bend",
+          "x": 9,
+          "y": 15
+        },
+        {
+          "t": "bend",
+          "x": 2,
+          "y": 15
+        },
+        {
+          "t": "bend",
+          "x": 2,
+          "y": 14
+        },
+        {
+          "t": "node",
+          "v": "v46"
         }
       ]
     },
@@ -809,25 +1079,19 @@
       "path": [
         {
           "t": "node",
-          "v": "v5"
-        },
-        {
-          "t": "bend",
-          "x": -19,
-          "y": -26
-        },
-        {
-          "t": "bend",
-          "x": -19,
-          "y": -24
-        },
-        {
-          "t": "node",
-          "v": "v13"
-        },
-        {
-          "t": "node",
           "v": "v6"
+        },
+        {
+          "t": "node",
+          "v": "v9"
+        },
+        {
+          "t": "node",
+          "v": "v22"
+        },
+        {
+          "t": "node",
+          "v": "v47"
         }
       ]
     },
@@ -836,25 +1100,15 @@
       "path": [
         {
           "t": "node",
-          "v": "v7"
-        },
-        {
-          "t": "bend",
-          "x": -36,
-          "y": -32
-        },
-        {
-          "t": "bend",
-          "x": -36,
-          "y": -29
-        },
-        {
-          "t": "node",
-          "v": "v15"
-        },
-        {
-          "t": "node",
           "v": "v8"
+        },
+        {
+          "t": "node",
+          "v": "v43"
+        },
+        {
+          "t": "node",
+          "v": "v7"
         }
       ]
     },
@@ -863,15 +1117,15 @@
       "path": [
         {
           "t": "node",
-          "v": "v9"
-        },
-        {
-          "t": "node",
-          "v": "v17"
-        },
-        {
-          "t": "node",
           "v": "v10"
+        },
+        {
+          "t": "node",
+          "v": "v41"
+        },
+        {
+          "t": "node",
+          "v": "v9"
         }
       ]
     },
@@ -883,23 +1137,36 @@
           "v": "v12"
         },
         {
-          "t": "bend",
-          "x": -28,
-          "y": -22
+          "t": "node",
+          "v": "v13"
         },
         {
           "t": "bend",
-          "x": -28,
-          "y": -25
-        },
-        {
-          "t": "bend",
-          "x": -20,
-          "y": -25
+          "x": 23,
+          "y": 19
         },
         {
           "t": "node",
-          "v": "v11"
+          "v": "v15"
+        },
+        {
+          "t": "bend",
+          "x": 5,
+          "y": 19
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 19
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 20
+        },
+        {
+          "t": "node",
+          "v": "v48"
         }
       ]
     },
@@ -911,9 +1178,8 @@
           "v": "v14"
         },
         {
-          "t": "bend",
-          "x": -30,
-          "y": -20
+          "t": "node",
+          "v": "v39"
         },
         {
           "t": "node",
@@ -930,30 +1196,12 @@
         },
         {
           "t": "bend",
-          "x": -32,
-          "y": -17
+          "x": 21,
+          "y": 24
         },
         {
           "t": "node",
           "v": "v15"
-        }
-      ]
-    },
-    {
-      "id": "w9",
-      "path": [
-        {
-          "t": "node",
-          "v": "v18"
-        },
-        {
-          "t": "bend",
-          "x": -34,
-          "y": -15
-        },
-        {
-          "t": "node",
-          "v": "v17"
         }
       ]
     },
@@ -966,17 +1214,12 @@
         },
         {
           "t": "bend",
-          "x": -22,
-          "y": -20
-        },
-        {
-          "t": "bend",
-          "x": -22,
-          "y": -21
+          "x": 20,
+          "y": 26
         },
         {
           "t": "node",
-          "v": "v20"
+          "v": "v18"
         }
       ]
     },
@@ -989,17 +1232,12 @@
         },
         {
           "t": "bend",
-          "x": -22,
-          "y": -16
-        },
-        {
-          "t": "bend",
-          "x": -22,
-          "y": -18
+          "x": 14,
+          "y": 29
         },
         {
           "t": "node",
-          "v": "v22"
+          "v": "v20"
         }
       ]
     },
@@ -1012,12 +1250,571 @@
         },
         {
           "t": "bend",
-          "x": 3,
-          "y": -19
+          "x": 10,
+          "y": 31
         },
         {
           "t": "node",
+          "v": "v22"
+        }
+      ]
+    },
+    {
+      "id": "w13",
+      "path": [
+        {
+          "t": "node",
           "v": "v24"
+        },
+        {
+          "t": "bend",
+          "x": 32,
+          "y": 25
+        },
+        {
+          "t": "bend",
+          "x": 32,
+          "y": 26
+        },
+        {
+          "t": "node",
+          "v": "v25"
+        }
+      ]
+    },
+    {
+      "id": "w14",
+      "path": [
+        {
+          "t": "node",
+          "v": "v26"
+        },
+        {
+          "t": "bend",
+          "x": 31,
+          "y": 28
+        },
+        {
+          "t": "bend",
+          "x": 31,
+          "y": 30
+        },
+        {
+          "t": "node",
+          "v": "v27"
+        }
+      ]
+    },
+    {
+      "id": "w15",
+      "path": [
+        {
+          "t": "node",
+          "v": "v28"
+        },
+        {
+          "t": "bend",
+          "x": 36,
+          "y": 17
+        },
+        {
+          "t": "node",
+          "v": "v37"
+        },
+        {
+          "t": "node",
+          "v": "v29"
+        }
+      ]
+    },
+    {
+      "id": "w16",
+      "path": [
+        {
+          "t": "node",
+          "v": "v30"
+        },
+        {
+          "t": "bend",
+          "x": 43,
+          "y": 27
+        },
+        {
+          "t": "node",
+          "v": "v35"
+        },
+        {
+          "t": "node",
+          "v": "v31"
+        }
+      ]
+    },
+    {
+      "id": "w20",
+      "path": [
+        {
+          "t": "node",
+          "v": "v36"
+        },
+        {
+          "t": "bend",
+          "x": 43,
+          "y": 5
+        },
+        {
+          "t": "bend",
+          "x": 45,
+          "y": 5
+        },
+        {
+          "t": "bend",
+          "x": 45,
+          "y": 9
+        },
+        {
+          "t": "node",
+          "v": "v35"
+        }
+      ]
+    },
+    {
+      "id": "w21",
+      "path": [
+        {
+          "t": "node",
+          "v": "v38"
+        },
+        {
+          "t": "bend",
+          "x": 36,
+          "y": 5
+        },
+        {
+          "t": "bend",
+          "x": 38,
+          "y": 5
+        },
+        {
+          "t": "bend",
+          "x": 38,
+          "y": 9
+        },
+        {
+          "t": "node",
+          "v": "v37"
+        }
+      ]
+    },
+    {
+      "id": "w22",
+      "path": [
+        {
+          "t": "node",
+          "v": "v40"
+        },
+        {
+          "t": "bend",
+          "x": 23,
+          "y": 5
+        },
+        {
+          "t": "bend",
+          "x": 25,
+          "y": 5
+        },
+        {
+          "t": "bend",
+          "x": 25,
+          "y": 9
+        },
+        {
+          "t": "node",
+          "v": "v39"
+        }
+      ]
+    },
+    {
+      "id": "w23",
+      "path": [
+        {
+          "t": "node",
+          "v": "v42"
+        },
+        {
+          "t": "bend",
+          "x": 12,
+          "y": 5
+        },
+        {
+          "t": "bend",
+          "x": 14,
+          "y": 5
+        },
+        {
+          "t": "bend",
+          "x": 14,
+          "y": 9
+        },
+        {
+          "t": "node",
+          "v": "v41"
+        }
+      ]
+    },
+    {
+      "id": "w24",
+      "path": [
+        {
+          "t": "node",
+          "v": "v44"
+        },
+        {
+          "t": "bend",
+          "x": 10,
+          "y": 5
+        },
+        {
+          "t": "bend",
+          "x": 8,
+          "y": 5
+        },
+        {
+          "t": "bend",
+          "x": 8,
+          "y": 9
+        },
+        {
+          "t": "node",
+          "v": "v43"
+        }
+      ]
+    },
+    {
+      "id": "w25",
+      "path": [
+        {
+          "t": "node",
+          "v": "v49"
+        },
+        {
+          "t": "bend",
+          "x": -8,
+          "y": 50
+        },
+        {
+          "t": "bend",
+          "x": -9,
+          "y": 50
+        },
+        {
+          "t": "node",
+          "v": "v51"
+        },
+        {
+          "t": "bend",
+          "x": -9,
+          "y": 48
+        },
+        {
+          "t": "node",
+          "v": "v50"
+        }
+      ]
+    },
+    {
+      "id": "w26",
+      "path": [
+        {
+          "t": "node",
+          "v": "v52"
+        },
+        {
+          "t": "bend",
+          "x": -9,
+          "y": 46
+        },
+        {
+          "t": "node",
+          "v": "v53"
+        },
+        {
+          "t": "node",
+          "v": "v51"
+        }
+      ]
+    },
+    {
+      "id": "w27",
+      "path": [
+        {
+          "t": "node",
+          "v": "v54"
+        },
+        {
+          "t": "node",
+          "v": "v55"
+        },
+        {
+          "t": "bend",
+          "x": -9,
+          "y": 43
+        },
+        {
+          "t": "node",
+          "v": "v53"
+        }
+      ]
+    },
+    {
+      "id": "w28",
+      "path": [
+        {
+          "t": "node",
+          "v": "v56"
+        },
+        {
+          "t": "bend",
+          "x": -9,
+          "y": 41
+        },
+        {
+          "t": "node",
+          "v": "v57"
+        },
+        {
+          "t": "node",
+          "v": "v55"
+        }
+      ]
+    },
+    {
+      "id": "w29",
+      "path": [
+        {
+          "t": "node",
+          "v": "v58"
+        },
+        {
+          "t": "node",
+          "v": "v59"
+        },
+        {
+          "t": "bend",
+          "x": -9,
+          "y": 38
+        },
+        {
+          "t": "node",
+          "v": "v57"
+        }
+      ]
+    },
+    {
+      "id": "w30",
+      "path": [
+        {
+          "t": "node",
+          "v": "v60"
+        },
+        {
+          "t": "node",
+          "v": "v61"
+        },
+        {
+          "t": "bend",
+          "x": -9,
+          "y": 36
+        },
+        {
+          "t": "node",
+          "v": "v59"
+        }
+      ]
+    },
+    {
+      "id": "w31",
+      "path": [
+        {
+          "t": "node",
+          "v": "v62"
+        },
+        {
+          "t": "node",
+          "v": "v63"
+        },
+        {
+          "t": "bend",
+          "x": -3,
+          "y": 36
+        },
+        {
+          "t": "node",
+          "v": "v69"
+        },
+        {
+          "t": "bend",
+          "x": -3,
+          "y": 34
+        },
+        {
+          "t": "bend",
+          "x": -9,
+          "y": 34
+        },
+        {
+          "t": "node",
+          "v": "v61"
+        }
+      ]
+    },
+    {
+      "id": "w32",
+      "path": [
+        {
+          "t": "node",
+          "v": "v64"
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 38
+        },
+        {
+          "t": "node",
+          "v": "v65"
+        },
+        {
+          "t": "node",
+          "v": "v63"
+        }
+      ]
+    },
+    {
+      "id": "w33",
+      "path": [
+        {
+          "t": "node",
+          "v": "v66"
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 41
+        },
+        {
+          "t": "node",
+          "v": "v67"
+        },
+        {
+          "t": "node",
+          "v": "v65"
+        }
+      ]
+    },
+    {
+      "id": "w34",
+      "path": [
+        {
+          "t": "node",
+          "v": "v68"
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 43
+        },
+        {
+          "t": "node",
+          "v": "v67"
+        }
+      ]
+    },
+    {
+      "id": "w35",
+      "path": [
+        {
+          "t": "node",
+          "v": "v70"
+        },
+        {
+          "t": "node",
+          "v": "v71"
+        },
+        {
+          "t": "bend",
+          "x": 9,
+          "y": 35
+        },
+        {
+          "t": "bend",
+          "x": 9,
+          "y": 34
+        },
+        {
+          "t": "node",
+          "v": "v69"
+        }
+      ]
+    },
+    {
+      "id": "w36",
+      "path": [
+        {
+          "t": "node",
+          "v": "v72"
+        },
+        {
+          "t": "node",
+          "v": "v73"
+        },
+        {
+          "t": "bend",
+          "x": 13,
+          "y": 37
+        },
+        {
+          "t": "node",
+          "v": "v71"
+        }
+      ]
+    },
+    {
+      "id": "w37",
+      "path": [
+        {
+          "t": "node",
+          "v": "v74"
+        },
+        {
+          "t": "bend",
+          "x": 13,
+          "y": 40
+        },
+        {
+          "t": "node",
+          "v": "v75"
+        },
+        {
+          "t": "node",
+          "v": "v73"
+        }
+      ]
+    },
+    {
+      "id": "w38",
+      "path": [
+        {
+          "t": "node",
+          "v": "v76"
+        },
+        {
+          "t": "bend",
+          "x": 13,
+          "y": 42
+        },
+        {
+          "t": "node",
+          "v": "v75"
         }
       ]
     }
@@ -1027,258 +1824,507 @@
     {
       "id": "v1",
       "kind": "pin",
-      "ref": "U1C",
-      "pin": "3Y",
-      "x": -22,
-      "y": -28
+      "ref": "U1A",
+      "pin": "1Y",
+      "x": 19,
+      "y": 16
     },
     {
       "id": "v2",
       "kind": "pin",
-      "ref": "U1D",
-      "pin": "4A",
-      "x": -16,
-      "y": -28
-    },
-    {
-      "id": "v3",
-      "kind": "pin",
-      "ref": "U1D",
-      "pin": "4Y",
-      "x": -12,
-      "y": -27
+      "ref": "U1B",
+      "pin": "2A",
+      "x": 25,
+      "y": 16
     },
     {
       "id": "v4",
       "kind": "pin",
-      "ref": "A-1",
-      "pin": "IN",
-      "x": 3,
-      "y": -29
-    },
-    {
-      "id": "v5",
-      "kind": "pin",
-      "ref": "U1D",
-      "pin": "4B",
-      "x": -16,
-      "y": -26
+      "ref": "U1A",
+      "pin": "1A",
+      "x": 15,
+      "y": 15
     },
     {
       "id": "v6",
       "kind": "pin",
-      "ref": "A-3",
-      "pin": "OUT",
-      "x": -38,
-      "y": -25
+      "ref": "U1A",
+      "pin": "1B",
+      "x": 15,
+      "y": 17
     },
     {
       "id": "v7",
-      "kind": "pin",
-      "ref": "A-2",
-      "pin": "OUT",
-      "x": -38,
-      "y": -29
+      "kind": "junction",
+      "x": 10,
+      "y": 15
     },
     {
       "id": "v8",
       "kind": "pin",
-      "ref": "U1C",
-      "pin": "3A",
-      "x": -26,
-      "y": -29
+      "ref": "A-3",
+      "pin": "IN",
+      "x": 10,
+      "y": 8
     },
     {
       "id": "v9",
-      "kind": "pin",
-      "ref": "A-4",
-      "pin": "OUT",
-      "x": -41,
-      "y": -27
+      "kind": "junction",
+      "x": 12,
+      "y": 17
     },
     {
       "id": "v10",
       "kind": "pin",
-      "ref": "U1C",
-      "pin": "3B",
-      "x": -26,
-      "y": -27
-    },
-    {
-      "id": "v11",
-      "kind": "junction",
-      "x": -20,
-      "y": -28
+      "ref": "A-4",
+      "pin": "IN",
+      "x": 12,
+      "y": 8
     },
     {
       "id": "v12",
       "kind": "pin",
-      "ref": "U2A",
-      "pin": "1A",
-      "x": -27,
-      "y": -22
+      "ref": "U1B",
+      "pin": "2B",
+      "x": 25,
+      "y": 18
     },
     {
       "id": "v13",
       "kind": "junction",
-      "x": -30,
-      "y": -24
+      "x": 23,
+      "y": 18
     },
     {
       "id": "v14",
       "kind": "pin",
-      "ref": "U2A",
-      "pin": "1B",
-      "x": -27,
-      "y": -20
+      "ref": "A-6",
+      "pin": "IN",
+      "x": 23,
+      "y": 8
     },
     {
       "id": "v15",
       "kind": "junction",
-      "x": -32,
-      "y": -29
+      "x": 21,
+      "y": 19
     },
     {
       "id": "v16",
       "kind": "pin",
-      "ref": "U2B",
-      "pin": "2A",
-      "x": -27,
-      "y": -17
-    },
-    {
-      "id": "v17",
-      "kind": "junction",
-      "x": -34,
-      "y": -27
+      "ref": "U2A",
+      "pin": "1A",
+      "x": 25,
+      "y": 24
     },
     {
       "id": "v18",
-      "kind": "pin",
-      "ref": "U2B",
-      "pin": "2B",
-      "x": -27,
-      "y": -15
+      "kind": "junction",
+      "x": 20,
+      "y": 16
     },
     {
       "id": "v19",
       "kind": "pin",
-      "ref": "U3A",
-      "pin": "1A",
-      "x": -18,
-      "y": -20
+      "ref": "U2A",
+      "pin": "1B",
+      "x": 25,
+      "y": 26
     },
     {
       "id": "v20",
-      "kind": "pin",
-      "ref": "U2A",
-      "pin": "1Y",
-      "x": -23,
-      "y": -21
+      "kind": "junction",
+      "x": 14,
+      "y": 15
     },
     {
       "id": "v21",
       "kind": "pin",
       "ref": "U2B",
-      "pin": "2Y",
-      "x": -23,
-      "y": -16
+      "pin": "2A",
+      "x": 25,
+      "y": 29
     },
     {
       "id": "v22",
-      "kind": "pin",
-      "ref": "U3A",
-      "pin": "1B",
-      "x": -18,
-      "y": -18
+      "kind": "junction",
+      "x": 10,
+      "y": 17
     },
     {
       "id": "v23",
       "kind": "pin",
-      "ref": "U3A",
-      "pin": "1Y",
-      "x": -14,
-      "y": -19
+      "ref": "U2B",
+      "pin": "2B",
+      "x": 25,
+      "y": 31
     },
     {
       "id": "v24",
       "kind": "pin",
-      "ref": "A-5",
+      "ref": "U2A",
+      "pin": "1Y",
+      "x": 29,
+      "y": 25
+    },
+    {
+      "id": "v25",
+      "kind": "pin",
+      "ref": "U3A",
+      "pin": "1A",
+      "x": 35,
+      "y": 26
+    },
+    {
+      "id": "v26",
+      "kind": "pin",
+      "ref": "U3A",
+      "pin": "1B",
+      "x": 35,
+      "y": 28
+    },
+    {
+      "id": "v27",
+      "kind": "pin",
+      "ref": "U2B",
+      "pin": "2Y",
+      "x": 29,
+      "y": 30
+    },
+    {
+      "id": "v28",
+      "kind": "pin",
+      "ref": "U1B",
+      "pin": "2Y",
+      "x": 29,
+      "y": 17
+    },
+    {
+      "id": "v29",
+      "kind": "pin",
+      "ref": "A-7",
       "pin": "IN",
-      "x": 3,
-      "y": -21
+      "x": 36,
+      "y": 8
+    },
+    {
+      "id": "v30",
+      "kind": "pin",
+      "ref": "U3A",
+      "pin": "1Y",
+      "x": 39,
+      "y": 27
+    },
+    {
+      "id": "v31",
+      "kind": "pin",
+      "ref": "A-8",
+      "pin": "IN",
+      "x": 43,
+      "y": 8
+    },
+    {
+      "id": "v35",
+      "kind": "junction",
+      "x": 43,
+      "y": 9
+    },
+    {
+      "id": "v36",
+      "kind": "connector",
+      "ref": "A-16",
+      "pin": "P",
+      "x": 43,
+      "y": 2
+    },
+    {
+      "id": "v37",
+      "kind": "junction",
+      "x": 36,
+      "y": 9
+    },
+    {
+      "id": "v38",
+      "kind": "connector",
+      "ref": "A-15",
+      "pin": "P",
+      "x": 36,
+      "y": 2
+    },
+    {
+      "id": "v39",
+      "kind": "junction",
+      "x": 23,
+      "y": 9
+    },
+    {
+      "id": "v40",
+      "kind": "connector",
+      "ref": "A-14",
+      "pin": "P",
+      "x": 23,
+      "y": 2
+    },
+    {
+      "id": "v41",
+      "kind": "junction",
+      "x": 12,
+      "y": 9
+    },
+    {
+      "id": "v42",
+      "kind": "connector",
+      "ref": "A-13",
+      "pin": "P",
+      "x": 12,
+      "y": 2
+    },
+    {
+      "id": "v43",
+      "kind": "junction",
+      "x": 10,
+      "y": 9
+    },
+    {
+      "id": "v44",
+      "kind": "connector",
+      "ref": "A-12",
+      "pin": "P",
+      "x": 10,
+      "y": 2
+    },
+    {
+      "id": "v46",
+      "kind": "connector",
+      "ref": "A-9",
+      "pin": "P",
+      "x": -6,
+      "y": 14
+    },
+    {
+      "id": "v47",
+      "kind": "connector",
+      "ref": "A-10",
+      "pin": "P",
+      "x": -6,
+      "y": 17
+    },
+    {
+      "id": "v48",
+      "kind": "connector",
+      "ref": "A-11",
+      "pin": "P",
+      "x": -6,
+      "y": 20
+    },
+    {
+      "id": "v49",
+      "kind": "pin",
+      "ref": "A-17",
+      "pin": "OUT",
+      "x": -8,
+      "y": 52
+    },
+    {
+      "id": "v50",
+      "kind": "pin",
+      "ref": "U3D",
+      "pin": "4B",
+      "x": -8,
+      "y": 48
+    },
+    {
+      "id": "v51",
+      "kind": "junction",
+      "x": -9,
+      "y": 48
+    },
+    {
+      "id": "v52",
+      "kind": "pin",
+      "ref": "U3D",
+      "pin": "4A",
+      "x": -8,
+      "y": 46
+    },
+    {
+      "id": "v53",
+      "kind": "junction",
+      "x": -9,
+      "y": 46
+    },
+    {
+      "id": "v54",
+      "kind": "pin",
+      "ref": "U3C",
+      "pin": "3B",
+      "x": -8,
+      "y": 43
+    },
+    {
+      "id": "v55",
+      "kind": "junction",
+      "x": -9,
+      "y": 43
+    },
+    {
+      "id": "v56",
+      "kind": "pin",
+      "ref": "U3C",
+      "pin": "3A",
+      "x": -8,
+      "y": 41
+    },
+    {
+      "id": "v57",
+      "kind": "junction",
+      "x": -9,
+      "y": 41
+    },
+    {
+      "id": "v58",
+      "kind": "pin",
+      "ref": "U3B",
+      "pin": "2B",
+      "x": -8,
+      "y": 38
+    },
+    {
+      "id": "v59",
+      "kind": "junction",
+      "x": -9,
+      "y": 38
+    },
+    {
+      "id": "v60",
+      "kind": "pin",
+      "ref": "U3B",
+      "pin": "2A",
+      "x": -8,
+      "y": 36
+    },
+    {
+      "id": "v61",
+      "kind": "junction",
+      "x": -9,
+      "y": 36
+    },
+    {
+      "id": "v62",
+      "kind": "pin",
+      "ref": "U1C",
+      "pin": "3A",
+      "x": 4,
+      "y": 36
+    },
+    {
+      "id": "v63",
+      "kind": "junction",
+      "x": 1,
+      "y": 36
+    },
+    {
+      "id": "v64",
+      "kind": "pin",
+      "ref": "U1C",
+      "pin": "3B",
+      "x": 4,
+      "y": 38
+    },
+    {
+      "id": "v65",
+      "kind": "junction",
+      "x": 1,
+      "y": 38
+    },
+    {
+      "id": "v66",
+      "kind": "pin",
+      "ref": "U1D",
+      "pin": "4A",
+      "x": 4,
+      "y": 41
+    },
+    {
+      "id": "v67",
+      "kind": "junction",
+      "x": 1,
+      "y": 41
+    },
+    {
+      "id": "v68",
+      "kind": "pin",
+      "ref": "U1D",
+      "pin": "4B",
+      "x": 4,
+      "y": 43
+    },
+    {
+      "id": "v69",
+      "kind": "junction",
+      "x": -3,
+      "y": 34
+    },
+    {
+      "id": "v70",
+      "kind": "pin",
+      "ref": "U2C",
+      "pin": "3A",
+      "x": 16,
+      "y": 35
+    },
+    {
+      "id": "v71",
+      "kind": "junction",
+      "x": 13,
+      "y": 35
+    },
+    {
+      "id": "v72",
+      "kind": "pin",
+      "ref": "U2C",
+      "pin": "3B",
+      "x": 16,
+      "y": 37
+    },
+    {
+      "id": "v73",
+      "kind": "junction",
+      "x": 13,
+      "y": 37
+    },
+    {
+      "id": "v74",
+      "kind": "pin",
+      "ref": "U2D",
+      "pin": "4A",
+      "x": 16,
+      "y": 40
+    },
+    {
+      "id": "v75",
+      "kind": "junction",
+      "x": 13,
+      "y": 40
+    },
+    {
+      "id": "v76",
+      "kind": "pin",
+      "ref": "U2D",
+      "pin": "4B",
+      "x": 16,
+      "y": 42
     }
   ],
   "nets": [
     {
       "pins": [
-        "U1C.3Y",
-        "U1D.4A",
-        "U2A.1A"
-      ],
-      "members": [
-        "w1",
-        "w6"
-      ],
-      "provenance": [],
-      "name": "3Y"
-    },
-    {
-      "pins": [
-        "U1D.4Y",
-        "A-1.IN"
-      ],
-      "members": [
-        "w2"
-      ],
-      "provenance": [],
-      "name": "IN"
-    },
-    {
-      "pins": [
-        "U1D.4B",
-        "A-3.OUT",
+        "U1A.1Y",
+        "U1B.2A",
         "U2A.1B"
       ],
       "members": [
-        "w3",
-        "w7"
-      ],
-      "provenance": [],
-      "name": "OUT"
-    },
-    {
-      "pins": [
-        "A-2.OUT",
-        "U1C.3A",
-        "U2B.2A"
-      ],
-      "members": [
-        "w4",
-        "w8"
-      ],
-      "provenance": [],
-      "name": "OUT"
-    },
-    {
-      "pins": [
-        "A-4.OUT",
-        "U1C.3B",
-        "U2B.2B"
-      ],
-      "members": [
-        "w5",
-        "w9"
-      ],
-      "provenance": [],
-      "name": "OUT"
-    },
-    {
-      "pins": [
-        "U3A.1A",
-        "U2A.1Y"
-      ],
-      "members": [
+        "w1",
         "w10"
       ],
       "provenance": [],
@@ -1286,25 +2332,139 @@
     },
     {
       "pins": [
-        "U2B.2Y",
-        "U3A.1B"
+        "U1A.1A",
+        "A-3.IN",
+        "U2B.2A",
+        "A-12.P",
+        "A-9.P"
       ],
       "members": [
-        "w11"
+        "w2",
+        "w4",
+        "w11",
+        "w24"
+      ],
+      "provenance": [],
+      "name": "inA0"
+    },
+    {
+      "pins": [
+        "U1A.1B",
+        "A-4.IN",
+        "U2B.2B",
+        "A-13.P",
+        "A-10.P"
+      ],
+      "members": [
+        "w3",
+        "w5",
+        "w12",
+        "w23"
+      ],
+      "provenance": [],
+      "name": "inB0"
+    },
+    {
+      "pins": [
+        "U1B.2B",
+        "A-6.IN",
+        "U2A.1A",
+        "A-14.P",
+        "A-11.P"
+      ],
+      "members": [
+        "w6",
+        "w7",
+        "w8",
+        "w22"
+      ],
+      "provenance": [],
+      "name": "Cin"
+    },
+    {
+      "pins": [
+        "U2A.1Y",
+        "U3A.1A"
+      ],
+      "members": [
+        "w13"
+      ],
+      "provenance": [],
+      "name": "1Y"
+    },
+    {
+      "pins": [
+        "U3A.1B",
+        "U2B.2Y"
+      ],
+      "members": [
+        "w14"
       ],
       "provenance": [],
       "name": "2Y"
     },
     {
       "pins": [
-        "U3A.1Y",
-        "A-5.IN"
+        "U1B.2Y",
+        "A-7.IN",
+        "A-15.P"
       ],
       "members": [
-        "w12"
+        "w15",
+        "w21"
       ],
       "provenance": [],
-      "name": "IN"
+      "name": "sum"
+    },
+    {
+      "pins": [
+        "U3A.1Y",
+        "A-8.IN",
+        "A-16.P"
+      ],
+      "members": [
+        "w16",
+        "w20"
+      ],
+      "provenance": [],
+      "name": "Cout"
+    },
+    {
+      "pins": [
+        "A-17.OUT",
+        "U3D.4B",
+        "U3D.4A",
+        "U3C.3B",
+        "U3C.3A",
+        "U3B.2B",
+        "U3B.2A",
+        "U1C.3A",
+        "U1C.3B",
+        "U1D.4A",
+        "U1D.4B",
+        "U2C.3A",
+        "U2C.3B",
+        "U2D.4A",
+        "U2D.4B"
+      ],
+      "members": [
+        "w25",
+        "w26",
+        "w27",
+        "w28",
+        "w29",
+        "w30",
+        "w31",
+        "w32",
+        "w33",
+        "w34",
+        "w35",
+        "w36",
+        "w37",
+        "w38"
+      ],
+      "provenance": [],
+      "name": "OUT"
     }
   ]
 }

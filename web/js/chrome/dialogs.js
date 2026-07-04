@@ -1028,6 +1028,27 @@ export function memDeviceDialog({ submit, startPath = "" }) {
 // openFileDialog resolves to { path } on confirm, or null on cancel. `title`
 // overrides the default heading (e.g. the ROM-content picker, FR-114a) — the
 // browser itself is unchanged (it lists dirs + the server's filtered files).
+// Open-mode dialogs start at the last directory viewed in any file dialog,
+// persisted across sessions in localStorage (FR-052a); a stored dir that no
+// longer lists falls back to the caller's startPath.
+const LAST_DIR_KEY = "sim.lastDir";
+
+function readLastDir() {
+  try {
+    return window.localStorage.getItem(LAST_DIR_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeLastDir(path) {
+  try {
+    window.localStorage.setItem(LAST_DIR_KEY, path);
+  } catch {
+    // quota/privacy-mode failure: degrade to startPath behavior (FR-052a)
+  }
+}
+
 export function openFileDialog({ mode, startPath, defaultName = "", title, exts = null, saveExt = "json" } = {}) {
   return new Promise((resolve) => {
     const overlay = el("div", "dialog-overlay");
@@ -1077,15 +1098,17 @@ export function openFileDialog({ mode, startPath, defaultName = "", title, exts 
       }
     }
 
-    async function navigate(path) {
+    async function navigate(path, fallback = null) {
       let listing;
       try {
         listing = await listDir(path, exts);
       } catch (e) {
+        if (fallback != null) return navigate(fallback);
         pathLabel.textContent = "error: " + e.message;
         return;
       }
       currentPath = listing.path;
+      writeLastDir(listing.path);
       selectedFile = null;
       existingFiles = new Set(listing.entries.filter((e) => !e.isDir).map((e) => e.name));
       pathLabel.textContent = listing.path;
@@ -1133,7 +1156,9 @@ export function openFileDialog({ mode, startPath, defaultName = "", title, exts 
     }
     document.addEventListener("keydown", onKey, true);
     document.body.appendChild(overlay);
-    navigate(startPath);
+    const lastDir = mode === "open" ? readLastDir() : null;
+    if (lastDir) navigate(lastDir, startPath);
+    else navigate(startPath);
   });
 }
 

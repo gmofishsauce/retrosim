@@ -19,6 +19,21 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-04 — FR-052a: file dialogs remember last-viewed directory
+What: open-mode file dialogs (Open, ROM picker, .tv Load) default to the most recently viewed directory, one shared value across all pickers, persisted in localStorage (key `sim.lastDir`) so it survives sessions; both modes record navigation, save-mode defaults unchanged; fallback to caller startPath if the stored dir no longer lists.
+Why: dialogs always reopened at the server dataDir, forcing re-navigation every time.
+Touches: FR-052a (new); design §6.11 (Dialogs)
+
+## 2026-07-04 — M6 landed: fast-engine hierarchy
+What: implementation of the same-day scoping entry (below). cgen.js: generateC(design, {columnsFrom = design}) — columns derive from the root while nets/logic come from the FlatDesign; X-instance/off-sheet refusals reworded to internal unflattened-input guards; SUBUNIT_PKG_RE prefix-tolerant. app.js onGenerateC flattens (loadDesign, rootPath) before generating. runtime.c rt_run_vectors: hidden-clock startup guard — any clock whose gen_labels entry contains '/' → stderr names it, points at --cycles, exit 2 (runtime.h rt_clock doc updated; no interface change, no regeneration needed). parity.js: both legs flatten (loadChildFs), generate with columnsFrom = root, ROM helpers run on the flat design, free-run clock period from the flat clocks; checkPair/checkFree async. New hierarchical parity pair: examples/hier-nand.json (ports A,B → NAND → port Y, embedded typeData) + hier-nand-demo.json (two instances of the same child: NAND then NAND-as-inverter = AND) + hier-nand-demo.tv (4-row truth table). Verified: 16/16 parity checks green incl. the new pair on both legs; hidden-clock guard exercised end-to-end (vector mode exit 2 naming X1/A-1.OUT, --cycles runs and dumps the child clock's net). docs/user.md deliberately untouched pending stakeholder verification (its "sub-designs are refused" sentence in the Generate C section is now stale and will be corrected then).
+Why: see scoping entry.
+Touches: web/js/engine/cgen.js, web/js/app.js, web/cgen/runtime.{c,h}, web/tools/parity.js, web/js/engine/cgen.test.js, examples/hier-nand{,-demo}.json, examples/hier-nand-demo.tv
+
+## 2026-07-04 — M6 scoped: fast-engine hierarchy (FR-116 rework)
+What: specs only (implementation follows). FR-116 reworked in place: generation flattens first (same flatten as the slow sim, FR-102/102a/103) — supersedes the deferred-scope refusal of sub-design instances/off-sheet connectors; columns derive from the top sheet only (FR-115e hierarchy rule); the emitted program's vector mode refuses a hidden clock at startup (exit 2, names the refdes, points at --cycles) while --cycles drives it time-based — the FR-115e rule enforced at run time because one program serves both modes; never-compiles clause unchanged. design §6.17: generateC(design, {columnsFrom}) (root-for-columns / flat-for-netlist split), onGenerateC flattens, refusals demoted to internal guards, SUBUNIT_PKG_RE twin fix, new M6 milestone (runtime hidden-clock guard; parity slow-leg flatten; hierarchical example pair).
+Why: last remaining generator work — hierarchy reaches the fast engine now that the slow sim provides the FR-107 parity reference. Stakeholder approved the columnsFrom split and the runtime-enforced hidden-clock refusal.
+Touches: FR-116; design §6.17 (generator, preflight, chrome wiring, M6)
+
 ## 2026-07-04 — user manual: hierarchical simulation, cycle refusals, auto-reroute
 What: docs only, after stakeholder manual verification (2-bit-adder/jeff-adder). §12: ADD-dialog embedding-cycle refusal; interface-change auto-reroute behavior (simple wires only, tray report, no dirty mark); new "Simulating a hierarchical design" subsection (flattening at Run, hierarchical names in messages, child built-ins electrical-only, keep-children-stimulus-free gotcha, unconnected-input U, load/cycle refusals). Test-vectors section: hierarchical designs run flattened, top-sheet columns only, child-clock refusal.
 Why: FR-102/FR-097a/FR-099c/FR-115e-hierarchy are user-visible and now verified.

@@ -1,0 +1,333 @@
+{
+ "formatVersion": 2,
+ "name": "hier-nand-demo",
+ "components": [
+  {
+   "refdes": "X1",
+   "type": "hier-nand",
+   "kind": "subdesign",
+   "childPath": "hier-nand.json",
+   "render": "ic",
+   "iface": [
+    {
+     "label": "A",
+     "dir": "in",
+     "width": 1
+    },
+    {
+     "label": "B",
+     "dir": "in",
+     "width": 1
+    },
+    {
+     "label": "Y",
+     "dir": "out",
+     "width": 1
+    }
+   ],
+   "x": 12,
+   "y": 4,
+   "rotation": 0
+  },
+  {
+   "refdes": "X2",
+   "type": "hier-nand",
+   "kind": "subdesign",
+   "childPath": "hier-nand.json",
+   "render": "ic",
+   "iface": [
+    {
+     "label": "A",
+     "dir": "in",
+     "width": 1
+    },
+    {
+     "label": "B",
+     "dir": "in",
+     "width": 1
+    },
+    {
+     "label": "Y",
+     "dir": "out",
+     "width": 1
+    }
+   ],
+   "x": 24,
+   "y": 4,
+   "rotation": 0
+  },
+  {
+   "refdes": "A-1",
+   "type": "type-switch",
+   "x": 2,
+   "y": 4,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-switch",
+    "name": "switch",
+    "builtin": true,
+    "title": "input switch",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+    "renderType": "switch",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "OUT",
+      "side": "right",
+      "position": 1,
+      "direction": "out"
+     }
+    ]
+   },
+   "overrides": {},
+   "switchState": "0",
+   "label": "inA"
+  },
+  {
+   "refdes": "A-2",
+   "type": "type-switch",
+   "x": 2,
+   "y": 8,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-switch",
+    "name": "switch",
+    "builtin": true,
+    "title": "input switch",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+    "renderType": "switch",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "OUT",
+      "side": "right",
+      "position": 1,
+      "direction": "out"
+     }
+    ]
+   },
+   "overrides": {},
+   "switchState": "0",
+   "label": "inB"
+  },
+  {
+   "refdes": "A-3",
+   "type": "type-indicator",
+   "x": 36,
+   "y": 5,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-indicator",
+    "name": "indicator",
+    "builtin": true,
+    "title": "State indicator",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+    "renderType": "indicator",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "IN",
+      "side": "bottom",
+      "position": 1,
+      "direction": "in"
+     }
+    ]
+   },
+   "overrides": {},
+   "label": "andOut"
+  }
+ ],
+ "wires": [
+  {
+   "id": "w1",
+   "path": [
+    {
+     "t": "node",
+     "v": "v1"
+    },
+    {
+     "t": "node",
+     "v": "v2"
+    }
+   ]
+  },
+  {
+   "id": "w2",
+   "path": [
+    {
+     "t": "node",
+     "v": "v3"
+    },
+    {
+     "t": "node",
+     "v": "v4"
+    }
+   ]
+  },
+  {
+   "id": "w3",
+   "path": [
+    {
+     "t": "node",
+     "v": "v5"
+    },
+    {
+     "t": "node",
+     "v": "v6"
+    }
+   ]
+  },
+  {
+   "id": "w4",
+   "path": [
+    {
+     "t": "node",
+     "v": "v5"
+    },
+    {
+     "t": "node",
+     "v": "v7"
+    }
+   ]
+  },
+  {
+   "id": "w5",
+   "path": [
+    {
+     "t": "node",
+     "v": "v8"
+    },
+    {
+     "t": "node",
+     "v": "v9"
+    }
+   ]
+  }
+ ],
+ "buses": [],
+ "vertices": [
+  {
+   "id": "v1",
+   "kind": "pin",
+   "ref": "A-1",
+   "pin": "OUT",
+   "x": 4,
+   "y": 5
+  },
+  {
+   "id": "v2",
+   "kind": "pin",
+   "ref": "X1",
+   "pin": "A",
+   "x": 12,
+   "y": 5
+  },
+  {
+   "id": "v3",
+   "kind": "pin",
+   "ref": "A-2",
+   "pin": "OUT",
+   "x": 4,
+   "y": 9
+  },
+  {
+   "id": "v4",
+   "kind": "pin",
+   "ref": "X1",
+   "pin": "B",
+   "x": 12,
+   "y": 6
+  },
+  {
+   "id": "v5",
+   "kind": "pin",
+   "ref": "X1",
+   "pin": "Y",
+   "x": 18,
+   "y": 5
+  },
+  {
+   "id": "v6",
+   "kind": "pin",
+   "ref": "X2",
+   "pin": "A",
+   "x": 24,
+   "y": 5
+  },
+  {
+   "id": "v7",
+   "kind": "pin",
+   "ref": "X2",
+   "pin": "B",
+   "x": 24,
+   "y": 6
+  },
+  {
+   "id": "v8",
+   "kind": "pin",
+   "ref": "X2",
+   "pin": "Y",
+   "x": 30,
+   "y": 5
+  },
+  {
+   "id": "v9",
+   "kind": "pin",
+   "ref": "A-3",
+   "pin": "IN",
+   "x": 37,
+   "y": 7
+  }
+ ],
+ "nets": [
+  {
+   "pins": [
+    "A-1.OUT",
+    "X1.A"
+   ],
+   "members": [
+    "w1"
+   ],
+   "provenance": [],
+   "name": "OUT"
+  },
+  {
+   "pins": [
+    "A-2.OUT",
+    "X1.B"
+   ],
+   "members": [
+    "w2"
+   ],
+   "provenance": [],
+   "name": "OUT"
+  },
+  {
+   "pins": [
+    "X1.Y",
+    "X2.A",
+    "X2.B"
+   ],
+   "members": [
+    "w3",
+    "w4"
+   ],
+   "provenance": [],
+   "name": "Y"
+  },
+  {
+   "pins": [
+    "X2.Y",
+    "A-3.IN"
+   ],
+   "members": [
+    "w5"
+   ],
+   "provenance": [],
+   "name": "IN"
+  }
+ ]
+}

@@ -1,0 +1,253 @@
+{
+ "formatVersion": 2,
+ "name": "hier-nand",
+ "components": [
+  {
+   "refdes": "A-1",
+   "type": "type-port",
+   "x": 2,
+   "y": 4,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-port",
+    "name": "port",
+    "builtin": true,
+    "title": "port / off-sheet connector",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+    "renderType": "port",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "P",
+      "side": "right",
+      "position": 1,
+      "direction": "bidir"
+     }
+    ]
+   },
+   "overrides": {},
+   "label": "A",
+   "portDir": "in"
+  },
+  {
+   "refdes": "A-2",
+   "type": "type-port",
+   "x": 2,
+   "y": 8,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-port",
+    "name": "port",
+    "builtin": true,
+    "title": "port / off-sheet connector",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+    "renderType": "port",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "P",
+      "side": "right",
+      "position": 1,
+      "direction": "bidir"
+     }
+    ]
+   },
+   "overrides": {},
+   "label": "B",
+   "portDir": "in"
+  },
+  {
+   "refdes": "A-3",
+   "type": "type-port",
+   "x": 20,
+   "y": 6,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-port",
+    "name": "port",
+    "builtin": true,
+    "title": "port / off-sheet connector",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+    "renderType": "port",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "P",
+      "side": "right",
+      "position": 1,
+      "direction": "bidir"
+     }
+    ]
+   },
+   "overrides": {},
+   "label": "Y",
+   "portDir": "in"
+  },
+  {
+   "refdes": "U1",
+   "type": "type-NAND2X",
+   "x": 10,
+   "y": 5,
+   "rotation": 0,
+   "typeData": {
+    "name": "NAND2X",
+    "id": "type-NAND2X",
+    "renderType": "unit",
+    "width": 4,
+    "height": 3,
+    "pins": [
+     {
+      "name": "A",
+      "side": "left",
+      "position": 1,
+      "direction": "in"
+     },
+     {
+      "name": "B",
+      "side": "left",
+      "position": 2,
+      "direction": "in"
+     },
+     {
+      "name": "Y",
+      "side": "right",
+      "position": 1,
+      "direction": "out"
+     }
+    ],
+    "behavior": "Y = /A + /B\n"
+   },
+   "overrides": {}
+  }
+ ],
+ "wires": [
+  {
+   "id": "w1",
+   "path": [
+    {
+     "t": "node",
+     "v": "v1"
+    },
+    {
+     "t": "node",
+     "v": "v2"
+    }
+   ]
+  },
+  {
+   "id": "w2",
+   "path": [
+    {
+     "t": "node",
+     "v": "v3"
+    },
+    {
+     "t": "node",
+     "v": "v4"
+    }
+   ]
+  },
+  {
+   "id": "w3",
+   "path": [
+    {
+     "t": "node",
+     "v": "v5"
+    },
+    {
+     "t": "node",
+     "v": "v6"
+    }
+   ]
+  }
+ ],
+ "buses": [],
+ "vertices": [
+  {
+   "id": "v1",
+   "kind": "connector",
+   "ref": "A-1",
+   "pin": "P",
+   "x": 4,
+   "y": 5
+  },
+  {
+   "id": "v2",
+   "kind": "pin",
+   "ref": "U1",
+   "pin": "A",
+   "x": 10,
+   "y": 6
+  },
+  {
+   "id": "v3",
+   "kind": "connector",
+   "ref": "A-2",
+   "pin": "P",
+   "x": 4,
+   "y": 9
+  },
+  {
+   "id": "v4",
+   "kind": "pin",
+   "ref": "U1",
+   "pin": "B",
+   "x": 10,
+   "y": 7
+  },
+  {
+   "id": "v5",
+   "kind": "pin",
+   "ref": "U1",
+   "pin": "Y",
+   "x": 14,
+   "y": 6
+  },
+  {
+   "id": "v6",
+   "kind": "connector",
+   "ref": "A-3",
+   "pin": "P",
+   "x": 22,
+   "y": 7
+  }
+ ],
+ "nets": [
+  {
+   "pins": [
+    "U1.A",
+    "A-1.P"
+   ],
+   "members": [
+    "w1"
+   ],
+   "provenance": [],
+   "name": "A"
+  },
+  {
+   "pins": [
+    "U1.B",
+    "A-2.P"
+   ],
+   "members": [
+    "w2"
+   ],
+   "provenance": [],
+   "name": "B"
+  },
+  {
+   "pins": [
+    "U1.Y",
+    "A-3.P"
+   ],
+   "members": [
+    "w3"
+   ],
+   "provenance": [],
+   "name": "Y"
+  }
+ ]
+}

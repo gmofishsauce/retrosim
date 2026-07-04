@@ -722,6 +722,20 @@ static void preamble(void) {
 
 int rt_run_vectors(void) {
   static char line[RT_LINE_MAX];
+  /* Hidden clock (FR-116 hierarchy / FR-115e): a clock generator inside a
+   * flattened sub-design or peer sheet carries a hierarchical label (it
+   * contains '/'). Vector mode scripts clocks through top-sheet columns
+   * only, so such a clock cannot be driven here — refuse. The free-running
+   * mode (--cycles, FR-117a) drives it from simulated time normally. */
+  for (int i = 0; i < gen_clock_count; i++) {
+    if (strchr(gen_labels[gen_clocks[i].label], '/')) {
+      fprintf(stderr,
+              "clock %s is inside a sub-design; vector mode drives clocks on "
+              "the top sheet only — run this design with --cycles N\n",
+              gen_labels[gen_clocks[i].label]);
+      exit(2);
+    }
+  }
   char *in_syms = xalloc((size_t)(gen_incol_count > 0 ? gen_incol_count : 1));
   char *out_syms = xalloc((size_t)(gen_outcol_count > 0 ? gen_outcol_count : 1));
   unsigned char *pulse = xalloc((size_t)(gen_incol_count > 0 ? gen_incol_count : 1));
