@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { proposeRoute } from "./router.js";
+import { proposeRoute, rerouteAttachedWires } from "./router.js";
 import { componentBBox } from "./hittest.js";
 import { rotateOffset } from "../geometry.js";
 
@@ -267,4 +267,73 @@ test("a bus is an obstacle to wire routing just like a wire (FR-027d)", () => {
   assertValid(path, { x: 0, y: 0 }, { x: 10, y: 0 }, d);
   assertNoOverlap(path, d);
   assert.ok(path.length > 2, "expected a detour around the bus");
+});
+
+// --- rerouteAttachedWires (FR-099c) ---
+
+// A pinned instance pair with a simple wire carrying stale dog-leg bends, as a
+// re-laid-out sub-design leaves behind (§6.14).
+function staleWireFixture() {
+  const x1 = {
+    refdes: "X1",
+    x: 0,
+    y: 0,
+    rotation: 0,
+    typeData: { width: 2, height: 2, pins: [{ name: "A", side: "right", position: 1 }] },
+  };
+  const u9 = {
+    refdes: "U9",
+    x: 10,
+    y: 0,
+    rotation: 0,
+    typeData: { width: 2, height: 2, pins: [{ name: "B", side: "left", position: 1 }] },
+  };
+  const va = { id: "va", kind: "pin", ref: "X1", pin: "A", x: 0, y: 0 };
+  const vb = { id: "vb", kind: "pin", ref: "U9", pin: "B", x: 0, y: 0 };
+  const w = {
+    id: "w1",
+    path: [
+      { t: "node", v: "va" },
+      { t: "bend", x: 4, y: 7 }, // stale: routed to the pin's old position
+      { t: "bend", x: 9, y: 7 },
+      { t: "node", v: "vb" },
+    ],
+  };
+  return { d: { components: [x1, u9], wires: [w], buses: [], vertices: [va, vb] }, w };
+}
+
+test("rerouteAttachedWires replaces a simple wire's stale bends (FR-099c)", () => {
+  const { d, w } = staleWireFixture();
+  const n = rerouteAttachedWires(d, ["X1"]);
+  assert.equal(n, 1);
+  assert.equal(w.path[0].v, "va"); // endpoint node refs preserved (connectivity)
+  assert.equal(w.path[w.path.length - 1].v, "vb");
+  assert.ok(w.path.slice(1, -1).every((p) => p.t === "bend"));
+  assert.ok(!w.path.some((p) => p.t === "bend" && p.y === 7), "stale bends replaced");
+});
+
+test("rerouteAttachedWires skips unrelated and tapped wires; routes dangling ends (FR-099c)", () => {
+  const { d, w } = staleWireFixture();
+  // Unrelated: neither endpoint on a listed instance.
+  assert.equal(rerouteAttachedWires(d, ["X2"]), 0);
+  assert.equal(w.path.length, 4); // untouched
+  // Tapped: an interior node (junction) disqualifies the wire.
+  const before = JSON.stringify(w.path);
+  const vj = { id: "vj", kind: "junction", x: 5, y: 3 };
+  d.vertices.push(vj);
+  w.path.splice(2, 0, { t: "node", v: "vj" });
+  assert.equal(rerouteAttachedWires(d, ["X1"]), 0);
+  w.path.splice(2, 1);
+  assert.equal(JSON.stringify(w.path), before);
+  // A free (dangling) far endpoint keeps its own point but the wire still
+  // re-routes when its other end sits on a listed instance.
+  const vf = { id: "vf", kind: "free", x: 6, y: 4 };
+  d.vertices.push(vf);
+  const w2 = {
+    id: "w2",
+    path: [{ t: "node", v: "va" }, { t: "bend", x: 1, y: 9 }, { t: "node", v: "vf" }],
+  };
+  d.wires.push(w2);
+  assert.equal(rerouteAttachedWires(d, ["X1"]), 2); // w and w2 both qualify
+  assert.ok(!w2.path.some((p) => p.t === "bend" && p.y === 9));
 });

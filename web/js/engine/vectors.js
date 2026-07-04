@@ -123,6 +123,23 @@ export function deriveColumns(design) {
   return { inputs, outputs, warnings };
 }
 
+// refuseHiddenClocks throws when a flattened design (FR-102/FR-103, §6.14)
+// carries a clock generator inside a sub-design or peer sheet — its refdes is
+// hierarchical. Scripted-clock vector runs (FR-115e) drive clocks through
+// top-sheet columns only; a hidden clock would silently float U, so refuse
+// instead (FR-115e deferred scope).
+function refuseHiddenClocks(design) {
+  const hidden = (design.components ?? []).find(
+    (c) => c.typeData?.renderType === "clock" && c.refdes.includes("/"),
+  );
+  if (hidden) {
+    throw new Error(
+      `clock generator ${hidden.refdes} is inside a sub-design or peer sheet; ` +
+        `test vectors support clocks on the top sheet only`,
+    );
+  }
+}
+
 // actualSymbol maps a settled four-state net value to its display symbol.
 function actualSymbol(v) {
   return v === V1 ? "1" : v === V0 ? "0" : v === 2 ? "U" : "Z";
@@ -284,6 +301,7 @@ function scoreOutputs(sim, outputs, rowOut) {
 // `romContent` (FR-114e) is the Map from loadRomContents; null/omitted for designs
 // with no ROM. The live design is never mutated, dirtied, or undone (FR-115c).
 export function runVectors(design, { inputs, outputs, rows }, { romContent = null } = {}) {
+  refuseHiddenClocks(design);
   let results;
   if (hasClockGenerators(design)) {
     results = new Array(rows.length);
@@ -316,6 +334,7 @@ export function captureRow(design, { inputs, outputs }, rowIn, { romContent = nu
 // then each row's inputs and pulses — recording outputs in sequence (FR-115e).
 // Returns one out-symbol array per row.
 export function captureVectors(design, { inputs, outputs }, rowsIn, { romContent = null } = {}) {
+  refuseHiddenClocks(design);
   if (!hasClockGenerators(design)) {
     return rowsIn.map((rowIn) => captureRow(design, { inputs, outputs }, rowIn, { romContent }));
   }

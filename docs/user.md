@@ -570,6 +570,9 @@ file (it must have ports), preview its interface, and pick how it should be draw
 — an **IC** rectangle (inputs left, outputs right) or a **connector** strip (all
 pins along one edge). Confirm to place it. Sub-design instances are designated
 `X1`, `X2`, … and are wired through their interface pins like any component.
+A design cannot embed itself, and the dialog also refuses any choice that would
+create an **embedding cycle** — a child that (directly or through its own
+sub-designs) embeds the design you're editing.
 
 The reference is **live**: the instance stores no copy of the child, so changes to
 the child design appear in the parent the next time the parent is opened. If a
@@ -577,12 +580,49 @@ child file can't be found when the parent opens, its instance is drawn as a
 red **broken-link** box naming the missing path, and the condition is reported in
 the message tray — opening still succeeds.
 
+When a child's **interface has changed** since the parent was last saved (ports
+added, removed, or relabeled), the embedded block re-lays-out its pins on the
+next open — and the parent's wires to it are **automatically re-routed** so they
+don't keep the routes they had to the old pin positions. Only plain
+point-to-point wires are re-routed; wires carrying taps or junctions, and wires
+to pins that no longer exist (left **dangling**, per the message tray), are left
+for you to tidy. The message tray names each re-routed instance. Hand-tweaked
+routes elsewhere are never touched, and nothing about this marks the design
+modified.
+
 **Moving between sheets.** **Double-click** a sub-design instance (or right-click
 it and choose **Open sub-design**) to descend into the child design — it replaces
 the editing canvas. A **← back** button appears in the top bar; click it to return
 to the parent. Descending and going back are each treated as closing the current
 design, so the usual unsaved-changes prompt applies — save or discard before the
 canvas changes. A plain New or Open leaves the hierarchy and clears the back path.
+
+**Simulating a hierarchical design.** Pressing **Run** (or running
+[test vectors](#test-vectors)) **flattens** the design first: each sub-design
+instance is replaced, internally, by its child's contents — recursively, so
+children may embed children. You don't see the flattening; the schematic stays
+as drawn. Things to know:
+
+- Reference designators in messages are **hierarchical**: a bus conflict inside
+  the first instance of a child reports names like `X1/U3.1Y`, so you can tell
+  *which* instance is involved. (Following the name: descend into the child and
+  look at `U3`.)
+- A child's built-ins come along **electrically**: its pull-ups, clocks, and
+  power-on resets all participate. But a child's **input switches and
+  indicators have no presence on the parent sheet** — you can't click a child's
+  switch or read a child's indicator during a run. A switch buried in a child
+  still *drives* its net at its saved position, which leads to:
+- **Keep embeddable children free of test stimulus.** A child that carries its
+  own switches wired to its input ports will fight the parent's drivers — both
+  drive the net, and wherever they disagree you get a red bus conflict; where
+  they agree, the child's switch silently pins the input. Before embedding a
+  design, remove its test switches (its ports are how the parent drives it).
+- An interface input the parent leaves **unconnected** floats — the child sees
+  U, and anything that genuinely depends on it (an XOR, an undriven data input)
+  shows **?** on indicators downstream. Tie unused inputs with a switch,
+  pull-up, or pull-down.
+- If a file in the hierarchy can't be loaded, or the embedding graph has a
+  cycle, the run refuses with a message instead of starting.
 
 ---
 
@@ -658,6 +698,13 @@ The table's columns come from your design automatically:
   indicator is one column, an 8-wide indicator becomes eight columns `D0`…`D7` —
   holding the value you expect: **H** (logic 1), **L** (logic 0), or **X**
   (don't-test, i.e. ignore this output on this row).
+
+A design containing [sub-designs](#12-sub-designs-and-ports) runs **flattened**,
+exactly as the interactive simulator does; the columns still come only from the
+top sheet's own switches, clocks, indicators, and ports. One restriction: a
+**clock generator inside an embedded child** can't be scripted by the table, so
+Run and Capture refuse such a design with a message — keep clocks on the sheet
+under test.
 
 **Combinational designs** (no clock generator): each row is one **independent**
 case — its inputs are applied, the circuit settles, and the outputs are compared.

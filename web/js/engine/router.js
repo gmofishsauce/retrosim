@@ -5,7 +5,8 @@
 // falls back to the straight rat's-nest line.
 
 import { hitComponent, componentBBox } from "./hittest.js";
-import { getVertex, vertexWorld } from "../model/design.js";
+import { getVertex, vertexWorld, pinWorldPos, sideOutward } from "../model/design.js";
+import { rotateOffset } from "../geometry.js";
 
 // Tunable constants (representative; see §6.9a).
 export const TURN_PENALTY = 5; // extra cost per corner, in grid-step units
@@ -281,4 +282,53 @@ export function proposeRoute(design, from, to) {
   if (dF >= 0) pts.unshift(F);
   if (dT >= 0) pts.push(T);
   return mergeCollinear(pts);
+}
+
+// --- FR-099c: re-route wires after a sub-design interface change (§6.14) ---
+
+// endpointFor turns a wire-endpoint vertex into a router endpoint: a pin or
+// connector vertex contributes its derived world point plus the pin's outward
+// escape direction (rotation-aware — the same construction as interaction's
+// routerEndpoint, §6.9a); a junction/free vertex contributes its own point.
+function endpointFor(design, v) {
+  if (v.kind === "pin" || v.kind === "connector") {
+    const inst = design.components.find((c) => c.refdes === v.ref);
+    if (!inst) return null;
+    const w = pinWorldPos(inst, v.pin);
+    const pin = inst.typeData?.pins?.find((p) => p.name === v.pin);
+    const out = sideOutward(pin?.side);
+    return out.x || out.y ? { ...w, escape: rotateOffset(out.x, out.y, inst.rotation) } : w;
+  }
+  return { x: v.x, y: v.y };
+}
+
+// rerouteAttachedWires re-routes every **simple** wire attached to the listed
+// instances (FR-099c, §6.14): a simple wire's path is node–bends–node with no
+// junction/tap node along it. Each qualifying wire's interior bends are
+// replaced by a freshly proposed route between its endpoints' derived world
+// positions; the endpoint node refs are kept, so connectivity never changes.
+// A wire the router cannot route keeps its old bends. Returns the number of
+// wires re-routed. Geometry-only, caller-reported (no command/undo/dirty).
+export function rerouteAttachedWires(design, refdesList) {
+  const targets = new Set(refdesList);
+  const vById = new Map(design.vertices.map((v) => [v.id, v]));
+  let rerouted = 0;
+  for (const w of design.wires) {
+    const first = w.path[0];
+    const last = w.path[w.path.length - 1];
+    if (first.t !== "node" || last.t !== "node") continue;
+    if (!w.path.slice(1, -1).every((p) => p.t === "bend")) continue; // tap along it
+    const va = vById.get(first.v);
+    const vb = vById.get(last.v);
+    if (!va || !vb) continue;
+    const onTarget = (v) => (v.kind === "pin" || v.kind === "connector") && targets.has(v.ref);
+    if (!onTarget(va) && !onTarget(vb)) continue;
+    const from = endpointFor(design, va);
+    const to = endpointFor(design, vb);
+    const route = from && to ? proposeRoute(design, from, to) : null;
+    if (!route) continue; // no route found: keep the old bends
+    w.path = [first, ...route.slice(1, -1).map((p) => ({ t: "bend", x: p.x, y: p.y })), last];
+    rerouted++;
+  }
+  return rerouted;
 }

@@ -17,6 +17,7 @@ import {
 } from "./vectors.js";
 import { BUILTINS, portNFields } from "../builtins.js";
 import { createDesign, addInstance, addWire } from "../model/design.js";
+import { flatten, addSubDesignInstance, designInterface } from "../model/subdesign.js";
 
 const PORT = BUILTINS.find((b) => b.name === "port");
 const PORTN = BUILTINS.find((b) => b.name === "portN");
@@ -459,6 +460,56 @@ test("serializeVectors: strips the live-only kind marker and stamps v2 (§7.7)",
   const file = serializeVectors(doc);
   assert.equal(file.formatVersion, FORMAT_VERSION);
   assert.deepEqual(file.inputs, [{ refdes: "A-2", pin: "OUT", label: "CLK" }]);
+});
+
+test("vector run over a flattened hierarchical design (FR-102/FR-115e hierarchy)", async () => {
+  // Child: port IN → inverter → port OUT. Parent: switch → X1.IN, X1.OUT → indicator.
+  const child = createDesign("inv");
+  const pi = addInstance(child, PORT, 0, 0, 0);
+  pi.label = "IN";
+  const po = addInstance(child, PORT, 20, 0, 0);
+  po.label = "OUT";
+  const u = addInstance(child, NOT, 10, 0, 0);
+  wire(child, pi.refdes, "P", u.refdes, "A");
+  wire(child, u.refdes, "Y", po.refdes, "P");
+
+  const parent = createDesign("top");
+  const x = addSubDesignInstance(
+    parent,
+    { childPath: "/lib/inv.json", render: "ic", iface: designInterface(child), childName: "inv" },
+    10,
+    10,
+  );
+  const sw = addInstance(parent, builtin("switch"), 0, 0, 0);
+  const ind = addInstance(parent, builtin("indicator"), 20, 0, 0);
+  wire(parent, sw.refdes, "OUT", x.refdes, "IN");
+  wire(parent, x.refdes, "OUT", ind.refdes, "IN");
+
+  // Columns bind to the top sheet only (FR-115b): one switch in, one indicator out.
+  const columns = deriveColumns(parent);
+  assert.equal(columns.inputs.length, 1);
+  assert.equal(columns.outputs.length, 1);
+
+  const flat = await flatten(parent, async () => child);
+  const res = runVectors(flat, {
+    inputs: columns.inputs,
+    outputs: columns.outputs,
+    rows: [
+      { in: ["0"], out: ["H"] }, // inverted through the child
+      { in: ["1"], out: ["L"] },
+    ],
+  });
+  assert.equal(res.passed, 2);
+});
+
+test("runVectors/captureVectors refuse a clock hidden in a child (FR-115e deferred scope)", () => {
+  const d = mkDesign();
+  place(d, "X1/A-1", builtin("clock")); // hierarchical refdes = flattened child clock
+  assert.throws(
+    () => runVectors(d, { inputs: [], outputs: [], rows: [] }),
+    /top sheet only/,
+  );
+  assert.throws(() => captureVectors(d, { inputs: [], outputs: [] }, []), /top sheet only/);
 });
 
 test("reconcileVectors: a clock column absent from the file defaults its cells to C", () => {

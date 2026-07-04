@@ -7,10 +7,11 @@ import {
   deserializeDesign,
   FORMAT_VERSION,
 } from "../model/persist.js";
-import { designInterface, resolveSubDesigns, effectivePortDir } from "../model/subdesign.js";
+import { designInterface, resolveSubDesigns, effectivePortDir, wouldCycle } from "../model/subdesign.js";
 import { placeSubDesign } from "../commands.js";
 import { saveDesign as apiSave, loadDesign as apiLoad } from "../api.js";
 import { openFileDialog, chooseRenderDialog } from "./dialogs.js";
+import { rerouteAttachedWires } from "../engine/router.js";
 
 function toast(msg) {
   const el = document.createElement("div");
@@ -135,7 +136,14 @@ export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {
           inst.childPath = resolveRel(baseDir, inst.childPath);
         }
       }
-      await resolveSubDesigns(loaded, (childPath) => apiLoad(childPath), toast);
+      const { changed } = await resolveSubDesigns(loaded, (childPath) => apiLoad(childPath), toast);
+      // A child whose interface changed since this parent was saved re-lays-out
+      // its pins; re-route the stale simple wires (FR-099c, load-time
+      // normalization — before replaceDesign, so no dirty mark and no undo).
+      for (const refdes of changed) {
+        const n = rerouteAttachedWires(loaded, [refdes]);
+        toast(`sub-design ${refdes}: interface changed; ${n} wire${n === 1 ? "" : "s"} re-routed`);
+      }
       store.replaceDesign(loaded, { savePath: absPath });
       return true;
     } catch (e) {
@@ -212,6 +220,12 @@ export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {
     if (!res) return;
     if (parentPath && res.path === parentPath) {
       toast("A design cannot embed itself");
+      return;
+    }
+    // Transitive check (FR-097a/FR-102a): refuse a child whose embed chain
+    // leads back to this design, rather than letting Run discover the cycle.
+    if (parentPath && (await wouldCycle(res.path, parentPath, apiLoad))) {
+      toast("Cannot embed: that design (or one it embeds) embeds this design");
       return;
     }
     let obj;

@@ -341,6 +341,54 @@ test("subunit package: siblings evaluate as one entity (§6.13)", () => {
   assert.equal(sim.valueOfPin("U1B", "2Y"), V1); // NAND(0,0) = 1
 });
 
+test("subunit package groups under a hierarchical prefix (FR-102/§6.14)", () => {
+  // A flattened child's siblings carry prefixed refdes (X1/U1A, X1/U1B); the
+  // package key is the full prefixed stem, so they still evaluate together.
+  const PKG = {
+    name: "NANDPKG",
+    renderType: "subunit",
+    numUnits: 2,
+    renderAs: "nand",
+    pins: [
+      { name: "1A", side: "left", unit: "A", direction: "in" },
+      { name: "1B", side: "left", unit: "A", direction: "in" },
+      { name: "1Y", side: "right", unit: "A", direction: "out" },
+      { name: "2A", side: "left", unit: "B", direction: "in" },
+      { name: "2B", side: "left", unit: "B", direction: "in" },
+      { name: "2Y", side: "right", unit: "B", direction: "out" },
+    ],
+    behavior: "1Y = /1A + /1B\n2Y = /2A + /2B\n",
+  };
+  const d = mkDesign();
+  for (const letter of ["A", "B"]) {
+    const td = structuredClone(PKG);
+    td.pins = td.pins.filter((p) => p.unit === letter);
+    td.unit = letter;
+    d.components.push({
+      refdes: "X1/U1" + letter,
+      type: PKG.name,
+      x: 0,
+      y: 0,
+      rotation: 0,
+      typeData: td,
+      overrides: {},
+    });
+  }
+  place(d, "A-1", builtin("pullup"));
+  place(d, "A-2", builtin("pullup"));
+  place(d, "A-3", builtin("indicator"));
+  connect(d, ["A-1", "OUT"], ["X1/U1A", "1A"]);
+  connect(d, ["A-2", "OUT"], ["X1/U1A", "1B"]);
+  connect(d, ["X1/U1A", "1Y"], ["X1/U1B", "2A"]);
+  connect(d, ["X1/U1A", "1Y"], ["X1/U1B", "2B"]);
+  connect(d, ["X1/U1B", "2Y"], ["A-3", "IN"]); // 2Y needs a net to be observable
+
+  const sim = buildSimulation(d);
+  settle(sim);
+  assert.equal(sim.valueOfPin("X1/U1A", "1Y"), V0); // NAND(1,1) = 0
+  assert.equal(sim.valueOfPin("X1/U1B", "2Y"), V1); // one entity: B sees A's output
+});
+
 test("feedback loop settles to U (FR-077)", () => {
   // A ring oscillator cannot oscillate from a cold start: every net begins
   // Z/U, and an inverter of U is U even under selective pessimism (no

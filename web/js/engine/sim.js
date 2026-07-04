@@ -15,15 +15,19 @@ import {
   VZ,
 } from "./galasm.js";
 import { buildNets } from "../model/netlist.js";
+import { flatten } from "../model/subdesign.js";
 import { BEHAVIORS } from "../builtins.js";
 import { createMemoryCore, parseRomBytes } from "./memory.js";
-import { readRomFile } from "../api.js";
+import { readRomFile, loadDesign } from "../api.js";
 import { setAppState, postMessage, clearMessage } from "../chrome/statusbar.js";
 
 // SETTLE_BOUND is the combinational settling bound (FR-085).
 export const SETTLE_BOUND = 10000;
 
-const SUBUNIT_PKG_RE = /^(U\d+)[A-Z]$/;
+// Hierarchical-prefix tolerant (FR-102, §6.14): a flattened child's subunit
+// `X1/U3A` groups under the full prefixed stem `X1/U3`, so a package never
+// groups across sub-design instances.
+const SUBUNIT_PKG_RE = /^((?:.*\/)?U\d+)[A-Z]$/;
 
 // effectiveProps merges a type's declared property defaults with the
 // instance's overrides (FR-020b).
@@ -417,12 +421,24 @@ export function createSim({ store, renderer }) {
     // Clear any stale editing-time message before the run; compile/start-up
     // reports (FR-080, conflicts) posted below then survive into the run (FR-074).
     clearMessage();
+    // Flatten sub-design instances and off-sheet links first (FR-102/FR-103);
+    // a refusal (embedding cycle, unloadable child, FR-102a) reports via the
+    // tray. A design with neither is returned as-is.
+    let design;
+    try {
+      design = await flatten(store.design, loadDesign, { rootPath: store.state.savePath });
+    } catch (err) {
+      starting = false;
+      postMessage(`cannot simulate: ${err.message}`);
+      return;
+    }
+    if (!starting) return; // Stop() was hit during the async flatten
     // Load ROM contents from the server first (FR-114e); the build is sync.
-    const romContent = await loadRomContents(store.design);
+    const romContent = await loadRomContents(design);
     if (!starting) return; // Stop() was hit during the async load — abort the start
     starting = false;
     try {
-      sim = buildSimulation(store.design, { onMessage: postMessage, romContent });
+      sim = buildSimulation(design, { onMessage: postMessage, romContent });
     } catch (err) {
       postMessage(`cannot simulate: ${err.message}`);
       return;

@@ -78,9 +78,11 @@ export function serializeDesign(design) {
 
 // stripSubDesign persists only a sub-design's live link and placement, never its
 // synthetic interface typeData (re-derived on load by resolveSubDesigns, FR-098).
+// `iface` — the last-resolved interface record — rides along solely for the
+// FR-099c change comparison; it is never trusted for rendering or simulation.
 function stripSubDesign(c) {
-  const { refdes, label, type, kind, childPath, render, x, y, rotation } = c;
-  return { refdes, label, type, kind, childPath, render, x, y, rotation };
+  const { refdes, label, type, kind, childPath, render, iface, x, y, rotation } = c;
+  return { refdes, label, type, kind, childPath, render, iface, x, y, rotation };
 }
 
 // maxIdNum returns the highest numeric suffix among ids of the form `<prefix><n>`.

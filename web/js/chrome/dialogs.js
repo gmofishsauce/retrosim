@@ -1,9 +1,10 @@
 // Modal file-navigation dialog for Save and Open (§6.11, FR-046-053). Uses the
 // server's /files endpoint to browse directories (no native file picker).
 
-import { listDir, loadVectorFile, saveVectorFile } from "../api.js";
+import { listDir, loadDesign, loadVectorFile, saveVectorFile } from "../api.js";
 import { compileBehavior } from "../engine/galasm.js";
 import { loadRomContents } from "../engine/sim.js";
+import { flatten } from "../model/subdesign.js";
 import {
   deriveColumns,
   runVectors,
@@ -1330,8 +1331,12 @@ export function testVectorsPanel({ store, dataDir }) {
       const check = validateVectors(doc);
       if (!check.ok) return showError(check.errors[0]);
       try {
-        const romContent = await loadRomContents(design);
-        const res = runVectors(design, doc, { romContent });
+        // Flatten sub-designs/peer sheets first (FR-102/FR-103, §6.14); the
+        // columns stay bound to the top sheet, whose components the FlatDesign
+        // shares, and child ROMs are preloaded from the flat design.
+        const flat = await flatten(design, loadDesign, { rootPath: store.state.savePath });
+        const romContent = await loadRomContents(flat);
+        const res = runVectors(flat, doc, { romContent });
         runResults = res.rows;
         summary.textContent = `${res.passed} of ${res.total} rows passed`;
         summary.className = "vec-summary " + (res.passed === res.total ? "ok" : "err");
@@ -1344,10 +1349,12 @@ export function testVectorsPanel({ store, dataDir }) {
     async function onCapture() {
       errEl.hidden = true;
       try {
-        const romContent = await loadRomContents(design);
+        // Same flatten-first boundary as onRun (FR-102/FR-103, §6.14).
+        const flat = await flatten(design, loadDesign, { rootPath: store.state.savePath });
+        const romContent = await loadRomContents(flat);
         // Whole-table capture: an ordered pass for a sequential design (FR-115e),
         // independent rows for a combinational one.
-        const outs = captureVectors(design, columns, rows.map((r) => r.in), { romContent });
+        const outs = captureVectors(flat, columns, rows.map((r) => r.in), { romContent });
         rows.forEach((row, i) => {
           row.out = outs[i];
         });
