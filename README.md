@@ -56,9 +56,7 @@ button, the built-in components, and simulation.
 
 ## Known Issues
 
-- high speed simulation generator is not yet written.
-- test vector support is minimal.
-- lots more editing user interface issues
+- lots more editing user interface issues, See todo-list in repo root.
 
 ## About 4-State Simulation
 
