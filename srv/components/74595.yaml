@@ -1,0 +1,137 @@
+# 74595 — 8-bit serial-in, serial or parallel-out shift register with output
+# latches; 3-state.
+# Source: Nexperia, "74HC595; 74HCT595 8-bit serial-in, serial or parallel-out
+# shift register with output latches; 3-state", product data sheet
+# Rev. 12 — 20 March 2024.
+# https://assets.nexperia.com/documents/data-sheet/74HC_HCT595.pdf
+id: "type-74595"
+type: "74595"
+outline: [8, 13]
+# The shift register is eight stages deep, clocked by SHCP. Only the last stage
+# is exposed (serial output Q7S); the first seven flip-flops SR0..SR6 are the
+# hidden internal nodes (FR-079c). The eight storage-register outputs Q0..Q7 are
+# separate flip-flops clocked by STCP. Two independent clocks => each registered
+# output carries its own .CLK (extended dialect, FR-079a); no global clock: key.
+internal: [SR0, SR1, SR2, SR3, SR4, SR5, SR6]
+
+description: "8-bit serial-in, serial/parallel-out shift register with output latches, 3-state"
+datasheet:
+  vendor: Nexperia
+  title: "74HC595; 74HCT595 8-bit serial-in, serial or parallel-out shift register with output latches; 3-state"
+  rev: "Rev. 12, 20 March 2024"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT595.pdf"
+
+pins: # number: physical DIP16/SO16 pin (datasheet Table 2)
+  - { name: SHCP, side: top,   pos: 3,  dir: in,       number: 11, desc: "shift register clock input, LOW-to-HIGH edge-triggered" }
+  - { name: STCP, side: top,   pos: 5,  dir: in,       number: 12, desc: "storage register clock input, LOW-to-HIGH edge-triggered" }
+  - { name: DS,   side: left,  pos: 3,  dir: in,       number: 14, desc: "serial data input" }
+  - { name: /MR,  side: left,  pos: 7,  dir: in,       number: 10, desc: "master reset, active LOW; asynchronously clears the shift register only" }
+  - { name: /OE,  side: left,  pos: 9,  dir: in,       number: 13, desc: "output enable, active LOW; a HIGH puts Q0..Q7 in the high-impedance state" }
+  - { name: Q0,   side: right, pos: 2,  dir: tristate, number: 15, desc: "parallel data output bit 0" }
+  - { name: Q1,   side: right, pos: 3,  dir: tristate, number: 1,  desc: "parallel data output bit 1" }
+  - { name: Q2,   side: right, pos: 4,  dir: tristate, number: 2,  desc: "parallel data output bit 2" }
+  - { name: Q3,   side: right, pos: 5,  dir: tristate, number: 3,  desc: "parallel data output bit 3" }
+  - { name: Q4,   side: right, pos: 6,  dir: tristate, number: 4,  desc: "parallel data output bit 4" }
+  - { name: Q5,   side: right, pos: 7,  dir: tristate, number: 5,  desc: "parallel data output bit 5" }
+  - { name: Q6,   side: right, pos: 8,  dir: tristate, number: 6,  desc: "parallel data output bit 6" }
+  - { name: Q7,   side: right, pos: 9,  dir: tristate, number: 7,  desc: "parallel data output bit 7" }
+  - { name: Q7S,  side: right, pos: 11, dir: out,      number: 9,  desc: "serial data output from the last shift stage (for cascading)" }
+
+groups:
+  - { name: Q, pins: [Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7] }
+
+delays: # ns, 74HC595 typical at Vcc=4.5V, 25C (datasheet Table 7)
+  tpd_shcp: 19 # SHCP -> Q7S
+  tpd_stcp: 20 # STCP -> Qn
+  tpd_mr:   17 # /MR  -> Q7S (master reset, tPHL)
+  ten:      17 # /OE  -> Qn enabled (tPZH/tPZL)
+  tdis:     15 # /OE  -> Qn high-Z (tPHZ/tPLZ)
+  tsu_ds:   4  # DS   setup before the SHCP edge
+  tsu_shcp: 8  # SHCP setup before the STCP edge
+  th:       3  # DS hold after the SHCP edge (minimum; typical is negative)
+  trec_mr:  10 # /MR recovery before the SHCP edge (minimum; typical is negative)
+
+behavior: |
+  ; 74595 — 8-bit serial-in, serial/parallel-out shift register with output
+  ; latches. Derived from the function table (datasheet Table 3) and the logic
+  ; diagram (Fig. 4), verified against the PDF.
+  ;
+  ; TWO INDEPENDENT CLOCKS (extended dialect, FR-079a): the shift register is
+  ; clocked by SHCP and the storage register by STCP, so the single global
+  ; clock: convention cannot serve both. Each registered output instead carries
+  ; its own GAL20RA10-style single-term .CLK naming its clock pin; there is no
+  ; top-level clock: key. Both clocks are LOW->HIGH edge-triggered.
+  ;
+  ; BURIED SHIFT STAGES (FR-079c): the shift register is eight bits deep but
+  ; exposes only the last stage on serial output Q7S. SR0..SR6 (declared under
+  ; internal:) are the seven hidden flip-flops; Q7S is the eighth, exposed. Each
+  ; is a .R register clocked by SHCP. A buried node rides the one-unit-delay
+  ; model exactly like a net, so reading SR(i-1) yields its pre-edge value and
+  ; the chain advances exactly one stage per SHCP edge (as on the 74165).
+  ;
+  ; Equations are physical-level GALasm: '/' is the complement operator and a
+  ; signal name is this file's pin name with any active-low '/' prefix dropped.
+  ; So 'MR' is pin /MR and '/MR' means "pin /MR is LOW" (reset asserted); 'OE'
+  ; is pin /OE and '/OE' means "pin /OE is LOW" (outputs enabled).
+  ;
+  ; Shift register: SR0 loads the serial input DS on each SHCP rising edge; each
+  ; later stage loads the previous stage. .ARST = /MR asynchronously clears every
+  ; shift stage to 0 while pin /MR is LOW — this affects ONLY the shift register
+  ; (function table row "a LOW-level on /MR only affects the shift registers"),
+  ; never the storage register below.
+  SR0.R = DS
+  SR0.CLK = SHCP
+  SR0.ARST = /MR
+  SR1.R = SR0
+  SR1.CLK = SHCP
+  SR1.ARST = /MR
+  SR2.R = SR1
+  SR2.CLK = SHCP
+  SR2.ARST = /MR
+  SR3.R = SR2
+  SR3.CLK = SHCP
+  SR3.ARST = /MR
+  SR4.R = SR3
+  SR4.CLK = SHCP
+  SR4.ARST = /MR
+  SR5.R = SR4
+  SR5.CLK = SHCP
+  SR5.ARST = /MR
+  SR6.R = SR5
+  SR6.CLK = SHCP
+  SR6.ARST = /MR
+  Q7S.R = SR6
+  Q7S.CLK = SHCP
+  Q7S.ARST = /MR
+  ;
+  ; Storage register: eight D flip-flops clocked by STCP. On each STCP rising
+  ; edge Qn latches the current contents of shift stage n (the pre-edge value,
+  ; per the one-unit-delay model); Q7 latches the last stage Q7S. /MR does not
+  ; touch these. Each Qn is a 3-state output gated by a single-term .E enable
+  ; that drives the pin only while /OE is LOW; when /OE is HIGH the .E term is
+  ; false and Qn is high-impedance, covering the OFF-state row of the function
+  ; table without disturbing the stored value.
+  Q0.R = SR0
+  Q0.CLK = STCP
+  Q0.E = /OE
+  Q1.R = SR1
+  Q1.CLK = STCP
+  Q1.E = /OE
+  Q2.R = SR2
+  Q2.CLK = STCP
+  Q2.E = /OE
+  Q3.R = SR3
+  Q3.CLK = STCP
+  Q3.E = /OE
+  Q4.R = SR4
+  Q4.CLK = STCP
+  Q4.E = /OE
+  Q5.R = SR5
+  Q5.CLK = STCP
+  Q5.E = /OE
+  Q6.R = SR6
+  Q6.CLK = STCP
+  Q6.E = /OE
+  Q7.R = Q7S
+  Q7.CLK = STCP
+  Q7.E = /OE
