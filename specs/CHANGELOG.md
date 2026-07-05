@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-05 — FR-015a: edge-anchor unit pin name labels for border margin
+What: unit-component pin names are edge-anchored (hug their border edge with a small fixed pixel margin, growing inward) instead of centered on a fixed inward-nudged point, so the gap to the component border is constant and legible regardless of name length. Subunit gate labels unchanged.
+Why: user feedback — with symmetric centering, longer pin names crowded or crossed the border line and were hard to read; edge-anchoring also avoids eating the center space between opposing labels.
+Touches: FR-015a (new); design §6.8 (Component drawing / unit pin-label placement)
+
 ## 2026-07-04 — FR-052a: file dialogs remember last-viewed directory
 What: open-mode file dialogs (Open, ROM picker, .tv Load) default to the most recently viewed directory, one shared value across all pickers, persisted in localStorage (key `sim.lastDir`) so it survives sessions; both modes record navigation, save-mode defaults unchanged; fallback to caller startPath if the stored dir no longer lists.
 Why: dialogs always reopened at the server dataDir, forcing re-navigation every time.

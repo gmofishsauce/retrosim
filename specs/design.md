@@ -919,6 +919,16 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   there. For subunit symbols the common path anchors each pin's
   upright name label to the body outline (`pinLabelEdge`, §6.8a) rather than the
   pin point, so stubs never bisect labels.
+- **Unit pin-label placement (FR-015a):** for a `unit` instance the pin name is
+  edge-anchored rather than centered on an inward-nudged point. The renderer picks
+  the label's `textAlign`/`textBaseline` from the rotated outward direction (`outR`)
+  so the text hugs its border edge — left-align inside a left edge, right-align
+  inside a right edge, top/bottom baselines for horizontal edges — and offsets the
+  anchor one small fixed pixel margin inward from the pin's screen point. Because
+  the text then grows toward the body center, the gap to the border is constant
+  regardless of name length and short names are not pushed inward. Alignment is set
+  per pin and the labels stay upright/screen-space (FR-015). Subunit labels keep the
+  centered inward-nudge off `pinLabelEdge`.
 - **Text note (`note` renderType, FR-071f):** `drawComponent` gains a `note`
   branch (`drawNote`) drawing the note's `inst.text` line-broken on its embedded
   newlines. An outline box over the instance's auto-sized footprint —

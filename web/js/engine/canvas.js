@@ -29,6 +29,9 @@ import { sameRef } from "../store.js";
 const INDICATOR_RADIUS = 0.85;
 const PIN_FONT = "10px system-ui, sans-serif";
 const LABEL_FONT = "bold 11px system-ui, sans-serif";
+// Fixed gap (screen px) from a unit part's border to the near edge of its pin
+// name label; the label is edge-anchored and grows inward (FR-015a).
+const PIN_LABEL_MARGIN = 4;
 // Zoom-based label culling (FR-012a): apparent on-screen symbol size, in CSS px
 // (min footprint dimension × scale), below which pin labels (T1) then the type
 // display-name line (T2) stop being drawn. The U-number is always drawn.
@@ -593,12 +596,29 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
     // screen (FR-012a).
     if (!td.builtin && symPx >= LABEL_T1) {
       ctx.fillStyle = "#333";
-      ctx.fillText(pin.name, lref.x - Math.sign(outR.x) * 8, lref.y - Math.sign(outR.y) * 8);
+      if (td.renderType === "subunit") {
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(pin.name, lref.x - Math.sign(outR.x) * 8, lref.y - Math.sign(outR.y) * 8);
+      } else if (outR.x !== 0) {
+        // Unit part, vertical (left/right) border: hug the edge, grow inward (FR-015a).
+        ctx.textAlign = outR.x < 0 ? "left" : "right";
+        ctx.textBaseline = "middle";
+        ctx.fillText(pin.name, ps.x - Math.sign(outR.x) * PIN_LABEL_MARGIN, ps.y);
+      } else {
+        // Unit part, horizontal (top/bottom) border.
+        ctx.textAlign = "center";
+        ctx.textBaseline = outR.y < 0 ? "top" : "bottom";
+        ctx.fillText(pin.name, ps.x, ps.y - Math.sign(outR.y) * PIN_LABEL_MARGIN);
+      }
     }
   }
 
   // Center labels, upright (FR-012). A subunit shows just its refdes (e.g. U5A);
-  // a unit component shows refdes + type name.
+  // a unit component shows refdes + type name. Restore centered anchoring, which
+  // the per-pin edge alignment above (FR-015a) may have changed.
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
   const cr = rotateOffset(td.width / 2, td.height / 2, inst.rotation);
   const center = worldToScreen({ x: inst.x + cr.x, y: inst.y + cr.y }, vp);
   ctx.fillStyle = "#111";
