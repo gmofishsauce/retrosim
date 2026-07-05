@@ -70,3 +70,7 @@ When a subcomponent design is open in the editor, it should be possible to click
 Add a doc about giving the editor a spin.
 
 Add a built-in component that is a "magic UART". It exposes a register and when a bite is written to the register, it is treated as a character and sent to the standard output of the generated C simulator. The debug simuator will need a console window similar to the test vector panel.
+
+Add the components that are follower type 8-bit latches: 74373 and 74573.
+
+Add an indication in the YAML file that the component has built-in behaviors.
