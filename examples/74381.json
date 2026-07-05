@@ -3,90 +3,6 @@
   "name": "74381",
   "components": [
     {
-      "refdes": "A-2",
-      "type": "type-indicator8",
-      "x": 62,
-      "y": 5,
-      "rotation": 270,
-      "typeData": {
-        "id": "type-indicator8",
-        "name": "indicator8",
-        "builtin": true,
-        "title": "state indicator (8-wide)",
-        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"7\" y=\"3\" width=\"22\" height=\"30\" fill=\"#fff\" stroke=\"#333\" stroke-width=\"1.5\"/><rect x=\"10\" y=\"5\" width=\"16\" height=\"2.2\" fill=\"#222\"/><rect x=\"10\" y=\"8.4\" width=\"16\" height=\"2.2\" fill=\"#cfcfcf\"/><rect x=\"10\" y=\"11.8\" width=\"16\" height=\"2.2\" fill=\"#222\"/><rect x=\"10\" y=\"15.2\" width=\"16\" height=\"2.2\" fill=\"#cfcfcf\"/><rect x=\"10\" y=\"18.6\" width=\"16\" height=\"2.2\" fill=\"#222\"/><rect x=\"10\" y=\"22\" width=\"16\" height=\"2.2\" fill=\"#cfcfcf\"/><rect x=\"10\" y=\"25.4\" width=\"16\" height=\"2.2\" fill=\"#222\"/><rect x=\"10\" y=\"28.8\" width=\"16\" height=\"2.2\" fill=\"#cfcfcf\"/></svg>",
-        "renderType": "indicator8",
-        "width": 3,
-        "height": 9,
-        "pins": [
-          {
-            "name": "D0",
-            "side": "left",
-            "position": 1,
-            "direction": "in"
-          },
-          {
-            "name": "D1",
-            "side": "left",
-            "position": 2,
-            "direction": "in"
-          },
-          {
-            "name": "D2",
-            "side": "left",
-            "position": 3,
-            "direction": "in"
-          },
-          {
-            "name": "D3",
-            "side": "left",
-            "position": 4,
-            "direction": "in"
-          },
-          {
-            "name": "D4",
-            "side": "left",
-            "position": 5,
-            "direction": "in"
-          },
-          {
-            "name": "D5",
-            "side": "left",
-            "position": 6,
-            "direction": "in"
-          },
-          {
-            "name": "D6",
-            "side": "left",
-            "position": 7,
-            "direction": "in"
-          },
-          {
-            "name": "D7",
-            "side": "left",
-            "position": 8,
-            "direction": "in"
-          }
-        ],
-        "pinGroups": [
-          {
-            "name": "D",
-            "pins": [
-              "D0",
-              "D1",
-              "D2",
-              "D3",
-              "D4",
-              "D5",
-              "D6",
-              "D7"
-            ]
-          }
-        ]
-      },
-      "overrides": {},
-      "label": "A-25"
-    },
-    {
       "refdes": "U1A",
       "type": "7408",
       "x": -21,
@@ -3393,58 +3309,6 @@
       },
       "overrides": {},
       "text": "S==0"
-    },
-    {
-      "refdes": "A-30",
-      "type": "type-indicator",
-      "x": 35,
-      "y": 36,
-      "rotation": 0,
-      "typeData": {
-        "id": "type-indicator",
-        "name": "indicator",
-        "builtin": true,
-        "title": "State indicator",
-        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
-        "renderType": "indicator",
-        "width": 2,
-        "height": 2,
-        "pins": [
-          {
-            "name": "IN",
-            "side": "bottom",
-            "position": 1,
-            "direction": "in"
-          }
-        ]
-      },
-      "overrides": {}
-    },
-    {
-      "refdes": "A-31",
-      "type": "type-indicator",
-      "x": 71,
-      "y": 40,
-      "rotation": 0,
-      "typeData": {
-        "id": "type-indicator",
-        "name": "indicator",
-        "builtin": true,
-        "title": "State indicator",
-        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
-        "renderType": "indicator",
-        "width": 2,
-        "height": 2,
-        "pins": [
-          {
-            "name": "IN",
-            "side": "bottom",
-            "position": 1,
-            "direction": "in"
-          }
-        ]
-      },
-      "overrides": {}
     }
   ],
   "wires": [
@@ -6347,42 +6211,6 @@
       ]
     },
     {
-      "id": "w430",
-      "path": [
-        {
-          "t": "node",
-          "v": "v813"
-        },
-        {
-          "t": "bend",
-          "x": 72,
-          "y": 43
-        },
-        {
-          "t": "node",
-          "v": "v812"
-        }
-      ]
-    },
-    {
-      "id": "w431",
-      "path": [
-        {
-          "t": "node",
-          "v": "v815"
-        },
-        {
-          "t": "bend",
-          "x": 36,
-          "y": 39
-        },
-        {
-          "t": "node",
-          "v": "v814"
-        }
-      ]
-    },
-    {
       "id": "w433",
       "path": [
         {
@@ -6395,8 +6223,9 @@
           "y": 34
         },
         {
-          "t": "node",
-          "v": "v812"
+          "t": "bend",
+          "x": 67,
+          "y": 43
         },
         {
           "t": "bend",
@@ -6427,8 +6256,9 @@
           "v": "v689"
         },
         {
-          "t": "node",
-          "v": "v814"
+          "t": "bend",
+          "x": 41,
+          "y": 39
         },
         {
           "t": "bend",
@@ -9143,34 +8973,6 @@
       "y": 62
     },
     {
-      "id": "v812",
-      "kind": "junction",
-      "x": 67,
-      "y": 43
-    },
-    {
-      "id": "v813",
-      "kind": "pin",
-      "ref": "A-31",
-      "pin": "IN",
-      "x": 72,
-      "y": 42
-    },
-    {
-      "id": "v814",
-      "kind": "junction",
-      "x": 41,
-      "y": 39
-    },
-    {
-      "id": "v815",
-      "kind": "pin",
-      "ref": "A-30",
-      "pin": "IN",
-      "x": 36,
-      "y": 38
-    },
-    {
       "id": "v820",
       "kind": "junction",
       "x": 81,
@@ -9418,18 +9220,16 @@
         "U5C.3A",
         "U5B.2A",
         "U5A.1A",
-        "A-31.IN",
         "U16D.4Y"
       ],
       "members": [
         "w59",
         "w60",
         "w61",
-        "w430",
         "w433"
       ],
       "provenance": [],
-      "name": "IN"
+      "name": "4Y"
     },
     {
       "pins": [
@@ -9437,18 +9237,16 @@
         "U6B.2B",
         "U6C.3B",
         "U6D.4B",
-        "A-30.IN",
         "U16C.3Y"
       ],
       "members": [
         "w70",
         "w71",
         "w72",
-        "w431",
         "w435"
       ],
       "provenance": [],
-      "name": "IN"
+      "name": "3Y"
     },
     {
       "pins": [
