@@ -152,6 +152,15 @@ parallel load (`/PL` low) is modeled as **synchronous** (data is captured on a c
 edge), whereas the real chip loads asynchronously; in the usual pattern of loading
 and then clocking the bits out, the two behave identically.
 
+The `74595` 8-bit serial-in, serial/parallel-out **shift register with output
+latches** is the complementary part. Serial data (`DS`) is clocked into the shift
+register on the **shift clock** `SHCP`; a separate **storage clock** `STCP` transfers
+the shift register's contents into an 8-bit latch driving the parallel outputs
+`Q0`–`Q7`. Because it has two independent clocks, they are drawn as separate pins.
+The parallel outputs are **3-state**, enabled by `/OE` (low); the master reset `/MR`
+(low) asynchronously clears the shift register only, leaving the output latch
+untouched. `Q7S` is the serial output of the last stage, for daisy-chaining chips.
+
 ### Creating a custom GAL part (22V10)
 
 Unlike the fixed-function 74-series parts, a GAL22V10 is **programmable** — its
