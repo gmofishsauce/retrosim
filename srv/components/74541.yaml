@@ -1,0 +1,70 @@
+# 74541 — octal inverter/buffer; 3-state (dual active-low enables)
+# Source: Nexperia, "74HC541; 74HCT541 Octal buffer/line driver; 3-state; non-inverting",
+# product data sheet Rev. 6.
+# https://assets.nexperia.com/documents/data-sheet/74HC_HCT540.pdf
+
+id: "type-74541"
+type: "74541"
+outline: [8, 14]
+
+description: "Octal non-inverting buffer/line driver, 3-state, dual active-low enables"
+
+datasheet:
+  vendor: Nexperia
+  title: "74HC540; 74HCT540 Octal buffer/line driver; 3-state; inverting"
+  rev: "Rev. 6"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT540.pdf"
+
+pins:
+  - { name: D0,   side: left,  pos: 2,  dir: in,       number: 2,  desc: "data input 1" }
+  - { name: D1,   side: left,  pos: 3,  dir: in,       number: 3,  desc: "data input 2" }
+  - { name: D2,   side: left,  pos: 4,  dir: in,       number: 4,  desc: "data input 3" }
+  - { name: D3,   side: left,  pos: 5,  dir: in,       number: 5,  desc: "data input 4" }
+  - { name: D4,   side: left,  pos: 6,  dir: in,       number: 6,  desc: "data input 5" }
+  - { name: D5,   side: left,  pos: 7,  dir: in,       number: 7,  desc: "data input 6" }
+  - { name: D6,   side: left,  pos: 8,  dir: in,       number: 8,  desc: "data input 7" }
+  - { name: D7,   side: left,  pos: 9,  dir: in,       number: 9,  desc: "data input 8" }
+
+  - { name: Q0,   side: right, pos: 2,  dir: tristate, number: 18, desc: "3-state output 1" }
+  - { name: Q1,   side: right, pos: 3,  dir: tristate, number: 17, desc: "3-state output 2" }
+  - { name: Q2,   side: right, pos: 4,  dir: tristate, number: 16, desc: "3-state output 3" }
+  - { name: Q3,   side: right, pos: 5,  dir: tristate, number: 15, desc: "3-state output 4" }
+  - { name: Q4,   side: right, pos: 6,  dir: tristate, number: 14, desc: "3-state output 5" }
+  - { name: Q5,   side: right, pos: 7,  dir: tristate, number: 13, desc: "3-state output 6" }
+  - { name: Q6,   side: right, pos: 8,  dir: tristate, number: 12, desc: "3-state output 7" }
+  - { name: Q7,   side: right, pos: 9,  dir: tristate, number: 11, desc: "3-state output 8" }
+
+  - { name: /OE1, side: left,  pos: 11, dir: in,       number: 1,  desc: "active-low output enable 1" }
+  - { name: /OE2, side: left,  pos: 12, dir: in,       number: 19, desc: "active-low output enable 2" }
+
+groups:
+  - { name: D, pins: [D0, D1, D2, D3, D4, D5, D6, D7] }
+  - { name: Q, pins: [Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7] }
+
+delays: # ns, typical 74HC541 at VCC=4.5 V, 25°C
+  tpd: 11
+  ten: 15
+  tdis: 15
+
+behavior: |
+  ; 74541 — octal non-inverting 3-state buffer.
+  ; Both active-low enables must be LOW for the outputs to drive.
+  ; Otherwise all outputs are high impedance.
+
+  Q0.T = D0
+  Q0.E = /OE1 * /OE2
+  Q1.T = D1
+  Q1.E = /OE1 * /OE2
+  Q2.T = D2
+  Q2.E = /OE1 * /OE2
+  Q3.T = D3
+  Q3.E = /OE1 * /OE2
+  Q4.T = D4
+  Q4.E = /OE1 * /OE2
+  Q5.T = D5
+  Q5.E = /OE1 * /OE2
+  Q6.T = D6
+  Q6.E = /OE1 * /OE2
+  Q7.T = D7
+  Q7.E = /OE1 * /OE2
+  
