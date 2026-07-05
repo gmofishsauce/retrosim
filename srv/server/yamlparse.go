@@ -9,6 +9,7 @@ package server
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -58,6 +59,7 @@ type yamlComponent struct {
 	Delays     map[string]float64 `yaml:"delays"`
 	Behavior   string             `yaml:"behavior"`
 	Clock      string             `yaml:"clock"`
+	Internal   []string           `yaml:"internal"`
 	Gal        string             `yaml:"gal"`
 	PartNumber string             `yaml:"partnumber"`
 
@@ -216,6 +218,32 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		return ComponentType{}, fmt.Errorf("%s: 'partnumber' is only valid on a gal part (set 'gal:')", path)
 	}
 
+	// internal: buried registered-node names (FR-079c) — the same opaque-carry
+	// treatment as clock:/gal:. The server checks only that each name is a legal,
+	// unique signal token distinct from every pin (buried nodes and pins share one
+	// signal namespace, so a pin's signal is its name with any leading '/' dropped);
+	// whether each declared node actually has a .R equation is checked client-side
+	// at Run (§6.13), the behavior block being opaque to the server (FR-066).
+	if len(doc.Internal) > 0 {
+		pinSignals := make(map[string]bool, len(pins))
+		for _, p := range pins {
+			pinSignals[strings.TrimPrefix(p.Name, "/")] = true
+		}
+		seen := make(map[string]bool, len(doc.Internal))
+		for _, name := range doc.Internal {
+			if !isSignalToken(name) {
+				return ComponentType{}, fmt.Errorf("%s: internal node %q is not a legal signal name (letters and digits only)", path, name)
+			}
+			if seen[name] {
+				return ComponentType{}, fmt.Errorf("%s: duplicate internal node name %q", path, name)
+			}
+			if pinSignals[name] {
+				return ComponentType{}, fmt.Errorf("%s: internal node %q collides with a pin signal (buried nodes and pins share one signal namespace)", path, name)
+			}
+			seen[name] = true
+		}
+	}
+
 	// mem: (FR-114f) — a generated memory device. The client owns the full pinout
 	// (parsed above like any component); this block carries the parameters the
 	// client's built-in behavior binds from (FR-114d). Validate the few fields the
@@ -293,6 +321,7 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 			Delays:      doc.Delays,
 			Behavior:    doc.Behavior,
 			Clock:       doc.Clock,
+			Internal:    doc.Internal,
 			Gal:         doc.Gal,
 			PartNumber:  doc.PartNumber,
 			Description: doc.Description,
@@ -333,6 +362,7 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		Delays:      doc.Delays,
 		Behavior:    doc.Behavior,
 		Clock:       doc.Clock,
+		Internal:    doc.Internal,
 		Gal:         doc.Gal,
 		PartNumber:  doc.PartNumber,
 		Description: doc.Description,
@@ -356,6 +386,23 @@ func deriveComponentID(explicit, partNumber, typeName string) string {
 		stem = typeName
 	}
 	return "type-" + stem
+}
+
+// isSignalToken reports whether s is a legal GALasm signal name (§6.13): a
+// non-empty run of ASCII letters and digits. The client's compiler is the
+// authoritative lexer (length and reserved-word checks, §6.13); the server
+// applies this minimal check to internal-node names (FR-079c), consistent with
+// keeping the behavior block otherwise opaque (FR-066).
+func isSignalToken(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
+			return false
+		}
+	}
+	return true
 }
 
 // validateGroupGeometry enforces the pin-group geometry rule (FR-063a): a group's

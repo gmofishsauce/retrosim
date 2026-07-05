@@ -644,3 +644,86 @@ test("the real 74138 and 74574 behavior blocks compile", () => {
   assert.equal(c574.outputs.length, 2);
   assert.ok(c574.outputs.every((o) => o.kind === "R" && o.enable !== null));
 });
+
+// tyI builds a typeData with buried internal nodes (FR-079c) and a clock.
+function tyI(pins, internal, behavior) {
+  return {
+    name: "TT",
+    clock: "CP",
+    internal,
+    pins: pins.map(([name, direction]) => ({ name, direction })),
+    behavior,
+  };
+}
+
+test("buried internal node compiles as a pinless .R output (FR-079c)", () => {
+  const c = compileBehavior(
+    tyI(
+      [
+        ["DS", "in"],
+        ["CP", "in"],
+        ["Q1", "out"],
+      ],
+      ["Q0"],
+      "Q0.R = DS\nQ1.R = Q0\n",
+    ),
+  );
+  const q0 = c.outputs.find((o) => o.signal === "Q0");
+  const q1 = c.outputs.find((o) => o.signal === "Q1");
+  assert.equal(q0.kind, "R");
+  assert.equal(q0.pin, null); // buried: drives no pin
+  assert.equal(q1.pin, "Q1"); // exposed
+  // Q1's D input reads the buried node Q0 as an ordinary literal.
+  assert.deepEqual(q1.terms, [[lit("Q0")]]);
+});
+
+test("a declared internal node needs exactly one .R equation (FR-079c)", () => {
+  const pins = [["DS", "in"], ["CP", "in"], ["Q1", "out"]];
+  // Missing definition.
+  assert.throws(
+    () => compileBehavior(tyI(pins, ["Q0"], "Q1.R = DS\n")),
+    /internal node Q0 has no \.R equation/,
+  );
+  // Defined, but not registered.
+  assert.throws(
+    () => compileBehavior(tyI([...pins, ["X", "in"]], ["Q0"], "Q0 = X\nQ1.R = Q0\n")),
+    /internal node Q0 must be defined by a registered \(\.R\) equation/,
+  );
+});
+
+test("an internal node may not collide with a pin or a reserved word (FR-079c)", () => {
+  assert.throws(
+    () => compileBehavior(tyI([["DS", "in"], ["CP", "in"], ["Q1", "out"]], ["Q1"], "Q1.R = DS\n")),
+    /internal node Q1 collides/,
+  );
+  assert.throws(
+    () => compileBehavior(tyI([["DS", "in"], ["CP", "in"], ["Q1", "out"]], ["AR"], "Q1.R = DS\n")),
+    /internal node name AR is reserved/,
+  );
+});
+
+test("74165 buried-node behavior block compiles (FR-079c)", () => {
+  const pins = [
+    ["/PL", "in"], ["CP", "in"], ["/CE", "in"], ["DS", "in"],
+    ["D0", "in"], ["D1", "in"], ["D2", "in"], ["D3", "in"],
+    ["D4", "in"], ["D5", "in"], ["D6", "in"], ["D7", "in"],
+    ["Q7", "out"], ["Q7N", "out"],
+  ];
+  const behavior =
+    "SR0.R = /PL*D0 + PL*/CE*DS + PL*CE*SR0\n" +
+    "SR1.R = /PL*D1 + PL*/CE*SR0 + PL*CE*SR1\n" +
+    "SR2.R = /PL*D2 + PL*/CE*SR1 + PL*CE*SR2\n" +
+    "SR3.R = /PL*D3 + PL*/CE*SR2 + PL*CE*SR3\n" +
+    "SR4.R = /PL*D4 + PL*/CE*SR3 + PL*CE*SR4\n" +
+    "SR5.R = /PL*D5 + PL*/CE*SR4 + PL*CE*SR5\n" +
+    "SR6.R = /PL*D6 + PL*/CE*SR5 + PL*CE*SR6\n" +
+    "Q7.R  = /PL*D7 + PL*/CE*SR6 + PL*CE*Q7\n" +
+    "Q7N = /Q7\n";
+  const c = compileBehavior(tyI(pins, ["SR0", "SR1", "SR2", "SR3", "SR4", "SR5", "SR6"], behavior));
+  // Eight registers (seven buried + Q7) plus the combinational complement.
+  assert.equal(c.outputs.filter((o) => o.kind === "R").length, 8);
+  assert.equal(c.outputs.filter((o) => o.kind === "R" && o.pin === null).length, 7);
+  const q7n = c.outputs.find((o) => o.signal === "Q7N");
+  assert.equal(q7n.kind, "plain");
+  assert.deepEqual(q7n.terms, [[lit("Q7", true)]]); // Q7N = /Q7
+});

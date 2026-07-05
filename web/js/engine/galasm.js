@@ -33,7 +33,9 @@ export const VU = 2;
 export const VZ = 3;
 
 const NAME_RE = /^[A-Za-z0-9]+$/;
-const OUTPUT_DIRS = new Set(["out", "bidir", "tristate"]);
+// "internal" is the synthetic direction of a buried registered node (FR-079c):
+// output-capable so it may head a .R equation, though it drives no pin.
+const OUTPUT_DIRS = new Set(["out", "bidir", "tristate", "internal"]);
 
 // GAL_DEVICES drives strict validation (FR-079b): the cheap, exact per-device
 // limits. `ioPins` is the device's pin count minus the two power/ground pins
@@ -147,6 +149,24 @@ export function compileBehavior(typeData) {
   // Reserved names (manual §2) would collide with keyword handling below.
   for (const reserved of ["AR", "SP", "VCC", "GND", "NC"]) {
     if (signals.has(reserved)) fail(`pin name ${reserved} is reserved`);
+  }
+
+  // Buried internal nodes (FR-079c): seed the signal table alongside the pins,
+  // each with a synthetic "internal" direction (output-capable, above) and no
+  // pin. Buried nodes and pins share one signal namespace, so the same lexical,
+  // reserved-word, and collision rules that guard pin signals guard these.
+  const internalNodes = typeData.internal ?? [];
+  for (const node of internalNodes) {
+    if (!NAME_RE.test(node) || node.length > 8) {
+      fail(`internal node ${JSON.stringify(node)} is not a legal signal name`);
+    }
+    if (["AR", "SP", "VCC", "GND", "NC"].includes(node)) {
+      fail(`internal node name ${node} is reserved`);
+    }
+    if (signals.has(node)) {
+      fail(`internal node ${node} collides with an existing signal (a pin or another internal node)`);
+    }
+    signals.set(node, { pin: null, direction: "internal" });
   }
 
   let tokens;
@@ -318,6 +338,17 @@ export function compileBehavior(typeData) {
   }
 
   if (outputs.length === 0) fail("no equations found");
+
+  // Every declared buried node must be defined by exactly one registered (.R)
+  // equation (FR-079c). "Exactly one" already holds — a second equation for the
+  // signal failed above as "two output equations". A missing definition, or one
+  // that is plain/.T (never .E, which needs a prior .T/.R), is caught here.
+  for (const node of internalNodes) {
+    const out = bySignal.get(node);
+    if (!out) fail(`internal node ${node} has no .R equation`);
+    if (out.kind !== "R") fail(`internal node ${node} must be defined by a registered (.R) equation`);
+  }
+
   const compiled = { outputs, ar, sp };
   // Strict device gate (FR-079b): only when `gal:` names a device. Never alters
   // `compiled` — a passing block evaluates identically to extended mode.

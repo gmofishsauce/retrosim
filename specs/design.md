@@ -593,6 +593,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   (FR-062d) must name an existing pin with `dir: in`; whether the behavior block
   actually *requires* a clock (uses `.R`) is checked client-side at Run time
   (§6.13), since the server keeps the behavior opaque (FR-066). An optional
+  `internal: [names…]` (FR-079c) is carried onto the `ComponentType` as a
+  string list (`Internal []string` in `types.go`, `yaml:"internal"`), the same
+  opaque-carry treatment as `clock:`/`gal:`: the server validates only that each
+  name is a non-empty legal signal token, that the list has no duplicates, and
+  that no name collides with a pin name (buried nodes and pins share one signal
+  namespace); whether each declared node actually has a `.R` equation is checked
+  client-side at Run (§6.13), since the behavior stays opaque (FR-066). An optional
   `gal: <device>` (FR-066a) must be one of `GAL16V8`/`GAL20V8`/`GAL22V10`/
   `GAL20RA10`; the server validates only the device **name** and carries it onto
   the `ComponentType` — the dialect it selects (strict vs extended) is enforced
@@ -1692,6 +1699,19 @@ no sequential part could ever leave U.)
   on a plain output / with a negated LHS; `AR`/`SP` multi-term, on a
   RHS, or defined twice; `VCC`/`GND` not the entire RHS. A type with no
   `behavior:` block compiles to `null` (FR-080).
+- **Buried internal nodes (FR-079c).** `compileBehavior` reads `typeData.internal`
+  (a list of node names) and seeds the signal table with each one **alongside**
+  the pin-derived signals, giving it a synthetic direction (`"internal"`, treated
+  as output-capable so it may head a `.R` equation) and a `pin` of `null` (it owns
+  no pin). The same lexical/reserved/collision checks that guard pin signals guard
+  these: a name is rejected if it is illegal, reserved, or already a pin signal
+  (one shared namespace). After parsing, `compileBehavior` verifies every declared
+  internal node is defined by exactly one `.R` equation — a missing definition, or
+  a definition that is plain/`.T`/`.E`, is a compile error (FR-079c). An internal
+  node otherwise flows through compilation as an ordinary `.R` output record
+  (`kind:"R"`, `pin:null`) and through evaluation (`updateRegisters`/`evalOutput`)
+  **unchanged** — only its *drive target* differs, which is a `sim.js`/`cgen.js`
+  concern (below), not a compiler one. The compiled form gains no new shape.
 - Compiled form: `{ outputs: [{signal, pin, kind: plain|T|R, lhsLow,
   terms: [[{signal, low}]], enable: term|null}], ar, sp }`, cached **per type
   name** — instances share it.
@@ -1745,6 +1765,53 @@ no sequential part could ever leave U.)
   drive it with a derived inverse equation reading the true net (`Q0B = /Q0`).
   The complement then lags its true output by one unit — invisible at human
   pacing — and no language extension is needed.
+- **Buried registered nodes as virtual nets (FR-079c, `sim.js`).** The engine
+  realizes a buried node (`compileBehavior` emitted an `.R` output with `pin:null`,
+  above) as a **virtual net**: a net cell that carries a four-state value and
+  double-buffers exactly like a real net, but is bound to no conductor. In
+  `makeGalasmEntity`, after compiling, for each declared `typeData.internal` name
+  the build **appends a placeholder net** `{ pins:[], members:[] }` to the `nets`
+  array (so `curr`/`next`, `contribs`, the resolve loop, and `changed` detection —
+  all sized/indexed off `nets.length` — cover it for free), records its index under
+  a synthetic key `"<entityRefdes>.#<node>"` in `netOfPin`, and maps the node
+  signal to that key in `pinOwner`. Nothing else changes: `readNet(node)` resolves
+  the node → synthetic key → virtual-net index → `curr[i]`, the drive loop already
+  does `add(pinOwner.get(out.signal), evalOutput(out,…))` so a buried `.R` output
+  contributes its (single) driver onto its virtual net, `resolveNet` reduces that
+  lone driver to its value (a buried node has no enable, so never Z; a power-up or
+  uncertain node contributes **U**, which flows down the chain — FR-079c/FR-077),
+  and `updateRegisters` latches it on the global clock like any `.R` output. Because
+  the virtual net double-buffers, a buried node's value is **one unit delayed** and
+  constant within a step — identical to a real pin net — so a self-feedback term
+  (`Q.R = … + hold * Q`) reads the held value and a shift term (`Qi.R = … Qi-1`)
+  reads the previous stage's *pre-edge* value; the chain advances exactly one stage
+  per clock with **no special evaluation ordering** (FR-078). The placeholder nets
+  never enter `conflictedConductors` (empty `members`) and are unreachable by
+  `valueOfPin` (their key carries `#`, matching no `refdes.pin`), so buried state
+  stays invisible, as required.
+- **The 74HC165 model (the driving case, FR-079c).** Nexperia 74HC165 (Rev. 8,
+  9 May 2025) Table 3, verified against the PDF: `PL`/ (pin 1) is an **asynchronous**
+  active-low parallel load; `CE`/ (pin 15) is an active-low clock enable (a HIGH on
+  `CE`/ inhibits `CP`; the internal clock is effectively `CP OR CE`/); the shift
+  runs on `CP`'s LOW→HIGH edge while `CE`/ is LOW; only stage 7 is exposed, as `Q7`
+  (pin 9) and `/Q7` (pin 7). It is modeled with `clock: CP`, seven buried stages
+  `internal: [SR0..SR6]` for the hidden bits, `Q7` as the eighth (exposed) `.R`
+  register, and its complement pin named `Q7N` driven `Q7N = /Q7` (the §6.13
+  complementary convention — the pin is *not* named `/Q7`). Clock-inhibit and load
+  are **folded into each stage's `.R` D-equation** via buried self-feedback (rather
+  than a per-output `.CLK`, which is a single product term and so cannot express the
+  `CP OR CE`/ clock): with signals `PL`≡pin `PL`/ and `CE`≡pin `CE`/,
+  `SR0.R = /PL*D0 + PL*/CE*DS + PL*CE*SR0`, `SRi.R = /PL*Di + PL*/CE*SR(i-1) + PL*CE*SRi`
+  for i=1..6, and `Q7.R = /PL*D7 + PL*/CE*SR6 + PL*CE*Q7`. **Two deliberate fidelity
+  approximations, documented in the YAML header and consistent with the standing
+  FR-079a/§8 position that the 74HC165's variable behaviors sit outside the dialect:**
+  (1) parallel load is modeled **synchronously** — it rides a `CP` edge while `PL`/
+  is LOW — whereas the real part loads asynchronously (the engine has no variable
+  async-load primitive; `AR`/`SP` force only a fixed 0/1); (2) the clock is `CP`
+  alone with `CE`/ folded as a synchronous hold, so the datasheet's secondary
+  "shift on `CE`/'s rising edge while `CP` is LOW" path is not reproduced. The
+  dominant behaviors — the eight-stage shift, `CE`/ inhibit-as-hold, and parallel
+  capture followed by serial-out — are faithful.
 
 **`sim.js` — engine:**
 - **Interface:** `createSim({store, renderer, library}) → {run(), stop(),
@@ -1973,7 +2040,7 @@ no sequential part could ever leave U.)
 
 **Generator (`web/js/engine/cgen.js`).** Pure, DOM-free ES module (unit-tested under `node:test` like `vectors.js`). `generateC(design, { columnsFrom = design } = {}) → { code, warnings }` produces the `<design>.c` text (the `{ romContent }` option was removed at M5 — ROM contents are no longer baked, FR-117b). `design` is the **FlatDesign** (§6.14) when the source is hierarchical; `columnsFrom` is the **root** design the column tables derive from — the same root-for-columns / flat-for-netlist split the vector panel uses (§6.16), because a top-sheet port's direction derivation needs the root's wiring and a child's ports/switches/indicators must not become columns (FR-116 hierarchy). It **reuses** the existing single-source modules (FR-109): `compileBehavior` (§6.13 `galasm.js`) for behavior lowering, `buildNets` (§6.6 `netlist.js`) for connectivity, `deriveColumns` (§6.16 `vectors.js`) for the baked column tables, and the `effectiveProps` merge (FR-020b) for built-in property values. Emission:
   - **Net table:** nets indexed as in `buildNets` order; a string table of `refdes.pin` labels for conflict messages (FR-108).
-  - **GALasm entities:** each compiled output's term/sum tree is lowered to a C expression/function over `curr[]` using the `rt_*` ops — plain, `.T` (enable gating), and `.R` outputs; register state as static `rt_val` arrays; global-clock and per-output `.CLK` edge detection mirroring `updateRegisters`/`evalOutput` (§6.13, FR-079/FR-079a). Subunit packages union their siblings' pins exactly as `makeGalasmEntity`.
+  - **GALasm entities:** each compiled output's term/sum tree is lowered to a C expression/function over `curr[]` using the `rt_*` ops — plain, `.T` (enable gating), and `.R` outputs; register state as static `rt_val` arrays; global-clock and per-output `.CLK` edge detection mirroring `updateRegisters`/`evalOutput` (§6.13, FR-079/FR-079a). Subunit packages union their siblings' pins exactly as `makeGalasmEntity`. **Buried registered nodes (FR-079c)** mirror the slow engine's virtual-net trick: `lowerGalasm` appends one placeholder net per `typeData.internal` name (bumping `gen_net_count`), maps the node to a synthetic `"<refdes>.#<node>"` key in `netOfPin`/`pinOwner` and interns a label for it; the buried `.R` output then lowers into ordinary `reg_<tag>[k]` state (`gen_init` U-seed, `gen_latch` rising-edge D-latch reading buried literals as `curr[<vnet>]`) and a `gen_drive` fragment `rt_contrib(<vnet>, reg_<tag>[k], 0, <label>)`, so `curr[<vnet>]` carries the one-unit-delayed buried value the runtime's unchanged net resolve produces — no runtime change, the two engines agree on `Q7`/`Q7N` (FR-107). New sequential parity pair `examples/74165-*` (a placed 74165 with switch-driven `D0..D7`/`DS`/`PL`//`CE`/, a clock on `CP`, indicators on `Q7`/`Q7N`, and a `.tv` exercising load-then-shift and `CE`/ inhibit) covers a buried sequential node through the FR-107 harness (`runtests.sh` step 3).
   - **Built-ins/memory:** instance tables (type, nets, effective properties, switch's persisted state as its baked drive level — overridable by a vector input column); each ROM's **refdes and content-file path** baked for the runtime's startup load (FR-117b; superseded the M3 baked-bytes rule 2026-07-03); RAM starts all-U.
   - **Preflight/refusals:** same compile errors as `buildSimulation` (parse failure, `.R` without `clock:`); behavior-less types generate U-drivers with a warning (FR-080 analogue). The former FR-116 deferred-scope refusals of sub-design instances / off-sheet connectors remain **as internal guards** — the caller flattens first (FR-116 hierarchy, reworked 2026-07-04), so tripping one means an unflattened design reached the generator. `SUBUNIT_PKG_RE` is the hierarchical-prefix-tolerant form (§6.14), so a child's subunit packages group within their instance. A clock generator with a hierarchical refdes is baked normally (free-run mode drives it, FR-117a) and the **runtime's vector mode refuses it at startup** — `rt_init`/the vector runner scans `gen_clocks[].refdes` for `/`, reports the refdes with a pointer at `--cycles`, and exits 2 (the FR-115e hidden-clock rule, enforceable only at run time because one program serves both modes).
 
@@ -2008,6 +2075,7 @@ no sequential part could ever leave U.)
 | `delays` | `map[string]number` | optional propagation delays, ns (FR-064); not used by the slow simulator (FR-078) |
 | `behavior` | string | GALasm equations, captured verbatim by the server (FR-066); compiled and evaluated client-side by the slow simulator (§6.13, FR-079) |
 | `clock` | string? | optional name of the input pin that clocks `.R` registered behavior outputs (FR-062d); parser-validated to exist with `dir: in`; required (checked at Run time) iff the behavior uses `.R` |
+| `internal` | `string[]?` | optional buried registered-node names (FR-079c): registered state the behavior block uses that surfaces on no pin (e.g. the 74HC165's seven hidden shift stages). Server-validated as legal, duplicate-free names distinct from pin names; that each has a `.R` equation is checked client-side at Run (§6.13). Absent on parts with no buried state |
 | `properties` | `Property[]` | optional named numeric parameters (FR-020b): `{name, unit, default}`, e.g. the clock's `{name:"period", unit:"ns", default:100}` (FR-071a). Declared by built-ins in the client registry today; YAML types may declare them later. Serializable data only — per-instance values live in `overrides.props` (§7.2) |
 | `description` | string? | optional one-line function summary (FR-104), e.g. `"3-to-8 line decoder/demultiplexer"`; presentation-only |
 | `datasheet` | `Datasheet?` | optional provenance (FR-104): `{vendor, title, rev, url}`, all strings; the panel renders `url` as a link |
@@ -2324,6 +2392,7 @@ pins:                    # unit + dir; pos is not used (FR-014a)
 | `delays` | no | `delays` | `map[string]number`, ns (FR-064) |
 | `behavior` | no | `behavior` | literal block scalar; verbatim (FR-066); evaluated by the slow simulator (FR-079) |
 | `clock` | iff `.R` | `clock` | names the global clock input pin for `.R` registered outputs (FR-062d); must exist with `dir: in`. E.g. `clock: CP` in 74574.yaml. A `.R` output that gives its own `.CLK` (extended, FR-079a) needs no global `clock:` |
+| `internal` | no | `internal` | optional list of buried registered-node names (FR-079c), e.g. `internal: [SR0, SR1, SR2, SR3, SR4, SR5, SR6]` for the 74HC165. Each must be a legal name, unique, and distinct from every pin name; each must be defined by exactly one `.R` equation in `behavior` (checked at Run). A buried node is read/written in the behavior block but drives no pin |
 | `gal` | no | `gal` | optional GAL device name selecting **strict** dialect (FR-066a): one of `GAL16V8`/`GAL20V8`/`GAL22V10`/`GAL20RA10`. Omit ⇒ **extended** dialect (default; FR-079a). Server validates the name only |
 | `partnumber` | iff `gal` | `partnumber` | GAL parts only (FR-066b): non-empty free-form **display name** (FR-005b), e.g. `"PC-DECODE-A"`; not a key and need not be unique (the library key is `id`). Absent on 74-series types |
 | `description` | no | `description` | optional one-line function summary (FR-104); presentation-only. For a GAL part it is authored in the New GAL part dialog (FR-066c) since the part has no datasheet of its own |
@@ -2464,6 +2533,8 @@ read/written through the same `/api/v1/design/{load,save}` endpoints as a design
 | Four-state combination rule | Strict pessimism (any U operand → U; the vision statement's original rule, chosen first) | **Selective pessimism: `0 AND x = 0`, `1 OR x = 1`; other U combinations → U; Z reads as U (FR-077)** | Reworked 2026-06-12 (supersedes the strict-pessimism decision): under strict-U, registered feedback could never be initialized — `0 AND U = U` made even a held synchronous clear/load ineffective (discovered on the 74163), so no sequential part could leave U. Selective pessimism is what real logic permits; genuinely uninitialized paths still surface as U, preserving the debug intent |
 | Clock pin for `.R` outputs | Name convention (CP/CLK/CK); infer from equations | **Explicit `clock:` YAML key (FR-062d)** | Unambiguous and parser-validated; makes the 74574's named-clock convention machine-readable; additive per FR-066 |
 | Expressing parts beyond flat SOP / one clock (74HC74, 165, 283, 595, …) | (a) integrate a full **Verilog** parser + 4-state event simulator; (b) a bare `galasm: strict` boolean; (c) hand-coded **native-JS** behaviors for the hard parts (the `BEHAVIORS` escape hatch already used by built-ins); (d) compose hard parts as **sub-designs** of primitive built-ins (§6.14 hierarchy) | **Device-named dialect: `gal: <device>` ⇒ strict that device; omit ⇒ extended (union of the four GAL dialects, capacity lifted, plus XOR) — FR-066a/FR-079a/FR-079b** | Verilog is an order of magnitude more code than the whole engine, imports a worldview that clashes with the unit-delay SOP model, and the stakeholder dislikes it — disproportionate for ~5 parts. A boolean can't say "fits *what*", and breaks the moment a second device matters; naming the device makes strict a real "would this burn?" gate and gives *extended* a principled definition (the GAL20RA10's per-output `.CLK` is real GALasm, so independent clock domains aren't invented syntax). Strict is a pure accept/reject gate, never a second evaluator. The native-JS (c) and sub-design (d) paths remain available for behaviors no GAL can express (74HC165 async variable load) — they sit *outside* the `gal:` flag and are out of scope for this change |
+| Buried registered internal nodes (74HC165 & kin, FR-079c) | (a) infer a buried node from any `.R` LHS that matches no pin — no new YAML key; (b) a separate per-entity value buffer with a new `readNet` branch and an explicit swap; (c) native-JS behavior (the `BEHAVIORS` escape hatch); (d) compose from primitive built-ins as a sub-design | **Explicit `internal:` node list + realize each node as a driver-less *virtual net* appended to the net array** | Explicit declaration keeps typo-safety (an unknown signal still errors, vs. (a) where a mistyped pin silently becomes a buried node) and is self-documenting. The virtual-net realization reuses `readNet`, `updateRegisters`, `evalOutput`, and `resolveNet` **unchanged** — a buried node is just a net with one driver and no conductor — so it inherits the one-unit-delay, four-state, U-propagation semantics for free and both engines stay in lock-step (FR-107); (b) reimplements that machinery for no gain. (c)/(d) are the heavier escape hatches reserved for behaviors no GAL can express (async variable load); a buried *shift register* is ordinary registered logic that only lacked a way to name hidden state |
+| 74HC165 parallel load: sync vs. async | Model load faithfully **async** (needs a new variable-async-load engine primitive); model it **synchronously** (folds into the `.R` D-equation, no engine change); omit load entirely (support only shift) | **Synchronous load, folded into each stage's `.R` D-equation, documented as an approximation** | The real part loads asynchronously, but the engine has no variable-async-load primitive and adding one is out of scope (the standing FR-079a/§8 position, restated across two prior decisions). A sync-load approximation reuses the buried-`.R` mechanism with zero new machinery and matches the real part whenever load is followed by a clock (the normal usage); the gap is stated in the YAML header and FR-079c. Omitting load would make the part far less useful for no saving |
 | API versioning | Unversioned routes | **`/api/v1/` prefix** | New endpoints (future transpiler) added without breaking clients (NFR-004) |
 | Fast-engine deliverable & runtime split (FR-116/FR-116a) | Single emitted `.c` with the runtime text prepended; server-side compile and/or run; generated-only program with no fixed runtime | **Two-file delivery: a fixed, hand-written, documented `runtime.h`/`runtime.c` pair copied verbatim beside the thin generated `<design>.c`; user compiles with plain `cc`** | Stakeholder-chosen (2026-07-02). A human-readable runtime with a documentable API keeps every subtle semantic (FR-077/FR-081–083/FR-078/FR-115c/e) in one auditable, natively-testable C file; the generator stays small (tables + lowered expressions); no toolchain dependency enters the product — compilation is the user's step |
 | Fast-engine batch I/O (FR-117/FR-118) | Teach the C program to parse `.tv` JSON; bake vector rows into the emitted source; VCD as the primary output | **Columns baked at generate time (they derive from the design), rows as plain whitespace text on stdin; stdout transcript + stderr conflicts; VCD as a later `--vcd` flag** | Avoids a JSON parser in C; rows-on-stdin lets vectors change without regenerating; a line-oriented transcript is directly diffable against `runVectors` output — the cheapest FR-107 parity harness (`gen-open.md` sequencing) |
@@ -2518,6 +2589,7 @@ sim/
     js/chrome/statusbar.js  CREATE  bottom status bar trays (§6.11)
   components/
     74138.yaml              CREATE  (user-authored sample; §7.6)
+    74165.yaml              CREATE  8-bit PISO shift register; buried nodes (FR-079c, §6.13)
     74xxx.yaml              CREATE  (additional user-authored samples)
   specs/
     design.md               (this document)
@@ -2600,6 +2672,7 @@ No files are modified (greenfield).
 | FR-092, FR-093 | §6.12, §6.12a | `backup.js`, `app.js`, `model/persist.js` |
 | FR-062d | §6.3, §6.13, §7.1, §7.6 | `yamlparse.go`, `types.go`, `sim.js` |
 | FR-075, FR-078, FR-079, FR-080 | §6.13 | `sim.js`, `galasm.js` |
+| FR-079c | §6.3, §6.13, §6.17, §7.1, §7.6 | `types.go`, `yamlparse.go`, `galasm.js`, `sim.js`, `cgen.js`, `srv/components/74165.yaml`, `examples/74165-*` |
 | FR-076, FR-087 | §6.9, §6.10, §6.11, §6.13 | `toolbar.js`, `store.js`, `interaction.js`, `sim.js`, `statusbar.js` |
 | FR-077, FR-081, FR-082, FR-083 | §6.8, §6.13 | `sim.js`, `galasm.js`, `canvas.js` |
 | FR-084, FR-085, FR-086 | §6.13 | `sim.js`, `builtins.js` |

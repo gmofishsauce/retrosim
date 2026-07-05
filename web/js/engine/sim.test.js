@@ -510,3 +510,45 @@ test("scriptedClocks suppresses clock/reset behaviors; setStimulus drives their 
   settle(sim);
   assert.equal(sim.valueOfPin("A-1", "OUT"), V0);
 });
+
+// SHIFT2: a two-stage shift register whose first stage SR0 is a buried internal
+// node (FR-079c); DS shifts through SR0 into the exposed Q1, one stage per clock.
+const SHIFT2 = {
+  name: "SHIFT2",
+  renderType: "unit",
+  clock: "CP",
+  internal: ["SR0"],
+  pins: [
+    { name: "DS", side: "left", position: 1, direction: "in" },
+    { name: "CP", side: "left", position: 2, direction: "in" },
+    { name: "Q1", side: "right", position: 1, direction: "out" },
+  ],
+  behavior: "SR0.R = DS\nQ1.R = SR0\n",
+};
+
+test("a buried internal node carries a shift stage: DS reaches Q1 after two clocks (FR-079c)", () => {
+  const d = mkDesign();
+  place(d, "U1", SHIFT2);
+  // Wire DS, CP, Q1 to indicators so each is a net member (drivable/readable).
+  place(d, "A-1", builtin("indicator"));
+  place(d, "A-2", builtin("indicator"));
+  place(d, "A-3", builtin("indicator"));
+  connect(d, ["U1", "DS"], ["A-1", "IN"]);
+  connect(d, ["U1", "CP"], ["A-2", "IN"]);
+  connect(d, ["U1", "Q1"], ["A-3", "IN"]);
+
+  const sim = buildSimulation(d);
+  const pulse = (ds) => {
+    sim.setStimulus([{ refdes: "U1", pin: "DS", value: ds }, { refdes: "U1", pin: "CP", value: V0 }]);
+    sim.step(); sim.step(); sim.step();
+    sim.setStimulus([{ refdes: "U1", pin: "DS", value: ds }, { refdes: "U1", pin: "CP", value: V1 }]);
+    sim.step(); sim.step(); sim.step();
+  };
+
+  pulse(V1); // SR0 <- 1; Q1 <- old SR0 (U)
+  assert.notEqual(sim.valueOfPin("U1", "Q1"), V1); // the 1 has not reached Q1 yet
+  pulse(V0); // Q1 <- SR0 (=1); SR0 <- 0
+  assert.equal(sim.valueOfPin("U1", "Q1"), V1); // it arrives one clock later
+  pulse(V0); // Q1 <- SR0 (=0)
+  assert.equal(sim.valueOfPin("U1", "Q1"), V0); // and shifts on through
+});

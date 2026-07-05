@@ -106,7 +106,13 @@ export function generateC(design, { columnsFrom = design } = {}) {
   // sim.js makeGalasmEntity).
   function lowerGalasm(typeName, insts, pins) {
     const td0 = insts[0].typeData;
-    const typeData = { name: typeName, pins, behavior: td0.behavior, gal: td0.gal };
+    const typeData = {
+      name: typeName,
+      pins,
+      behavior: td0.behavior,
+      gal: td0.gal,
+      internal: td0.internal, // buried registered nodes (FR-079c)
+    };
     const c = compiled(typeName, typeData);
 
     const pinOwner = new Map(); // signal → "refdes.pinName" net key
@@ -117,6 +123,22 @@ export function generateC(design, { columnsFrom = design } = {}) {
         pinOwner.set(signal, `${inst.refdes}.${p.name}`);
         if (c === null && p.direction !== "in") uPins.push(`${inst.refdes}.${p.name}`);
       }
+    }
+
+    // Buried registered nodes (FR-079c): mirror sim.js makeGalasmEntity — append
+    // one placeholder virtual net per declared internal node (bumping
+    // gen_net_count = nets.length below), map the node to a synthetic
+    // "<refdes>.#<node>" key in netOfPin/pinOwner, and intern its label. The
+    // buried .R output then lowers through the ordinary reg/drive paths below:
+    // its D literals read curr[<vnet>] and its driver is rt_contrib(<vnet>, …),
+    // so curr[<vnet>] carries the one-unit-delayed buried value the runtime's
+    // unchanged net resolve produces — the two engines agree on the exposed pins.
+    for (const node of td0.internal ?? []) {
+      const key = `${insts[0].refdes}.#${node}`;
+      netOfPin.set(key, nets.length);
+      nets.push({ pins: [], members: [] });
+      pinOwner.set(node, key);
+      intern(key);
     }
 
     const refdesList = insts.map((i) => i.refdes).join(", ");

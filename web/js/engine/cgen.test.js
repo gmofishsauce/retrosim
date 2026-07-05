@@ -168,6 +168,34 @@ test("generateC: global-clock .R output emits register state and latch (M3 step 
   assert.match(code, /v = reg_U1\[0\]; \/\* latched \*\//); // drive reads the register
 });
 
+// SHIFT2: first stage SR0 is a buried internal node (FR-079c); DS -> SR0 -> Q1.
+const SHIFT2 = {
+  name: "SHIFT2",
+  renderType: "unit",
+  clock: "CP",
+  internal: ["SR0"],
+  pins: [
+    { name: "DS", side: "left", position: 1, direction: "in" },
+    { name: "CP", side: "left", position: 2, direction: "in" },
+    { name: "Q1", side: "right", position: 1, direction: "out" },
+  ],
+  behavior: "SR0.R = DS\nQ1.R = SR0\n",
+};
+
+test("generateC: buried internal node becomes a virtual net with register state (FR-079c)", () => {
+  const d = mkDesign();
+  place(d, "U1", SHIFT2);
+  const { code } = generateC(d);
+  // The buried node SR0 gets a virtual net even though no conductor exists.
+  assert.match(code, /const int gen_net_count = 1;/);
+  // Two registers: the buried SR0 and the exposed Q1.
+  assert.match(code, /static rt_val reg_U1\[2\];/);
+  // The buried node lowers with its synthetic "#"-tagged key and drives its net.
+  assert.match(code, /\/\* U1\.#SR0 \*\//);
+  assert.match(code, /v = reg_U1\[0\]; \/\* latched \*\//);
+  assert.match(code, /v = reg_U1\[1\]; \/\* latched \*\//);
+});
+
 test("generateC: per-output .CLK registered output latches on its own clock (M3 step 2)", () => {
   const CLKFF = { ...DFF, behavior: "Q.R = D\nQ.CLK = CP\n" };
   const d = mkDesign();

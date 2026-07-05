@@ -95,7 +95,13 @@ export function buildSimulation(
     // Carry `gal` so a GAL part's behavior is strict-validated at Run (FR-079b);
     // absent on 74-series, so they stay in the extended dialect (FR-079a).
     const td0 = insts[0].typeData;
-    const typeData = { name: typeName, pins, behavior: td0.behavior, gal: td0.gal };
+    const typeData = {
+      name: typeName,
+      pins,
+      behavior: td0.behavior,
+      gal: td0.gal,
+      internal: td0.internal, // buried registered nodes (FR-079c)
+    };
     const c = compiled(typeName, typeData);
     // c === null means either no behavior block (report once, FR-080) or a
     // parse error (already in `errors`; preflight will refuse to start).
@@ -114,6 +120,20 @@ export function buildSimulation(
           uPins.push(`${inst.refdes}.${p.name}`);
         }
       }
+    }
+
+    // Buried registered nodes (FR-079c): realize each as a driver-less virtual
+    // net appended to the net array. curr/next, contribs, the resolve loop, and
+    // changed-detection are all sized/indexed off nets.length, so the virtual net
+    // rides along for free and inherits the one-unit-delay, four-state model. Its
+    // synthetic key carries '#', so it matches no real (refdes,pin) query
+    // (valueOfPin) and its empty members keep it out of conflictedConductors —
+    // buried state stays invisible.
+    for (const node of td0.internal ?? []) {
+      const key = `${insts[0].refdes}.#${node}`;
+      netOfPin.set(key, nets.length);
+      nets.push({ pins: [], members: [] });
+      pinOwner.set(node, key);
     }
 
     const e = {

@@ -23,6 +23,7 @@ type ComponentType struct {
 	Delays     map[string]float64 `json:"delays,omitempty"`     // optional propagation delays, ns (FR-064)
 	Behavior   string             `json:"behavior,omitempty"`   // GALasm text, captured verbatim (FR-066); evaluated client-side (FR-079)
 	Clock      string             `json:"clock,omitempty"`      // optional clock input pin for .R behavior outputs (FR-062d)
+	Internal   []string           `json:"internal,omitempty"`   // optional buried registered-node names (FR-079c); each defined by one .R equation, checked client-side at Run (§6.13)
 	Gal        string             `json:"gal,omitempty"`        // optional GAL device selecting strict dialect (FR-066a); "" = extended (FR-079a)
 	PartNumber string             `json:"partnumber,omitempty"` // GAL parts only: free-form display name (FR-066b/FR-005b); not a key; "" for 74-series
 

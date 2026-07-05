@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-05 — FR-079c: buried registered internal nodes (74HC165 & kin)
+What: specs only (implementation follows). New FR-079c: a 74-series behavior block may declare buried registered state (an `internal:` node list, §7.6) that surfaces on no pin, so hidden shift/counter stages model faithfully — driver: the 74HC165 8-bit PISO, which exposes only its last stage (Q7//Q7) of eight. Each buried node is defined by one `.R` equation, powers up U, and rides the one-unit-delay four-state model exactly like a pin net, so a buried shift chain advances one stage per clock. Realized in both engines as a driver-less *virtual net* appended to the net array, reusing readNet/updateRegisters/evalOutput/resolveNet unchanged. FR-079a's async-load caveat cross-references FR-079c. Datasheet verified against the Nexperia 74HC165 PDF (Rev. 8, Table 3): parallel load is asynchronous, CE/ is active-low clock enable (internal clock = CP OR CE/). The library part therefore models load *synchronously* and clock as CP alone — two documented fidelity approximations, consistent with the standing FR-079a/§8 position that the 165's variable async load is outside the dialect. The full 74165 equation set is recorded in design §6.13.
+Why: user handoff brief — model shift registers/counters with hidden internal bits; the current engine (readNet resolves only pin signals, register D reads nets not registers) returns Z for a buried .R read, collapsing the chain.
+Touches: FR-079c (new), FR-079a (cross-ref); design §6.3, §6.13, §6.17, §7.1, §7.6, §8, traceability, §9. Implementation to follow: types.go, yamlparse.go, galasm.js, sim.js, cgen.js, srv/components/74165.yaml, examples/74165-*, tests (galasm/sim/cgen .test.js, parity.js).
+
 ## 2026-07-05 — FR-015a: edge-anchor unit pin name labels for border margin
 What: unit-component pin names are edge-anchored (hug their border edge with a small fixed pixel margin, growing inward) instead of centered on a fixed inward-nudged point, so the gap to the component border is constant and legible regardless of name length. Subunit gate labels unchanged.
 Why: user feedback — with symmetric centering, longer pin names crowded or crossed the border line and were hard to read; edge-anchoring also avoids eating the center space between opposing labels.
