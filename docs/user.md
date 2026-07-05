@@ -145,6 +145,13 @@ are dropped at once, slightly offset. Each unit is independently selectable,
 movable, and rotatable, but deleting any one unit deletes the whole package (after
 a confirmation).
 
+The `74165` 8-bit parallel-in/serial-out **shift register** is included as well. It
+holds eight internal bits but exposes only the last stage — `Q7` and its complement
+`Q7N` — shifting one bit toward that output per clock. One fidelity note: its
+parallel load (`/PL` low) is modeled as **synchronous** (data is captured on a clock
+edge), whereas the real chip loads asynchronously; in the usual pattern of loading
+and then clocking the bits out, the two behave identically.
+
 ### Creating a custom GAL part (22V10)
 
 Unlike the fixed-function 74-series parts, a GAL22V10 is **programmable** — its

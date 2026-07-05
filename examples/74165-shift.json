@@ -5,8 +5,8 @@
     {
       "refdes": "U1",
       "type": "type-74165",
-      "x": 0,
-      "y": 0,
+      "x": 7,
+      "y": -2,
       "rotation": 0,
       "typeData": {
         "id": "type-74165",
@@ -117,8 +117,8 @@
     {
       "refdes": "A-1",
       "type": "type-switch",
-      "x": 0,
-      "y": 0,
+      "x": -10,
+      "y": -4,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -138,13 +138,14 @@
           }
         ]
       },
-      "overrides": {}
+      "overrides": {},
+      "switchState": "1"
     },
     {
       "refdes": "A-2",
       "type": "type-switch",
-      "x": 0,
-      "y": 0,
+      "x": -8,
+      "y": -5,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -164,13 +165,14 @@
           }
         ]
       },
-      "overrides": {}
+      "overrides": {},
+      "switchState": "0"
     },
     {
       "refdes": "A-3",
       "type": "type-switch",
-      "x": 0,
-      "y": 0,
+      "x": -6,
+      "y": -1,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -190,13 +192,14 @@
           }
         ]
       },
-      "overrides": {}
+      "overrides": {},
+      "switchState": "0"
     },
     {
       "refdes": "A-4",
       "type": "type-switch",
-      "x": 0,
-      "y": 0,
+      "x": -8,
+      "y": 1,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -216,13 +219,14 @@
           }
         ]
       },
-      "overrides": {}
+      "overrides": {},
+      "switchState": "0"
     },
     {
       "refdes": "A-5",
       "type": "type-switch",
-      "x": 0,
-      "y": 0,
+      "x": -5,
+      "y": 2,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -247,8 +251,8 @@
     {
       "refdes": "A-6",
       "type": "type-switch",
-      "x": 0,
-      "y": 0,
+      "x": -2,
+      "y": 3,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -273,8 +277,8 @@
     {
       "refdes": "A-7",
       "type": "type-switch",
-      "x": 0,
-      "y": 0,
+      "x": -7,
+      "y": 4,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -299,8 +303,8 @@
     {
       "refdes": "A-8",
       "type": "type-switch",
-      "x": 0,
-      "y": 0,
+      "x": -3,
+      "y": 5,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -325,8 +329,8 @@
     {
       "refdes": "A-9",
       "type": "type-switch",
-      "x": 0,
-      "y": 0,
+      "x": -5,
+      "y": 6,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -351,8 +355,8 @@
     {
       "refdes": "A-10",
       "type": "type-switch",
-      "x": 0,
-      "y": 0,
+      "x": -7,
+      "y": 7,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -377,8 +381,8 @@
     {
       "refdes": "A-11",
       "type": "type-switch",
-      "x": 0,
-      "y": 0,
+      "x": -4,
+      "y": 8,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -403,8 +407,8 @@
     {
       "refdes": "A-12",
       "type": "type-clock",
-      "x": 0,
-      "y": 0,
+      "x": -9,
+      "y": -8,
       "rotation": 0,
       "typeData": {
         "id": "type-clock",
@@ -441,8 +445,8 @@
     {
       "refdes": "A-13",
       "type": "type-indicator",
-      "x": 0,
-      "y": 0,
+      "x": 19,
+      "y": -1,
       "rotation": 0,
       "typeData": {
         "id": "type-indicator",
@@ -467,8 +471,34 @@
     {
       "refdes": "A-14",
       "type": "type-indicator",
-      "x": 0,
-      "y": 0,
+      "x": 22,
+      "y": -1,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-15",
+      "type": "type-indicator",
+      "x": 10,
+      "y": -11,
       "rotation": 0,
       "typeData": {
         "id": "type-indicator",
@@ -500,6 +530,11 @@
           "v": "v1"
         },
         {
+          "t": "bend",
+          "x": 9,
+          "y": -3
+        },
+        {
           "t": "node",
           "v": "v2"
         }
@@ -511,6 +546,11 @@
         {
           "t": "node",
           "v": "v4"
+        },
+        {
+          "t": "bend",
+          "x": 13,
+          "y": -4
         },
         {
           "t": "node",
@@ -644,6 +684,15 @@
         },
         {
           "t": "node",
+          "v": "v42"
+        },
+        {
+          "t": "bend",
+          "x": 11,
+          "y": -7
+        },
+        {
+          "t": "node",
           "v": "v35"
         }
       ]
@@ -654,6 +703,11 @@
         {
           "t": "node",
           "v": "v37"
+        },
+        {
+          "t": "bend",
+          "x": 20,
+          "y": 3
         },
         {
           "t": "node",
@@ -669,8 +723,26 @@
           "v": "v40"
         },
         {
+          "t": "bend",
+          "x": 23,
+          "y": 5
+        },
+        {
           "t": "node",
           "v": "v41"
+        }
+      ]
+    },
+    {
+      "id": "w43",
+      "path": [
+        {
+          "t": "node",
+          "v": "v43"
+        },
+        {
+          "t": "node",
+          "v": "v42"
         }
       ]
     }
@@ -900,6 +972,20 @@
       "pin": "IN",
       "x": 0,
       "y": 0
+    },
+    {
+      "id": "v42",
+      "kind": "junction",
+      "x": 11,
+      "y": -7
+    },
+    {
+      "id": "v43",
+      "kind": "pin",
+      "ref": "A-15",
+      "pin": "IN",
+      "x": 11,
+      "y": -9
     }
   ],
   "nets": [
@@ -1027,10 +1113,12 @@
     {
       "pins": [
         "A-12.OUT",
-        "U1.CP"
+        "U1.CP",
+        "A-15.IN"
       ],
       "members": [
-        "w36"
+        "w36",
+        "w43"
       ],
       "provenance": [],
       "name": "OUT"
