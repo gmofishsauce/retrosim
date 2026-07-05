@@ -62,3 +62,11 @@ New row in test vector generator should be a copy of the previous row.
 After test vectors are saved, the design should be clean unless changes were made to the schematic.
 
 Need to add a concept of per project memory and gal types. Need to change the creation functions to save types in the project.
+
+After opening a new design the editor should do a view: fit to screen
+
+When a subcomponent design is open in the editor, it should be possible to click (or perhaps right click) on a port icon in the design and set it to zero or one for visual test purposes
+
+Add a doc about giving the editor a spin.
+
+Add a built-in component that is a "magic UART". It exposes a register and when a bite is written to the register, it is treated as a character and sent to the standard output of the generated C simulator. The debug simuator will need a console window similar to the test vector panel.
