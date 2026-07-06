@@ -273,6 +273,9 @@ async function main() {
       onNavChange: (depth) => {
         backBtn.hidden = depth === 0;
       },
+      // FR-022a: frame the design after every load (interaction is created
+      // just below, so the closure is safe — it only runs post-init).
+      onLoaded: () => interaction.fitToScreen(),
     });
     backBtn.addEventListener("click", () => fileops.back());
     const interaction = initInteraction({

@@ -235,7 +235,9 @@ restart).
 - **Zoom:** mouse wheel (zooms toward the cursor), or the **View** menu's
   `Zoom In` / `Zoom Out` items (zoom about the canvas center).
 - **Fit to Screen:** the **View** menu's `Fit to Screen` item sizes and centers
-  the view so the whole design fits the canvas.
+  the view so the whole design fits the canvas. This also happens automatically
+  whenever you load a design (Open, or stepping into or back out of a
+  sub-design), so a freshly loaded design always arrives framed in the view.
 - **Pan:** drag with the **middle** mouse button, or hold **Space** and drag with
   the left button.
 - **Recenter:** **right-click on empty canvas** — the clicked point becomes the

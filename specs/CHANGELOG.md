@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-06 — Auto fit-to-screen on design load
+What: the last act of loading any design (File ▸ Open and sub-design descend/back navigation) is now an automatic Fit to Screen (FR-022a), so a freshly loaded design arrives framed in the viewport. Implemented as an `onLoaded` callback on `makeFileOps` invoked at the end of `loadIntoStore`, wired in `app.js` to `interaction.fitToScreen`.
+Why: user request — avoid landing on a loaded design that's off-screen or at the wrong zoom.
+Touches: FR-022a (rework), FR-052; design §6.14 (sub-design Loading note); code fileops.js, app.js.
+
 ## 2026-07-06 — Pin connection bubble → connection lead (rectangles/built-ins)
 What: replace the FR-013 tangent connection bubble (a white circle, radius 0.25, centered 0.25 grid outside each pin's grid point) with a short straight connection lead — a line segment from the pin's grid point outward along the pin side, 0.5 grid units long — on every non-subunit (rectangle) component, built-in objects included. The visual wire attachment point (`pinVisualPos`, FR-013d) moves from the bubble center (0.25 out) to the lead's outer end (0.5 out); the grid point stays the electrical/persisted coordinate. Subunit symbols (FR-013a/c) and built-ins' own body glyphs are unchanged.
 Why: user request — leads read more like a schematic than resting bubbles.

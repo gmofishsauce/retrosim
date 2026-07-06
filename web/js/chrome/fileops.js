@@ -53,7 +53,7 @@ function resolveRel(baseDir, rel) {
   return "/" + out.join("/");
 }
 
-export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {} }) {
+export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {}, onLoaded = () => {} }) {
   // navStack records the absolute paths of the sheets descended through, so the
   // user can step back up the chain (FR-100a). Session-only: not persisted, not
   // on the undo stack. A plain Open/New starts a fresh chain.
@@ -145,6 +145,7 @@ export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {
         toast(`sub-design ${refdes}: interface changed; ${n} wire${n === 1 ? "" : "s"} re-routed`);
       }
       store.replaceDesign(loaded, { savePath: absPath });
+      onLoaded();
       return true;
     } catch (e) {
       toast("Open failed: " + e.message);
