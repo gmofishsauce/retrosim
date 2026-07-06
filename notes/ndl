@@ -1,0 +1,80 @@
+I wrote:
+
+I have a worthy challenge for you. I'm going to give you a URL pointing at a design document for a digital circuit written in a unique descriptive language. The problem is there is no formal description for this language, just an example. I would like you To create documentation for the language implied by the example. The example is https://gtoal.com/vectrex/joystick/netlist.txt
+
+It said:
+
+A fun reverse-engineering task. Let me fetch the netlist and study it.
+
+Done — the spec is at docs/netlist-language.md (untracked in the repo; move it wherever you like).
+
+The language in a nutshell: a line-oriented netlist format with exactly three constructs, used in declare-before-use order:
+
+1. pinout <Type> … end <Type> defines a package type as pin <number> = <name> [= alias…] lines. Names are wildly permissive — they can start with digits or +/- (3.3v, -5v), contain dots (SPI0.MOSI), and end with a prime for active-low (CS'). Repeating a name across pins (eight pins named 0v) makes it a rail class: any like-named pin satisfies a connection.
+2. package <Type> <Instance>… instantiates one or more named instances.
+3. circuit <Name> … end <Name> lists connections of the form Inst.Pin -> Inst.Pin. The arrow is documentation only (source on the left, sink on the right); electrically each statement just merges two pins into a net, and nets merge transitively. ; chains related connections on one line, used for current paths like B1 -> Opto0.Collector ; Opto0.Emitter -> 0v.
+
+Two inferences worth calling out, since you asked for the language implied by the example rather than just a transcription:
+
+- Pin references split at the first dot. PI.SPI0.CE0 is instance PI, pin SPI0.CE0 — which forces the rule that instance names may not contain dots while pin names may.
+- The example's own bugs were the best evidence. The end tags mismatch three times out of five (pinout PI … end MCP42010, etc.), the package line declares Opto1–Opto8 while the circuit uses Opto0–Opto7, and there are two genuine copy-paste wiring errors (RYLo.Mid/LYLo.Mid connected where the X-axis trimpots RXLo.Mid/LXLo.Mid were clearly intended, leaving those wipers floating). I documented each as errata paired with the validation rule a checker should enforce — mismatched-end detection, undeclared/unused instance checks, and unconnected-pin warnings, the last of which would have caught the real wiring bug.
+
+The spec also includes an EBNF grammar, the net-merging semantics, the # X.SO -> unconnected convention for deliberately floating pins, and a self-contained miniature example exercising every feature. One asymmetry I judged intentional rather than a bug: Y-axis trimpots are wired +5v -> Right but X-axis ones +5v -> Left, which reads as a record of physical mounting orientation.
+
+Then I said:
+
+in this repo there is a digital Simulator and Schematic Editor. The editor is logical, meaning it has no power or ground or analog components like the coupling capacitors. Is there a sufficient information in the save files written by this editor to allow an exporter for NDL?
+
+It said:
+
+Good question — this hinges on what the save format actually records. Let me look at the save-file format and the component definitions.
+
+Yes — with one genuine gap: power and ground. Everything a logical NDL netlist needs is in the save file, and the mapping is almost embarrassingly direct. The one thing the format truly cannot supply is exactly what you flagged: rails and analog glue.
+
+Here's how the save format maps onto NDL's three constructs:
+- pinout blocks — FR-057 embeds a full copy of the component's YAML in every saved instance, and that copy includes each pin's name, direction, and physical DIP pin number (I checked: all 31 of the 74-series YAMLs carry number:; a saved 74174 instance in simple174.json has "name": "D0", "number": 3, ...). So the exporter can emit real-pinout pin 3 = D0 lines without touching the component library.
+
+- package statements — FR-011 gives each physical package exactly one U-number. Subunit gates appear in nets as U1A.1B, but the unit letter is redundant (pin names like 1B are unique within the package), so the exporter just strips it: package 7400 U1 … U1.1B.
+
+circuit connections — the save file carries a nets array whose pins are already spelled "U1.CP", "A-1.OUT" — literally NDL's pin-reference syntax. It's regenerated on every save (design.md A4), and FR-059a guarantees connectivity is derivable from the authoritative wires/vertices even without it. A multi-pin net expands to a chain of pairwise -> statements, and since pin directions are saved, the exporter can even honor NDL's driver-on-the-left convention.
+
+The caveats, in descending order of substance:
+
+1. Power/ground — the real insufficiency. FR-062 bans them from the YAML, the editor, and the save file, and the removed "declared-package" mechanism (FR-062b's supersession note) took away the last place that knowledge lived. The gtoal example is dominated by rail wiring (PI.5v -> Digipot1.Vdd…), and none of that can be generated from a save file. An exporter would need its own side table (DIP14 → pin 14 Vcc / pin 7 GND, etc.) or simply emit rail-less pinouts — legal NDL, since nothing requires a pinout to be complete.
+2. A-series built-ins (switches, clock, indicators, pull-ups, ports) have no physical package. This is exporter policy, not missing data — the natural move is to turn the design's ports into a connector pinout, exactly like the example's VecPort, and drop or header-ize the rest.
+3. Sub-designs (X-series) store only a relative child path (FR-060b), so a flat NDL export must recursively load and flatten child files — the information exists, just not within one file.
+4. Trivia: the two parts without pin numbers (type-R8X8, type-RAM256-8) need invented numbering, which is harmless since NDL numbers are footprint metadata; and your active-low convention /MR would cosmetically translate to NDL's MR', though both are legal NDL names. Instance names (U1, A-4, X1) contain no dots, so NDL's split-at-first-dot parsing works unmodified.
+
+So an exporter is very feasible: read the saved JSON, emit one pinout per distinct type (from the embedded typeData), one package line per type listing the U-numbers, and the nets array as the circuit block. The output would be a correct logical NDL netlist; making it buildable like the joystick example would take only a small static Vcc/GND table on the exporter side.
+
+I said:
+
+I hope to eventually have a KiCad exporter. This would require full pin number information. So I'm wondering if we can enhance the per-component YAML format To include this meta-data. It would not be used except by exporters. This would require updating all the existing YAML files. Thoughts?
+
+This is the right instinct — the exporter-side lookup table I hand-waved for NDL would rot; the component YAML, which already cites its datasheet, is the natural home for this knowledge. It's very doable, and I'd shape it like this:
+
+Keep it out of pins:. FR-062's ban on power/ground pins isn't an accident — every rule downstream of pins: assumes signal pins (required direction, side/position, group coherence, unique names feeding saved endpoints). Adding power pins there means carving exceptions through all of that. Instead, add a separate optional top-level block that the editor and simulator never read:
+
+physical:
+  package: DIP-14            # tool-neutral footprint hint
+  power:
+    - { name: VCC, number: 14, rail: 5v }
+    - { name: GND, number: 7 }
+  nc: [ 13 ]                 # no-connects, if any
+
+This follows the FR-066 precedent (the behavior: block is opaque to everything except its one consumer), so the parser change is nearly nil and no editor behavior is touched.
+
+The validation is where the value is. Once physical: exists, the server can cross-check what today is uncheckable: signal-pin numbers plus power/NC numbers must be unique and must exactly tile 1..N for the declared package. That completeness check will catch transcription errors in the existing number: fields that nothing currently exercises — the same class of bug the NDL example's unconnected-wiper errata illustrated. I'd make the check conditional on the block being present, so parts without it (fictional ones like type-RAM256-8, dialog-created GALs) stay legal and the exporter just warns.
+
+A pleasant free ride: FR-057 copies the full type YAML into every saved instance, so physical: flows into save files automatically — no save-format change, no formatVersion bump, and exporters (NDL, KiCad) can work from the design JSON alone without consulting the library.
+
+Scope of the update: 33 files. The 31 74-series parts are mostly mechanical — HC-family corner power (Vcc = top corner, GND = pin N/2 is the usual pattern but not universal, so each one should be confirmed against the datasheet already cited in the file header). type-R8X8 needs numbers assigned (real SIP/DIP resistor packs exist to model it on); type-RAM256-8 is fictional and can simply omit the block. The make-yaml-from-datasheet skill should also be updated so new parts arrive with the block filled in.
+
+Two things I'd defer but leave room for: per-instance footprint choice (DIP vs SOIC — the FR-058 override mechanism is the natural carrier when KiCad export actually lands), and tool-specific footprint IDs (Package_DIP:DIP-14_W7.62mm
+— I'd keep the YAML tool-neutral and let the KiCad exporter own that mapping, with an optional escape-hatch field only if the mapping proves lossy).
+
+Process-wise this is a clean additive change: a new suffixed FR (FR-062e, say) stating the block is exporter-only metadata ignored by editor and simulation, a design.md §7.6 addition, a CHANGELOG line, then the parser tweak + validation + the 33-file sweep. The datasheet verification pass is the only genuinely careful part.
+
+Want me to draft the FR text and the exact YAML schema first, or is there a piece of this you'd shape differently?
+
+
