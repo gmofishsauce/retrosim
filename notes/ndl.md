@@ -1,8 +1,8 @@
-I wrote:
+**I wrote:**
 
 I have a worthy challenge for you. I'm going to give you a URL pointing at a design document for a digital circuit written in a unique descriptive language. The problem is there is no formal description for this language, just an example. I would like you To create documentation for the language implied by the example. The example is https://gtoal.com/vectrex/joystick/netlist.txt
 
-It said:
+**Fable said:**
 
 A fun reverse-engineering task. Let me fetch the netlist and study it.
 
@@ -21,11 +21,11 @@ Two inferences worth calling out, since you asked for the language implied by th
 
 The spec also includes an EBNF grammar, the net-merging semantics, the # X.SO -> unconnected convention for deliberately floating pins, and a self-contained miniature example exercising every feature. One asymmetry I judged intentional rather than a bug: Y-axis trimpots are wired +5v -> Right but X-axis ones +5v -> Left, which reads as a record of physical mounting orientation.
 
-Then I said:
+**Then I said:**
 
 in this repo there is a digital Simulator and Schematic Editor. The editor is logical, meaning it has no power or ground or analog components like the coupling capacitors. Is there a sufficient information in the save files written by this editor to allow an exporter for NDL?
 
-It said:
+**It said:**
 
 Good question — this hinges on what the save format actually records. Let me look at the save-file format and the component definitions.
 
@@ -47,9 +47,11 @@ The caveats, in descending order of substance:
 
 So an exporter is very feasible: read the saved JSON, emit one pinout per distinct type (from the embedded typeData), one package line per type listing the U-numbers, and the nets array as the circuit block. The output would be a correct logical NDL netlist; making it buildable like the joystick example would take only a small static Vcc/GND table on the exporter side.
 
-I said:
+**I said:**
 
 I hope to eventually have a KiCad exporter. This would require full pin number information. So I'm wondering if we can enhance the per-component YAML format To include this meta-data. It would not be used except by exporters. This would require updating all the existing YAML files. Thoughts?
+
+**It said:**
 
 This is the right instinct — the exporter-side lookup table I hand-waved for NDL would rot; the component YAML, which already cites its datasheet, is the natural home for this knowledge. It's very doable, and I'd shape it like this:
 
@@ -77,10 +79,15 @@ Process-wise this is a clean additive change: a new suffixed FR (FR-062e, say) s
 
 Want me to draft the FR text and the exact YAML schema first, or is there a piece of this you'd shape differently?
 
-Eventually, I wrote:
+[ . . . work elided . . . ]
+
+**Eventually, I wrote:**
+
 Now write the NDL exporter using the new physical metadata. Please expose it as file: export, with a dialogue box that allows a choice of export formats. There will be only one choice for now, NDL.
 
-Eventuially, it replied:
+[ . . . work elided . . . ]
+
+E**ventuially, it replied:**
 
 Done and committed as 4e40e5c. Full suite green, including 18/18 parity checks.
 
