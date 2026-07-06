@@ -77,4 +77,21 @@ Process-wise this is a clean additive change: a new suffixed FR (FR-062e, say) s
 
 Want me to draft the FR text and the exact YAML schema first, or is there a piece of this you'd shape differently?
 
+Eventually, I wrote:
+Now write the NDL exporter using the new physical metadata. Please expose it as file: export, with a dialogue box that allows a choice of export formats. There will be only one choice for now, NDL.
 
+Eventuially, it replied:
+
+Done and committed as 4e40e5c. Full suite green, including 18/18 parity checks.
+
+What you get: File ▸ Export… opens a format dialog (a dropdown with one entry, "NDL netlist (.ndl)" — new formats are just an EXPORT_FORMATS entry plus a backend case), then the standard save-mode file dialog, and writes the file through the existing verbatim-text endpoint. Export is read-only, works on the live design including unsaved edits, flattens sub-designs/off-sheet connectors exactly like Generate C, and is disabled under the same simulate/vector-panel locks.
+
+The NDL output (in web/js/engine/ndl.js, spec'd as FR-119/FR-119a §3.24 and design.md §6.18): one pinout per type with real physical pin numbers, /MR exported as MR' per NDL convention, power and NC pins drawn from the FR-062e physical: block — its first consumer beyond the parser; a synthetic POWER package wired to every part's VCC/GND, which is exactly the wiring the logical editor can't represent; a J1 connector package exposing the design's ports; subunit siblings collapsed to their package stem (U1A–U1D → U1); driver-first star connection statements per net with net names as comments; and clocks/switches/indicators/pulls/reset preserved as comment lines rather than fake hardware. Output is deterministic — no timestamps — so exports diff cleanly.
+
+Verification: 10 unit tests, plus smoke runs against your real simple174.json and nand.json saves. The nand smoke caught a real bug before commit: a saved subunit sibling's typeData carries only its own unit's pins, so the first cut emitted a 3-pin 7400 pinout; the generator now unions pins across siblings (with a regression test).
+
+Three things you should know:
+
+1. docs/netlist-language.md had vanished from the repo since I wrote it earlier today. FR-119a cites it as the format reference, so I recreated and committed it. If you'd deliberately moved it elsewhere, tell me where and I'll re-point the references.
+2. Pre-FR-062e saves export without the POWER section — their embedded typeData copies predate physical:. Run File ▸ Refresh Types first (or just re-place parts) and the rails appear; I noted this in the commit message.
+3. docs/user.md is untouched per the house rule — once you've manually verified the Export flow in the browser, I'll document it there.

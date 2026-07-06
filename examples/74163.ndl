@@ -1,0 +1,62 @@
+# NDL netlist — exported by retrosim (FR-119a)
+# design: counter
+# Generated file; the next export overwrites any edits.
+
+pinout 74163
+  pin 3 = A
+  pin 4 = B
+  pin 5 = C
+  pin 6 = D
+  pin 1 = CLR'
+  pin 9 = LOAD'
+  pin 7 = ENP
+  pin 10 = ENT
+  pin 14 = QA
+  pin 13 = QB
+  pin 12 = QC
+  pin 11 = QD
+  pin 15 = RCO
+  pin 2 = CLK
+  pin 16 = VCC
+  pin 8 = GND
+end 74163
+
+# power rails from the parts' physical: metadata (FR-062e); the
+# schematic itself is logical and carries no power wiring
+pinout POWER
+  pin 1 = VCC
+  pin 2 = GND
+end POWER
+
+package 74163 U1
+package POWER PWR
+
+circuit counter
+
+  # net OUT
+  U1.A -> U1.B
+  U1.A -> U1.C
+  U1.A -> U1.D
+
+  # net OUT
+  U1.ENP -> U1.ENT
+  U1.ENP -> U1.LOAD'
+
+  # power rail wiring (FR-062e physical: metadata)
+  PWR.VCC -> U1.VCC
+  PWR.GND -> U1.GND
+
+  # virtual devices (no physical package; FR-119a f):
+  # virtual: A-1 (clock) OUT -> U1.CLK
+  # virtual: A-2 (pulldown) OUT -> U1.A U1.B U1.C U1.D
+  # virtual: A-3 (reset) /R -> U1.CLR'
+  # virtual: A-4 (pullup) OUT -> U1.ENP U1.ENT U1.LOAD'
+  # virtual: A-5 (indicator) IN -> U1.QA
+  # virtual: A-6 (indicator) IN -> U1.QB
+  # virtual: A-7 (indicator) IN -> U1.QC
+  # virtual: A-8 (indicator) IN -> U1.QD
+  # virtual: A-9 (indicator) IN -> U1.RCO
+  # virtual: A-10 (indicator) IN -> U1.CLK
+  # virtual: A-11 (indicator) IN -> U1.CLR'
+
+end counter
