@@ -537,11 +537,10 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
     ctx.stroke();
   }
 
-  // Pin connection bubbles + upright pin name labels.
+  // Pin connection leads + upright pin name labels.
   ctx.font = PIN_FONT;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const r = PIN_RADIUS * scaleFor(vp);
   for (const pin of td.pins) {
     const pw = pinWorldPos(inst, pin.name);
     const ps = worldToScreen(pw, vp);
@@ -549,33 +548,32 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
     const outR = rotateOffset(out.x, out.y, inst.rotation);
 
     // Connection mark at the pin point (which stays the connection target, FR-013).
-    // Unit components draw the FR-013 bubble, tangent to the body one radius
-    // outward. Subunit symbols draw no resting bubble — the circle is reserved for
-    // logic negation (FR-013c) — and instead get a short perpendicular tick on the
-    // pin point, shown only while the symbol is hovered or selected. Inverting-gate
-    // outputs are exempt in both cases: the symbol's inversion bubble is their mark.
+    // Unit components draw the FR-013 lead: a short segment from the grid point out
+    // to the pin's visual attachment point (pinVisualPos, FR-013d). Subunit symbols
+    // draw no resting mark — the circle is reserved for logic negation (FR-013c) —
+    // and instead get the same short tick, shown only while the symbol is hovered or
+    // selected. Inverting-gate outputs are exempt in both cases: the symbol's
+    // inversion bubble is their mark.
     if (td.renderType === "subunit") {
       if (!pinHasOwnBubble(td, pin) && (selected || hovered)) {
         // Short tick along the pin axis (an outward lead from the grid point), so
         // it reads as a connection stub and never hides inside a body edge.
-        const a = worldToScreen(pw, vp);
         const b = worldToScreen(
           { x: pw.x + outR.x * 2 * PIN_RADIUS, y: pw.y + outR.y * 2 * PIN_RADIUS },
           vp,
         );
         ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
+        ctx.moveTo(ps.x, ps.y);
         ctx.lineTo(b.x, b.y);
         ctx.strokeStyle = "#333";
         ctx.lineWidth = 1.5;
         ctx.stroke();
       }
     } else {
-      const bc = worldToScreen(pinVisualPos(inst, pin.name), vp);
+      const end = worldToScreen(pinVisualPos(inst, pin.name), vp);
       ctx.beginPath();
-      ctx.arc(bc.x, bc.y, r, 0, Math.PI * 2);
-      ctx.fillStyle = "#fff";
-      ctx.fill();
+      ctx.moveTo(ps.x, ps.y);
+      ctx.lineTo(end.x, end.y);
       ctx.strokeStyle = "#333";
       ctx.lineWidth = 1;
       ctx.stroke();

@@ -7,7 +7,7 @@ import {
   addWire,
   branchWire,
   pinVisualPos,
-  PIN_RADIUS,
+  PIN_LEAD,
 } from "../model/design.js";
 import { hitComponent, hitPin, hitJunction, hitBend, marqueeHits, PIN_HIT_TOL } from "./hittest.js";
 
@@ -77,8 +77,8 @@ test("hitComponent returns the topmost (last-added) overlapping instance", () =>
 
 test("hitPin returns the pin within tolerance", () => {
   const d = createDesign("t");
-  addInstance(d, ty(), 10, 20, 0); // A0 world (10,22)
-  assert.deepEqual(hitPin(d, { x: 10.2, y: 22.1 }, 0.5), {
+  addInstance(d, ty(), 10, 20, 0); // A0 grid (10,22), lead end (9.5,22)
+  assert.deepEqual(hitPin(d, { x: 9.7, y: 22.1 }, 0.5), {
     refdes: "U1",
     pin: "A0",
   });
@@ -104,22 +104,22 @@ function ty2() {
   };
 }
 
-test("pinVisualPos: one bubble radius outward of the grid point, rotation-aware (FR-013d)", () => {
+test("pinVisualPos: one lead length outward of the grid point, rotation-aware (FR-013d)", () => {
   const d = createDesign("t");
   const inst = addInstance(d, ty2(), 0, 0, 0);
   // Left-side pin at grid (0,1): outward is -x.
-  assert.deepEqual(pinVisualPos(inst, "A"), { x: -PIN_RADIUS, y: 1 });
+  assert.deepEqual(pinVisualPos(inst, "A"), { x: -PIN_LEAD, y: 1 });
   inst.rotation = 90; // outward normal rotates with the pin
   const w = pinVisualPos(inst, "A");
   assert.equal(w.x, -1);
-  assert.equal(w.y, -PIN_RADIUS);
+  assert.equal(w.y, -PIN_LEAD);
 });
 
 test("hot region: PIN_HIT_TOL circle about the visual attachment point (FR-013d)", () => {
   const d = createDesign("t");
-  addInstance(d, ty2(), 0, 0, 0); // A: grid (0,1), bubble center (-0.25, 1)
-  // Just inside / just outside, measured from the bubble center.
-  const cx = -PIN_RADIUS;
+  addInstance(d, ty2(), 0, 0, 0); // A: grid (0,1), lead end (-0.5, 1)
+  // Just inside / just outside, measured from the lead end.
+  const cx = -PIN_LEAD;
   assert.deepEqual(hitPin(d, { x: cx - PIN_HIT_TOL + 0.05, y: 1 }), { refdes: "U1", pin: "A" });
   assert.equal(hitPin(d, { x: cx - PIN_HIT_TOL - 0.05, y: 1 }), null);
   // The grid point itself stays well inside the region.
@@ -129,8 +129,8 @@ test("hot region: PIN_HIT_TOL circle about the visual attachment point (FR-013d)
 test("nearest pin wins where adjacent hot regions overlap (FR-013d)", () => {
   const d = createDesign("t");
   addInstance(d, ty2(), 0, 0, 0); // A at y=1, B at y=2 — regions overlap (tol > 0.5)
-  assert.deepEqual(hitPin(d, { x: -PIN_RADIUS, y: 1.4 }), { refdes: "U1", pin: "A" });
-  assert.deepEqual(hitPin(d, { x: -PIN_RADIUS, y: 1.6 }), { refdes: "U1", pin: "B" });
+  assert.deepEqual(hitPin(d, { x: -PIN_LEAD, y: 1.4 }), { refdes: "U1", pin: "A" });
+  assert.deepEqual(hitPin(d, { x: -PIN_LEAD, y: 1.6 }), { refdes: "U1", pin: "B" });
 });
 
 test("subunit pins keep the on-grid connection point as the visual point (FR-013d/FR-013c)", () => {

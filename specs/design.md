@@ -88,13 +88,14 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
   pin labels, designator only). Thresholds are tuning constants.
 
 **Component Appearance**
-- **FR-013** — Each component is a rectangular outline with a small connection
-  bubble (circle) just outside the body at each pin and pin name labels on the
-  rectangle's sides. The bubble is tangent to the outline edge and anchored on the
-  pin's grid point (that grid point stays the connection coordinate). It is sized
-  so adjacent pins (1 grid unit apart) never overlap and so the whole bubble lies
-  within the pin hit tolerance, and is the wire-connection target (click anywhere
-  within it to start/end a wire).
+- **FR-013** — Each component is a rectangular outline with a short connection
+  lead at each pin and pin name labels on the rectangle's sides. Each lead is a
+  straight line segment from the pin's grid point on the outline edge, outward
+  along the pin's side direction (rotation-aware), 0.5 grid units long. That grid
+  point stays the connection coordinate. Leads are short enough that adjacent pins
+  (1 grid unit apart) never crowd. Applies to every non-subunit component (built-in
+  objects included; their body glyphs are unaffected). The wire attachment point
+  and hot region are FR-013d.
 - **FR-014** — Pin side (left/right/top/bottom) and position come from the YAML
   file; the editor never infers or rearranges pins.
 - **FR-015** — Pin name labels always render upright regardless of rotation.
@@ -160,7 +161,7 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
   `rotateSelectionCmd` captures the prior origins/rotations and interior
   positions for undo. Supersedes per-component "about its own center", which
   tore multi-component sub-circuits apart.
-- **FR-020** — Rotation repositions pin bubbles; all text labels stay upright.
+- **FR-020** — Rotation repositions pin leads; all text labels stay upright.
 
 **Per-Instance Type Overrides**
 - **FR-020a** — View a selected instance's type data and override specific values
@@ -895,7 +896,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   the DPR scale, so neither a stale size nor the `round()` sub-pixel sliver can
   leave an uncleared bottom strip that accumulates drag-image fragments.
 - **Draw order:** grid → buses (thick blue, width annotation `/n` at midpoint,
-  FR-036/FR-037) → wires (thin black) → components (outline, pin bubbles, pin
+  FR-036/FR-037) → wires (thin black) → components (outline, pin leads, pin
   labels) → **vertex marks** → **group-snap braces** → upright text labels →
   selection highlight → tool preview (rubber-band polyline — the proposed route,
   §6.9a — plus the prospective group-snap brace, and the placement ghost) →
@@ -926,12 +927,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   rectangle path as today; a `subunit` instance draws its schematic symbol via the
   symbol module (§6.8a) — the gate/mux outline path plus an upright refdes (e.g.
   `U5A`). The grid-point/stub rule is common to both paths (FR-013/FR-013b). A
-  `unit` instance draws the FR-013 connection bubble at each `pinWorldPos`. A
-  `subunit` instance draws no resting bubble (FR-013c); instead, when that
+  `unit` instance (built-ins included) draws the FR-013 connection lead — a short
+  outward segment from each `pinWorldPos` to `pinVisualPos` (0.5 grid out). A
+  `subunit` instance draws no resting lead (FR-013c); instead, when that
   subunit is hovered (`state.hover`) or selected, the common path draws a short
   tick as an outward lead along the pin axis from the pin's grid point. In
   both paths an inverting output's bubble is owned by the symbol
-  (`pinHasOwnBubble`, §6.8a), so the common path draws neither a bubble nor a tick
+  (`pinHasOwnBubble`, §6.8a), so the common path draws neither a lead nor a tick
   there. For subunit symbols the common path anchors each pin's
   upright name label to the body outline (`pinLabelEdge`, §6.8a) rather than the
   pin point, so stubs never bisect labels.
@@ -963,9 +965,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `editing` refdes set via `setEditingNote` (§6.9).
 - **Wire attachment drawing (FR-013d):** wire/bus *endpoint* segments and the
   rubber-band preview draw to the pin's visual attachment point —
-  `pinVisualPos` (model/design.js): the bubble center (grid point + one bubble
-  radius outward, rotation-aware) for bubbled pins, the plain grid point for
-  subunit pins. Drawing only: path vertices keep the on-grid pin coordinate
+  `pinVisualPos` (model/design.js): the lead's outer end (grid point + 0.5 grid
+  outward along the pin side, rotation-aware) for lead pins, the plain grid point
+  for subunit pins. Drawing only: path vertices keep the on-grid pin coordinate
   (FR-021/FR-059), so saves, netlist, and hit-tested wire geometry are
   unchanged.
 - **Grid (FR-021):** draw grid dots/lines only when `scale` is large enough that
@@ -996,7 +998,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     `in`\|`out`\|`sel`. Every returned offset is integer (on-grid).
   - `drawSymbol(ctx, renderAs, nIn, instance, vp)` — strokes the gate/mux outline,
     any mux select stubs, the inverting-gate inversion bubble + output stub, and
-    OR-family input stubs (connection marks — unit bubbles or subunit hover/select
+    OR-family input stubs (connection marks — unit leads or subunit hover/select
     ticks per FR-013/FR-013c — are drawn by the common pin path in §6.8, except for
     the inverting output, whose bubble the symbol owns).
   - `pinHasOwnBubble(typeData, pin) → bool` — true for an inverting gate's output:

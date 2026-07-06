@@ -257,9 +257,14 @@ export function pinWorldPos(instance, pinName) {
   return { x: instance.x + r.x, y: instance.y + r.y };
 }
 
-// PIN_RADIUS is the FR-013 connection-bubble radius in grid units, drawn
-// tangent to the body (center one radius outside the pin's grid point).
+// PIN_RADIUS is the base pin-mark unit in grid units: the half-length of a
+// subunit connection tick (FR-013c) and, doubled, the FR-013 lead length.
 export const PIN_RADIUS = 0.25;
+
+// PIN_LEAD is the FR-013 connection-lead length in grid units: a straight
+// segment from the pin's grid point outward along the pin side. Its outer end
+// is the pin's visual attachment point (FR-013d).
+export const PIN_LEAD = 2 * PIN_RADIUS;
 
 // sideOutward is the unit vector pointing away from the body for a pin's side,
 // before instance rotation.
@@ -278,10 +283,10 @@ export function sideOutward(side) {
   }
 }
 
-// pinVisualPos returns a pin's *visual attachment point* (FR-013d): the bubble
-// center for bubbled pins (one radius outward of the grid point, rotation-
-// aware), the plain grid point for subunit pins. Drawing and hot-region use
-// only — the grid point (pinWorldPos) remains the electrical and persisted
+// pinVisualPos returns a pin's *visual attachment point* (FR-013d): the outer
+// end of the connection lead for lead pins (PIN_LEAD outward of the grid point,
+// rotation-aware), the plain grid point for subunit pins. Drawing and hot-region
+// use only — the grid point (pinWorldPos) remains the electrical and persisted
 // wire-connection coordinate (FR-021/FR-059).
 export function pinVisualPos(instance, pinName) {
   const w = pinWorldPos(instance, pinName);
@@ -289,7 +294,7 @@ export function pinVisualPos(instance, pinName) {
   const pin = instance.typeData.pins.find((p) => p.name === pinName);
   const out = sideOutward(pin.side);
   const r = rotateOffset(out.x, out.y, instance.rotation);
-  return { x: w.x + r.x * PIN_RADIUS, y: w.y + r.y * PIN_RADIUS };
+  return { x: w.x + r.x * PIN_LEAD, y: w.y + r.y * PIN_LEAD };
 }
 
 // BUS_BRACE_DEPTH is how far (grid units) a group-snap brace's apex juts beyond
