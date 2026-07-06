@@ -1049,6 +1049,60 @@ function writeLastDir(path) {
   }
 }
 
+// EXPORT_FORMATS drives the File ▸ Export… format choice (FR-119). One entry
+// per netlist backend; NDL is the only one so far — the dialog exists so later
+// formats (e.g. KiCad) are additive.
+export const EXPORT_FORMATS = [
+  { id: "ndl", label: "NDL netlist (.ndl)", ext: "ndl" },
+];
+
+// exportFormatDialog asks which export format to write (FR-119). Resolves to
+// an EXPORT_FORMATS entry, or null on cancel.
+export function exportFormatDialog() {
+  return new Promise((resolve) => {
+    const overlay = el("div", "dialog-overlay");
+    const box = el("div", "dialog");
+    overlay.appendChild(box);
+
+    box.appendChild(el("div", "dialog-title", "Export design"));
+    box.appendChild(el("div", "dialog-path", "Format:"));
+    const select = document.createElement("select");
+    select.className = "dialog-input";
+    for (const f of EXPORT_FORMATS) {
+      const opt = document.createElement("option");
+      opt.value = f.id;
+      opt.textContent = f.label;
+      select.appendChild(opt);
+    }
+    box.appendChild(select);
+
+    const buttons = el("div", "dialog-buttons");
+    buttons.append(button("Cancel", () => done(null)));
+    buttons.append(
+      button("Export", () => done(EXPORT_FORMATS.find((f) => f.id === select.value))),
+    );
+    box.appendChild(buttons);
+
+    function done(result) {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(result ?? null);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(null);
+      } else if (e.key === "Enter") {
+        e.stopPropagation();
+        done(EXPORT_FORMATS.find((f) => f.id === select.value));
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+    select.focus();
+  });
+}
+
 export function openFileDialog({ mode, startPath, defaultName = "", title, exts = null, saveExt = "json" } = {}) {
   return new Promise((resolve) => {
     const overlay = el("div", "dialog-overlay");

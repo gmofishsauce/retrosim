@@ -11,8 +11,10 @@ import {
   memDeviceYaml,
   testVectorsPanel,
   openFileDialog,
+  exportFormatDialog,
 } from "./chrome/dialogs.js";
 import { generateC } from "./engine/cgen.js";
+import { generateNDL } from "./engine/ndl.js";
 import { BUILTINS, memDeviceType } from "./builtins.js";
 import { createDesign, typeIdentity } from "./model/design.js";
 import { createStore } from "./store.js";
@@ -344,6 +346,44 @@ async function main() {
         postMessage(`cannot generate: ${e.message}`);
       }
     };
+    // File ▸ Export… (FR-119/§6.18): write the design to a foreign netlist
+    // format. Format dialog (NDL only for now) → flatten (like Generate C) →
+    // generate → save-mode file dialog → verbatim write. Read-only; refusals
+    // and generator warnings post to the message tray (FR-074).
+    const onExport = async () => {
+      const format = await exportFormatDialog();
+      if (!format) return;
+      let out;
+      try {
+        const flat = await flatten(store.design, loadDesign, {
+          rootPath: store.state.savePath,
+        });
+        // format.id is "ndl" — the only backend so far (FR-119a); a new
+        // format adds an EXPORT_FORMATS entry and a case here.
+        out = generateNDL(flat, { name: store.state.designName });
+      } catch (e) {
+        postMessage(`cannot export: ${e.message}`);
+        return;
+      }
+      const sp = store.state.savePath;
+      const res = await openFileDialog({
+        mode: "save",
+        startPath: sp ? dirOf(sp) : defaults.dataDir,
+        defaultName:
+          (sp ? baseName(sp).replace(/\.[^.]*$/, "") : "design") + "." + format.ext,
+        title: `Export ${format.label}`,
+        exts: [format.ext],
+        saveExt: format.ext,
+      });
+      if (!res) return;
+      try {
+        await saveTextFile(res.path, out.text);
+        for (const w of out.warnings) postMessage(w);
+        postMessage(`exported ${baseName(res.path)}`);
+      } catch (e) {
+        postMessage(`cannot export: ${e.message}`);
+      }
+    };
     initToolbar({
       container: document.getElementById("tools"),
       store,
@@ -353,6 +393,7 @@ async function main() {
       library, // for the Refresh Types action (FR-088)
       onTestVectors, // FR-115: Simulate ▸ Test Vectors…
       onGenerateC, // FR-116: Simulate ▸ Generate C…
+      onExport, // FR-119: File ▸ Export…
     });
     initProperties({ container: document.getElementById("properties"), store });
     overlay.classList.add("hidden");

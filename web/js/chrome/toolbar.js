@@ -26,7 +26,7 @@ function accelLabel({ key, shift }) {
     : `Ctrl+${shift ? "Shift+" : ""}${key}`;
 }
 
-export function initToolbar({ container, store, interaction, fileops, sim, library, onTestVectors, onGenerateC }) {
+export function initToolbar({ container, store, interaction, fileops, sim, library, onTestVectors, onGenerateC, onExport }) {
   const tools = [
     { tool: "select", label: "Select" },
     { tool: "wire", icon: WIRE_ICON },
@@ -47,6 +47,13 @@ export function initToolbar({ container, store, interaction, fileops, sim, libra
   addItem(fileMenu.panel, "Save", "Save design", () => fileops.save(), { key: "S" });
   addItem(fileMenu.panel, "Save As", "Save under a new name", () =>
     fileops.save({ saveAs: true }), { key: "S", shift: true });
+  // Export… writes the design to a foreign netlist format (FR-119).
+  const exportItem = addItem(
+    fileMenu.panel,
+    "Export…",
+    "Export the design to a netlist format (NDL)",
+    () => onExport?.(),
+  );
   // Refresh Types re-copies type data from the loaded library into placed
   // instances (FR-088), e.g. after editing a YAML behavior and restarting.
   const refreshItem = addItem(
@@ -224,8 +231,10 @@ export function initToolbar({ container, store, interaction, fileops, sim, libra
     // (FR-115b).
     vectorsItem.disabled = simming;
     // Generate C… is disabled under either lock (FR-116): while simulating
-    // and while the vector panel is open.
+    // and while the vector panel is open. Export… follows the same rule
+    // (FR-119).
     generateItem.disabled = locked;
+    exportItem.disabled = locked;
     // Run and the panel are mutually exclusive (FR-115h): Run is disabled while
     // the panel is open. Stop stays usable while simulating.
     runBtn.disabled = panelOpen;

@@ -2063,6 +2063,70 @@ no sequential part could ever leave U.)
   5. **M5 — runtime ROM loading** (scoped 2026-07-03: FR-117b). ROM contents move from generate-time baking to a **startup load** in `runtime.c`, so a content file can change without regenerating. **Generated tables:** `rt_mem` gains `refdes` and `rom_file` (the `mem` block's path, FR-114f) and loses `rom`/`rom_len`; `cgen.js` stops consuming `romContent` (signature `generateC(design)`); `app.js` needs no change — it never actually wired the specified `loadRomContents` preload (a latent all-U-ROM bug in app-generated programs, found and mooted at M5). This is a `gen_`/runtime **interface change**: programs generated before M5 must be regenerated once. **Runtime:** `mem_load_all`, called from `rt_init` — per ROM, resolve the source (`--rom REFDES=FILE` override, else `rom_file` as recorded, else its basename in the cwd), parse per FR-114e (extension-selected `.bin`/`.hex`, hex = whitespace-separated byte tokens), pack little-endian `ceil(w/8)`-byte words into a runtime-owned byte buffer (partial trailing word dropped, over-capacity reported to stderr and truncated), any failure → stderr + exit 2 (an unresolvable `rom_file` names the refdes, both paths tried, and describes `--rom`); `mem_reset` seeds each ROM from that loaded buffer (the per-row combinational reset re-seeds from it, not from any file re-read). `main()` parses repeatable `--rom REFDES=FILE` before `rt_init`. **Parity:** `parity.js` keeps `loadRomContentsFs` for the JS engine only and points the program at the same file via `--rom` (its temp-dir cwd resolves neither baked path), exercising the override path on `rom-demo`.
   6. **M6 — hierarchy** (scoped 2026-07-04: FR-116 hierarchy rework). Fast-engine flattening: `onGenerateC` flattens (chrome wiring above); `generateC` gains `{ columnsFrom }` (generator paragraph above); the former X-instance/off-sheet refusals become internal unflattened-input guards; cgen's `SUBUNIT_PKG_RE` goes prefix-tolerant. **Runtime:** `rt_clock` gains no fields — the vector runner refuses at startup when any clock's `gen_labels` entry contains `/` (a clock's label is `<refdes>.OUT`, so a slash means a hierarchical refdes — hidden clock, FR-115e analogue; stderr names the clock and points at `--cycles`, exit 2); free-run mode unchanged. **Parity:** `parity.js` flattens the slow leg (Node `loadChild` reads relative to the design file's directory) and generates from the same FlatDesign with `columnsFrom` = the root; a hierarchical parity pair (a parent embedding a child) joins `examples/`. `engine/galasm.js` (`compileBehavior`, compiled-output shape), `model/netlist.js` (`buildNets`), `engine/vectors.js` (`deriveColumns`), `engine/sim.js` (semantic reference for the runtime), `engine/memory.js` (memory semantics reference; `parseRomBytes` as the FR-114e parsing reference), `chrome/dialogs.js` (`openFileDialog`), `chrome/fileops.js` (`dirOf`), `api.js` (save + static fetch), `chrome/toolbar.js`, `app.js`.
 
+### 6.18 JS: NDL netlist exporter (`web/js/engine/ndl.js` + chrome wiring)
+
+- **Purpose:** render a flattened design as an NDL netlist (FR-119a) — the
+  pinout/package/circuit language documented in `docs/netlist-language.md` —
+  behind the generic **File ▸ Export…** flow (FR-119).
+- **Satisfies:** FR-119, FR-119a. First consumer of the FR-062e `physical:`
+  metadata (power pins, NC pins, pincount) outside the parser.
+- **Interface:** `generateNDL(design, { name }) → { text, warnings }` — pure and
+  synchronous, `design` already flattened (§6.14). Deterministic output: types
+  ordered by first use, instances by refdes (natural sort), nets by their first
+  exported reference; a given design always exports byte-identical text.
+- **Behavior (mirrors FR-119a's clause letters):**
+  - **Types → `pinout`.** One block per distinct `typeData` id among exported
+    instances, named by the display name (whitespace → `_`, deduped). Signal
+    pins emit `pin <number> = <name>`; a leading `/` (active-low) becomes a
+    trailing `'` (NDL convention: `/MR` → `MR'`). When `typeData.physical` is
+    present its `power[]` pins emit under their rail names and `nc` pins as
+    `NC`; a type with any unnumbered signal pin gets lowest-unused invented
+    numbers plus a warning comment in the block (FR-062e's degrade-gracefully
+    case, e.g. generated memory devices).
+  - **Power.** A synthetic `pinout POWER` / `package POWER PWR` with one pin per
+    distinct rail name in use (numbered 1..k); the circuit block wires
+    `PWR.<rail> -> <inst>.<rail>` for every physical power pin of every part
+    carrying `physical:`.
+  - **Ports → connector.** When the flattened design has ports, a
+    `pinout <design>_IO` / `package <design>_IO J1`: one pin per distinct
+    1-wide port label, `<label>0..(N-1)` per portN (FR-095 naming), numbered
+    sequentially in label order. Net references to `A-n.P`/`A-n.Pi` rewrite to
+    `J1.<label>`/`J1.<label><i>`; same-label ports collapse (FR-094a).
+  - **Instances → `package`.** Instances grouped by type id; subunit siblings
+    collapse to their package stem via the §6.13/§6.17 rule
+    (`/^((?:.*\/)?U\d+)[A-Z]$/` — `U1A..U1D` → `U1`, `X1/U3A` → `X1/U3`), so a
+    flattened child's packages stay distinct per instance. Text notes (no pins)
+    are skipped entirely.
+  - **Nets → `circuit`.** `buildNets(design)` (§6.6); per net, pin refs map
+    through the subunit-stem and port rewrites, active-low renames, and
+    dedupe; nets with ≥2 exported refs emit a star from the **driver** — the
+    first ref whose pin direction is out/tristate/bidir, else the first ref —
+    one `driver -> sink` statement per line, preceded by `# net <name>` when
+    the net is named. The `->` is documentation of intent (NDL §5.2); star
+    orientation is why direction matters here at all.
+  - **Virtual built-ins.** clock/switch/indicator/indicator8/pullup/pulldown/
+    reset instances have no physical package: each emits a comment line in the
+    circuit block (`# virtual: A-3 (clock) OUT -> U1.CP, …`) naming every net
+    pin it drives or observes, so the information survives the export without
+    inventing hardware. Ports are **not** virtual (they became `J1`).
+- **Chrome wiring (`chrome/dialogs.js`, `chrome/toolbar.js`, `app.js`):** the
+  File menu gains **Export…** (`onExport`), disabled like Generate C while
+  `state.simulating` or `state.vectorPanelOpen` (FR-119). `app.js` handles it:
+  `exportFormatDialog()` (dialogs.js — a modal with a format `<select>`
+  listing `NDL netlist (.ndl)` only, OK/Cancel) → `flatten(store.design,
+  loadDesign, { rootPath: savePath })` (§6.14; refusal posts to the tray and
+  aborts) → `generateNDL(flat, { name: designName })` → `openFileDialog` in
+  save mode (`.ndl` extension, seeded at `dirOf(savePath)`, default
+  `<base>.ndl`) → `saveTextFile` (`POST /api/v1/file/save`, §6.4). Warnings
+  post to the message tray (FR-074).
+- **Tests (`web/js/engine/ndl.test.js`):** a small hand-built flat design (two
+  ICs incl. a subunit pair and `physical:` blocks, a port, a clock, wires
+  giving multi-pin nets) asserting: pinout lines incl. power/NC and active-low
+  rename; invented-number warning for a numberless type; package grouping and
+  subunit stem collapse; connector pinout and reference rewrite; power rail
+  wiring; driver-first star statements; virtual-builtin comments;
+  determinism (two runs byte-identical).
+
 ---
 
 ## 7. Data Model
@@ -2613,6 +2677,7 @@ sim/
     js/engine/galasm.js     CREATE  GALasm behavior compiler/evaluator (§6.13)
     js/engine/sim.js        CREATE  slow simulator engine + scheduler (§6.13)
     js/engine/cgen.js       CREATE  fast-engine C code generator (§6.17)
+    js/engine/ndl.js        CREATE  NDL netlist exporter (§6.18)
     cgen/runtime.h          CREATE  fast-engine C runtime API, documented (§6.17)
     cgen/runtime.c          CREATE  fast-engine C runtime implementation (§6.17)
     tools/tv2txt.js         CREATE  .tv → generated-program stdin rows (§6.17 M2)
@@ -2708,6 +2773,7 @@ No files are modified (greenfield).
 | FR-092, FR-093 | §6.12, §6.12a | `backup.js`, `app.js`, `model/persist.js` |
 | FR-062d | §6.3, §6.13, §7.1, §7.6 | `yamlparse.go`, `types.go`, `sim.js` |
 | FR-062e | §6.3, §7.1, §7.6 | `yamlparse.go`, `types.go`, `srv/components/*.yaml` |
+| FR-119, FR-119a | §6.18 | `engine/ndl.js`, `chrome/dialogs.js`, `chrome/toolbar.js`, `app.js`, `docs/netlist-language.md` |
 | FR-075, FR-078, FR-079, FR-080 | §6.13 | `sim.js`, `galasm.js` |
 | FR-079c | §6.3, §6.13, §6.17, §7.1, §7.6 | `types.go`, `yamlparse.go`, `galasm.js`, `sim.js`, `cgen.js`, `srv/components/74165.yaml`, `examples/74165-*` |
 | FR-076, FR-087 | §6.9, §6.10, §6.11, §6.13 | `toolbar.js`, `store.js`, `interaction.js`, `sim.js`, `statusbar.js` |
