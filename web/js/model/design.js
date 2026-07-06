@@ -186,6 +186,13 @@ export function refreshInstance(design, inst, libType) {
       ? subunitTypeData(libType, inst.typeData.unit)
       : structuredClone(libType);
 
+  // A memory instance's content binding is per-instance state riding in the
+  // copied type data (FR-114e): keep the instance's romFile, never adopt the
+  // library metatype's creation-time path (FR-088).
+  if (td.mem && inst.typeData.mem?.romFile != null) {
+    td.mem.romFile = inst.typeData.mem.romFile;
+  }
+
   const pinNames = new Set(td.pins.map((p) => p.name));
   for (const v of design.vertices) {
     if (

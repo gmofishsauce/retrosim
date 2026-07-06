@@ -572,6 +572,18 @@ test("refreshInstance keeps overrides whose keys survive (FR-088)", () => {
   assert.deepEqual(inst.overrides, { delays: { tpd_a: 11 }, props: { period: 200 } });
 });
 
+test("refreshInstance preserves a memory instance's romFile binding (FR-088/FR-114e)", () => {
+  const d = createDesign("t");
+  const libType = type74138(); // stand-in shape; only mem matters here
+  libType.mem = { kind: "rom", addressBits: 3, dataWidth: 8, locations: 8,
+    romFile: "/library/creation-time.hex" };
+  const inst = addInstance(d, libType, 0, 0, 0);
+  inst.typeData.mem.romFile = "/designs/this-instance.hex"; // rebound via the ROM picker
+  assert.deepEqual(refreshInstance(d, inst, libType), { ok: true });
+  // The refresh took the library's mem block but kept the instance's binding.
+  assert.equal(inst.typeData.mem.romFile, "/designs/this-instance.hex");
+});
+
 test("refreshInstance skips when a wired pin is gone; unwired pin changes are fine (FR-088)", () => {
   const d = createDesign("t");
   const inst = addInstance(d, type74138(), 0, 0, 0);

@@ -124,6 +124,20 @@
           "title": "74HC74; 74HCT74 Dual D-type flip-flop with set and reset; positive edge-trigger",
           "rev": "Rev. 9, 2 April 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT74.pdf"
+        },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
         }
       },
       "overrides": {}

@@ -1,14 +1,15 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "name": "counter",
   "components": [
     {
       "refdes": "U1",
-      "type": "74163",
+      "type": "type-74163",
       "x": 36,
       "y": 19,
       "rotation": 0,
       "typeData": {
+        "id": "type-74163",
         "name": "74163",
         "renderType": "unit",
         "width": 6,
@@ -19,98 +20,112 @@
             "side": "left",
             "position": 2,
             "direction": "in",
-            "number": 3
+            "number": 3,
+            "desc": "parallel load input bit 0 (LSB)"
           },
           {
             "name": "B",
             "side": "left",
             "position": 3,
             "direction": "in",
-            "number": 4
+            "number": 4,
+            "desc": "parallel load input bit 1"
           },
           {
             "name": "C",
             "side": "left",
             "position": 4,
             "direction": "in",
-            "number": 5
+            "number": 5,
+            "desc": "parallel load input bit 2"
           },
           {
             "name": "D",
             "side": "left",
             "position": 5,
             "direction": "in",
-            "number": 6
+            "number": 6,
+            "desc": "parallel load input bit 3 (MSB)"
           },
           {
             "name": "/CLR",
             "side": "left",
             "position": 7,
             "direction": "in",
-            "number": 1
+            "number": 1,
+            "desc": "active-low synchronous clear"
           },
           {
             "name": "/LOAD",
             "side": "left",
             "position": 8,
             "direction": "in",
-            "number": 9
+            "number": 9,
+            "desc": "active-low synchronous parallel load"
           },
           {
             "name": "ENP",
             "side": "left",
             "position": 10,
             "direction": "in",
-            "number": 7
+            "number": 7,
+            "desc": "count enable P"
           },
           {
             "name": "ENT",
             "side": "left",
             "position": 11,
             "direction": "in",
-            "number": 10
+            "number": 10,
+            "desc": "count enable T (also gates RCO)"
           },
           {
             "name": "QA",
             "side": "right",
             "position": 2,
             "direction": "out",
-            "number": 14
+            "number": 14,
+            "desc": "count output bit 0 (LSB)"
           },
           {
             "name": "QB",
             "side": "right",
             "position": 3,
             "direction": "out",
-            "number": 13
+            "number": 13,
+            "desc": "count output bit 1"
           },
           {
             "name": "QC",
             "side": "right",
             "position": 4,
             "direction": "out",
-            "number": 12
+            "number": 12,
+            "desc": "count output bit 2"
           },
           {
             "name": "QD",
             "side": "right",
             "position": 5,
             "direction": "out",
-            "number": 11
+            "number": 11,
+            "desc": "count output bit 3 (MSB)"
           },
           {
             "name": "RCO",
             "side": "right",
             "position": 7,
             "direction": "out",
-            "number": 15
+            "number": 15,
+            "desc": "ripple-carry out (count=15 and ENT high)"
           },
           {
             "name": "CLK",
             "side": "top",
             "position": 2,
             "direction": "in",
-            "number": 2
+            "number": 2,
+            "desc": "clock input, rising-edge triggered"
           }
         ],
         "pinGroups": [
@@ -141,13 +156,34 @@
           "tsu_d": 5
         },
         "behavior": "; 74163 (SN74F163A) — synchronous presettable 4-bit binary counter with\n; synchronous clear. Derived from the description (datasheet p.1), the\n; logic diagram (p.3), and the state diagram (p.2); this datasheet has no\n; numbered function table. Priority at each rising clock edge:\n; clear (pin /CLR LOW) > load (pin /LOAD LOW) > count (ENP and ENT both\n; HIGH) > hold.\n;\n; SEQUENTIAL-PART CLOCK CONVENTION (74574.yaml): GALasm's .R registered\n; outputs are clocked by the GAL22V10's dedicated pin-1 clock\n; (galasmManual.txt section 3.4). That pin-1 clock role is played by the\n; part's named clock pin — here CLK, rising-edge triggered. CLK therefore\n; does NOT appear as a term in any equation below; the .R suffix implies it.\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (pin /CLR is GAL signal CLR, so '/CLR' below means \"pin /CLR is\n; LOW\"). Each Qn has four kinds of product term, every one carrying CLR\n; (pin /CLR HIGH, i.e. not clearing):\n;   load:  /LOAD * <data>                     — synchronous preset\n;   count: LOAD * ENP * ENT * <toggle/carry>  — binary up-count\n;   hold:  LOAD * /ENP * Qn  and  LOAD * /ENT * Qn — count disabled\n; The synchronous clear needs no terms of its own: with pin /CLR LOW no\n; term is true, so every register loads 0 at the next rising edge,\n; regardless of /LOAD, ENP, and ENT (p.1: clear overrides load and count).\n;\n; QA (LSB) toggles whenever counting; each higher bit toggles when all\n; lower bits are 1 (the look-ahead carry), otherwise holds while counting.\nQA.R =   CLR * /LOAD * A\n       + CLR *  LOAD * ENP * ENT * /QA\n       + CLR *  LOAD * /ENP * QA\n       + CLR *  LOAD * /ENT * QA\n\nQB.R =   CLR * /LOAD * B\n       + CLR *  LOAD * ENP * ENT *  QA * /QB\n       + CLR *  LOAD * ENP * ENT * /QA *  QB\n       + CLR *  LOAD * /ENP * QB\n       + CLR *  LOAD * /ENT * QB\n\nQC.R =   CLR * /LOAD * C\n       + CLR *  LOAD * ENP * ENT *  QA *  QB * /QC\n       + CLR *  LOAD * ENP * ENT * /QA *  QC\n       + CLR *  LOAD * ENP * ENT * /QB *  QC\n       + CLR *  LOAD * /ENP * QC\n       + CLR *  LOAD * /ENT * QC\n\nQD.R =   CLR * /LOAD * D\n       + CLR *  LOAD * ENP * ENT *  QA *  QB *  QC * /QD\n       + CLR *  LOAD * ENP * ENT * /QA *  QD\n       + CLR *  LOAD * ENP * ENT * /QB *  QD\n       + CLR *  LOAD * ENP * ENT * /QC *  QD\n       + CLR *  LOAD * /ENP * QD\n       + CLR *  LOAD * /ENT * QD\n\n; Ripple-carry output (combinational): HIGH while the count is 15 and ENT\n; is HIGH — ENT is fed forward to enable RCO; ENP does not affect RCO\n; (p.1). Counting spikes can occur on RCO (p.1); this unit-delay model\n; does not reproduce them.\nRCO = ENT * QA * QB * QC * QD\n",
-        "clock": "CLK"
+        "clock": "CLK",
+        "description": "Synchronous 4-bit binary counter, synchronous clear",
+        "datasheet": {
+          "vendor": "Texas Instruments",
+          "title": "SN74F163A Synchronous 4-Bit Binary Counter (SDFS088A)",
+          "rev": "March 1987, revised August 2001",
+          "url": "https://www.ti.com/lit/ds/symlink/sn74f163a.pdf"
+        },
+        "physical": {
+          "package": "DIP-16",
+          "pincount": 16,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 16
+            },
+            {
+              "name": "GND",
+              "number": 8
+            }
+          ]
+        }
       },
       "overrides": {}
     },
     {
       "refdes": "A-1",
-      "type": "clock",
+      "type": "type-clock",
       "x": 22,
       "y": 11,
       "rotation": 0,
@@ -178,13 +214,14 @@
             "unit": "Hz",
             "default": 1
           }
-        ]
+        ],
+        "id": "type-clock"
       },
       "overrides": {}
     },
     {
       "refdes": "A-2",
-      "type": "pulldown",
+      "type": "type-pulldown",
       "x": 29,
       "y": 37,
       "rotation": 0,
@@ -203,13 +240,14 @@
             "position": 1,
             "direction": "out"
           }
-        ]
+        ],
+        "id": "type-pulldown"
       },
       "overrides": {}
     },
     {
       "refdes": "A-3",
-      "type": "reset",
+      "type": "type-reset",
       "x": 12,
       "y": 24,
       "rotation": 0,
@@ -241,13 +279,14 @@
             "unit": "cycles",
             "default": 3
           }
-        ]
+        ],
+        "id": "type-reset"
       },
       "overrides": {}
     },
     {
       "refdes": "A-4",
-      "type": "pullup",
+      "type": "type-pullup",
       "x": 23,
       "y": 17,
       "rotation": 0,
@@ -266,13 +305,14 @@
             "position": 1,
             "direction": "out"
           }
-        ]
+        ],
+        "id": "type-pullup"
       },
       "overrides": {}
     },
     {
       "refdes": "A-5",
-      "type": "indicator",
+      "type": "type-indicator",
       "x": 45,
       "y": 16,
       "rotation": 0,
@@ -291,13 +331,14 @@
             "position": 1,
             "direction": "in"
           }
-        ]
+        ],
+        "id": "type-indicator"
       },
       "overrides": {}
     },
     {
       "refdes": "A-6",
-      "type": "indicator",
+      "type": "type-indicator",
       "x": 48,
       "y": 16,
       "rotation": 0,
@@ -316,13 +357,14 @@
             "position": 1,
             "direction": "in"
           }
-        ]
+        ],
+        "id": "type-indicator"
       },
       "overrides": {}
     },
     {
       "refdes": "A-7",
-      "type": "indicator",
+      "type": "type-indicator",
       "x": 51,
       "y": 16,
       "rotation": 0,
@@ -341,13 +383,14 @@
             "position": 1,
             "direction": "in"
           }
-        ]
+        ],
+        "id": "type-indicator"
       },
       "overrides": {}
     },
     {
       "refdes": "A-8",
-      "type": "indicator",
+      "type": "type-indicator",
       "x": 54,
       "y": 16,
       "rotation": 0,
@@ -366,13 +409,14 @@
             "position": 1,
             "direction": "in"
           }
-        ]
+        ],
+        "id": "type-indicator"
       },
       "overrides": {}
     },
     {
       "refdes": "A-9",
-      "type": "indicator",
+      "type": "type-indicator",
       "x": 64,
       "y": 16,
       "rotation": 0,
@@ -391,13 +435,14 @@
             "position": 1,
             "direction": "in"
           }
-        ]
+        ],
+        "id": "type-indicator"
       },
       "overrides": {}
     },
     {
       "refdes": "A-10",
-      "type": "indicator",
+      "type": "type-indicator",
       "x": 37,
       "y": 7,
       "rotation": 0,
@@ -416,13 +461,14 @@
             "position": 1,
             "direction": "in"
           }
-        ]
+        ],
+        "id": "type-indicator"
       },
       "overrides": {}
     },
     {
       "refdes": "A-11",
-      "type": "indicator",
+      "type": "type-indicator",
       "x": 17,
       "y": 17,
       "rotation": 0,
@@ -441,7 +487,8 @@
             "position": 1,
             "direction": "in"
           }
-        ]
+        ],
+        "id": "type-indicator"
       },
       "overrides": {}
     }

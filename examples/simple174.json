@@ -166,6 +166,20 @@
           "title": "74HC174; 74HCT174 Hex D-type flip-flop with reset; positive-edge trigger",
           "rev": "Rev. 7, 14 March 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT174.pdf"
+        },
+        "physical": {
+          "package": "DIP-16",
+          "pincount": 16,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 16
+            },
+            {
+              "name": "GND",
+              "number": 8
+            }
+          ]
         }
       },
       "overrides": {}

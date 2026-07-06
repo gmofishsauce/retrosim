@@ -4,7 +4,7 @@
   "components": [
     {
       "refdes": "U1A",
-      "type": "7408",
+      "type": "type-7408",
       "x": -21,
       "y": 21,
       "rotation": 0,
@@ -53,13 +53,27 @@
           "rev": "Rev. 9, 16 February 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT08.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "A"
       },
       "overrides": {}
     },
     {
       "refdes": "U1B",
-      "type": "7408",
+      "type": "type-7408",
       "x": -21,
       "y": 26,
       "rotation": 0,
@@ -108,13 +122,27 @@
           "rev": "Rev. 9, 16 February 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT08.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "B"
       },
       "overrides": {}
     },
     {
       "refdes": "U1C",
-      "type": "7408",
+      "type": "type-7408",
       "x": -21,
       "y": 31,
       "rotation": 0,
@@ -163,13 +191,27 @@
           "rev": "Rev. 9, 16 February 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT08.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "C"
       },
       "overrides": {}
     },
     {
       "refdes": "U1D",
-      "type": "7408",
+      "type": "type-7408",
       "x": -21,
       "y": 36,
       "rotation": 0,
@@ -218,13 +260,27 @@
           "rev": "Rev. 9, 16 February 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT08.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "D"
       },
       "overrides": {}
     },
     {
       "refdes": "U2A",
-      "type": "7432",
+      "type": "type-7432",
       "x": 2,
       "y": 38,
       "rotation": 180,
@@ -273,13 +329,27 @@
           "rev": "Rev. 10, 30 April 2025",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT32.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "A"
       },
       "overrides": {}
     },
     {
       "refdes": "U2B",
-      "type": "7432",
+      "type": "type-7432",
       "x": 2,
       "y": 33,
       "rotation": 180,
@@ -328,13 +398,27 @@
           "rev": "Rev. 10, 30 April 2025",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT32.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "B"
       },
       "overrides": {}
     },
     {
       "refdes": "U2C",
-      "type": "7432",
+      "type": "type-7432",
       "x": 2,
       "y": 28,
       "rotation": 180,
@@ -383,13 +467,27 @@
           "rev": "Rev. 10, 30 April 2025",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT32.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "C"
       },
       "overrides": {}
     },
     {
       "refdes": "U2D",
-      "type": "7432",
+      "type": "type-7432",
       "x": 2,
       "y": 23,
       "rotation": 180,
@@ -438,13 +536,27 @@
           "rev": "Rev. 10, 30 April 2025",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT32.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "D"
       },
       "overrides": {}
     },
     {
       "refdes": "U3A",
-      "type": "7486",
+      "type": "type-7486",
       "x": 14,
       "y": 19,
       "rotation": 0,
@@ -486,13 +598,27 @@
           "tpd": 14
         },
         "behavior": "; 7486 — quad 2-input EXCLUSIVE-OR gate. Derived from the function table\n; (datasheet Table 3): each output nY is HIGH when its two inputs differ and\n; LOW when they are equal.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: xor fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). The XOR output is active-high and\n; written as the two differing-input product terms: nY = nA*/nB + /nA*nB.\n1Y = 1A * /1B + /1A * 1B\n2Y = 2A * /2B + /2A * 2B\n3Y = 3A * /3B + /3A * 3B\n4Y = 4A * /4B + /4A * 4B\n",
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "A"
       },
       "overrides": {}
     },
     {
       "refdes": "U3B",
-      "type": "7486",
+      "type": "type-7486",
       "x": 14,
       "y": 24,
       "rotation": 0,
@@ -534,13 +660,27 @@
           "tpd": 14
         },
         "behavior": "; 7486 — quad 2-input EXCLUSIVE-OR gate. Derived from the function table\n; (datasheet Table 3): each output nY is HIGH when its two inputs differ and\n; LOW when they are equal.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: xor fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). The XOR output is active-high and\n; written as the two differing-input product terms: nY = nA*/nB + /nA*nB.\n1Y = 1A * /1B + /1A * 1B\n2Y = 2A * /2B + /2A * 2B\n3Y = 3A * /3B + /3A * 3B\n4Y = 4A * /4B + /4A * 4B\n",
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "B"
       },
       "overrides": {}
     },
     {
       "refdes": "U3C",
-      "type": "7486",
+      "type": "type-7486",
       "x": 14,
       "y": 29,
       "rotation": 0,
@@ -582,13 +722,27 @@
           "tpd": 14
         },
         "behavior": "; 7486 — quad 2-input EXCLUSIVE-OR gate. Derived from the function table\n; (datasheet Table 3): each output nY is HIGH when its two inputs differ and\n; LOW when they are equal.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: xor fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). The XOR output is active-high and\n; written as the two differing-input product terms: nY = nA*/nB + /nA*nB.\n1Y = 1A * /1B + /1A * 1B\n2Y = 2A * /2B + /2A * 2B\n3Y = 3A * /3B + /3A * 3B\n4Y = 4A * /4B + /4A * 4B\n",
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "C"
       },
       "overrides": {}
     },
     {
       "refdes": "U3D",
-      "type": "7486",
+      "type": "type-7486",
       "x": 14,
       "y": 34,
       "rotation": 0,
@@ -630,13 +784,27 @@
           "tpd": 14
         },
         "behavior": "; 7486 — quad 2-input EXCLUSIVE-OR gate. Derived from the function table\n; (datasheet Table 3): each output nY is HIGH when its two inputs differ and\n; LOW when they are equal.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: xor fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). The XOR output is active-high and\n; written as the two differing-input product terms: nY = nA*/nB + /nA*nB.\n1Y = 1A * /1B + /1A * 1B\n2Y = 2A * /2B + /2A * 2B\n3Y = 3A * /3B + /3A * 3B\n4Y = 4A * /4B + /4A * 4B\n",
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "D"
       },
       "overrides": {}
     },
     {
       "refdes": "U5A",
-      "type": "7486",
+      "type": "type-7486",
       "x": 63,
       "y": 35,
       "rotation": 180,
@@ -678,13 +846,27 @@
           "tpd": 14
         },
         "behavior": "; 7486 — quad 2-input EXCLUSIVE-OR gate. Derived from the function table\n; (datasheet Table 3): each output nY is HIGH when its two inputs differ and\n; LOW when they are equal.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: xor fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). The XOR output is active-high and\n; written as the two differing-input product terms: nY = nA*/nB + /nA*nB.\n1Y = 1A * /1B + /1A * 1B\n2Y = 2A * /2B + /2A * 2B\n3Y = 3A * /3B + /3A * 3B\n4Y = 4A * /4B + /4A * 4B\n",
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "A"
       },
       "overrides": {}
     },
     {
       "refdes": "U5B",
-      "type": "7486",
+      "type": "type-7486",
       "x": 63,
       "y": 30,
       "rotation": 180,
@@ -726,13 +908,27 @@
           "tpd": 14
         },
         "behavior": "; 7486 — quad 2-input EXCLUSIVE-OR gate. Derived from the function table\n; (datasheet Table 3): each output nY is HIGH when its two inputs differ and\n; LOW when they are equal.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: xor fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). The XOR output is active-high and\n; written as the two differing-input product terms: nY = nA*/nB + /nA*nB.\n1Y = 1A * /1B + /1A * 1B\n2Y = 2A * /2B + /2A * 2B\n3Y = 3A * /3B + /3A * 3B\n4Y = 4A * /4B + /4A * 4B\n",
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "B"
       },
       "overrides": {}
     },
     {
       "refdes": "U5C",
-      "type": "7486",
+      "type": "type-7486",
       "x": 63,
       "y": 25,
       "rotation": 180,
@@ -774,13 +970,27 @@
           "tpd": 14
         },
         "behavior": "; 7486 — quad 2-input EXCLUSIVE-OR gate. Derived from the function table\n; (datasheet Table 3): each output nY is HIGH when its two inputs differ and\n; LOW when they are equal.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: xor fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). The XOR output is active-high and\n; written as the two differing-input product terms: nY = nA*/nB + /nA*nB.\n1Y = 1A * /1B + /1A * 1B\n2Y = 2A * /2B + /2A * 2B\n3Y = 3A * /3B + /3A * 3B\n4Y = 4A * /4B + /4A * 4B\n",
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "C"
       },
       "overrides": {}
     },
     {
       "refdes": "U5D",
-      "type": "7486",
+      "type": "type-7486",
       "x": 63,
       "y": 20,
       "rotation": 180,
@@ -822,13 +1032,27 @@
           "tpd": 14
         },
         "behavior": "; 7486 — quad 2-input EXCLUSIVE-OR gate. Derived from the function table\n; (datasheet Table 3): each output nY is HIGH when its two inputs differ and\n; LOW when they are equal.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: xor fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). The XOR output is active-high and\n; written as the two differing-input product terms: nY = nA*/nB + /nA*nB.\n1Y = 1A * /1B + /1A * 1B\n2Y = 2A * /2B + /2A * 2B\n3Y = 3A * /3B + /3A * 3B\n4Y = 4A * /4B + /4A * 4B\n",
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "D"
       },
       "overrides": {}
     },
     {
       "refdes": "U6A",
-      "type": "7486",
+      "type": "type-7486",
       "x": 43,
       "y": 15,
       "rotation": 0,
@@ -870,13 +1094,27 @@
           "tpd": 14
         },
         "behavior": "; 7486 — quad 2-input EXCLUSIVE-OR gate. Derived from the function table\n; (datasheet Table 3): each output nY is HIGH when its two inputs differ and\n; LOW when they are equal.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: xor fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). The XOR output is active-high and\n; written as the two differing-input product terms: nY = nA*/nB + /nA*nB.\n1Y = 1A * /1B + /1A * 1B\n2Y = 2A * /2B + /2A * 2B\n3Y = 3A * /3B + /3A * 3B\n4Y = 4A * /4B + /4A * 4B\n",
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "A"
       },
       "overrides": {}
     },
     {
       "refdes": "U6B",
-      "type": "7486",
+      "type": "type-7486",
       "x": 43,
       "y": 20,
       "rotation": 0,
@@ -918,13 +1156,27 @@
           "tpd": 14
         },
         "behavior": "; 7486 — quad 2-input EXCLUSIVE-OR gate. Derived from the function table\n; (datasheet Table 3): each output nY is HIGH when its two inputs differ and\n; LOW when they are equal.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: xor fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). The XOR output is active-high and\n; written as the two differing-input product terms: nY = nA*/nB + /nA*nB.\n1Y = 1A * /1B + /1A * 1B\n2Y = 2A * /2B + /2A * 2B\n3Y = 3A * /3B + /3A * 3B\n4Y = 4A * /4B + /4A * 4B\n",
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "B"
       },
       "overrides": {}
     },
     {
       "refdes": "U6C",
-      "type": "7486",
+      "type": "type-7486",
       "x": 43,
       "y": 25,
       "rotation": 0,
@@ -966,13 +1218,27 @@
           "tpd": 14
         },
         "behavior": "; 7486 — quad 2-input EXCLUSIVE-OR gate. Derived from the function table\n; (datasheet Table 3): each output nY is HIGH when its two inputs differ and\n; LOW when they are equal.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: xor fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). The XOR output is active-high and\n; written as the two differing-input product terms: nY = nA*/nB + /nA*nB.\n1Y = 1A * /1B + /1A * 1B\n2Y = 2A * /2B + /2A * 2B\n3Y = 3A * /3B + /3A * 3B\n4Y = 4A * /4B + /4A * 4B\n",
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "C"
       },
       "overrides": {}
     },
     {
       "refdes": "U6D",
-      "type": "7486",
+      "type": "type-7486",
       "x": 43,
       "y": 30,
       "rotation": 0,
@@ -1014,6 +1280,20 @@
           "tpd": 14
         },
         "behavior": "; 7486 — quad 2-input EXCLUSIVE-OR gate. Derived from the function table\n; (datasheet Table 3): each output nY is HIGH when its two inputs differ and\n; LOW when they are equal.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: xor fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). The XOR output is active-high and\n; written as the two differing-input product terms: nY = nA*/nB + /nA*nB.\n1Y = 1A * /1B + /1A * 1B\n2Y = 2A * /2B + /2A * 2B\n3Y = 3A * /3B + /3A * 3B\n4Y = 4A * /4B + /4A * 4B\n",
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "D"
       },
       "overrides": {}
@@ -1189,6 +1469,20 @@
           "title": "CD74HC283 High-Speed CMOS Logic 4-Bit Binary Full Adder with Fast Carry",
           "rev": "SCHS176E, Revised July 2022",
           "url": "https://www.ti.com/lit/ds/symlink/cd74hc283.pdf"
+        },
+        "physical": {
+          "package": "DIP-16",
+          "pincount": 16,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 16
+            },
+            {
+              "name": "GND",
+              "number": 8
+            }
+          ]
         }
       },
       "overrides": {}
@@ -1427,6 +1721,20 @@
           "title": "74HC244; 74HCT244 Octal buffer/line driver; 3-state",
           "rev": "Rev. 8, 5 August 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT244.pdf"
+        },
+        "physical": {
+          "package": "DIP-20",
+          "pincount": 20,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 20
+            },
+            {
+              "name": "GND",
+              "number": 10
+            }
+          ]
         }
       },
       "overrides": {}
@@ -1639,6 +1947,20 @@
           "title": "74HC244; 74HCT244 Octal buffer/line driver; 3-state",
           "rev": "Rev. 8, 5 August 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT244.pdf"
+        },
+        "physical": {
+          "package": "DIP-20",
+          "pincount": 20,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 20
+            },
+            {
+              "name": "GND",
+              "number": 10
+            }
+          ]
         }
       },
       "overrides": {}
@@ -2109,6 +2431,20 @@
           "title": "74HC244; 74HCT244 Octal buffer/line driver; 3-state",
           "rev": "Rev. 8, 5 August 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT244.pdf"
+        },
+        "physical": {
+          "package": "DIP-20",
+          "pincount": 20,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 20
+            },
+            {
+              "name": "GND",
+              "number": 10
+            }
+          ]
         }
       },
       "overrides": {}
@@ -2484,6 +2820,20 @@
           "title": "74HC138; 74HCT138 3-to-8 line decoder/demultiplexer; inverting",
           "rev": "Rev. 10, 26 February 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT138.pdf"
+        },
+        "physical": {
+          "package": "DIP-16",
+          "pincount": 16,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 16
+            },
+            {
+              "name": "GND",
+              "number": 8
+            }
+          ]
         }
       },
       "overrides": {}
@@ -2632,7 +2982,7 @@
     },
     {
       "refdes": "U16A",
-      "type": "7400",
+      "type": "type-7400",
       "x": 82,
       "y": 39,
       "rotation": 0,
@@ -2681,13 +3031,27 @@
           "rev": "Rev. 11, 29 April 2025",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT00.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "A"
       },
       "overrides": {}
     },
     {
       "refdes": "U16B",
-      "type": "7400",
+      "type": "type-7400",
       "x": 82,
       "y": 34,
       "rotation": 0,
@@ -2736,13 +3100,27 @@
           "rev": "Rev. 11, 29 April 2025",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT00.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "B"
       },
       "overrides": {}
     },
     {
       "refdes": "U16C",
-      "type": "7400",
+      "type": "type-7400",
       "x": -60,
       "y": 20,
       "rotation": 90,
@@ -2791,13 +3169,27 @@
           "rev": "Rev. 11, 29 April 2025",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT00.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "C"
       },
       "overrides": {}
     },
     {
       "refdes": "U16D",
-      "type": "7400",
+      "type": "type-7400",
       "x": -66,
       "y": 30,
       "rotation": 90,
@@ -2846,13 +3238,27 @@
           "rev": "Rev. 11, 29 April 2025",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT00.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "D"
       },
       "overrides": {}
     },
     {
       "refdes": "U17A",
-      "type": "7408",
+      "type": "type-7408",
       "x": -49,
       "y": 28,
       "rotation": 90,
@@ -2901,13 +3307,27 @@
           "rev": "Rev. 9, 16 February 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT08.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "A"
       },
       "overrides": {}
     },
     {
       "refdes": "U17B",
-      "type": "7408",
+      "type": "type-7408",
       "x": -48,
       "y": 22,
       "rotation": 90,
@@ -2956,13 +3376,27 @@
           "rev": "Rev. 9, 16 February 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT08.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "B"
       },
       "overrides": {}
     },
     {
       "refdes": "U17C",
-      "type": "7408",
+      "type": "type-7408",
       "x": 81,
       "y": 22,
       "rotation": 0,
@@ -3011,13 +3445,27 @@
           "rev": "Rev. 9, 16 February 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT08.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "C"
       },
       "overrides": {}
     },
     {
       "refdes": "U17D",
-      "type": "7408",
+      "type": "type-7408",
       "x": 81,
       "y": 15,
       "rotation": 0,
@@ -3066,13 +3514,27 @@
           "rev": "Rev. 9, 16 February 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT08.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "D"
       },
       "overrides": {}
     },
     {
       "refdes": "U18A",
-      "type": "7402",
+      "type": "type-7402",
       "x": 81,
       "y": 27,
       "rotation": 0,
@@ -3121,13 +3583,27 @@
           "rev": "Rev. 9, 15 February 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT02.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "A"
       },
       "overrides": {}
     },
     {
       "refdes": "U18B",
-      "type": "7402",
+      "type": "type-7402",
       "x": 85,
       "y": -2,
       "rotation": 0,
@@ -3176,13 +3652,27 @@
           "rev": "Rev. 9, 15 February 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT02.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "B"
       },
       "overrides": {}
     },
     {
       "refdes": "U18C",
-      "type": "7402",
+      "type": "type-7402",
       "x": 85,
       "y": 3,
       "rotation": 0,
@@ -3231,13 +3721,27 @@
           "rev": "Rev. 9, 15 February 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT02.pdf"
         },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
         "unit": "C"
       },
       "overrides": {}
     },
     {
       "refdes": "U18D",
-      "type": "7402",
+      "type": "type-7402",
       "x": 85,
       "y": 9,
       "rotation": 0,
@@ -3285,6 +3789,20 @@
           "title": "74HC02; 74HCT02 Quad 2-input NOR gate",
           "rev": "Rev. 9, 15 February 2024",
           "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT02.pdf"
+        },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
         },
         "unit": "D"
       },

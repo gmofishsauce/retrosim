@@ -14,6 +14,145 @@
         "renderType": "unit",
         "width": 8,
         "height": 13,
+        "pins": [
+          {
+            "name": "/PL",
+            "side": "top",
+            "position": 2,
+            "direction": "in",
+            "number": 1,
+            "desc": "parallel load, active LOW; asynchronous on the real part, modeled synchronously (FR-079c)"
+          },
+          {
+            "name": "CP",
+            "side": "top",
+            "position": 4,
+            "direction": "in",
+            "number": 2,
+            "desc": "clock input, LOW-to-HIGH edge-triggered"
+          },
+          {
+            "name": "/CE",
+            "side": "top",
+            "position": 6,
+            "direction": "in",
+            "number": 15,
+            "desc": "clock enable, active LOW (a HIGH inhibits CP)"
+          },
+          {
+            "name": "DS",
+            "side": "left",
+            "position": 2,
+            "direction": "in",
+            "number": 10,
+            "desc": "serial data input"
+          },
+          {
+            "name": "D0",
+            "side": "left",
+            "position": 4,
+            "direction": "in",
+            "number": 11,
+            "desc": "parallel data input bit 0"
+          },
+          {
+            "name": "D1",
+            "side": "left",
+            "position": 5,
+            "direction": "in",
+            "number": 12,
+            "desc": "parallel data input bit 1"
+          },
+          {
+            "name": "D2",
+            "side": "left",
+            "position": 6,
+            "direction": "in",
+            "number": 13,
+            "desc": "parallel data input bit 2"
+          },
+          {
+            "name": "D3",
+            "side": "left",
+            "position": 7,
+            "direction": "in",
+            "number": 14,
+            "desc": "parallel data input bit 3"
+          },
+          {
+            "name": "D4",
+            "side": "left",
+            "position": 8,
+            "direction": "in",
+            "number": 3,
+            "desc": "parallel data input bit 4"
+          },
+          {
+            "name": "D5",
+            "side": "left",
+            "position": 9,
+            "direction": "in",
+            "number": 4,
+            "desc": "parallel data input bit 5"
+          },
+          {
+            "name": "D6",
+            "side": "left",
+            "position": 10,
+            "direction": "in",
+            "number": 5,
+            "desc": "parallel data input bit 6"
+          },
+          {
+            "name": "D7",
+            "side": "left",
+            "position": 11,
+            "direction": "in",
+            "number": 6,
+            "desc": "parallel data input bit 7"
+          },
+          {
+            "name": "Q7",
+            "side": "right",
+            "position": 5,
+            "direction": "out",
+            "number": 9,
+            "desc": "serial output from the last stage"
+          },
+          {
+            "name": "Q7N",
+            "side": "right",
+            "position": 7,
+            "direction": "out",
+            "number": 7,
+            "desc": "complementary output from the last stage (physical pin /Q7)"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "D",
+            "pins": [
+              "D0",
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5",
+              "D6",
+              "D7"
+            ]
+          }
+        ],
+        "delays": {
+          "th": 2,
+          "tpd_cp": 19,
+          "tpd_d": 13,
+          "tpd_pl": 18,
+          "tsu_ce": 6,
+          "tsu_d": 8,
+          "tsu_ds": 4
+        },
+        "behavior": "; 74165 — 8-bit parallel-in/serial-out shift register. Derived from the\n; function table (datasheet Table 3, verified against the PDF).\n;\n; SEQUENTIAL-PART CLOCK CONVENTION (as on the 74574): GALasm's .R registered\n; outputs are clocked by the GAL22V10's dedicated pin-1 clock. Here that role\n; is played by CP, the LOW->HIGH edge-triggered clock pin. CP therefore does\n; NOT appear as a term in any equation below; the .R suffix implies it.\n;\n; BURIED SHIFT STAGES (FR-079c): the register is eight bits deep but exposes\n; only the last stage. SR0..SR6 (declared under internal:) are the seven hidden\n; flip-flops; Q7 is the eighth, exposed on pin Q7. Each is a .R register that\n; latches on CP; the buried nodes drive no pin. A shift is written as a chain\n; SRi.R = ... SR(i-1): because a buried node rides the one-unit-delay model\n; exactly like a net, reading SR(i-1) yields its pre-edge value, so the chain\n; advances exactly one stage per clock (FR-079c).\n;\n; Equations are physical-level GALasm: '/' is the complement operator and a\n; signal name is this file's pin name with any active-low '/' prefix dropped.\n; So 'PL' is pin /PL and '/PL' means \"pin /PL is LOW\" (load asserted); 'CE' is\n; pin /CE and '/CE' means \"pin /CE is LOW\" (clock enabled). Each stage's D input\n; selects among three modes on the clock edge:\n;   /PL*Dn       — LOAD:  /PL LOW captures the parallel input;\n;   PL*/CE*<in>  — SHIFT: /PL HIGH and /CE LOW takes the previous stage\n;                         (the serial input DS for the first stage);\n;   PL*CE*<self> — HOLD:  /PL HIGH and /CE HIGH (clock inhibit) retains the bit,\n;                         so an inhibited clock edge does not disturb the state.\n;\n; TWO DELIBERATE FIDELITY APPROXIMATIONS (FR-079c/FR-079a, design section 8):\n; (1) parallel load is modeled SYNCHRONOUSLY (it rides a CP edge while /PL is\n;     LOW) whereas the real part loads asynchronously — the engine has no\n;     variable async-load primitive. (2) the clock is CP alone with /CE folded\n;     in as a synchronous hold, so the datasheet's secondary \"shift on /CE's\n;     rising edge while CP is LOW\" path is not reproduced. The dominant\n;     behaviors (eight-stage shift, /CE inhibit-as-hold, load-then-serialize)\n;     are faithful.\n;\n; Q7N is the complementary output. It is NOT named /Q7: the signal-name rule\n; strips the '/', so Q7 and /Q7 would collide on one net. It is driven by the\n; derived inverse of the Q7 net (Q7N = /Q7), lagging Q7 by one unit.\nSR0.R = /PL*D0 + PL*/CE*DS + PL*CE*SR0\nSR1.R = /PL*D1 + PL*/CE*SR0 + PL*CE*SR1\nSR2.R = /PL*D2 + PL*/CE*SR1 + PL*CE*SR2\nSR3.R = /PL*D3 + PL*/CE*SR2 + PL*CE*SR3\nSR4.R = /PL*D4 + PL*/CE*SR3 + PL*CE*SR4\nSR5.R = /PL*D5 + PL*/CE*SR4 + PL*CE*SR5\nSR6.R = /PL*D6 + PL*/CE*SR5 + PL*CE*SR6\nQ7.R  = /PL*D7 + PL*/CE*SR6 + PL*CE*Q7\nQ7N = /Q7\n",
         "clock": "CP",
         "internal": [
           "SR0",
@@ -24,93 +163,27 @@
           "SR5",
           "SR6"
         ],
-        "pins": [
-          {
-            "name": "/PL",
-            "side": "top",
-            "position": 2,
-            "direction": "in"
-          },
-          {
-            "name": "CP",
-            "side": "top",
-            "position": 4,
-            "direction": "in"
-          },
-          {
-            "name": "/CE",
-            "side": "top",
-            "position": 6,
-            "direction": "in"
-          },
-          {
-            "name": "DS",
-            "side": "left",
-            "position": 2,
-            "direction": "in"
-          },
-          {
-            "name": "D0",
-            "side": "left",
-            "position": 4,
-            "direction": "in"
-          },
-          {
-            "name": "D1",
-            "side": "left",
-            "position": 5,
-            "direction": "in"
-          },
-          {
-            "name": "D2",
-            "side": "left",
-            "position": 6,
-            "direction": "in"
-          },
-          {
-            "name": "D3",
-            "side": "left",
-            "position": 7,
-            "direction": "in"
-          },
-          {
-            "name": "D4",
-            "side": "left",
-            "position": 8,
-            "direction": "in"
-          },
-          {
-            "name": "D5",
-            "side": "left",
-            "position": 9,
-            "direction": "in"
-          },
-          {
-            "name": "D6",
-            "side": "left",
-            "position": 10,
-            "direction": "in"
-          },
-          {
-            "name": "D7",
-            "side": "left",
-            "position": 11,
-            "direction": "in"
-          },
-          {
-            "name": "Q7",
-            "side": "right",
-            "position": 5,
-            "direction": "out"
-          },
-          {
-            "name": "Q7N",
-            "side": "right",
-            "position": 7,
-            "direction": "out"
-          }
-        ],
-        "behavior": "SR0.R = /PL*D0 + PL*/CE*DS + PL*CE*SR0\nSR1.R = /PL*D1 + PL*/CE*SR0 + PL*CE*SR1\nSR2.R = /PL*D2 + PL*/CE*SR1 + PL*CE*SR2\nSR3.R = /PL*D3 + PL*/CE*SR2 + PL*CE*SR3\nSR4.R = /PL*D4 + PL*/CE*SR3 + PL*CE*SR4\nSR5.R = /PL*D5 + PL*/CE*SR4 + PL*CE*SR5\nSR6.R = /PL*D6 + PL*/CE*SR5 + PL*CE*SR6\nQ7.R  = /PL*D7 + PL*/CE*SR6 + PL*CE*Q7\nQ7N = /Q7\n"
+        "description": "8-bit parallel-in/serial-out shift register",
+        "datasheet": {
+          "vendor": "Nexperia",
+          "title": "74HC165; 74HCT165 8-bit parallel-in/serial out shift register",
+          "rev": "Rev. 8, 9 May 2025",
+          "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT165.pdf"
+        },
+        "physical": {
+          "package": "DIP-16",
+          "pincount": 16,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 16
+            },
+            {
+              "name": "GND",
+              "number": 8
+            }
+          ]
+        }
       },
       "overrides": {}
     },

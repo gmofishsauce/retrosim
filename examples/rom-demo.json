@@ -11,93 +11,120 @@
       "typeData": {
         "id": "type-R8X8",
         "name": "R8X8",
+        "renderType": "unit",
+        "width": 4,
+        "height": 10,
+        "pins": [
+          {
+            "name": "A0",
+            "side": "left",
+            "position": 1,
+            "direction": "in"
+          },
+          {
+            "name": "A1",
+            "side": "left",
+            "position": 2,
+            "direction": "in"
+          },
+          {
+            "name": "A2",
+            "side": "left",
+            "position": 3,
+            "direction": "in"
+          },
+          {
+            "name": "CE/",
+            "side": "left",
+            "position": 4,
+            "direction": "in"
+          },
+          {
+            "name": "OE/",
+            "side": "left",
+            "position": 5,
+            "direction": "in"
+          },
+          {
+            "name": "D0",
+            "side": "right",
+            "position": 1,
+            "direction": "tristate"
+          },
+          {
+            "name": "D1",
+            "side": "right",
+            "position": 2,
+            "direction": "tristate"
+          },
+          {
+            "name": "D2",
+            "side": "right",
+            "position": 3,
+            "direction": "tristate"
+          },
+          {
+            "name": "D3",
+            "side": "right",
+            "position": 4,
+            "direction": "tristate"
+          },
+          {
+            "name": "D4",
+            "side": "right",
+            "position": 5,
+            "direction": "tristate"
+          },
+          {
+            "name": "D5",
+            "side": "right",
+            "position": 6,
+            "direction": "tristate"
+          },
+          {
+            "name": "D6",
+            "side": "right",
+            "position": 7,
+            "direction": "tristate"
+          },
+          {
+            "name": "D7",
+            "side": "right",
+            "position": 8,
+            "direction": "tristate"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "ADDR",
+            "pins": [
+              "A0",
+              "A1",
+              "A2"
+            ]
+          },
+          {
+            "name": "DATA",
+            "pins": [
+              "D0",
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5",
+              "D6",
+              "D7"
+            ]
+          }
+        ],
+        "description": "8×8 ROM (generated)",
         "mem": {
           "kind": "rom",
           "addressBits": 3,
           "dataWidth": 8,
           "locations": 8,
           "romFile": "/Users/jeff/go/src/github.com/gmofishsauce/retrosim/examples/rom-demo.hex"
-        },
-        "pins": [
-          {
-            "name": "A0",
-            "side": "left",
-            "pos": 1,
-            "direction": "in"
-          },
-          {
-            "name": "A1",
-            "side": "left",
-            "pos": 2,
-            "direction": "in"
-          },
-          {
-            "name": "A2",
-            "side": "left",
-            "pos": 3,
-            "direction": "in"
-          },
-          {
-            "name": "CE/",
-            "side": "left",
-            "pos": 4,
-            "direction": "in"
-          },
-          {
-            "name": "OE/",
-            "side": "left",
-            "pos": 5,
-            "direction": "in"
-          },
-          {
-            "name": "D0",
-            "side": "right",
-            "pos": 1,
-            "direction": "tristate"
-          },
-          {
-            "name": "D1",
-            "side": "right",
-            "pos": 2,
-            "direction": "tristate"
-          },
-          {
-            "name": "D2",
-            "side": "right",
-            "pos": 3,
-            "direction": "tristate"
-          },
-          {
-            "name": "D3",
-            "side": "right",
-            "pos": 4,
-            "direction": "tristate"
-          },
-          {
-            "name": "D4",
-            "side": "right",
-            "pos": 5,
-            "direction": "tristate"
-          },
-          {
-            "name": "D5",
-            "side": "right",
-            "pos": 6,
-            "direction": "tristate"
-          },
-          {
-            "name": "D6",
-            "side": "right",
-            "pos": 7,
-            "direction": "tristate"
-          },
-          {
-            "name": "D7",
-            "side": "right",
-            "pos": 8,
-            "direction": "tristate"
-          }
-        ]
+        }
       },
       "overrides": {}
     },

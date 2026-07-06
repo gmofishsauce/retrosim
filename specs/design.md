@@ -2648,6 +2648,8 @@ read/written through the same `/api/v1/design/{load,save}` endpoints as a design
 sim/
   cmd/retrosim/
     main.go                 CREATE  entry point: flags, bind 127.0.0.1, wire deps (§6.1)
+  cmd/dumplib/
+    main.go                 CREATE  dump parsed library as JSON for offline tooling (refresh-types)
   server/
     api.go                  CREATE  /api/v1 router + handlers + static (§6.4)
     components.go           CREATE  library load/hold/List (§6.2)
@@ -2682,6 +2684,7 @@ sim/
     cgen/runtime.c          CREATE  fast-engine C runtime implementation (§6.17)
     tools/tv2txt.js         CREATE  .tv → generated-program stdin rows (§6.17 M2)
     tools/parity.js         CREATE  fast-vs-slow FR-107 parity harness (§6.17 M2)
+    tools/refresh-types.js  CREATE  batch FR-088 refresh for saved designs (uses cmd/dumplib)
     js/chrome/toolbar.js    CREATE  toolbar (§6.11)
     js/chrome/palette.js    CREATE  palette tiles (§6.11)
     js/chrome/dialogs.js    CREATE  save/open dialogs (§6.11)
