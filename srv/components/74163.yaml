@@ -16,6 +16,13 @@ datasheet:
   rev: "March 1987, revised August 2001"
   url: "https://www.ti.com/lit/ds/symlink/sn74f163a.pdf"
 
+physical: # exporter-only package metadata (FR-062e); not read by editor or sim
+  package: DIP-16
+  pincount: 16
+  power:
+    - { name: VCC, number: 16 }
+    - { name: GND, number: 8 }
+
 pins: # number: physical DIP16/SO16 pin (package pinout, datasheet p.1)
   - { name: A,     side: left,  pos: 2,  dir: in,  number: 3,  desc: "parallel load input bit 0 (LSB)" }
   - { name: B,     side: left,  pos: 3,  dir: in,  number: 4,  desc: "parallel load input bit 1" }

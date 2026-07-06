@@ -15,6 +15,14 @@ datasheet:
   rev: "Rev. 10, 13 March 2024"
   url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT30.pdf"
 
+physical: # exporter-only package metadata (FR-062e); not read by editor or sim
+  package: DIP-14
+  pincount: 14
+  power:
+    - { name: VCC, number: 14 }
+    - { name: GND, number: 7 }
+  nc: [9, 10, 13]
+
 pins: # number: physical DIP14/SO14 pin (datasheet Table 2)
   - { name: A, side: left,  unit: A, dir: in,  number: 1 }
   - { name: B, side: left,  unit: A, dir: in,  number: 2 }

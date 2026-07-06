@@ -5,6 +5,13 @@ partnumber: "22V574"
 description: "8-bit register with additional features"
 clock: "CLK"
 outline: [8, 14]
+physical: # exporter-only package metadata (FR-062e); not read by editor or sim
+  package: DIP-24
+  pincount: 24
+  power:
+    - { name: VCC, number: 24 }
+    - { name: GND, number: 12 }
+
 pins:
   - { name: "CLK", side: left, pos: 1, dir: in, number: 1 }
   - { name: "D0", side: left, pos: 2, dir: in, number: 2 }

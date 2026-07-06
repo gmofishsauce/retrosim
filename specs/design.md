@@ -565,7 +565,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
 ### 6.3 Go: YAML parser (`sim/server/yamlparse.go`)
 - **Purpose:** convert one YAML file's bytes (YAML — §7.6) into a `ComponentType`.
-- **Satisfies:** FR-061, FR-062, FR-062a, FR-062b, FR-062c, FR-062d, FR-063, FR-064, FR-066, FR-066a, FR-104.
+- **Satisfies:** FR-061, FR-062, FR-062a, FR-062b, FR-062c, FR-062d, FR-062e, FR-063, FR-064, FR-066, FR-066a, FR-104.
 - **Interface (the deferral boundary — now bound to the YAML format in §7.6):**
   - `ParseComponent(path string) (ComponentType, error)`
   - The returned `ComponentType` MUST be fully populated for the fields in §7.1.
@@ -607,7 +607,16 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   otherwise opaque (FR-066). Power and ground
   pins are **not represented** — there is no `pwr`/`power` direction and such
   pins are simply omitted from the file (and thus from the symbol and the
-  simulation).
+  simulation). An optional top-level `physical:` block (FR-062e) is carried
+  verbatim onto the `ComponentType` (the same opaque-carry treatment as `mem:`)
+  for netlist exporters only; when present the parser validates **physical
+  completeness**: `pincount` is a positive integer; every signal pin carries a
+  `number`; every `power[]` entry has a non-empty `name` and a `number`; the
+  signal, power, and `nc` numbers are mutually distinct and together account
+  for exactly 1..`pincount`; and no `power[].name` equals a `pins[].name`. A
+  violation rejects the component (loader logs and skips, like every other
+  validation failure). Nothing else reads the block — it never influences
+  outline, pins, groups, or behavior.
 - **Outline resolution (FR-062b) — at parse time, in this order:**
   1. if the file states an explicit `outline: [w, h]`, use it;
   2. else derive a default rectangle sized to fit the author-placed pins
@@ -2080,6 +2089,7 @@ no sequential part could ever leave U.)
 | `description` | string? | optional one-line function summary (FR-104), e.g. `"3-to-8 line decoder/demultiplexer"`; presentation-only |
 | `datasheet` | `Datasheet?` | optional provenance (FR-104): `{vendor, title, rev, url}`, all strings; the panel renders `url` as a link |
 | `mem` | `MemSpec?` | generated memory device only (FR-114c/FR-114f): `{kind:"ram"\|"rom", addressBits, dataWidth, locations, romFile?}`. Serializable data the client's built-in memory behavior binds from at Run (FR-114d); round-trips through the `mem:` YAML block (§7.6) so a persisted device simulates on reload. Absent on all other types |
+| `physical` | `PhysicalSpec?` | optional exporter-only package metadata (FR-062e): `{package?, pincount, power[], nc?}` — see §7.6. Carried verbatim (like `mem`), parser-validated for physical completeness, and copied into saves per FR-057 so exporters can work from the design JSON alone. Read by no editor or simulator code |
 
 Built-in types additionally have a **behavior** (FR-067a): a client-JS function
 held in a registry in `builtins.js` keyed by type `id` (FR-066e) — deliberately **not** a
@@ -2093,8 +2103,10 @@ Note: for `unit` components `width`/`height` are always **concrete in the parsed
 save format, and FR-057's full-copy all keep consuming explicit geometry. For
 `subunit` components the rectangle is not drawn; each unit's footprint and pin
 positions come from the schematic-symbol geometry module (§6.8a), so `outline:`
-and per-pin `pos` are ignored. There is no package field: physical packages were
-removed in favor of an explicit `outline:` or a pin-derived default (see §8).
+and per-pin `pos` are ignored. There is no package field **affecting geometry**:
+physical packages were removed in favor of an explicit `outline:` or a
+pin-derived default (see §8). The optional `physical` block (FR-062e) records
+package metadata for exporters but never influences the symbol.
 
 **`Pin`**
 
@@ -2371,6 +2383,25 @@ pins:                    # unit + dir; pos is not used (FR-014a)
   # … units C and D likewise
 ```
 
+Any part (`unit` or `subunit`) may additionally carry an optional
+**exporter-only** `physical:` block (FR-062e), never read by the editor or the
+simulators — shown here as it appears in 7400.yaml:
+
+```yaml
+physical:                # optional; exporter-only metadata (FR-062e)
+  package: DIP-14        # free-form name; exporters interpret it
+  pincount: 14           # REQUIRED in this block; drives completeness check
+  power:                 # power/ground pins, absent from pins[] per FR-062
+    - { name: VCC, number: 14 }
+    - { name: GND, number: 7 }
+  # nc: [ 13 ]           # optional no-connect pin numbers
+```
+
+Presence of the block makes the parser enforce **physical completeness** (§6.3):
+all signal pins numbered, and signal + power + nc numbers tiling exactly
+1..`pincount` with no duplicates — so a part carrying `physical:` is guaranteed
+fully and consistently numbered for KiCad/NDL/BOM export.
+
 **Field reference** (maps 1:1 onto §7.1):
 
 | Key | Required | Maps to | Notes |
@@ -2399,6 +2430,11 @@ pins:                    # unit + dir; pos is not used (FR-014a)
 | `datasheet` | no | `datasheet` | optional mapping `{vendor, title, rev, url}` (FR-104) |
 | `pins[].desc` | no | `Pin.desc` | optional pin role text (FR-104) |
 | `mem` | no | `mem` | generated memory device only (FR-114f): mapping `{kind: ram\|rom, addressBits, dataWidth, locations, romFile?}` driving the built-in memory behavior (FR-114d). Carried through verbatim; the client binds the behavior from it on load. `romFile` is the absolute content-file path (ROM only, FR-114e) |
+| `physical` | no | `physical` | exporter-only package metadata (FR-062e); carried verbatim like `mem`; ignored by editor and simulators; presence triggers the completeness validation (§6.3) |
+| `physical.pincount` | in block | — | total physical pins; with `pins[].number` + `power` + `nc` must tile exactly 1..pincount, all `pins[]` numbered, no duplicates |
+| `physical.package` | no | — | free-form package name (`"DIP-14"`, `"SOIC-16"`); uninterpreted by the server — exporters own the mapping (e.g. to a KiCad footprint id) |
+| `physical.power[]` | in block | — | `{name, number}`; `name` is the rail net label (`VCC`, `GND`) for exporters; names may repeat across entries (multi-ground packages) but must not collide with `pins[].name` |
+| `physical.nc` | no | — | list of no-connect pin numbers |
 
 Documentation keys (`description`, `datasheet`, `pins[].desc`) are all optional
 and presentation-only: the server copies them onto the `ComponentType` for the
@@ -2523,7 +2559,7 @@ read/written through the same `/api/v1/design/{load,save}` endpoints as a design
 | Bus connectivity (N nets) | Treat a bus as one net; expand bits only in a downstream tool; per-bit explicit net objects | **Bit-lane union-find: a bus = `width` lanes `(busId,i)`; group snap binds bit i, bus↔bus joins lanes by index, breakout taps one lane** | A bus is genuinely *width* signals (FR-037a); lanes make wires, group snaps, bus joins, and breakout all the same union; subsumes the old "one net per bus" bug; provenance (`{bus,bit,name}`) serves downstream tools (FR-060a) |
 | Bus group-match tie | First group in file order (silent) | **Auto-connect only on a single match; prompt to disambiguate on ≥2 (FR-041b)** | Silent guessing is wrong for chips with multiple equal-width groups (e.g., ALU A/B/Y); stakeholder confirmed → promoted to requirement; withdraws design-only assumption A3 |
 | YAML file format | Bespoke line-oriented grammar; Markdown-with-frontmatter; TOML; **YAML** | **YAML (`gopkg.in/yaml.v3`, 1.2 core schema)** | A well-known format an LLM can emit reliably when transcribing datasheets (a stakeholder goal); free comment/escape/unknown-key handling (FR-066); the `\|` block scalar makes hand-typing GALasm equations ceremony-free. Supersedes the earlier "syntax TBD / strawman" and closes OQ-001 |
-| Component outline source | Declared physical `package:` resolved by a parser registry/parametric generator to outline + pin numbers (earlier design) | **Explicit `outline: [w, h]` else a pin-derived default box; no package mechanism at all** | Stakeholder removed packages: power/ground (the only reason the physical package mattered for the symbol) do not exist in file/editor/sim, and outlines are better derived from author-placed pins (FR-014). Eliminates `packages.go`, the package-name grammar, and the `pincount`/generator entirely; physical pin `number`s, if used, are author-stated optional metadata. Supersedes the package-registry decision (was FR-062b) |
+| Component outline source | Declared physical `package:` resolved by a parser registry/parametric generator to outline + pin numbers (earlier design) | **Explicit `outline: [w, h]` else a pin-derived default box; no package mechanism at all** | Stakeholder removed packages: power/ground (the only reason the physical package mattered for the symbol) do not exist in file/editor/sim, and outlines are better derived from author-placed pins (FR-014). Eliminates `packages.go`, the package-name grammar, and the `pincount`/generator entirely; physical pin `number`s, if used, are author-stated optional metadata. Supersedes the package-registry decision (was FR-062b). (The later exporter-only `physical:` block, FR-062e, reintroduces package *metadata* — `package` free-form and uninterpreted, `pincount` used only to validate numbering completeness — without reviving this mechanism: nothing about the symbol, editor, or simulation reads it) |
 | Subunit package model (FR-013a) | One instance owning a `subunits[]` array of positions; teach wires/netlist/hittest/persistence about sub-identities | **N sibling instances sharing a U-number (refdes `U5A`…), one per unit** | Each gate is independently placeable/movable/rotatable like any instance, so wiring, netlist (`U5A.1Y`), hit-test, and persistence work unchanged; the "package" is just a shared U-number + grouped drop/delete (FR-018b). Symbol geometry lives in one module (§6.8a) consumed by model/renderer/hittest so they cannot drift |
 | Coordinate system | Store pixels; store mm | **Store integer grid units; derive pixels via viewport** | Everything snaps to grid by construction (FR-021); zoom/pan are pure view transforms; rotation by 90° preserves grid (§6.7) |
 | Rotation pivot | Rotate about component center | **Rotate pin offsets about the instance origin** | Guarantees rotated pins stay on integer grid intersections (FR-021) without half-grid artifacts |
@@ -2671,6 +2707,7 @@ No files are modified (greenfield).
 | FR-089, FR-090, FR-091 | §6.4, §6.11, §6.12a | `api.go`, `connection.js`, `statusbar.js`, `api.js` |
 | FR-092, FR-093 | §6.12, §6.12a | `backup.js`, `app.js`, `model/persist.js` |
 | FR-062d | §6.3, §6.13, §7.1, §7.6 | `yamlparse.go`, `types.go`, `sim.js` |
+| FR-062e | §6.3, §7.1, §7.6 | `yamlparse.go`, `types.go`, `srv/components/*.yaml` |
 | FR-075, FR-078, FR-079, FR-080 | §6.13 | `sim.js`, `galasm.js` |
 | FR-079c | §6.3, §6.13, §6.17, §7.1, §7.6 | `types.go`, `yamlparse.go`, `galasm.js`, `sim.js`, `cgen.js`, `srv/components/74165.yaml`, `examples/74165-*` |
 | FR-076, FR-087 | §6.9, §6.10, §6.11, §6.13 | `toolbar.js`, `store.js`, `interaction.js`, `sim.js`, `statusbar.js` |
@@ -2865,7 +2902,9 @@ only the noted slices.
   parametric generator (`packages.go` deleted). Outlines come from an explicit
   `outline: [w, h]` or a pin-derived default; physical pin `number`s are
   author-stated optional metadata. `yamlparse.go` may now be implemented against
-  §7.6.
+  §7.6. (FR-062e later added an exporter-only `physical:` block that carries
+  `package`/`pincount` as uninterpreted metadata — it does not revive the
+  removed mechanism; nothing geometric or behavioral reads it.)
 - **A3 — Pin-group "width" semantics & tie-break — RESOLVED.** Group width =
   number of member pins (each pin is one bit); on a tie the user is **prompted**
   (no silent pick). This was

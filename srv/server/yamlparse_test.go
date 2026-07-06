@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -406,5 +407,127 @@ pins:
 `)
 	if _, err := ParseComponent(path); err == nil {
 		t.Fatal("expected error for invalid mem.dataWidth")
+	}
+}
+
+// A valid physical: block (FR-062e) maps onto PhysicalSpec: signal + power + nc
+// numbers tile exactly 1..pincount, and the block is carried through verbatim.
+func TestParseComponentPhysicalValid(t *testing.T) {
+	path := writeYAML(t, `
+type: "7420-ish"
+pins:
+  - { name: A, side: left,  pos: 1, dir: in,  number: 1 }
+  - { name: B, side: left,  pos: 2, dir: in,  number: 2 }
+  - { name: Y, side: right, pos: 1, dir: out, number: 4 }
+physical:
+  package: DIP-6
+  pincount: 6
+  power:
+    - { name: VCC, number: 6 }
+    - { name: GND, number: 3 }
+  nc: [5]
+`)
+	ct, err := ParseComponent(path)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	want := &PhysicalSpec{
+		Package:  "DIP-6",
+		PinCount: 6,
+		Power:    []PowerPin{{Name: "VCC", Number: 6}, {Name: "GND", Number: 3}},
+		NC:       []int{5},
+	}
+	if !reflect.DeepEqual(ct.Physical, want) {
+		t.Fatalf("Physical = %+v\nwant %+v", ct.Physical, want)
+	}
+}
+
+// Without a physical: block nothing changes: pin numbers stay optional
+// metadata (FR-062b) and Physical is nil.
+func TestParseComponentPhysicalAbsent(t *testing.T) {
+	path := writeYAML(t, `
+type: "PLAIN"
+pins:
+  - { name: A, side: left,  pos: 1, dir: in }
+  - { name: Y, side: right, pos: 1, dir: out, number: 3 }
+`)
+	ct, err := ParseComponent(path)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if ct.Physical != nil {
+		t.Fatalf("expected nil Physical, got %+v", ct.Physical)
+	}
+}
+
+// The physical-completeness violations of FR-062e each reject the component:
+// unnumbered signal pin, duplicate/out-of-range numbers, unaccounted-for pins,
+// power-name collision, missing pincount, and unnamed/unnumbered power entries.
+func TestParseComponentPhysicalInvalid(t *testing.T) {
+	base := `
+type: "BADPHYS"
+pins:
+  - { name: A, side: left,  pos: 1, dir: in%s }
+  - { name: Y, side: right, pos: 1, dir: out, number: 2 }
+physical:
+%s`
+	cases := []struct {
+		name    string
+		pinAttr string // appended inside pin A's mapping
+		phys    string // the physical: block body
+		wantSub string // substring expected in the error
+	}{
+		{"signal pin unnumbered", "",
+			"  pincount: 3\n  power: [{ name: VCC, number: 3 }]\n", "has no 'number'"},
+		{"missing pincount", ", number: 1",
+			"  power: [{ name: VCC, number: 3 }]\n", "pincount"},
+		{"duplicate number", ", number: 2",
+			"  pincount: 3\n  power: [{ name: VCC, number: 3 }]\n", "claimed by both"},
+		{"out of range", ", number: 9",
+			"  pincount: 3\n  power: [{ name: VCC, number: 3 }]\n", "outside 1..3"},
+		{"unaccounted pins", ", number: 1",
+			"  pincount: 4\n  power: [{ name: VCC, number: 3 }]\n", "unaccounted"},
+		{"power collides with pin name", ", number: 1",
+			"  pincount: 3\n  power: [{ name: Y, number: 3 }]\n", "collides"},
+		{"power missing name", ", number: 1",
+			"  pincount: 3\n  power: [{ number: 3 }]\n", "missing 'name'"},
+		{"power missing number", ", number: 1",
+			"  pincount: 3\n  power: [{ name: VCC }]\n", "missing 'number'"},
+		{"nc duplicates power", ", number: 1",
+			"  pincount: 3\n  power: [{ name: VCC, number: 3 }]\n  nc: [3]\n", "claimed by both"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeYAML(t, fmt.Sprintf(base, tc.pinAttr, tc.phys))
+			_, err := ParseComponent(path)
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tc.wantSub)
+			}
+			if !strings.Contains(err.Error(), tc.wantSub) {
+				t.Fatalf("error %q does not contain %q", err, tc.wantSub)
+			}
+		})
+	}
+}
+
+// Multiple power entries may share a rail name (multi-ground packages, FR-062e).
+func TestParseComponentPhysicalRepeatedRailName(t *testing.T) {
+	path := writeYAML(t, `
+type: "WIDE"
+pins:
+  - { name: A, side: left,  pos: 1, dir: in,  number: 1 }
+  - { name: Y, side: right, pos: 1, dir: out, number: 2 }
+physical:
+  pincount: 4
+  power:
+    - { name: GND, number: 3 }
+    - { name: GND, number: 4 }
+`)
+	ct, err := ParseComponent(path)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(ct.Physical.Power) != 2 || ct.Physical.Power[0].Name != "GND" || ct.Physical.Power[1].Name != "GND" {
+		t.Fatalf("Power = %+v, want two GND entries", ct.Physical.Power)
 	}
 }

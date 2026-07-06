@@ -17,6 +17,13 @@ datasheet:
   rev: "Rev. 8, 9 May 2025"
   url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT165.pdf"
 
+physical: # exporter-only package metadata (FR-062e); not read by editor or sim
+  package: DIP-16
+  pincount: 16
+  power:
+    - { name: VCC, number: 16 }
+    - { name: GND, number: 8 }
+
 pins: # number: physical DIP16/SO16 pin (datasheet Table 2)
   - { name: /PL, side: top,   pos: 2,  dir: in,  number: 1,  desc: "parallel load, active LOW; asynchronous on the real part, modeled synchronously (FR-079c)" }
   - { name: CP,  side: top,   pos: 4,  dir: in,  number: 2,  desc: "clock input, LOW-to-HIGH edge-triggered" }

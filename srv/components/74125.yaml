@@ -13,6 +13,13 @@ datasheet:
   rev: "Rev. 8, 22 February 2024"
   url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT125.pdf"
 
+physical: # exporter-only package metadata (FR-062e); not read by editor or sim
+  package: DIP-14
+  pincount: 14
+  power:
+    - { name: VCC, number: 14 }
+    - { name: GND, number: 7 }
+
 pins: # number: physical DIP14/SO14 pin (datasheet Table 2)
   - { name: 1A,   side: left,  pos: 2,  dir: in,       number: 2,  desc: "buffer 1 data input" }
   - { name: /1OE, side: left,  pos: 3,  dir: in,       number: 1,  desc: "buffer 1 active-low output enable" }

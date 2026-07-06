@@ -57,6 +57,27 @@ match its structure, comment style, and conventions exactly.
   this system.
 - **`number:`**: record the physical DIP pin number for every pin, from the
   pin-description table. Metadata only, but it cross-checks the pin list.
+- **`physical:`** (FR-062e): after `datasheet:` and before `pins:`, add the
+  exporter-only package-metadata block — never read by the editor or the
+  simulators, but validated by the parser for **physical completeness**
+  (signal + power + nc numbers must tile exactly 1..pincount, every signal
+  pin numbered):
+
+  ```yaml
+  physical: # exporter-only package metadata (FR-062e); not read by editor or sim
+    package: DIP-16
+    pincount: 16
+    power:
+      - { name: VCC, number: 16 }
+      - { name: GND, number: 8 }
+    # nc: [3, 11]   # only when the datasheet shows no-connect pins (e.g. 7420)
+  ```
+
+  Take the power and NC pin numbers from the datasheet pinout — most 74HC
+  parts are corner-powered (GND = pincount/2, VCC = pincount), but verify;
+  parts like the 7420 and 7430 also have NC pins. Multiple entries may share
+  a rail name (multi-ground packages). Skip the block only for parts with no
+  physical package (generated memory devices).
 - **`groups:`**: ordered, bus-snappable pin groups (address, data) with the
   LSB first.
 - **`delays:`**: from the dynamic-characteristics table — typical values, HC

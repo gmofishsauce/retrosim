@@ -15,6 +15,13 @@ datasheet:
   rev: "April 2004, revised March 2022"
   url: "https://www.ti.com/lit/ds/symlink/sn74hc148.pdf"
 
+physical: # exporter-only package metadata (FR-062e); not read by editor or sim
+  package: DIP-16
+  pincount: 16
+  power:
+    - { name: VCC, number: 16 }
+    - { name: GND, number: 8 }
+
 pins: # number: physical DIP16/SO16 pin (datasheet Pin Functions)
   - { name: /I0, side: left,  pos: 2,  dir: in,  number: 10, desc: "active-low data input 0 (lowest priority)" }
   - { name: /I1, side: left,  pos: 3,  dir: in,  number: 11, desc: "active-low data input 1" }

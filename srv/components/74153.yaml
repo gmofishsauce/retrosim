@@ -16,6 +16,13 @@ datasheet:
   rev: "Rev. 11, 11 March 2024"
   url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT153.pdf"
 
+physical: # exporter-only package metadata (FR-062e); not read by editor or sim
+  package: DIP-16
+  pincount: 16
+  power:
+    - { name: VCC, number: 16 }
+    - { name: GND, number: 8 }
+
 pins: # number: physical DIP16/SO16 pin (datasheet Table 2)
   - { name: 1I0, side: left,  pos: 1,  dir: in,  number: 6,  desc: "mux 1 data input 0" }
   - { name: 1I1, side: left,  pos: 2,  dir: in,  number: 5,  desc: "mux 1 data input 1" }

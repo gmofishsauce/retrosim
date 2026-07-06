@@ -14,6 +14,13 @@ datasheet:
   rev: "SCHS176E, Revised July 2022"
   url: "https://www.ti.com/lit/ds/symlink/cd74hc283.pdf"
 
+physical: # exporter-only package metadata (FR-062e); not read by editor or sim
+  package: DIP-16
+  pincount: 16
+  power:
+    - { name: VCC, number: 16 }
+    - { name: GND, number: 8 }
+
 pins: # number: physical DIP16/SO16 pin (datasheet §4, Top View)
   # Pins are laid out so each bus group (A, B) occupies a contiguous run on its
   # side (FR-063a); `number` keeps the true DIP pin, which interleaves A/B.

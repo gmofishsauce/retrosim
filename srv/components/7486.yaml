@@ -8,6 +8,13 @@ rendertype: subunit
 numunits: 4
 renderas: xor
 
+physical: # exporter-only package metadata (FR-062e); not read by editor or sim
+  package: DIP-14
+  pincount: 14
+  power:
+    - { name: VCC, number: 14 }
+    - { name: GND, number: 7 }
+
 pins: # number: physical DIP14/SO14 pin (datasheet Table 2)
   - { name: 1A, side: left,  unit: A, dir: in,  number: 1 }
   - { name: 1B, side: left,  unit: A, dir: in,  number: 2 }

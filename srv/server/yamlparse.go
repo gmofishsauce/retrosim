@@ -69,6 +69,24 @@ type yamlComponent struct {
 
 	// Generated memory device (FR-114f), optional.
 	Mem *yamlMem `yaml:"mem"`
+
+	// Exporter-only physical-package metadata (FR-062e), optional.
+	Physical *yamlPhysical `yaml:"physical"`
+}
+
+// yamlPhysical is the on-disk shape of the exporter-only physical block
+// (FR-062e). Numbers are pointers so an omitted required field is
+// distinguishable from a legitimate value.
+type yamlPhysical struct {
+	Package  string         `yaml:"package"`
+	PinCount int            `yaml:"pincount"`
+	Power    []yamlPowerPin `yaml:"power"`
+	NC       []int          `yaml:"nc"`
+}
+
+type yamlPowerPin struct {
+	Name   string `yaml:"name"`
+	Number *int   `yaml:"number"`
 }
 
 // yamlMem is the on-disk shape of a generated memory device's parameters
@@ -269,6 +287,14 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		}
 	}
 
+	// physical: (FR-062e) — exporter-only package metadata, carried verbatim
+	// like mem:. Presence triggers the physical-completeness validation (§6.3);
+	// nothing geometric or behavioral reads the block.
+	physical, err := validatePhysical(path, doc.Physical, pins)
+	if err != nil {
+		return ComponentType{}, err
+	}
+
 	// id (FR-066e) is the immutable library key, divorced from the free-form
 	// display name. It is optional in the YAML — when omitted it is derived from
 	// the display name so the format stays additive (FR-066) and pre-existing
@@ -327,6 +353,7 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 			Description: doc.Description,
 			Datasheet:   datasheet,
 			Mem:         mem,
+			Physical:    physical,
 		}, nil
 	}
 
@@ -368,6 +395,85 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		Description: doc.Description,
 		Datasheet:   datasheet,
 		Mem:         mem,
+		Physical:    physical,
+	}, nil
+}
+
+// validatePhysical checks the optional exporter-only physical: block (FR-062e)
+// and maps it onto a PhysicalSpec. A nil block returns nil — numbers stay
+// optional metadata (FR-062b). A present block must be physically complete:
+// every signal pin numbered; every power entry named and numbered; signal,
+// power, and nc numbers mutually distinct and together exactly the set
+// 1..pincount; no power name equal to a pin name (exporters emit both into one
+// namespace). Distinctness + range + count == pincount implies the exact tiling.
+func validatePhysical(path string, phys *yamlPhysical, pins []Pin) (*PhysicalSpec, error) {
+	if phys == nil {
+		return nil, nil
+	}
+	if phys.PinCount < 1 {
+		return nil, fmt.Errorf("%s: physical: missing or invalid 'pincount' (want a positive pin count)", path)
+	}
+	used := make(map[int]string, phys.PinCount) // number -> what claimed it, for error text
+	claim := func(n int, what string) error {
+		if n < 1 || n > phys.PinCount {
+			return fmt.Errorf("%s: physical: %s has pin number %d outside 1..%d", path, what, n, phys.PinCount)
+		}
+		if prev, dup := used[n]; dup {
+			return fmt.Errorf("%s: physical: pin number %d claimed by both %s and %s", path, n, prev, what)
+		}
+		used[n] = what
+		return nil
+	}
+
+	pinNames := make(map[string]bool, len(pins))
+	for _, p := range pins {
+		pinNames[p.Name] = true
+		if p.Number == nil {
+			return nil, fmt.Errorf("%s: physical: signal pin %q has no 'number' (a physical: block requires every pin numbered)", path, p.Name)
+		}
+		if err := claim(*p.Number, fmt.Sprintf("pin %q", p.Name)); err != nil {
+			return nil, err
+		}
+	}
+
+	power := make([]PowerPin, 0, len(phys.Power))
+	for i, pw := range phys.Power {
+		if pw.Name == "" {
+			return nil, fmt.Errorf("%s: physical: power entry %d: missing 'name'", path, i)
+		}
+		if pinNames[pw.Name] {
+			return nil, fmt.Errorf("%s: physical: power name %q collides with a signal pin name", path, pw.Name)
+		}
+		if pw.Number == nil {
+			return nil, fmt.Errorf("%s: physical: power %q: missing 'number'", path, pw.Name)
+		}
+		if err := claim(*pw.Number, fmt.Sprintf("power %q", pw.Name)); err != nil {
+			return nil, err
+		}
+		power = append(power, PowerPin{Name: pw.Name, Number: *pw.Number})
+	}
+
+	for _, n := range phys.NC {
+		if err := claim(n, "nc"); err != nil {
+			return nil, err
+		}
+	}
+
+	if len(used) != phys.PinCount {
+		var missing []string
+		for n := 1; n <= phys.PinCount; n++ {
+			if _, ok := used[n]; !ok {
+				missing = append(missing, fmt.Sprintf("%d", n))
+			}
+		}
+		return nil, fmt.Errorf("%s: physical: pincount is %d but pins %s are unaccounted for (not signal, power, or nc)", path, phys.PinCount, strings.Join(missing, ","))
+	}
+
+	return &PhysicalSpec{
+		Package:  phys.Package,
+		PinCount: phys.PinCount,
+		Power:    power,
+		NC:       phys.NC,
 	}, nil
 }
 

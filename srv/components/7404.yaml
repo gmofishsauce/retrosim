@@ -12,6 +12,13 @@ datasheet:
   title: "74HC04; 74HCT04 Hex inverter"
   url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT04.pdf"
 
+physical: # exporter-only package metadata (FR-062e); not read by editor or sim
+  package: DIP-14
+  pincount: 14
+  power:
+    - { name: VCC, number: 14 }
+    - { name: GND, number: 7 }
+
 pins:
   - { name: 1A, side: left,  unit: A, dir: in, number: 1 }
   - { name: 1Y, side: right, unit: A, dir: out, number: 2 }

@@ -13,6 +13,13 @@ datasheet:
   rev: "Rev. 9, 2 April 2024"
   url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT74.pdf"
 
+physical: # exporter-only package metadata (FR-062e); not read by editor or sim
+  package: DIP-14
+  pincount: 14
+  power:
+    - { name: VCC, number: 14 }
+    - { name: GND, number: 7 }
+
 pins: # number: physical DIP14/SO14 pin (datasheet Table 2). Each flip-flop has
       # its own clock — an independent clock domain (per-output .CLK, below).
   - { name: 1D,   side: left,  pos: 2,  dir: in,  number: 2,  desc: "FF1 data input" }

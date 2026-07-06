@@ -13,6 +13,13 @@ datasheet:
   rev: "Rev. 8, 5 August 2024"
   url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT244.pdf"
 
+physical: # exporter-only package metadata (FR-062e); not read by editor or sim
+  package: DIP-20
+  pincount: 20
+  power:
+    - { name: VCC, number: 20 }
+    - { name: GND, number: 10 }
+
 pins: # number: physical DIP20/SO20 pin (datasheet Table 2)
   - { name: 1A0,  side: left,  pos: 2,  dir: in,       number: 2,  desc: "group 1 data input bit 0" }
   - { name: 1A1,  side: left,  pos: 3,  dir: in,       number: 4,  desc: "group 1 data input bit 1" }

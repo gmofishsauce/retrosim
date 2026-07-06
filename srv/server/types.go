@@ -36,6 +36,31 @@ type ComponentType struct {
 	// verbatim from the YAML so the client's built-in memory behavior (FR-114d)
 	// binds from this serializable data on reload. Absent on all other types.
 	Mem *MemSpec `json:"mem,omitempty"`
+
+	// Physical is exporter-only package metadata (FR-062e): carried through
+	// verbatim like Mem and copied into saves (FR-057) so netlist exporters
+	// (KiCad, NDL, BOM) can work from the design JSON alone. Read by no editor
+	// or simulator code; power/ground stay unrepresented there (FR-062).
+	Physical *PhysicalSpec `json:"physical,omitempty"`
+}
+
+// PhysicalSpec describes a component's physical package for exporters
+// (FR-062e). When present, the parser has verified physical completeness: all
+// signal pins carry a number, and signal + power + NC numbers tile exactly
+// 1..PinCount with no duplicates (§6.3).
+type PhysicalSpec struct {
+	Package  string     `json:"package,omitempty"` // free-form package name, e.g. "DIP-14"; uninterpreted — exporters own the mapping
+	PinCount int        `json:"pincount"`          // total physical pin count
+	Power    []PowerPin `json:"power"`             // power/ground pins (absent from Pins per FR-062)
+	NC       []int      `json:"nc,omitempty"`      // physically no-connect pin numbers
+}
+
+// PowerPin names one power/ground pin (FR-062e). Name is the rail net label an
+// exporter attaches the pin to (e.g. "VCC", "GND"); several entries may share a
+// name (multi-ground packages) but a name never collides with a signal pin's.
+type PowerPin struct {
+	Name   string `json:"name"`
+	Number int    `json:"number"`
 }
 
 // MemSpec is a generated memory device's parameters (FR-114c/FR-114f). Field
