@@ -199,6 +199,39 @@ export function buildSimulation(
     return { kind: "memory", refdes, w: mem.dataWidth, core, read };
   }
 
+  // makePassEntity wraps a switch element (transmission gate / relay,
+  // FR-071g/FR-071h) as a kind:"pass" entity (§6.13, FR-083a). Unlike every
+  // other entity it deposits no contributions: it carries only its control net
+  // index and a list of contact records {a, b, closedWhen} over terminal net
+  // indices, which the step loop turns into a per-step net merge. An unwired
+  // terminal or control resolves to `undefined` (no net) and is handled in the
+  // resolve phase (an unwired SPST throw simply never joins; an unwired control
+  // reads Z→U and forces its terminals U).
+  function makePassEntity(inst) {
+    const refdes = inst.refdes;
+    const netFor = (pin) => netOfPin.get(`${refdes}.${pin}`);
+    if (inst.typeData.renderType === "tgate") {
+      return {
+        kind: "pass",
+        refdes,
+        control: netFor("EN"),
+        contacts: [{ a: netFor("A"), b: netFor("B"), closedWhen: V1 }],
+      };
+    }
+    // relay (FR-071h): SPDT changeover — COM–NO closed when energized, COM–NC
+    // closed when released (complementary by construction).
+    const com = netFor("COM");
+    return {
+      kind: "pass",
+      refdes,
+      control: netFor("COIL"),
+      contacts: [
+        { a: com, b: netFor("NO"), closedWhen: V1 },
+        { a: com, b: netFor("NC"), closedWhen: V0 },
+      ],
+    };
+  }
+
   for (const inst of design.components) {
     if (inst.typeData.mem) {
       // A generated memory device (FR-114c) is not a `builtin` (so it keeps a
@@ -209,6 +242,13 @@ export function buildSimulation(
       // A text note (FR-071f) is a pure annotation with no pins and no behavior;
       // it is not a simulation entity, so skip it rather than flagging it unknown.
       if (inst.typeData.renderType === "note") continue;
+      // Switch elements (FR-071g/FR-071h) drive nothing; they merge nets instead
+      // of depositing contributions, so they route to a pass entity (FR-083a),
+      // not the BEHAVIORS source-drive path (they have no BEHAVIORS entry).
+      if (inst.typeData.renderType === "tgate" || inst.typeData.renderType === "relay") {
+        entities.push(makePassEntity(inst));
+        continue;
+      }
       const behave = BEHAVIORS[inst.type];
       if (!behave) {
         errors.push(`${inst.refdes}: unknown built-in type ${inst.type}`);
@@ -241,6 +281,10 @@ export function buildSimulation(
   }
 
   if (errors.length) throw new Error(errors.join("; "));
+
+  // Switch elements (FR-083a): when none are placed the resolve phase runs per
+  // net exactly as before (no union-find, zero cost for ordinary designs).
+  const passEntities = entities.filter((e) => e.kind === "pass");
 
   // --- Mutable state ---
   let curr = new Uint8Array(nets.length).fill(VZ);
@@ -305,6 +349,11 @@ export function buildSimulation(
       if (n !== undefined && v !== VZ) contribs[n].push({ v, weak, label });
     };
     for (const e of entities) {
+      if (e.kind === "pass") {
+        // Switch elements deposit no contributions — they merge nets in the
+        // resolve phase instead (FR-083a).
+        continue;
+      }
       if (e.kind === "builtin") {
         // Scripted-clock mode (FR-115e): the clock and reset built-ins' simTime-
         // based behaviors are suppressed; the caller drives their nets via the
@@ -340,9 +389,78 @@ export function buildSimulation(
     }
 
     let changed = false;
-    for (let i = 0; i < nets.length; i++) {
-      next[i] = resolveNet(i, contribs[i]);
-      if (next[i] !== curr[i]) changed = true;
+    if (passEntities.length === 0) {
+      // No switch elements: resolve each net independently (FR-081–FR-083).
+      for (let i = 0; i < nets.length; i++) {
+        next[i] = resolveNet(i, contribs[i]);
+        if (next[i] !== curr[i]) changed = true;
+      }
+    } else {
+      // Switch elements (FR-083a): closed contacts merge their terminal nets for
+      // this step. Read each control from curr (Z/undefined → U, preserving the
+      // one-unit control-to-contact delay), union the nets joined by matching
+      // closed contacts, and collect the terminals of U-position switches to
+      // force U afterward.
+      const parent = new Int32Array(nets.length);
+      for (let i = 0; i < nets.length; i++) parent[i] = i;
+      const find = (x) => {
+        let r = x;
+        while (parent[r] !== r) r = parent[r];
+        while (parent[x] !== r) {
+          const nx = parent[x];
+          parent[x] = r;
+          x = nx;
+        }
+        return r;
+      };
+      const union = (a, b) => {
+        const ra = find(a);
+        const rb = find(b);
+        if (ra !== rb) parent[ra] = rb;
+      };
+      const forceU = new Set();
+      for (const e of passEntities) {
+        const ctrl =
+          e.control === undefined ? VU : curr[e.control] === VZ ? VU : curr[e.control];
+        for (const c of e.contacts) {
+          if (c.a === undefined || c.b === undefined) continue; // unwired throw
+          if (ctrl === VU) {
+            forceU.add(c.a);
+            forceU.add(c.b);
+          } else if (ctrl === c.closedWhen) {
+            union(c.a, c.b);
+          }
+        }
+      }
+      // Bucket every net's contributions by its group root, then resolve once per
+      // group and write the result to every member (FR-083a): strength tiers,
+      // conflicts, and weak-pull rules apply across a closed contact for free.
+      const membersByRoot = new Map();
+      const contribsByRoot = new Map();
+      for (let i = 0; i < nets.length; i++) {
+        const r = find(i);
+        if (!membersByRoot.has(r)) {
+          membersByRoot.set(r, []);
+          contribsByRoot.set(r, []);
+        }
+        membersByRoot.get(r).push(i);
+        for (const c of contribs[i]) contribsByRoot.get(r).push(c);
+      }
+      for (const [r, members] of membersByRoot) {
+        let val = resolveNet(r, contribsByRoot.get(r));
+        // A U-position switch forces its terminals' whole group to U (FR-083a's
+        // conservative rule), overriding the resolved value and any conflict.
+        const forced = members.some((m) => forceU.has(m));
+        if (forced) val = VU;
+        const conflicted = !forced && conflictedNets.has(r);
+        for (const m of members) {
+          next[m] = val;
+          if (next[m] !== curr[m]) changed = true;
+          // Flag every member net's conductors on a merged-group conflict (FR-082).
+          if (conflicted) conflictedNets.add(m);
+          else conflictedNets.delete(m);
+        }
+      }
     }
     [curr, next] = [next, curr];
     simTime++;

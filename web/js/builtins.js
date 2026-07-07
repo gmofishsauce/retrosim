@@ -110,6 +110,36 @@ const BARGRAPH_ICON =
     .join("") +
   "</svg>";
 
+// TGATE_ICON: the conventional transmission-gate glyph — two overlapping
+// opposite-pointing triangles between the A and B terminals — with the EN lead
+// entering the top (FR-071g). Same glyph as drawTgate on the canvas.
+const TGATE_ICON =
+  '<svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"' +
+  ' fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+  '<polygon points="11,9 11,27 25,18"/>' + // left triangle, apex pointing right
+  '<polygon points="25,9 25,27 11,18"/>' + // right triangle, apex pointing left
+  '<line x1="3" y1="18" x2="11" y2="18"/>' + // A lead (left)
+  '<line x1="25" y1="18" x2="33" y2="18"/>' + // B lead (right)
+  '<line x1="18" y1="2" x2="18" y2="9"/>' + // EN lead entering the top
+  "</svg>";
+
+// RELAY_ICON: a schematic SPDT relay (FR-071h) — a coil whose single logic-level
+// lead enters from the top, and on the right the three contact terminals: COM
+// (the common pole, marked with a dot) plus NO and NC. No moving contact arm is
+// drawn (it could not track the simulated state). Same glyph as drawRelay on the
+// canvas (the NO/COM/NC labels are canvas-only). Coords track the 4×4 footprint
+// at scale 7, origin (2,8).
+const RELAY_ICON =
+  '<svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"' +
+  ' fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+  '<rect x="4.8" y="15" width="5.6" height="14" fill="#fff"/>' + // coil
+  '<line x1="9" y1="4.5" x2="9" y2="15"/>' + // COIL lead (top) into the coil
+  '<line x1="33.5" y1="22" x2="24.4" y2="22"/>' + // COM common pole
+  '<line x1="33.5" y1="29" x2="27.2" y2="29"/>' + // NC terminal (bottom)
+  '<line x1="33.5" y1="15" x2="27.2" y2="15"/>' + // NO terminal (top)
+  '<circle cx="24.4" cy="22" r="1.4" fill="#333" stroke="none"/>' + // COM pole dot
+  "</svg>";
+
 // BIT_NAMES returns the n bit names "<prefix>0".."<prefix>(n-1)" for a wide
 // built-in's pins and its single pin group (FR-071d/e). n defaults to 8 (the
 // fixed-width 8-wide indicator); the multi-bit port passes its chosen width.
@@ -262,6 +292,42 @@ const BUILTIN_DEFS = [
     // the interface (FR-095) with a derived direction (FR-094c), and snaps an
     // N-bit bus to its P0..P(N-1) group (FR-041/FR-042).
     ...portNFields(PORTN_DEFAULT_WIDTH),
+  },
+  {
+    name: "tgate",
+    builtin: true,
+    title: "transmission gate", // FR-071g palette tooltip
+    icon: TGATE_ICON,
+    renderType: "tgate", // not "switch" — the input switch owns that renderType
+    width: 2,
+    height: 2,
+    // Two symmetric, interchangeable contact terminals (bidir) plus an active-
+    // high enable on top (FR-071g). No properties, and no BEHAVIORS/INTERACTIONS
+    // entry: the engine realizes it as a kind:"pass" entity (§6.13, FR-083a).
+    pins: [
+      { name: "A", side: "left", position: 1, direction: "bidir" },
+      { name: "B", side: "right", position: 1, direction: "bidir" },
+      { name: "EN", side: "top", position: 1, direction: "in" },
+    ],
+  },
+  {
+    name: "relay",
+    builtin: true,
+    title: "relay (SPDT)", // FR-071h palette tooltip
+    icon: RELAY_ICON,
+    renderType: "relay",
+    width: 4,
+    height: 4,
+    // Idealized single-pin logic-level coil (in, on the top edge) and an SPDT
+    // changeover contact: NO/COM/NC down the right edge, all bidir (FR-071h). No
+    // properties, and no BEHAVIORS/INTERACTIONS entry — realized as a kind:"pass"
+    // entity (§6.13).
+    pins: [
+      { name: "COIL", side: "top", position: 1, direction: "in" },
+      { name: "NO", side: "right", position: 1, direction: "bidir" },
+      { name: "COM", side: "right", position: 2, direction: "bidir" },
+      { name: "NC", side: "right", position: 3, direction: "bidir" },
+    ],
   },
   {
     name: "note",

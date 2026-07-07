@@ -19,6 +19,10 @@ const SUBUNIT_PKG_RE = /^((?:.*\/)?U\d+)[A-Z]$/;
 // Text notes have no pins and are skipped entirely.
 const VIRTUAL_TYPES = new Set([
   "indicator", "indicator8", "pullup", "pulldown", "clock", "reset", "switch",
+  // Switch elements (FR-071g/FR-071h): no physical package. Each emits a comment
+  // line per pin naming its control pin's net (EN/COIL) and its contact
+  // terminals' nets (A/B or NO/COM/NC), so the merge survives export (FR-119a f).
+  "tgate", "relay",
 ]);
 
 const natural = (a, b) => a.localeCompare(b, undefined, { numeric: true });

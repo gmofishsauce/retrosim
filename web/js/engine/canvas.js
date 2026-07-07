@@ -519,6 +519,10 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
     drawPortN(ctx, inst, vp, selected);
   } else if (td.renderType === "port") {
     drawPort(ctx, inst, vp, selected);
+  } else if (td.renderType === "tgate") {
+    drawTgate(ctx, inst, vp, selected);
+  } else if (td.renderType === "relay") {
+    drawRelay(ctx, inst, vp, selected);
   } else {
     const corners = [
       [0, 0],
@@ -818,6 +822,70 @@ function drawPulldown(ctx, inst, vp, selected) {
     ],
     selected,
   );
+}
+
+// drawTgate renders the transmission gate (FR-071g): two overlapping
+// opposite-pointing triangles between the A (left) and B (right) terminals, with
+// the EN control lead entering from the top. A static glyph — it does not animate
+// with the simulated switch state (§6.11). The shared pin loop draws the A/B/EN
+// connection leads (FR-013).
+function drawTgate(ctx, inst, vp, selected) {
+  strokePaths(
+    ctx,
+    inst,
+    vp,
+    [
+      [[0.55, 0.35], [1.45, 1], [0.55, 1.65], [0.55, 0.35]], // left triangle, apex right
+      [[1.45, 0.35], [0.55, 1], [1.45, 1.65], [1.45, 0.35]], // right triangle, apex left
+      [[0, 1], [0.55, 1]], // A terminal stub
+      [[2, 1], [1.45, 1]], // B terminal stub
+      [[1, 0], [1, 0.68]], // EN control lead into the top of the gate
+    ],
+    selected,
+  );
+}
+
+// drawRelay renders the SPDT relay (FR-071h): a coil whose single logic-level
+// lead enters from the top edge, and on the right the three contact terminals —
+// COM (the common pole, marked with a dot) plus NO and NC. No moving contact arm
+// is drawn: it could not track the simulated contact state, so a static one
+// misleads (the state shows on wired indicators, §6.11). The three right-edge
+// terminals are labeled NO/COM/NC in a column between the coil and the contact so
+// they can be told apart. The shared pin loop draws the COIL/NO/COM/NC leads.
+function drawRelay(ctx, inst, vp, selected) {
+  const stroke = selected ? "#4a90d9" : "#333";
+  ctx.lineWidth = selected ? 2 : 1.5;
+  // Coil, filled so it reads as a solid body; its lead enters from the top.
+  fillLocalPoly(ctx, inst, vp, [[0.4, 1], [1.2, 1], [1.2, 3], [0.4, 3]], "#fff", stroke);
+  strokePaths(
+    ctx,
+    inst,
+    vp,
+    [
+      [[1, 0], [1, 1]], // COIL into the top of the coil
+      [[4, 2], [3.2, 2]], // COM common pole
+      [[4, 3], [3.6, 3]], // NC terminal
+      [[4, 1], [3.6, 1]], // NO terminal
+    ],
+    selected,
+  );
+  // Dot marking COM as the common pole.
+  fillLocalPoly(ctx, inst, vp, [[3.07, 2], [3.2, 1.88], [3.33, 2], [3.2, 2.12]], stroke, stroke);
+  // Contact labels (FR-071h): a NO/COM/NC column between the coil and the
+  // contact, right-aligned at grid x=2.8, so the three right-edge terminals are
+  // identifiable. Drawn in screen space (upright, FR-015); culled with the other
+  // pin names when the symbol is small (FR-012a).
+  if (Math.min(inst.typeData.width, inst.typeData.height) * scaleFor(vp) >= LABEL_T1) {
+    ctx.fillStyle = "#333";
+    ctx.font = PIN_FONT;
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    for (const [name, row] of [["NO", 1], ["COM", 2], ["NC", 3]]) {
+      const o = rotateOffset(2.8, row, inst.rotation);
+      const p = worldToScreen({ x: inst.x + o.x, y: inst.y + o.y }, vp);
+      ctx.fillText(name, p.x, p.y);
+    }
+  }
 }
 
 // drawLabelBox renders a built-in's outline box with a centered label: the

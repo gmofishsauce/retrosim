@@ -289,6 +289,24 @@ test("generateC: guards against an unflattened off-sheet connector (FR-116)", ()
   assert.throws(() => generateC(d), /reached the generator unflattened/);
 });
 
+test("generateC: refuses a transmission gate — not supported by the fast simulator (FR-116/FR-083a)", () => {
+  const d = mkDesign();
+  place(d, "A-3", builtin("tgate"));
+  assert.throws(
+    () => generateC(d),
+    (e) => /A-3/.test(e.message) && /not supported by the fast simulator/.test(e.message),
+  );
+});
+
+test("generateC: refuses a relay — not supported by the fast simulator (FR-116/FR-083a)", () => {
+  const d = mkDesign();
+  place(d, "A-5", builtin("relay"));
+  assert.throws(
+    () => generateC(d),
+    (e) => /A-5/.test(e.message) && /not supported by the fast simulator/.test(e.message),
+  );
+});
+
 test("generateC: hierarchical design generates from the FlatDesign, columns from the root (FR-116)", async () => {
   // Child: port IN → inverter → port OUT (plus its own indicator, which must
   // NOT become a column). Parent: switch → X1.IN, X1.OUT → indicator.

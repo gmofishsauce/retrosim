@@ -73,6 +73,16 @@ const TY_CLOCK = {
   renderType: "clock",
   pins: [{ name: "OUT", direction: "out" }],
 };
+const TY_TGATE = {
+  id: "type-tgate",
+  name: "tgate",
+  renderType: "tgate",
+  pins: [
+    { name: "A", direction: "bidir" },
+    { name: "B", direction: "bidir" },
+    { name: "EN", direction: "in" },
+  ],
+};
 
 function fixture() {
   const pinV = (id, ref, pin) => ({ id, kind: "pin", ref, pin, x: 0, y: 0 });
@@ -162,6 +172,23 @@ test("virtual built-ins survive as comments, not hardware", () => {
 
 test("deterministic output", () => {
   assert.equal(gen().text, gen().text);
+});
+
+test("switch elements export as virtual comment lines, not hardware (FR-119a f)", () => {
+  const pinV = (id, ref, pin) => ({ id, kind: "pin", ref, pin, x: 0, y: 0 });
+  const d = {
+    components: [
+      { refdes: "U2", type: "type-74XX", typeData: TY_74XX },
+      { refdes: "A-1", type: "type-tgate", typeData: TY_TGATE },
+    ],
+    wires: [{ id: "w1", path: [{ t: "node", v: "v1" }, { t: "node", v: "v2" }] }],
+    buses: [],
+    vertices: [pinV("v1", "U2", "Q0"), pinV("v2", "A-1", "A")],
+  };
+  const { text } = generateNDL(d, { name: "sw" });
+  // The tgate's terminal net is named, and it never becomes a pinout/package.
+  assert.match(text, / {2}# virtual: A-1 \(tgate\) A -> U2\.Q0\n/);
+  assert.doesNotMatch(text, /pinout tgate|package [^\n]*A-1/);
 });
 
 test("subunit pinout unions pins across siblings' per-unit typeData", () => {

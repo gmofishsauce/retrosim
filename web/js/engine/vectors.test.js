@@ -86,6 +86,19 @@ function inverterDesign() {
   return d;
 }
 
+// tgate circuit: data switch → tgate A, enable switch → tgate EN, indicator on B.
+function tgateVectorDesign() {
+  const d = mkDesign();
+  place(d, "A-1", builtin("switch"), { label: "D" }); // data
+  place(d, "A-2", builtin("switch"), { label: "EN" }); // enable
+  place(d, "A-3", builtin("tgate"));
+  place(d, "A-4", builtin("indicator"), { label: "Q" });
+  connect(d, ["A-1", "OUT"], ["A-3", "A"]);
+  connect(d, ["A-2", "OUT"], ["A-3", "EN"]);
+  connect(d, ["A-3", "B"], ["A-4", "IN"]);
+  return d;
+}
+
 test("deriveColumns: switches → inputs, indicators → outputs, indicator8 expands to 8 bits", () => {
   const d = mkDesign();
   place(d, "A-2", builtin("switch"), { label: "B" });
@@ -104,6 +117,32 @@ test("deriveColumns: switches → inputs, indicators → outputs, indicator8 exp
   const bus = outputs.filter((c) => c.refdes === "A-4");
   assert.deepEqual(bus.map((c) => c.pin), ["D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7"]);
   assert.equal(bus[0].label, "BUS.D0");
+});
+
+test("deriveColumns: switch elements contribute no vector columns (FR-115b/FR-083a)", () => {
+  const d = tgateVectorDesign();
+  const { inputs, outputs } = deriveColumns(d);
+  assert.deepEqual(inputs.map((c) => c.refdes), ["A-1", "A-2"]); // the two switches
+  assert.deepEqual(outputs.map((c) => c.refdes), ["A-4"]); // the indicator
+  // The transmission gate A-3 yields no column of either kind.
+  assert.ok(![...inputs, ...outputs].some((c) => c.refdes === "A-3"));
+});
+
+test("runVectors: a transmission-gate circuit scores per FR-115c", () => {
+  const d = tgateVectorDesign();
+  const cols = deriveColumns(d);
+  // Input order follows deriveColumns (A-1 data, A-2 enable).
+  const rows = [
+    { in: ["1", "1"], out: ["H"] }, // closed, data 1 → B=1 → H passes
+    { in: ["0", "1"], out: ["L"] }, // closed, data 0 → B=0 → L passes
+    { in: ["1", "0"], out: ["H"] }, // open → B isolated (Z) → captures X, H fails
+  ];
+  const res = runVectors(d, { ...cols, rows });
+  assert.equal(res.total, 3);
+  assert.equal(res.passed, 2);
+  assert.equal(res.rows[0].pass, true);
+  assert.equal(res.rows[1].pass, true);
+  assert.equal(res.rows[2].pass, false);
 });
 
 test("runVectors: buffer scores H/L matches and reports mismatches with the actual value", () => {

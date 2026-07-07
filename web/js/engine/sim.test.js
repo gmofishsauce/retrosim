@@ -552,3 +552,271 @@ test("a buried internal node carries a shift stage: DS reaches Q1 after two cloc
   pulse(V0); // Q1 <- SR0 (=0)
   assert.equal(sim.valueOfPin("U1", "Q1"), V0); // and shifts on through
 });
+
+// --- switch elements: transmission gates & relays (FR-071g/FR-071h/FR-083a) ---
+
+// placeSwitch places an input switch already set to a given state, so it strong-
+// drives that fixed level from step 1 (its behavior reads live inst.switchState,
+// §6.13). Returns the instance so a test can toggle it mid-run.
+function placeSwitch(d, refdes, state) {
+  place(d, refdes, builtin("switch"));
+  d.components.at(-1).switchState = state;
+  return d.components.at(-1);
+}
+
+test("transmission gate: closed passes a driver across; open isolates the far side (FR-071g/FR-083a)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("tgate"));
+  placeSwitch(d, "A-2", "1"); // data on A
+  place(d, "A-3", builtin("indicator")); // probe on B
+  const se = placeSwitch(d, "A-4", "1"); // enable
+  connect(d, ["A-1", "A"], ["A-2", "OUT"]);
+  connect(d, ["A-1", "B"], ["A-3", "IN"]);
+  connect(d, ["A-1", "EN"], ["A-4", "OUT"]);
+  const sim = buildSimulation(d);
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-1", "B"), V1); // driver on A observed at B
+  assert.equal(sim.valueOfPin("A-1", "A"), V1);
+
+  se.switchState = "0"; // open
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-1", "A"), V1); // still driven
+  assert.equal(sim.valueOfPin("A-1", "B"), VZ); // far side isolated → Z
+});
+
+test("transmission gate: terminals are symmetric — a driver on B is seen at A (FR-071g)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("tgate"));
+  place(d, "A-2", builtin("indicator")); // probe A
+  placeSwitch(d, "A-3", "1"); // data on B
+  placeSwitch(d, "A-4", "1"); // enable
+  connect(d, ["A-1", "A"], ["A-2", "IN"]);
+  connect(d, ["A-1", "B"], ["A-3", "OUT"]);
+  connect(d, ["A-1", "EN"], ["A-4", "OUT"]);
+  const sim = buildSimulation(d);
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-1", "A"), V1);
+});
+
+test("transmission gate: releasing the driver leaves both sides Z — no charge latch (FR-083a)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("tgate"));
+  place(d, "A-2", builtin("indicator")); // A
+  place(d, "A-3", builtin("indicator")); // B
+  place(d, "A-4", builtin("pullup")); // EN held closed (weak 1)
+  connect(d, ["A-1", "A"], ["A-2", "IN"]);
+  connect(d, ["A-1", "B"], ["A-3", "IN"]);
+  connect(d, ["A-1", "EN"], ["A-4", "OUT"]);
+  const sim = buildSimulation(d, { stimulus: [{ refdes: "A-1", pin: "A", value: V1 }] });
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-1", "A"), V1);
+  assert.equal(sim.valueOfPin("A-1", "B"), V1); // carried across the closed gate
+
+  sim.setStimulus([]); // release the driver
+  sim.step();
+  // The merged group is now undriven; a merge stores no charge, so BOTH sides
+  // read Z — the back-to-back-driver model would latch B at 1 here (§8).
+  assert.equal(sim.valueOfPin("A-1", "A"), VZ);
+  assert.equal(sim.valueOfPin("A-1", "B"), VZ);
+});
+
+test("transmission gates chain: two closed gates join three nets; opening one splits them (FR-083a)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("tgate")); // G1
+  place(d, "A-2", builtin("tgate")); // G2
+  placeSwitch(d, "A-3", "1"); // driver on net1
+  place(d, "A-4", builtin("indicator")); // probe on net3
+  const e1 = placeSwitch(d, "A-5", "1"); // G1 enable
+  placeSwitch(d, "A-6", "1"); // G2 enable
+  connect(d, ["A-3", "OUT"], ["A-1", "A"]); // net1
+  connect(d, ["A-1", "B"], ["A-2", "A"]); // net2
+  connect(d, ["A-2", "B"], ["A-4", "IN"]); // net3
+  connect(d, ["A-1", "EN"], ["A-5", "OUT"]);
+  connect(d, ["A-2", "EN"], ["A-6", "OUT"]);
+  const sim = buildSimulation(d);
+  settle(sim);
+  // Transitive join: the driver on net1 reaches net3 through two closed gates.
+  assert.equal(sim.valueOfPin("A-1", "B"), V1); // net2
+  assert.equal(sim.valueOfPin("A-2", "B"), V1); // net3
+
+  e1.switchState = "0"; // open G1 → net1 splits off
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-1", "A"), V1); // net1 still driven
+  assert.equal(sim.valueOfPin("A-1", "B"), VZ); // net2 now isolated from the driver
+  assert.equal(sim.valueOfPin("A-2", "B"), VZ); // net3 too
+});
+
+test("transmission gate: a weak pull crosses a closed contact but loses to a far strong 0 (FR-083)", () => {
+  // Weak pull-up on A, strong 0 on B, gate closed → the strong driver wins.
+  const d = mkDesign();
+  place(d, "A-1", builtin("tgate"));
+  place(d, "A-2", builtin("pullup")); // weak 1 on A
+  placeSwitch(d, "A-3", "0"); // strong 0 on B
+  place(d, "A-4", builtin("pullup")); // EN closed
+  connect(d, ["A-1", "A"], ["A-2", "OUT"]);
+  connect(d, ["A-1", "B"], ["A-3", "OUT"]);
+  connect(d, ["A-1", "EN"], ["A-4", "OUT"]);
+  let sim = buildSimulation(d);
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-1", "A"), V0);
+  assert.equal(sim.valueOfPin("A-1", "B"), V0);
+
+  // With no strong driver, the weak pull decides the whole merged group.
+  const d2 = mkDesign();
+  place(d2, "A-1", builtin("tgate"));
+  place(d2, "A-2", builtin("pullup")); // weak 1 on A
+  place(d2, "A-3", builtin("indicator")); // B undriven
+  place(d2, "A-4", builtin("pullup")); // EN closed
+  connect(d2, ["A-1", "A"], ["A-2", "OUT"]);
+  connect(d2, ["A-1", "B"], ["A-3", "IN"]);
+  connect(d2, ["A-1", "EN"], ["A-4", "OUT"]);
+  sim = buildSimulation(d2);
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-1", "A"), V1);
+  assert.equal(sim.valueOfPin("A-1", "B"), V1); // weak pull seen across the contact
+});
+
+test("transmission gate: strong 0 vs strong 1 across a closed contact conflicts (FR-082/FR-083a)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("tgate"));
+  placeSwitch(d, "A-2", "1"); // strong 1 on A
+  placeSwitch(d, "A-3", "0"); // strong 0 on B
+  place(d, "A-4", builtin("pullup")); // EN closed
+  const wA = connect(d, ["A-1", "A"], ["A-2", "OUT"]);
+  const wB = connect(d, ["A-1", "B"], ["A-3", "OUT"]);
+  connect(d, ["A-1", "EN"], ["A-4", "OUT"]);
+  const messages = [];
+  const sim = buildSimulation(d, { onMessage: (m) => messages.push(m) });
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-1", "A"), VU); // group value U
+  assert.equal(sim.valueOfPin("A-1", "B"), VU);
+  // Every member net's conductor is flagged (FR-082 across the merge).
+  const flagged = sim.conflictedConductors();
+  assert.ok(flagged.has(wA));
+  assert.ok(flagged.has(wB));
+  const conflicts = messages.filter((m) => m.includes("bus conflict"));
+  assert.equal(conflicts.length, 1); // reported once
+  assert.match(conflicts[0], /A-[23]\.OUT vs A-[23]\.OUT/); // two drivers named
+});
+
+test("transmission gate: EN reading U forces both terminal groups U (FR-083a)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("tgate")); // EN left unconnected → reads Z→U
+  placeSwitch(d, "A-2", "1"); // strong 1 on A
+  placeSwitch(d, "A-3", "1"); // strong 1 on B (agreeing)
+  connect(d, ["A-1", "A"], ["A-2", "OUT"]);
+  connect(d, ["A-1", "B"], ["A-3", "OUT"]);
+  const sim = buildSimulation(d);
+  settle(sim);
+  // Unknown contact position is conservative: both terminals U despite the
+  // agreeing strong drivers.
+  assert.equal(sim.valueOfPin("A-1", "A"), VU);
+  assert.equal(sim.valueOfPin("A-1", "B"), VU);
+});
+
+test("transmission gate: a control change joins on the next step (one-unit delay, FR-078)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("tgate"));
+  placeSwitch(d, "A-2", "1"); // data on A
+  place(d, "A-3", builtin("indicator")); // probe B
+  const se = placeSwitch(d, "A-4", "0"); // enable, start open
+  connect(d, ["A-1", "A"], ["A-2", "OUT"]);
+  connect(d, ["A-1", "B"], ["A-3", "IN"]);
+  connect(d, ["A-1", "EN"], ["A-4", "OUT"]);
+  const sim = buildSimulation(d);
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-1", "B"), VZ); // open: B isolated
+
+  se.switchState = "1"; // close
+  sim.step(); // EN net rises to 1 this step, but the contact read the old EN
+  assert.equal(sim.valueOfPin("A-1", "EN"), V1); // control already high...
+  assert.equal(sim.valueOfPin("A-1", "B"), VZ); // ...yet the contact has not closed
+  sim.step(); // now the contact reads EN=1 and closes
+  assert.equal(sim.valueOfPin("A-1", "B"), V1);
+});
+
+test("relay: the coil throws the changeover contact (COM–NC released, COM–NO energized) (FR-071h)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("relay"));
+  placeSwitch(d, "A-2", "1"); // COM driver
+  place(d, "A-3", builtin("indicator")); // NO probe
+  place(d, "A-4", builtin("indicator")); // NC probe
+  const sc = placeSwitch(d, "A-5", "0"); // coil, start released
+  connect(d, ["A-1", "COM"], ["A-2", "OUT"]);
+  connect(d, ["A-1", "NO"], ["A-3", "IN"]);
+  connect(d, ["A-1", "NC"], ["A-4", "IN"]);
+  connect(d, ["A-1", "COIL"], ["A-5", "OUT"]);
+  const sim = buildSimulation(d);
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-1", "NC"), V1); // released: COM–NC joined
+  assert.equal(sim.valueOfPin("A-1", "NO"), VZ); // NO isolated
+
+  sc.switchState = "1"; // energize
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-1", "NO"), V1); // energized: COM–NO joined
+  assert.equal(sim.valueOfPin("A-1", "NC"), VZ); // NC isolated
+});
+
+test("relay: a coil reading U forces all three contact terminals U (FR-083a)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("relay")); // COIL unconnected → U
+  placeSwitch(d, "A-2", "1"); // COM driver
+  place(d, "A-3", builtin("indicator")); // NO
+  place(d, "A-4", builtin("indicator")); // NC
+  connect(d, ["A-1", "COM"], ["A-2", "OUT"]);
+  connect(d, ["A-1", "NO"], ["A-3", "IN"]);
+  connect(d, ["A-1", "NC"], ["A-4", "IN"]);
+  const sim = buildSimulation(d);
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-1", "COM"), VU);
+  assert.equal(sim.valueOfPin("A-1", "NO"), VU);
+  assert.equal(sim.valueOfPin("A-1", "NC"), VU);
+});
+
+test("relay: an unwired throw gives an SPST contact (FR-071h)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("relay")); // NO left unwired
+  placeSwitch(d, "A-2", "1"); // COM driver
+  place(d, "A-3", builtin("indicator")); // NC probe
+  const sc = placeSwitch(d, "A-4", "0"); // coil released
+  connect(d, ["A-1", "COM"], ["A-2", "OUT"]);
+  connect(d, ["A-1", "NC"], ["A-3", "IN"]);
+  connect(d, ["A-1", "COIL"], ["A-4", "OUT"]);
+  const sim = buildSimulation(d);
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-1", "NC"), V1); // released: COM–NC closed
+
+  sc.switchState = "1"; // energize → NC opens; the unwired NO simply never joins
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-1", "COM"), V1); // COM still driven
+  assert.equal(sim.valueOfPin("A-1", "NC"), VZ); // NC isolated
+});
+
+test("a design with no switch elements resolves per net (fast path unaffected) (FR-083a)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("pullup"));
+  place(d, "A-2", builtin("indicator"));
+  connect(d, ["A-1", "OUT"], ["A-2", "IN"]);
+  const sim = buildSimulation(d);
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-2", "IN"), V1);
+});
+
+test("merge feedback settles rather than spinning (FR-085)", () => {
+  // A gate whose enable depends on a net it merges. From a cold start every net
+  // is U and merging cannot manufacture a definite level, so the loop settles
+  // (at U) well within the settling bound rather than oscillating — the same
+  // 4-state convergence as a plain inverter ring ("feedback loop settles to U").
+  // See the note to the reviewer re: literally hitting the 10,000-unit bound.
+  const d = mkDesign();
+  place(d, "A-1", builtin("tgate"));
+  place(d, "A-2", builtin("pullup")); // weak 1 on A
+  place(d, "A-3", builtin("pulldown")); // weak 0 on B
+  place(d, "U1", NOT); // EN = /B — control depends on the merged B net
+  connect(d, ["A-1", "A"], ["A-2", "OUT"]);
+  connect(d, ["A-1", "B"], ["A-3", "OUT"]);
+  connect(d, ["A-1", "B"], ["U1", "A"]);
+  connect(d, ["U1", "Y"], ["A-1", "EN"]);
+  const sim = buildSimulation(d);
+  assert.ok(settle(sim) <= 100); // converges; does not spin
+});

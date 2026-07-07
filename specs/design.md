@@ -140,6 +140,26 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
   at the rotated angle — a deliberate exception to the upright-label rule of
   FR-012/FR-015/FR-020). Per-instance `text` (default empty) round-trips with the
   instance. (Added 2026-06-22.)
+- **FR-071g** — Transmission gate: 2×2; contact terminals `A` (left-center) and
+  `B` (right-center), active-high enable `EN` (top-center); the conventional
+  two-opposing-triangles glyph. An ideal bidirectional switch: terminals are
+  symmetric (no input/output side); closed (EN=1) joins the two terminal nets,
+  open (EN=0) isolates them — semantics per FR-083a (net merging, U-control
+  rule, one-unit control delay, no charge storage). Drives nothing, stores
+  nothing, no properties, not interactive. Tooltip "transmission gate". (Added
+  2026-07-07.)
+- **FR-071h** — Relay (SPDT changeover): 4×4; `COIL` (top edge, an idealized
+  one-pin logic-level coil — no second terminal, no analog) and right-edge
+  contacts `NO` (top) / `COM` (middle) / `NC` (bottom). Released (COIL=0) joins
+  COM–NC; energized (COIL=1) joins COM–NO; per FR-083a. No pick/drop delay
+  (contacts follow the coil by the standard one unit; a delay property is a
+  later additive change). SPST = leave a throw unwired. Drawn as a coil (top
+  lead) + three contact terminals (COM common pole marked with a dot, plus NO
+  and NC) with **no static contact arm** (it could not track the simulated
+  state), the right-edge `NO`/`COM`/`NC` terminals labeled on the canvas so they
+  are identifiable. Tooltip "relay (SPDT)". (Added 2026-07-07; COIL moved from
+  the left edge to the top, footprint widened to 4×4, glyph reworked with
+  contact labels, and the misleading static contact arm removed 2026-07-07.)
 
 **Component Selection and Movement**
 - **FR-016** — In select mode, click a component to select it.
@@ -1452,7 +1472,21 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `in` pins `D0`–`D7` in one pin group `D`, FR-071d); **multi-bit port**
   (`"portN"`, `3 × (N+1)`, N left-edge `bidir` pins `P0`–`P(N-1)` in one pin group
   `P`, FR-071e — width N chosen at placement, 2–16, default 8);
-  **text note** (`"note"`, a `NOTE`-labeled tile, **no `pins`**, FR-071f). The
+  **text note** (`"note"`, a `NOTE`-labeled tile, **no `pins`**, FR-071f);
+  **transmission gate** (`"tgate"`, 2×2, left-center `bidir` pin `A`,
+  right-center `bidir` pin `B`, top-center `in` pin `EN`, FR-071g — the
+  renderType is `tgate`, not `switch`, which the input switch already owns);
+  **relay** (`"relay"`, 4×4, top-edge `in` pin `COIL`, right-edge `bidir`
+  pins `NO`/`COM`/`NC` top-to-bottom, FR-071h). The two switch elements'
+  contact terminals are declared `bidir` — deliberately, since a switch
+  terminal is genuinely directionless; a consequence is that a port whose net
+  reaches a switch terminal derives direction **bidir** (FR-094c), the
+  conservative result, for which the FR-094d override is the existing remedy.
+  Like the text note, the switch elements have **no `BEHAVIORS` entry** and no
+  `INTERACTIONS` entry: they neither source-drive a value nor accept sim-time
+  clicks — the engine realizes them as dedicated `kind:"pass"` entities
+  (§6.13, FR-083a), the same pattern as memory's `kind:"memory"` escape from
+  the source-only `BEHAVIORS` signature. The
   8-wide indicator and the multi-bit port declare `pinGroups` so an N-bit bus
   snap-connects to all N bits at once (FR-041/FR-042, `matchingGroups`). Unlike the
   fixed built-ins, `portN`'s pins/group/footprint are generated for its chosen
@@ -1483,9 +1517,21 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   stripes, each filled by its bit's value via `sim.valueOfPin(refdes,"D"+i)` with
   the same white/black/gray mapping as the 1-wide indicator, FR-071d), and
   `drawPortN` draws N narrow off-sheet pentagons, one centered on each bit
-  pin's row (FR-071e). The shared
-  pin loop draws the connection bubbles down the left edge for both. Pin
-  name labels are suppressed for built-ins (the glyph owns the body); the refdes is
+  pin's row (FR-071e). Two switch-element branches (FR-071g/FR-071h):
+  `drawTgate` draws the two overlapping opposite-pointing triangles between
+  the `A` and `B` pins with the `EN` lead entering the top, and `drawRelay`
+  draws a coil (its single lead entering from the top edge) with, on the
+  right, the three contact terminals — `COM` as the common pole (marked with a
+  dot) plus `NO` and `NC`, and **no moving contact arm** (a static one could not
+  track the simulated state) — and draws the `NO`/`COM`/`NC` labels in a column
+  between the coil and the contact so the three right-edge terminals are
+  identifiable (FR-071h) — these labels are culled at low zoom like other pin
+  names (FR-012a) and kept upright regardless of rotation (FR-015). The static
+  symbol does not animate with the simulated coil state (indicators are the
+  state display, FR-068). The shared pin loop draws the connection leads at
+  each pin for both. Pin
+  name labels are suppressed for built-ins (the glyph owns the body) — the relay
+  is the exception, labeling its `NO`/`COM`/`NC` contacts (above); the refdes is
   drawn above the symbol. The **text note** (`note`) is the lone exception that
   draws neither pins nor refdes (FR-071f): `drawNote` (§6.8) draws only `inst.text`
   (plus a dotted blue outline box when selected). While a note is being edited the
@@ -1682,7 +1728,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 ### 6.13 JS: slow simulator (`web/js/engine/sim.js`, `web/js/engine/galasm.js`)
 - **Purpose:** the interpretive debug engine (requirements §3.19; sim-vision.md):
   execute the design live on the canvas under a unit-delay, four-state model.
-- **Satisfies:** FR-075–FR-087, FR-067a, FR-062d (client side), FR-071a, FR-071b.
+- **Satisfies:** FR-075–FR-087, FR-083a, FR-067a, FR-062d (client side), FR-071a, FR-071b, FR-071g/FR-071h (simulation side).
 
 **Four-state values (FR-077).** Every net carries `0`, `1`, `U`, or `Z`, encoded
 as small ints in two `Uint8Array`s (`curr`, `next`) indexed by net id. Reading Z
@@ -1865,6 +1911,47 @@ no sequential part could ever leave U.)
   value. Empty pool (no driver, or every driver Z) → Z. Thus a weak pull decides a
   net only when every strong driver is Z, and a pull-up xor pull-down gives 1/0
   while both kinds together (still weak tier) is a conflict (FR-083).
+- **Switch elements — dynamic net merging (FR-083a, FR-071g/FR-071h):** the
+  transmission gate and relay are realized as a third entity kind,
+  **`kind:"pass"`** (`makePassEntity`; "pass" because `"switch"` is the input
+  switch's renderType). Like memory they escape the source-only `BEHAVIORS`
+  signature, but unlike every other entity they deposit **no contributions**: a
+  closed contact makes its two terminal nets *the same net* for resolution. Each
+  pass entity carries its control net index (`EN` or `COIL`) and a list of
+  **contact records** `{a, b, closedWhen}` over terminal net indices — tgate:
+  one contact `{A, B, closedWhen: 1}`; relay: two contacts `{COM, NO,
+  closedWhen: 1}` and `{COM, NC, closedWhen: 0}` (the changeover pair,
+  complementary by construction). The step loop (FR-078) changes only in its
+  resolve phase: after every entity's contributions are deposited per net and
+  **before** resolution, each pass entity reads its control from `curr` (same
+  Z→U normalization as `readNet`, FR-077) — preserving the one-unit
+  control-to-contact delay — and (a) for a 0/1 control, `union(a, b)` is applied
+  in a per-step **union-find over net indices** for each contact whose
+  `closedWhen` matches; (b) for a U control, each contact terminal's net index
+  is added to a `forceU` list (an unknown contact position joins nothing).
+  Resolution then runs **per root instead of per net**: contributions are
+  bucketed by `find(net)`, `resolveNet` runs once per root over the pooled
+  contributions (strength tiers, conflicts, and weak-pull rules all unchanged —
+  FR-081–FR-083 apply across a closed contact for free), and the result is
+  written to every member net's `next`; finally every group containing a
+  `forceU` terminal is overwritten to U (FR-083a's conservative rule). A
+  conflict in a merged group flags **every member net's conductors** for red
+  rendering and names two offending drivers as usual (FR-082). When the design
+  contains no pass entities the union-find degenerates to the identity and
+  resolution proceeds per net exactly as today — no cost for ordinary designs
+  (the build skips the pass machinery entirely when the entity list has no
+  `pass` kind). Everything downstream needs no change: `valueOfPin` reads any
+  member net's resolved value, indicators display it, quiescence detection
+  (`next` vs `curr`) is unaffected, and a switch whose control depends on nets
+  it merges oscillates into the existing 10,000-unit settle bound (FR-085).
+  The rejected alternative — modeling a closed switch as two back-to-back
+  conditional drivers — is recorded in §8: once both sides carry a value the
+  switch's own reflection sustains it after the external driver releases, an
+  unintended charge-storage latch; merging has no such artifact, and FR-083a
+  declares isolated-node charge storage a non-goal (an isolated group resolves
+  Z through the normal empty-pool rule). Vector runs (§6.16) build the same
+  simulation and inherit all of this unchanged; switch elements contribute no
+  columns (`deriveColumns` ignores them, FR-115b).
 - **Built-in behaviors (FR-067a):** the `BEHAVIORS` registry entries (§6.11)
   take the uniform signature `behave(ctx) → [{pin, value, weak?}]` with `ctx =
   {props, simTime, clockPeriod, state}`: **clock** returns its FR-084 waveform —
@@ -2053,7 +2140,7 @@ no sequential part could ever leave U.)
   - **Net table:** nets indexed as in `buildNets` order; a string table of `refdes.pin` labels for conflict messages (FR-108).
   - **GALasm entities:** each compiled output's term/sum tree is lowered to a C expression/function over `curr[]` using the `rt_*` ops — plain, `.T` (enable gating), and `.R` outputs; register state as static `rt_val` arrays; global-clock and per-output `.CLK` edge detection mirroring `updateRegisters`/`evalOutput` (§6.13, FR-079/FR-079a). Subunit packages union their siblings' pins exactly as `makeGalasmEntity`. **Buried registered nodes (FR-079c)** mirror the slow engine's virtual-net trick: `lowerGalasm` appends one placeholder net per `typeData.internal` name (bumping `gen_net_count`), maps the node to a synthetic `"<refdes>.#<node>"` key in `netOfPin`/`pinOwner` and interns a label for it; the buried `.R` output then lowers into ordinary `reg_<tag>[k]` state (`gen_init` U-seed, `gen_latch` rising-edge D-latch reading buried literals as `curr[<vnet>]`) and a `gen_drive` fragment `rt_contrib(<vnet>, reg_<tag>[k], 0, <label>)`, so `curr[<vnet>]` carries the one-unit-delayed buried value the runtime's unchanged net resolve produces — no runtime change, the two engines agree on `Q7`/`Q7N` (FR-107). New sequential parity pair `examples/74165-*` (a placed 74165 with switch-driven `D0..D7`/`DS`/`PL`//`CE`/, a clock on `CP`, indicators on `Q7`/`Q7N`, and a `.tv` exercising load-then-shift and `CE`/ inhibit) covers a buried sequential node through the FR-107 harness (`runtests.sh` step 3).
   - **Built-ins/memory:** instance tables (type, nets, effective properties, switch's persisted state as its baked drive level — overridable by a vector input column); each ROM's **refdes and content-file path** baked for the runtime's startup load (FR-117b; superseded the M3 baked-bytes rule 2026-07-03); RAM starts all-U.
-  - **Preflight/refusals:** same compile errors as `buildSimulation` (parse failure, `.R` without `clock:`); behavior-less types generate U-drivers with a warning (FR-080 analogue). The former FR-116 deferred-scope refusals of sub-design instances / off-sheet connectors remain **as internal guards** — the caller flattens first (FR-116 hierarchy, reworked 2026-07-04), so tripping one means an unflattened design reached the generator. `SUBUNIT_PKG_RE` is the hierarchical-prefix-tolerant form (§6.14), so a child's subunit packages group within their instance. A clock generator with a hierarchical refdes is baked normally (free-run mode drives it, FR-117a) and the **runtime's vector mode refuses it at startup** — `rt_init`/the vector runner scans `gen_clocks[].refdes` for `/`, reports the refdes with a pointer at `--cycles`, and exits 2 (the FR-115e hidden-clock rule, enforceable only at run time because one program serves both modes).
+  - **Preflight/refusals:** same compile errors as `buildSimulation` (parse failure, `.R` without `clock:`); behavior-less types generate U-drivers with a warning (FR-080 analogue). **Switch elements (FR-071g/FR-071h) are refused** (added 2026-07-07): `generateC` fails with "transmission gates / relays are not supported by the fast simulator" naming the offending refdes(es) — FR-083a's dynamic net merging is slow-engine-only for now (FR-116); the Generate C… flow surfaces the refusal via the message tray like a flatten failure. When fast support is added later it will mirror the slow engine's per-root resolution (a union-find in `runtime.c` plus generated contact tables) with FR-107 parity coverage — no `gen_` interface provision is reserved for it now (YAGNI; the runtime pair ships verbatim per generation, so an interface change costs only a regenerate). The former FR-116 deferred-scope refusals of sub-design instances / off-sheet connectors remain **as internal guards** — the caller flattens first (FR-116 hierarchy, reworked 2026-07-04), so tripping one means an unflattened design reached the generator. `SUBUNIT_PKG_RE` is the hierarchical-prefix-tolerant form (§6.14), so a child's subunit packages group within their instance. A clock generator with a hierarchical refdes is baked normally (free-run mode drives it, FR-117a) and the **runtime's vector mode refuses it at startup** — `rt_init`/the vector runner scans `gen_clocks[].refdes` for `/`, reports the refdes with a pointer at `--cycles`, and exits 2 (the FR-115e hidden-clock rule, enforceable only at run time because one program serves both modes).
 
 **Chrome wiring (`chrome/toolbar.js`, `app.js`).** The Simulate menu (§6.16) gains a **Generate C…** item (`onGenerateC`), disabled while `state.simulating` or `state.vectorPanelOpen` (FR-116). `app.js` handles it: fetch `/cgen/runtime.h` + `/cgen/runtime.c` → `flatten(store.design, loadDesign, { rootPath: savePath })` (FR-116 hierarchy; a flatten refusal posts to the tray and aborts) → `generateC(flat, { columnsFrom: store.design })` (no ROM preload — the program reads ROM contents itself at startup, FR-117b; the `loadRomContents` preload this section originally specified was discovered at M5 never to have been wired in — a latent all-U-ROM bug in app-generated programs, mooted by FR-117b) → `openFileDialog` in save mode with a `.c` extension (the `saveExt` generalization of §6.16) seeded at `dirOf(savePath)` with default `<base>.c` → write all three files through `POST /api/v1/file/save` (§6.4), the verbatim-text endpoint added for this purpose (the design-save endpoint requires a valid-JSON body — `json.Indent` — so C source cannot ride it; corrected 2026-07-02 from the original "reuse `/design/save`" plan). Failures/warnings post via the message tray (FR-074).
 
@@ -2107,9 +2194,12 @@ no sequential part could ever leave U.)
     the net is named. The `->` is documentation of intent (NDL §5.2); star
     orientation is why direction matters here at all.
   - **Virtual built-ins.** clock/switch/indicator/indicator8/pullup/pulldown/
-    reset instances have no physical package: each emits a comment line in the
+    reset — and, added 2026-07-07, tgate/relay (FR-071g/FR-071h) — instances
+    have no physical package: each emits a comment line in the
     circuit block (`# virtual: A-3 (clock) OUT -> U1.CP, …`) naming every net
-    pin it drives or observes, so the information survives the export without
+    pin it drives or observes — for a switch element, its control pin's net and
+    its contact terminals' nets (`# virtual: A-4 (tgate) EN=…, A=…, B=…`) — so
+    the information survives the export without
     inventing hardware. Ports are **not** virtual (they became `J1`).
 - **Chrome wiring (`chrome/dialogs.js`, `chrome/toolbar.js`, `app.js`):** the
   File menu gains **Export…** (`onExport`), disabled like Generate C while
@@ -2640,6 +2730,7 @@ read/written through the same `/api/v1/design/{load,save}` endpoints as a design
 | API versioning | Unversioned routes | **`/api/v1/` prefix** | New endpoints (future transpiler) added without breaking clients (NFR-004) |
 | Fast-engine deliverable & runtime split (FR-116/FR-116a) | Single emitted `.c` with the runtime text prepended; server-side compile and/or run; generated-only program with no fixed runtime | **Two-file delivery: a fixed, hand-written, documented `runtime.h`/`runtime.c` pair copied verbatim beside the thin generated `<design>.c`; user compiles with plain `cc`** | Stakeholder-chosen (2026-07-02). A human-readable runtime with a documentable API keeps every subtle semantic (FR-077/FR-081–083/FR-078/FR-115c/e) in one auditable, natively-testable C file; the generator stays small (tables + lowered expressions); no toolchain dependency enters the product — compilation is the user's step |
 | Fast-engine batch I/O (FR-117/FR-118) | Teach the C program to parse `.tv` JSON; bake vector rows into the emitted source; VCD as the primary output | **Columns baked at generate time (they derive from the design), rows as plain whitespace text on stdin; stdout transcript + stderr conflicts; VCD as a later `--vcd` flag** | Avoids a JSON parser in C; rows-on-stdin lets vectors change without regenerating; a line-oriented transcript is directly diffable against `runVectors` output — the cheapest FR-107 parity harness (`gen-open.md` sequencing) |
+| Bidirectional switch elements — transmission gate & relay (FR-071g/FR-071h/FR-083a) | (a) two back-to-back conditional tri-state drivers (drive B with `curr[A]` when closed, and A with `curr[B]`); (b) variant of (a) with "resolve the net excluding my own contribution" to cancel the reflection; (c) **dynamic net merging** — a closed contact makes its terminal nets one net: per-step union-find over net indices, one `resolveNet` per merged group; (d) support in both engines at once | **Dynamic net merging (c), slow engine only for now — `kind:"pass"` entities + per-root resolution in `sim.js`; Generate C refuses (FR-116)** | (a) is subtly wrong: once both sides carry a value the switch's own reflection sustains it — release the external driver and the net latches its old value forever, an unintended charge-storage artifact; (b) cures that only by contorting the contribution model. Merging matches what a four-state no-analog simulator can honestly claim: strength survives a closed contact (weak pull stays weak, FR-083), the existing conflict machinery works across it (FR-082), chains merge transitively, and `valueOfPin`/display need no change. Charge storage on an isolated node is declared an explicit non-goal (weak keepers cover retention); a U control conservatively forces the terminal groups U. Slow-only is a clean incremental line (stakeholder-chosen 2026-07-07): vectors run on the slow engine so they work day one, and fast support can be added later without reworking FR-083a because both engines share the net-resolution semantics (FR-107) |
 | Sub-design embedding & off-sheet connectors (FR-094–FR-103) | (a) embed a copy of the child like FR-057; (b) two separate primitives (a port object and a distinct connector object); (c) compute multi-sheet/hierarchical nets in the editor at edit time | **One `port` built-in (a new `connector` vertex kind) serving both roles; a sub-design instance is a live relative-path reference whose interface is resolved to a synthetic in-memory `ComponentType`; flatten + cross-file label-union composed only at Run** | The synthetic type lets the whole pin/vertex/wire/netlist/render pipeline serve hierarchy unchanged — only render style, navigation, and flatten are new; a live reference keeps one source of truth (no stale copy, supersedes FR-057 here); the junction-identity decision already reserved a single `connector` vertex kind for this; composing cross-file nets only at Run keeps single-sheet editing fast and local (NFR-005); render style is deliberately cosmetic so simulation semantics never depend on a symbol toggle (stakeholder-confirmed) |
 
 ---
@@ -2784,6 +2875,7 @@ No files are modified (greenfield).
 | FR-076, FR-087 | §6.9, §6.10, §6.11, §6.13 | `toolbar.js`, `store.js`, `interaction.js`, `sim.js`, `statusbar.js` |
 | FR-077, FR-081, FR-082, FR-083 | §6.8, §6.13 | `sim.js`, `galasm.js`, `canvas.js` |
 | FR-084, FR-085, FR-086 | §6.13 | `sim.js`, `builtins.js` |
+| FR-071g, FR-071h, FR-083a | §6.11, §6.13, §6.17 (refusal), §6.18 (comment lines), §8 | `builtins.js`, `canvas.js`, `sim.js`, `cgen.js`, `ndl.js` |
 | FR-087b | §6.9, §6.10, §6.11, §6.13 | `interaction.js`, `store.js`, `builtins.js`, `sim.js` |
 | FR-088 | §6.6, §6.10, §6.11 | `model/design.js`, `commands.js`, `toolbar.js` |
 | FR-094, FR-094a, FR-095 | §6.14, §7.1a, §7.2 | `subdesign.js`, `builtins.js`, `model/design.js`, `model/netlist.js` |
@@ -2900,10 +2992,34 @@ snap FR-041–043) are fully designed so they are additive when implemented.
   default 3 cycles spans the first three rising edges. Dispatch refused while
   `simulating` (FR-087);
   `state.sim` retained at stop, cleared on next dispatch (FR-085).
+- **JS `sim` switch elements (FR-071g/FR-071h/FR-083a):** transmission gate —
+  closed (EN=1): a strong driver on A is read at B (and vice versa; terminals
+  symmetric); open (EN=0): the undriven side resolves Z, and releasing the
+  driver on a previously-closed gate leaves **both** sides Z next step (no
+  charge-storage latch — the regression the back-to-back-driver model fails).
+  Chain of two closed gates joins three nets transitively; opening the middle
+  one splits them. A weak pull-up seen through a closed contact still loses to
+  a strong 0 on the far side and still decides the group when all strong
+  drivers are Z (strength preserved across merge, FR-083). Strong 0 vs strong 1
+  across a closed switch → conflict: group value U, **every** member conductor
+  flagged red, two drivers named (FR-082). EN=U forces the terminal groups U
+  (both sides, regardless of drivers); EN read is one unit delayed (a control
+  change joins/splits on the *next* step, FR-078). Relay: COIL=0 joins COM–NC
+  (NO isolated), COIL=1 joins COM–NO (NC isolated), COIL=U forces all three
+  terminals' groups U; SPST usage (a throw unwired) works. A switch whose
+  control depends on a net it merges (merge-feedback oscillator) hits the
+  10,000-unit bound and reports once (FR-085). A design with no switch
+  elements resolves per net exactly as before (identity union-find /
+  skipped pass machinery). Vector run over a switch circuit passes/fails
+  per FR-115c unchanged; `deriveColumns` yields no columns for switch
+  elements (FR-115b).
 - **JS `cgen` (§6.17, FR-116a/FR-117):** `generateC` structure tests under
   `node:test` — emitted text contains the expected net table, column tables,
   labels, and lowered expressions for small designs; refusal cases (sub-design
-  instance, off-sheet connector, behavior parse error, `.R` without `clock:`).
+  instance, off-sheet connector, behavior parse error, `.R` without `clock:`,
+  and — FR-116/FR-083a — a design containing a transmission gate or relay,
+  whose refusal message names the offending refdes and says "not supported by
+  the fast simulator").
   The C **runtime** is natively testable standalone (ops/resolver truth tables
   mirroring the JS `sim` cases above). The **parity harness** (M2) generates,
   compiles (`cc`), and runs corpus design+`.tv` pairs, diffing the stdout

@@ -343,6 +343,11 @@ export function generateC(design, { columnsFrom = design } = {}) {
           rnLabel: intern(`${refdes}./R`),
           refdes,
         });
+      } else if (rt === "tgate" || rt === "relay") {
+        // Switch elements (FR-071g/FR-071h): dynamic net merging (FR-083a) is
+        // slow-engine-only for now — refuse rather than misbehave (FR-116).
+        const kind = rt === "tgate" ? "transmission gate" : "relay";
+        errors.push(`${refdes}: ${kind} not supported by the fast simulator (FR-116)`);
       } else {
         errors.push(`${refdes}: unknown built-in type ${inst.type}`);
       }
