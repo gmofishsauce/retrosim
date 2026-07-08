@@ -218,6 +218,13 @@ to generate a RAM or ROM without writing YAML:
 - **ROM file** (ROM only) — the content file (`.bin` or `.hex`) whose bytes the
   ROM serves, chosen through the same file browser as Open. Its contents are read
   at each Run, so editing the file and re-running reloads it.
+- **Save file** (RAM only, optional) — a persistent file (`.bin` or `.hex`) for the
+  RAM's contents. Leave it empty for an ordinary RAM that starts blank every run.
+  Use **Choose file…** to pick or name one, **Clear** to remove it. When set, the
+  RAM is **written to this file when you press Stop** (see *Persistent RAM* below).
+- **Load save file at start-up** (RAM only) — when checked (and a save file is set),
+  the RAM is **loaded** from that file before the run begins, instead of starting
+  blank.
 
 The generated chip carries its address pins (group **ADDR**) and the control pins
 `CE/`, `OE/`, and — on a RAM — `WE/` on the left edge, and its data pins (group
@@ -231,6 +238,36 @@ ready to place and simulate. Creation is one-way for now — the app never overw
 an existing part, so a name that already exists is refused with an inline message;
 to change a device, create one under a new name (or edit its YAML file directly and
 restart).
+
+#### Persistent RAM
+
+Normally a RAM starts every run blank (every cell undefined). Giving a RAM a **save
+file** makes its contents survive across runs — an unrealistic but handy convenience,
+for example to keep a scratchpad or to preload a fixed pattern.
+
+- **On Stop** — when you press Stop (a *normal* end of the run), the RAM's full
+  contents are written to its save file. If the file doesn't exist yet it is created.
+- **Abnormal end** — if the run ends abnormally (you close or reload the browser tab,
+  or it crashes), nothing is written and any changes since the last Stop are lost.
+- **On start-up** — if **Load save file at start-up** is checked, the RAM is filled
+  from the save file before the run begins; otherwise it starts blank even if a save
+  file is set (so you can save without auto-loading).
+- **File format** — same as a ROM content file: `.bin` is raw bytes, `.hex` is
+  whitespace-separated hex byte tokens, packed low-byte-first, one location after
+  another. So you can prepare a file by hand and check **Load at start-up** to
+  guarantee the RAM's initial contents.
+
+A few details worth knowing:
+
+- A cell that was never written (or holds an undefined value) is saved as **0** — the
+  file format has no way to record "undefined", so a blank cell reads back as 0.
+- If **Load at start-up** is on but the file is missing or malformed, the run still
+  starts (blank) and a message appears in the status bar — it is never an error. The
+  file will then be created on the next Stop.
+- The save file is written only for an **interactive** Run/Stop. Running **test
+  vectors** never reads or writes it.
+- The **standalone C simulator** (Generate C…) does **not** support persistent RAM
+  yet: generating from a design whose RAM has a save file is refused with a message.
 
 ---
 
@@ -936,10 +973,12 @@ ROM and shows the `--rom` option to use.
 
 Generation never modifies the design, and works whether or not it has been
 saved. Registered (`.R`) parts, independent per-output clocks, and RAM/ROM
-devices are all supported. A design containing a **transmission gate or relay**
-is refused with a message naming the instance — the bidirectional switch
-elements (see [Built-in components](#11-built-in-components)) run only on the
-debug simulator for now.
+devices are all supported. Two things are refused with a message naming the
+instance, because they run only on the debug simulator for now: a design
+containing a **transmission gate or relay** (the bidirectional switch elements,
+see [Built-in components](#11-built-in-components)), and a **RAM with a save
+file** (persistent RAM — remove the save file to generate, or run it on the
+debug simulator).
 
 **Hierarchical designs** generate too: like Run and the test-vector panel,
 generation **flattens** the design first (see
