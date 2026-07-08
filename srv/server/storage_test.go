@@ -164,6 +164,44 @@ func TestReadFileBytes(t *testing.T) {
 	}
 }
 
+func TestWriteRamFile(t *testing.T) {
+	dir := t.TempDir()
+
+	// Round trip: bytes written verbatim, readable back (FR-114g).
+	binPath := filepath.Join(dir, "ram.bin")
+	if err := WriteRamFile(binPath, []byte("\x01\x02\x03")); err != nil {
+		t.Fatalf("WriteRamFile .bin: %v", err)
+	}
+	if got, _ := os.ReadFile(binPath); string(got) != "\x01\x02\x03" {
+		t.Fatalf("bin bytes = %v, want 01 02 03", got)
+	}
+	hexPath := filepath.Join(dir, "ram.hex")
+	if err := WriteRamFile(hexPath, []byte("01 02 03")); err != nil {
+		t.Fatalf("WriteRamFile .hex: %v", err)
+	}
+	if got, _ := os.ReadFile(hexPath); string(got) != "01 02 03" {
+		t.Fatalf("hex bytes = %q, want \"01 02 03\"", got)
+	}
+
+	// Wrong extension -> ErrBadMemExt (→ 400).
+	if err := WriteRamFile(filepath.Join(dir, "ram.txt"), nil); !errors.Is(err, ErrBadMemExt) {
+		t.Fatalf("bad ext err = %v, want ErrBadMemExt", err)
+	}
+	// Relative path -> ErrInvalidPath (→ 400).
+	if err := WriteRamFile("ram.bin", nil); !errors.Is(err, ErrInvalidPath) {
+		t.Fatalf("relative path err = %v, want ErrInvalidPath", err)
+	}
+	// Over MaxRomBytes -> ErrTooLarge (→ 413), and nothing is written.
+	tooBig := make([]byte, MaxRomBytes+1)
+	overPath := filepath.Join(dir, "big.bin")
+	if err := WriteRamFile(overPath, tooBig); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("over-size err = %v, want ErrTooLarge", err)
+	}
+	if _, err := os.Stat(overPath); !os.IsNotExist(err) {
+		t.Fatalf("over-size file should not exist, stat err = %v", err)
+	}
+}
+
 func jsonEqual(t *testing.T, a, b []byte) bool {
 	t.Helper()
 	var x, y any

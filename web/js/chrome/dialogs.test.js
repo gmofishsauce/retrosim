@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  applySaveExt,
   galPartYaml,
   memDeviceYaml,
   pinGroupGeometryError,
@@ -67,6 +68,30 @@ test("galPartYaml orders members by physical pin layout, inputs before OLMCs (FR
   assert.match(yaml, /\{ name: "ALL", pins: \["D0", "Q0", "Q1"\] \}/);
 });
 
+// --- applySaveExt (save-dialog extension coercion) ---
+
+test("applySaveExt appends the default extension to a bare name", () => {
+  assert.equal(applySaveExt("design", "json"), "design.json");
+  assert.equal(applySaveExt("RAM1K", "bin", ["bin", "hex"]), "RAM1K.bin");
+});
+
+test("applySaveExt honors an already-acceptable extension without doubling (FR-114g)", () => {
+  // The reported bug: "RAM1K.hex" must not become "RAM1K.hex.bin".
+  assert.equal(applySaveExt("RAM1K.hex", "bin", ["bin", "hex"]), "RAM1K.hex");
+  assert.equal(applySaveExt("RAM1K.bin", "bin", ["bin", "hex"]), "RAM1K.bin");
+  assert.equal(applySaveExt("RAM1K.HEX", "bin", ["bin", "hex"]), "RAM1K.HEX"); // case-insensitive
+});
+
+test("applySaveExt with a non-acceptable extension appends the default", () => {
+  assert.equal(applySaveExt("RAM1K.txt", "bin", ["bin", "hex"]), "RAM1K.txt.bin");
+  // Single-extension pickers (the default) still coerce a foreign extension.
+  assert.equal(applySaveExt("gen.c", "json"), "gen.c.json");
+});
+
+test("applySaveExt leaves an empty name unchanged", () => {
+  assert.equal(applySaveExt("", "bin", ["bin", "hex"]), "");
+});
+
 // --- validateMemSpec (FR-114a/FR-114c) ---
 
 // A valid base spec; tests override one field at a time.
@@ -98,6 +123,14 @@ test("validateMemSpec requires a .bin/.hex ROM file (FR-114e)", () => {
   assert.equal(validateMemSpec(memSpec({ kind: "rom", romFile: "/r/x.bin" })), null);
   assert.equal(validateMemSpec(memSpec({ kind: "rom", romFile: "/r/x.HEX" })), null);
   assert.match(validateMemSpec(memSpec({ kind: "rom", romFile: "/r/x.txt" })), /\.bin or \.hex/);
+});
+
+test("validateMemSpec accepts an optional RAM save file but checks its extension (FR-114g)", () => {
+  assert.equal(validateMemSpec(memSpec({ kind: "ram", ramFile: "/s/x.bin", ramLoad: true })), null);
+  assert.equal(validateMemSpec(memSpec({ kind: "ram", ramFile: "/s/x.HEX" })), null);
+  assert.match(validateMemSpec(memSpec({ kind: "ram", ramFile: "/s/x.dat" })), /\.bin or \.hex/);
+  // No save file at all is still valid — persistence is opt-in.
+  assert.equal(validateMemSpec(memSpec({ kind: "ram" })), null);
 });
 
 test("validateMemSpec rejects out-of-range address bits (FR-114a)", () => {
@@ -146,4 +179,24 @@ test("memDeviceYaml includes romFile and tristate data pins for a ROM (FR-114f)"
   const yaml = memDeviceYaml(type);
   assert.match(yaml, /^mem: \{ kind: rom, addressBits: 4, dataWidth: 16, locations: 16, romFile: "\/roms\/font.bin" \}$/m);
   assert.match(yaml, /name: "D0", side: right, pos: 1, dir: tristate/);
+});
+
+test("memDeviceType and memDeviceYaml carry a RAM's persistent save file (FR-114g)", () => {
+  const type = memDeviceType({
+    name: "SCRATCH", kind: "ram", addressBits: 8, dataWidth: 8, locations: 256,
+    ramFile: "/s/scratch.bin", ramLoad: true,
+  });
+  assert.equal(type.mem.ramFile, "/s/scratch.bin");
+  assert.equal(type.mem.ramLoad, true);
+  const yaml = memDeviceYaml(type);
+  assert.match(yaml, /^mem: \{ kind: ram, addressBits: 8, dataWidth: 8, locations: 256, ramFile: "\/s\/scratch.bin", ramLoad: true \}$/m);
+  // A ROM's file field is never emitted for a RAM.
+  assert.ok(!yaml.includes("romFile"));
+});
+
+test("memDeviceType omits ramFile fields for a RAM with no save file (FR-114g)", () => {
+  const type = memDeviceType({ name: "PLAIN", kind: "ram", addressBits: 4, dataWidth: 4, locations: 16 });
+  assert.ok(!("ramFile" in type.mem));
+  assert.ok(!("ramLoad" in type.mem));
+  assert.ok(!memDeviceYaml(type).includes("ramFile"));
 });

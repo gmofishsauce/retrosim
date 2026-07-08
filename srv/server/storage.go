@@ -12,9 +12,11 @@ import (
 
 // Storage errors. The API layer maps these to HTTP statuses (§6.4).
 var (
-	ErrInvalidPath   = errors.New("invalid path")    // empty or non-absolute
-	ErrNotDir        = errors.New("not a directory") // ListDir on a file
-	ErrMalformedJSON = errors.New("malformed JSON")  // unparseable design file
+	ErrInvalidPath   = errors.New("invalid path")              // empty or non-absolute
+	ErrNotDir        = errors.New("not a directory")           // ListDir on a file
+	ErrMalformedJSON = errors.New("malformed JSON")            // unparseable design file
+	ErrBadMemExt     = errors.New("file must be .bin or .hex") // RAM/ROM path with wrong extension
+	ErrTooLarge      = errors.New("file too large")            // RAM write over MaxRomBytes
 )
 
 // DirEntry is one item in a directory listing.
@@ -140,6 +142,26 @@ func SaveFile(path string, content []byte) error {
 		return fmt.Errorf("%q: %w", path, ErrInvalidPath)
 	}
 	return atomicWrite(path, content)
+}
+
+// WriteRamFile writes a RAM persistent-content file's bytes to path atomically
+// (FR-114g), the write analogue of ReadFileBytes/handleRomFile. path must be
+// absolute and end in .bin or .hex; the client has already formatted the bytes
+// per the extension (raw binary, or ASCII hex tokens). Over-size content is
+// rejected with ErrTooLarge (the same MaxRomBytes cap as the ROM read).
+func WriteRamFile(path string, data []byte) error {
+	if path == "" || !filepath.IsAbs(path) {
+		return fmt.Errorf("%q: %w", path, ErrInvalidPath)
+	}
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".bin", ".hex":
+	default:
+		return fmt.Errorf("%s: %w", path, ErrBadMemExt)
+	}
+	if len(data) > MaxRomBytes {
+		return fmt.Errorf("%s: %d bytes, max %d: %w", path, len(data), MaxRomBytes, ErrTooLarge)
+	}
+	return atomicWrite(path, data)
 }
 
 // atomicWrite writes data to path via a temp file in the same directory, fsynced

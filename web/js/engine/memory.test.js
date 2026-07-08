@@ -153,6 +153,48 @@ test("loadBytes drops a trailing partial word and truncates past capacity (FR-11
   assert.equal(m.peek(2), undefined);
 });
 
+// writeCell latches `data` (a V-value[w]) into `addr` via a WE/ rising edge.
+const writeCell = (m, w, addr, data, n) => {
+  const bits = {};
+  for (let i = 0; i < n; i++) bits[`A${i}`] = addr & (1 << i) ? V1 : V0;
+  for (let i = 0; i < w; i++) bits[`D${i}`] = data[i];
+  m.writeStep(reader({ ...bits, "WE/": V0 }));
+  m.writeStep(reader({ ...bits, "WE/": V1 }));
+};
+
+test("dumpBytes emits the full device little-endian, inverse of loadBytes (FR-114g)", () => {
+  // Round trip: a loaded ROM dumps back the same bytes it loaded (widths 8/16/4).
+  let m = rom(4, 8);
+  m.loadBytes(Uint8Array.from([0xa5, 0x3c]));
+  // 16 locations, one byte each; loaded 0..1, the rest zero-filled.
+  const d8 = m.dumpBytes();
+  assert.equal(d8.length, 16);
+  assert.deepEqual([...d8.slice(0, 2)], [0xa5, 0x3c]);
+  assert.ok(d8.slice(2).every((b) => b === 0));
+
+  m = rom(2, 16); // 4 locations × 2 bytes = 8 bytes
+  m.loadBytes(Uint8Array.from([0x34, 0x12, 0x78, 0x56]));
+  assert.deepEqual([...m.dumpBytes()], [0x34, 0x12, 0x78, 0x56, 0, 0, 0, 0]);
+
+  m = rom(1, 4); // 2 locations × 1 byte; only the low nibble is meaningful
+  m.loadBytes(Uint8Array.from([0x5, 0xa]));
+  assert.deepEqual([...m.dumpBytes()], [0x5, 0xa]);
+});
+
+test("dumpBytes writes U bits (and unwritten cells) as 0 (FR-114g)", () => {
+  const m = ram(2, 8); // 4 locations
+  // Write a byte with two U bits; they serialize as 0. 1010_U_U11 → clean bits only.
+  writeCell(m, 8, 1, [V1, V1, VU, V1, VU, V0, V1, V0], 2);
+  const d = m.dumpBytes();
+  assert.equal(d.length, 4);
+  // bits set: 0,1,3,6 → 0b0100_1011 = 0x4b; U at 2,4 dropped to 0.
+  assert.equal(d[1], 0x4b);
+  // Location 0 and 2,3 were never written → all zero.
+  assert.equal(d[0], 0);
+  assert.equal(d[2], 0);
+  assert.equal(d[3], 0);
+});
+
 test("a loaded ROM reads its content; unloaded addresses read U (FR-114e/FR-114d)", () => {
   const r = rom(2, 8); // 4 locations
   r.loadBytes(Uint8Array.from([0xde, 0xad]));

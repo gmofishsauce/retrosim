@@ -97,6 +97,8 @@ type yamlMem struct {
 	DataWidth   int    `yaml:"dataWidth"`
 	Locations   int    `yaml:"locations"`
 	RomFile     string `yaml:"romFile"`
+	RamFile     string `yaml:"ramFile"`
+	RamLoad     bool   `yaml:"ramLoad"`
 }
 
 type yamlPin struct {
@@ -284,6 +286,8 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 			DataWidth:   m.DataWidth,
 			Locations:   m.Locations,
 			RomFile:     m.RomFile,
+			RamFile:     m.RamFile,
+			RamLoad:     m.RamLoad,
 		}
 	}
 

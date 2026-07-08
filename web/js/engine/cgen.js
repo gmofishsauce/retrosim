@@ -284,6 +284,13 @@ export function generateC(design, { columnsFrom = design } = {}) {
       const mem = inst.typeData.mem;
       const refdes = inst.refdes;
       const isRam = mem.kind === "ram";
+      // Persistent RAM (FR-114g): the save-on-Stop / load-on-start file is
+      // slow-engine-only for now — refuse rather than silently drop persistence
+      // (FR-116), exactly as switch elements are refused above.
+      if (isRam && mem.ramFile) {
+        errors.push(`${refdes}: persistent RAM (save file) not supported by the fast simulator (FR-116)`);
+        continue;
+      }
       const addr = [];
       for (let i = 0; i < mem.addressBits; i++) addr.push(netOf(`${refdes}.A${i}`));
       const data = [];

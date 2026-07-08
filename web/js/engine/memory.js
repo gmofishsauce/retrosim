@@ -125,6 +125,28 @@ export function createMemoryCore({ kind, addressBits: n, dataWidth: w }) {
       return { loaded, capacity, fileWords, truncated: fileWords > capacity };
     },
 
+    // dumpBytes serializes the full store to a byte stream (FR-114g), the inverse
+    // of loadBytes — a RAM's persistent-content save, written on Stop. Every
+    // location 0..2^n-1 is emitted (so the file always describes the whole
+    // device), B = ceil(w/8) bytes each, **little-endian**, each cell masked to
+    // w bits. A cell bit that is not a clean 1 — undefined (U), or a never-written
+    // cell — is written as **0**, since the byte format has no encoding for U; so
+    // a save→load round trip is not identity for uninitialized cells. Returns a
+    // Uint8Array of 2^n·B bytes, ready for the .bin/.hex formatter in the caller.
+    dumpBytes() {
+      const B = Math.ceil(w / 8);
+      const capacity = 2 ** n;
+      const out = new Uint8Array(capacity * B); // zero-filled: unwritten cells stay 0
+      for (let k = 0; k < capacity; k++) {
+        const word = mem.get(k);
+        if (!word) continue; // unwritten location → all-zero bytes
+        for (let i = 0; i < w; i++) {
+          if (word[i] === V1) out[k * B + (i >> 3)] |= 1 << (i % 8);
+        }
+      }
+      return out;
+    },
+
     // peek returns the stored word at an address (V-value[w]) or undefined if
     // unwritten — for tests/inspection only.
     peek: (addr) => mem.get(addr),

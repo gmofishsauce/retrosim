@@ -71,6 +71,8 @@ type MemSpec struct {
 	DataWidth   int    `json:"dataWidth"`         // data width in bits: 4 | 8 | 16 | 32
 	Locations   int    `json:"locations"`         // 2^AddressBits, recorded for fidelity
 	RomFile     string `json:"romFile,omitempty"` // ROM only: absolute content-file path (FR-114e)
+	RamFile     string `json:"ramFile,omitempty"` // RAM only: absolute persistent save-file path (FR-114g)
+	RamLoad     bool   `json:"ramLoad,omitempty"` // RAM only: seed from RamFile at start-up (FR-114g)
 }
 
 // Key is a component's library identity (§6.2): its immutable internal id

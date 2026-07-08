@@ -351,7 +351,7 @@ export const BUILTINS = BUILTIN_DEFS.map((t) => ({ id: builtinId(t.name), ...t }
 
 // memDeviceType synthesizes the ComponentType for a generator-defined memory
 // device (FR-114c) from a validated dialog spec {name, kind, addressBits,
-// dataWidth, locations, romFile?}. Its free-form `name` is the display name and
+// dataWidth, locations, romFile?, ramFile?, ramLoad?}. Its free-form `name` is the display name and
 // also derives the immutable library id `type-<name>` (the same rule loaded parts
 // and GAL parts use, FR-066e), so two devices with different names are distinct
 // types and a name colliding with any existing type is rejected by the caller. It
@@ -390,7 +390,14 @@ export function memDeviceType(spec) {
     id: `type-${name}`,
     name,
     description: `${locations}×${w} ${kind.toUpperCase()} (generated)`,
-    mem: { kind, addressBits: n, dataWidth: w, locations, ...(spec.romFile ? { romFile: spec.romFile } : {}) },
+    mem: {
+      kind,
+      addressBits: n,
+      dataWidth: w,
+      locations,
+      ...(spec.romFile ? { romFile: spec.romFile } : {}),
+      ...(isRam && spec.ramFile ? { ramFile: spec.ramFile, ramLoad: !!spec.ramLoad } : {}),
+    },
     width: 4,
     height: Math.max(maxLeftRight + 2, 4),
     pins,

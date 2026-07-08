@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { buildSimulation } from "./sim.js";
+import { buildSimulation, ramFileBody } from "./sim.js";
 import { V0, V1, VU, VZ } from "./galasm.js";
 import { BUILTINS, memDeviceType } from "../builtins.js";
 
@@ -476,6 +476,73 @@ test("a ROM seeded with content drives the loaded word on read (FR-114e)", () =>
   const sim = buildSimulation(d, { romContent });
   settle(sim);
   assert.equal(sim.valueOfPin("U1", "D0"), V1);
+});
+
+// wire a RAM/ROM for a read of address 0 (CE/=0, OE/=0, WE/=1 for RAM), with D0
+// observable through a NOT gate; returns the design.
+function memReadAtZero(type) {
+  const d = mkDesign();
+  place(d, "U1", type);
+  place(d, "Z1", CONST0); // CE/=0 selected
+  place(d, "Z2", CONST0); // OE/=0 output enabled
+  place(d, "Z3", CONST0); // A0=0
+  place(d, "Z4", CONST0); // A1=0
+  place(d, "U2", NOT); // observe D0
+  connect(d, ["Z1", "Y"], ["U1", "CE/"]);
+  connect(d, ["Z2", "Y"], ["U1", "OE/"]);
+  connect(d, ["Z3", "Y"], ["U1", "A0"]);
+  connect(d, ["Z4", "Y"], ["U1", "A1"]);
+  connect(d, ["U1", "D0"], ["U2", "A"]);
+  if (type.mem.kind === "ram") {
+    place(d, "O1", CONST1); // WE/=1 (reading)
+    connect(d, ["O1", "Y"], ["U1", "WE/"]);
+  }
+  return d;
+}
+
+test("a load-on-start RAM is seeded from ramContent and reads the saved word (FR-114g)", () => {
+  const type = RAM4();
+  type.mem.ramFile = "/x/save.bin";
+  type.mem.ramLoad = true;
+  const d = memReadAtZero(type);
+  // loc0 = low nibble of 0x05 = 0b0101 → D0=1.
+  const ramContent = new Map([["/x/save.bin", Uint8Array.from([0x05])]]);
+  const sim = buildSimulation(d, { ramContent });
+  settle(sim);
+  assert.equal(sim.valueOfPin("U1", "D0"), V1);
+});
+
+test("a RAM with load-on-start off ignores ramContent and reads U (FR-114g)", () => {
+  const type = RAM4();
+  type.mem.ramFile = "/x/save.bin";
+  type.mem.ramLoad = false; // no load on start
+  const d = memReadAtZero(type);
+  const ramContent = new Map([["/x/save.bin", Uint8Array.from([0x05])]]);
+  const sim = buildSimulation(d, { ramContent });
+  settle(sim);
+  assert.equal(sim.valueOfPin("U1", "D0"), VU); // powers up all-U
+});
+
+test("persistentRams lists only RAMs with a save file, with a wired dumpBytes (FR-114g)", () => {
+  const d = mkDesign();
+  const saved = RAM4();
+  saved.mem.ramFile = "/x/save.bin";
+  place(d, "U1", saved);
+  place(d, "U2", RAM4()); // no ramFile → excluded
+  place(d, "U3", ROM4()); // a ROM (has romFile) → excluded
+  const sim = buildSimulation(d);
+  const rams = sim.persistentRams();
+  assert.deepEqual(rams.map((r) => r.refdes), ["U1"]);
+  assert.equal(rams[0].ramFile, "/x/save.bin");
+  // dumpBytes is wired: full device image (4 locations × 1 byte), unwritten = 0.
+  assert.deepEqual([...rams[0].dumpBytes()], [0, 0, 0, 0]);
+});
+
+test("ramFileBody formats .hex as hex tokens and .bin as raw bytes (FR-114g)", () => {
+  const bytes = Uint8Array.from([0x00, 0x0a, 0xff]);
+  assert.equal(ramFileBody("/x/s.hex", bytes), "00 0a ff");
+  assert.equal(ramFileBody("/x/s.HEX", bytes), "00 0a ff"); // case-insensitive
+  assert.equal(ramFileBody("/x/s.bin", bytes), bytes); // raw Uint8Array passthrough
 });
 
 test("external stimulus strong-drives a net by (refdes, pin) (FR-115f)", () => {

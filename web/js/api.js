@@ -72,6 +72,28 @@ export async function readRomFile(path) {
   return new Uint8Array(await resp.arrayBuffer());
 }
 
+// writeRamFile writes a RAM's persistent-content file on Stop (FR-114g): the raw
+// bytes (a Uint8Array the caller formatted per the .bin/.hex extension) are POSTed
+// as the request body. The write analogue of readRomFile. Rejects with the
+// server's message (e.g. a non-.bin/.hex path or an over-size body).
+export async function writeRamFile(path, bytes) {
+  const resp = await fetch(BASE + "/ramfile?path=" + encodeURIComponent(path), {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream" },
+    body: bytes,
+  });
+  if (!resp.ok) {
+    let message = `${resp.status} ${resp.statusText}`;
+    try {
+      const body = await resp.json();
+      if (body && body.error) message = body.error;
+    } catch (_) {
+      // non-JSON error body; keep the status line
+    }
+    throw new Error(message);
+  }
+}
+
 // loadDesign reads a design file, returning the parsed design object (FR-052).
 export async function loadDesign(path) {
   const body = await request("/design/load?path=" + encodeURIComponent(path));

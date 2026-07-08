@@ -152,7 +152,60 @@ func TestFileSaveEndpoint(t *testing.T) {
 	postStatus(t, srv.URL+"/api/v1/file/save", "{not json", http.StatusBadRequest)
 }
 
+func TestRamFileEndpoint(t *testing.T) {
+	dataDir := t.TempDir()
+	srv := newTestServer(t, dataDir)
+	target := filepath.Join(dataDir, "ram.bin")
+	endpoint := srv.URL + "/api/v1/ramfile?path=" + url.QueryEscape(target)
+
+	// Raw body bytes written verbatim (FR-114g).
+	body := "\x00\xa5\xff\x10"
+	resp, err := http.Post(endpoint, "application/octet-stream", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if got, _ := os.ReadFile(target); string(got) != body {
+		t.Fatalf("written = %v, want %v", got, []byte(body))
+	}
+
+	// Wrong extension -> 400.
+	txt := srv.URL + "/api/v1/ramfile?path=" + url.QueryEscape(filepath.Join(dataDir, "ram.txt"))
+	postRawStatus(t, txt, "x", http.StatusBadRequest)
+	// Relative path -> 400.
+	postRawStatus(t, srv.URL+"/api/v1/ramfile?path=relative.bin", "x", http.StatusBadRequest)
+	// Wrong method (GET) -> 405.
+	getStatus(t, endpoint, http.StatusMethodNotAllowed)
+}
+
 // --- helpers ---
+
+func postRawStatus(t *testing.T, url, body string, want int) {
+	t.Helper()
+	resp, err := http.Post(url, "application/octet-stream", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != want {
+		t.Fatalf("POST %s status = %d, want %d", url, resp.StatusCode, want)
+	}
+}
+
+func getStatus(t *testing.T, url string, want int) {
+	t.Helper()
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != want {
+		t.Fatalf("GET %s status = %d, want %d", url, resp.StatusCode, want)
+	}
+}
 
 func getJSON(t *testing.T, url string, wantStatus int, v any) {
 	t.Helper()

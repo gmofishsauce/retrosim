@@ -423,6 +423,10 @@ export function memDeviceYaml(type) {
     `locations: ${m.locations}`,
   ];
   if (m.romFile) memFields.push(`romFile: ${JSON.stringify(m.romFile)}`);
+  if (m.ramFile) {
+    memFields.push(`ramFile: ${JSON.stringify(m.ramFile)}`);
+    memFields.push(`ramLoad: ${!!m.ramLoad}`);
+  }
 
   // Emit the explicit, immutable id (FR-066e) so the device keys stably; `type` is
   // the YAML display-name field (§7.6), here the device's free-form name.
@@ -822,6 +826,10 @@ export function validateMemSpec(spec) {
     if (!spec.romFile) return "choose a ROM content file";
     if (!/\.(bin|hex)$/i.test(spec.romFile)) return "ROM file must be .bin or .hex";
   }
+  // A RAM save file is optional (FR-114g); when set it must be .bin/.hex.
+  if (spec.kind === "ram" && spec.ramFile && !/\.(bin|hex)$/i.test(spec.ramFile)) {
+    return "RAM save file must be .bin or .hex";
+  }
   return null;
 }
 
@@ -844,6 +852,8 @@ export function memDeviceDialog({ submit, startPath = "" }) {
     let addressBits = 8;
     let dataWidth = 8;
     let romFile = null;
+    let ramFile = null; // optional RAM persistent save file (FR-114g)
+    let ramLoad = false; // seed the RAM from ramFile at start-up (FR-114g)
     let nameEdited = false; // once the user types a name, stop auto-suggesting it
 
     // RAM/ROM radio (default RAM); changing it rebuilds the dynamic region.
@@ -860,7 +870,11 @@ export function memDeviceDialog({ submit, startPath = "" }) {
       r.addEventListener("change", () => {
         if (!r.checked) return;
         kind = k;
-        romFile = null; // re-initialize: a class switch discards the chosen file
+        // re-initialize the class-specific file controls on a switch (FR-114a):
+        // ROM's content file and RAM's optional save file are both discarded.
+        romFile = null;
+        ramFile = null;
+        ramLoad = false;
         syncName();
         rebuild();
       });
@@ -970,6 +984,49 @@ export function memDeviceDialog({ submit, startPath = "" }) {
         dyn.appendChild(fileRow);
       }
 
+      // RAM-only optional persistent save file + load-on-start (FR-114g). Neither
+      // gates Create — a RAM with no save file is the historical default.
+      if (kind === "ram") {
+        const fileRow = el("div", "dialog-row");
+        const fileLabel = el("span", "memdlg-file", ramFile || "no save file (not persistent)");
+        const chooseBtn = button("Choose file…", async () => {
+          const res = await openFileDialog({
+            mode: "save",
+            startPath,
+            title: "Choose RAM save file (.bin / .hex)",
+            exts: ["bin", "hex"],
+            saveExt: "bin",
+            saveExts: ["bin", "hex"],
+          });
+          if (res) {
+            ramFile = res.path;
+            fileLabel.textContent = ramFile;
+            validate();
+          }
+        });
+        const clearBtn = button("Clear", () => {
+          ramFile = null;
+          ramLoad = false;
+          loadChk.checked = false;
+          fileLabel.textContent = "no save file (not persistent)";
+          validate();
+        });
+        fileRow.append(el("label", "dialog-label", "Save file:"), chooseBtn, clearBtn, fileLabel);
+        dyn.appendChild(fileRow);
+
+        const loadRow = el("div", "dialog-row");
+        const loadChk = el("input");
+        loadChk.type = "checkbox";
+        loadChk.checked = ramLoad;
+        loadChk.addEventListener("change", () => {
+          ramLoad = loadChk.checked;
+        });
+        const loadLbl = el("label", "memdlg-radio");
+        loadLbl.append(loadChk, document.createTextNode("Load save file at start-up"));
+        loadRow.append(el("label", "dialog-label", ""), loadLbl);
+        dyn.appendChild(loadRow);
+      }
+
       validate();
     }
 
@@ -982,6 +1039,7 @@ export function memDeviceDialog({ submit, startPath = "" }) {
         locations: 2 ** addressBits,
         dataWidth,
         ...(kind === "rom" ? { romFile } : {}),
+        ...(kind === "ram" && ramFile ? { ramFile, ramLoad } : {}),
       };
     }
 
@@ -1103,7 +1161,21 @@ export function exportFormatDialog() {
   });
 }
 
-export function openFileDialog({ mode, startPath, defaultName = "", title, exts = null, saveExt = "json" } = {}) {
+// applySaveExt normalizes a save-dialog file name's extension. It appends the
+// default `saveExt` only when the (trimmed) name doesn't already end in one of
+// the acceptable extensions (`saveExts`, defaulting to just `[saveExt]`) —
+// case-insensitively — so a picker allowing several (e.g. .bin/.hex for a RAM
+// save file, FR-114g) honors a typed "x.hex" instead of doubling it to
+// "x.hex.bin". An empty name is returned unchanged (the caller rejects it). Pure.
+export function applySaveExt(name, saveExt, saveExts = null) {
+  if (!name) return name;
+  const accept = saveExts && saveExts.length ? saveExts : [saveExt];
+  const lower = name.toLowerCase();
+  if (accept.some((e) => lower.endsWith("." + e.toLowerCase()))) return name;
+  return name + "." + saveExt;
+}
+
+export function openFileDialog({ mode, startPath, defaultName = "", title, exts = null, saveExt = "json", saveExts = null } = {}) {
   return new Promise((resolve) => {
     const overlay = el("div", "dialog-overlay");
     const box = el("div", "dialog");
@@ -1139,9 +1211,8 @@ export function openFileDialog({ mode, startPath, defaultName = "", title, exts 
 
     function onOk() {
       if (mode === "save") {
-        let name = nameInput.value.trim();
+        const name = applySaveExt(nameInput.value.trim(), saveExt, saveExts);
         if (!name) return;
-        if (!name.endsWith("." + saveExt)) name += "." + saveExt;
         // Confirm before clobbering an existing file (FR-049b).
         if (existingFiles.has(name) && !window.confirm(`"${name}" already exists. Overwrite?`)) {
           return;

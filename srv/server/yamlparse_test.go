@@ -397,6 +397,27 @@ pins:
 	}
 }
 
+func TestParseComponentMemRamPersistence(t *testing.T) {
+	path := writeYAML(t, `
+id: "type-SCRATCH"
+type: "SCRATCH"
+mem: { kind: ram, addressBits: 8, dataWidth: 8, locations: 256, ramFile: "/s/scratch.bin", ramLoad: true }
+pins:
+  - { name: A0, side: left, pos: 1, dir: in }
+  - { name: D0, side: right, pos: 1, dir: bidir }
+`)
+	ct, err := ParseComponent(path)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if ct.Mem == nil {
+		t.Fatal("expected mem block")
+	}
+	if ct.Mem.Kind != "ram" || ct.Mem.RamFile != "/s/scratch.bin" || !ct.Mem.RamLoad {
+		t.Fatalf("RAM persistence parse wrong: %+v", ct.Mem)
+	}
+}
+
 // An invalid mem block (bad data width) is rejected (FR-114f).
 func TestParseComponentMemInvalid(t *testing.T) {
 	path := writeYAML(t, `

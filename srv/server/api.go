@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -23,6 +24,7 @@ func NewRouter(lib *Library, dataDir, componentsDir, webDir string) http.Handler
 	api.HandleFunc("/api/v1/defaults", handleDefaults(dataDir))
 	api.HandleFunc("/api/v1/files", handleFiles(dataDir))
 	api.HandleFunc("/api/v1/romfile", handleRomFile())
+	api.HandleFunc("/api/v1/ramfile", handleRamFile())
 	api.HandleFunc("/api/v1/design/load", handleDesignLoad())
 	api.HandleFunc("/api/v1/design/save", handleDesignSave())
 	api.HandleFunc("/api/v1/file/save", handleFileSave())
@@ -168,6 +170,41 @@ func handleRomFile() http.HandlerFunc {
 	}
 }
 
+// handleRamFile writes a RAM's persistent-content file on Stop (FR-114g), the
+// write analogue of handleRomFile. The path (query) must be absolute and end in
+// .bin or .hex; the raw request body is the file bytes the client formatted per
+// the extension. Capped at MaxRomBytes.
+func handleRamFile() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !requireMethod(w, r, http.MethodPost) {
+			return
+		}
+		path := r.URL.Query().Get("path")
+		if path == "" || !filepath.IsAbs(path) {
+			writeError(w, http.StatusBadRequest, "path must be a non-empty absolute path")
+			return
+		}
+		switch strings.ToLower(filepath.Ext(path)) {
+		case ".bin", ".hex":
+		default:
+			writeError(w, http.StatusBadRequest, "RAM file must be .bin or .hex")
+			return
+		}
+		// Cap the read at MaxRomBytes+1 so an over-size body is detected without
+		// buffering the whole thing; WriteRamFile re-checks and rejects it.
+		data, err := io.ReadAll(io.LimitReader(r.Body, MaxRomBytes+1))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "could not read request body")
+			return
+		}
+		if err := WriteRamFile(path, data); err != nil {
+			writeStorageError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"path": path})
+	}
+}
+
 // handleDesignLoad reads a design file and returns it verbatim (FR-052).
 func handleDesignLoad() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -256,6 +293,10 @@ func writeStorageError(w http.ResponseWriter, err error) {
 		status = http.StatusNotFound
 	case errors.Is(err, ErrMalformedJSON):
 		status = http.StatusUnprocessableEntity
+	case errors.Is(err, ErrBadMemExt):
+		status = http.StatusBadRequest
+	case errors.Is(err, ErrTooLarge):
+		status = http.StatusRequestEntityTooLarge
 	default:
 		status = http.StatusInternalServerError
 	}

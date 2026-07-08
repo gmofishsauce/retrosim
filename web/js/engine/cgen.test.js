@@ -268,6 +268,43 @@ test("generateC: RAM device emits a gen_mems entry with a WE/ net and no ROM (M3
   assert.doesNotMatch(code, /mem_rom_U1/);
 });
 
+test("generateC: refuses a RAM with a persistent save file (FR-114g/FR-116)", () => {
+  const RAM = {
+    name: "RAM4x1S",
+    mem: { kind: "ram", addressBits: 2, dataWidth: 1, ramFile: "/s/scratch.bin", ramLoad: true },
+    pins: [
+      { name: "A0", side: "left", position: 1, direction: "in" },
+      { name: "A1", side: "left", position: 2, direction: "in" },
+      { name: "CE/", side: "left", position: 3, direction: "in" },
+      { name: "OE/", side: "left", position: 4, direction: "in" },
+      { name: "WE/", side: "left", position: 5, direction: "in" },
+      { name: "D0", side: "right", position: 1, direction: "bidir" },
+    ],
+  };
+  const d = mkDesign();
+  place(d, "U1", RAM);
+  assert.throws(() => generateC(d), /U1: persistent RAM .* not supported by the fast simulator \(FR-116\)/);
+});
+
+test("generateC: a RAM with no save file still generates (FR-114g)", () => {
+  const RAM = {
+    name: "RAM4x1P",
+    mem: { kind: "ram", addressBits: 2, dataWidth: 1 },
+    pins: [
+      { name: "A0", side: "left", position: 1, direction: "in" },
+      { name: "A1", side: "left", position: 2, direction: "in" },
+      { name: "CE/", side: "left", position: 3, direction: "in" },
+      { name: "OE/", side: "left", position: 4, direction: "in" },
+      { name: "WE/", side: "left", position: 5, direction: "in" },
+      { name: "D0", side: "right", position: 1, direction: "bidir" },
+    ],
+  };
+  const d = mkDesign();
+  place(d, "U1", RAM);
+  const { code } = generateC(d); // does not throw
+  assert.match(code, /RT_MEM_RAM/);
+});
+
 test("generateC: ROM with no recorded content file bakes a NULL rom_file (M5)", () => {
   const NOFILE = { ...ROM4x2, name: "ROMNF", mem: { kind: "rom", addressBits: 2, dataWidth: 2 } };
   const d = mkDesign();

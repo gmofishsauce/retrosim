@@ -18,7 +18,7 @@ import { buildNets } from "../model/netlist.js";
 import { flatten } from "../model/subdesign.js";
 import { BEHAVIORS } from "../builtins.js";
 import { createMemoryCore, parseRomBytes } from "./memory.js";
-import { readRomFile, loadDesign } from "../api.js";
+import { readRomFile, writeRamFile, loadDesign } from "../api.js";
 import { setAppState, postMessage, clearMessage } from "../chrome/statusbar.js";
 
 // SETTLE_BOUND is the combinational settling bound (FR-085).
@@ -59,7 +59,7 @@ function effectiveProps(inst) {
 // live editor run never passes it.
 export function buildSimulation(
   design,
-  { onMessage = () => {}, romContent = null, stimulus = [], scriptedClocks = false } = {},
+  { onMessage = () => {}, romContent = null, ramContent = null, stimulus = [], scriptedClocks = false } = {},
 ) {
   const nets = buildNets(design, onMessage);
 
@@ -186,17 +186,28 @@ export function buildSimulation(
       return n === undefined ? VZ : curr[n];
     };
     const core = createMemoryCore(mem);
-    // Seed a ROM's content from the bytes loaded at Run (FR-114e); a RAM and an
-    // unloaded ROM start all-U.
-    if (mem.kind === "rom" && mem.romFile && romContent && romContent.has(mem.romFile)) {
-      const info = core.loadBytes(romContent.get(mem.romFile));
+    // Seed a ROM's content (FR-114e), or a load-on-start RAM's saved content
+    // (FR-114g), from the bytes fetched at Run; an unseeded RAM/ROM starts all-U.
+    let seedBytes = null;
+    let seedLabel = "ROM";
+    if (mem.kind === "rom" && mem.romFile && romContent?.has(mem.romFile)) {
+      seedBytes = romContent.get(mem.romFile);
+    } else if (mem.kind === "ram" && mem.ramLoad && mem.ramFile && ramContent?.has(mem.ramFile)) {
+      seedBytes = ramContent.get(mem.ramFile);
+      seedLabel = "RAM save";
+    }
+    if (seedBytes) {
+      const info = core.loadBytes(seedBytes);
       if (info.truncated) {
         onMessage(
-          `${refdes}: ROM file has ${info.fileWords} words, exceeding the device's ${info.capacity}; extra ignored`,
+          `${refdes}: ${seedLabel} file has ${info.fileWords} words, exceeding the device's ${info.capacity}; extra ignored`,
         );
       }
     }
-    return { kind: "memory", refdes, w: mem.dataWidth, core, read };
+    // A RAM with a save-file path is written back on Stop (FR-114g); carry the
+    // path so createSim.stop() can dump the core. null for a ROM or an unsaved RAM.
+    const ramFile = mem.kind === "ram" ? mem.ramFile || null : null;
+    return { kind: "memory", refdes, w: mem.dataWidth, core, read, ramFile };
   }
 
   // makePassEntity wraps a switch element (transmission gate / relay,
@@ -499,6 +510,13 @@ export function buildSimulation(
     setStimulus(entries) {
       stimulus = entries;
     },
+    // persistentRams lists the RAMs to save on Stop (FR-114g): each RAM instance
+    // carrying a save-file path, paired with a dumpBytes() over its current store.
+    persistentRams() {
+      return entities
+        .filter((e) => e.kind === "memory" && e.ramFile)
+        .map((e) => ({ refdes: e.refdes, ramFile: e.ramFile, dumpBytes: () => e.core.dumpBytes() }));
+    },
   };
 }
 
@@ -515,19 +533,75 @@ export async function loadRomContents(design) {
     const mem = inst.typeData?.mem;
     if (!mem || mem.kind !== "rom" || !mem.romFile || seen.has(mem.romFile)) continue;
     seen.add(mem.romFile);
-    const lower = mem.romFile.toLowerCase();
-    const format = lower.endsWith(".hex") ? "hex" : lower.endsWith(".bin") ? "bin" : null;
-    if (!format) {
-      postMessage(`${inst.refdes}: ROM file must be .bin or .hex: ${mem.romFile}`);
-      continue;
-    }
-    try {
-      content.set(mem.romFile, parseRomBytes(await readRomFile(mem.romFile), format));
-    } catch (e) {
-      postMessage(`${inst.refdes}: cannot load ROM ${mem.romFile}: ${e.message}`);
-    }
+    const bytes = await fetchMemFile(inst.refdes, mem.romFile, "ROM");
+    if (bytes) content.set(mem.romFile, bytes);
   }
   return content;
+}
+
+// loadRamContents fetches the persistent save file of every distinct RAM whose
+// load-on-start flag is set (FR-114g), returning a Map<path, byte stream> the
+// build seeds into RAM cores before the first step (overriding the all-U
+// power-up). Same non-fatal handling as loadRomContents — a missing, wrong-type,
+// or malformed file is reported and skipped, leaving that RAM all-U, so a first
+// run before the file exists still runs. Deliberately **not** called by the
+// vector runner (§6.16): a vector run resets RAM per row and never loads a save
+// file (FR-115c).
+export async function loadRamContents(design) {
+  const content = new Map();
+  const seen = new Set();
+  for (const inst of design.components) {
+    const mem = inst.typeData?.mem;
+    if (!mem || mem.kind !== "ram" || !mem.ramLoad || !mem.ramFile || seen.has(mem.ramFile)) continue;
+    seen.add(mem.ramFile);
+    const bytes = await fetchMemFile(inst.refdes, mem.ramFile, "RAM save");
+    if (bytes) content.set(mem.ramFile, bytes);
+  }
+  return content;
+}
+
+// saveRamContents writes each persistent RAM's full contents to its save file on
+// Stop (FR-114g). Formats by extension — `.hex` as space-separated two-digit hex
+// byte tokens, `.bin` as the raw bytes (a bad extension is rejected server-side).
+// Fire-and-forget per RAM: a write failure is reported (FR-074) but does not block
+// the return to editing. `dumpBytes()` renders U (and unwritten cells) as 0.
+export function saveRamContents(rams) {
+  for (const ram of rams) {
+    const body = ramFileBody(ram.ramFile, ram.dumpBytes());
+    writeRamFile(ram.ramFile, body).catch((e) =>
+      postMessage(`${ram.refdes}: cannot save RAM ${ram.ramFile}: ${e.message}`),
+    );
+  }
+}
+
+// ramFileBody renders a RAM's dumped bytes into the request body for its save
+// file (FR-114g), by extension: `.hex` → space-separated two-digit hex byte
+// tokens (a string); `.bin` (or anything else — the server rejects non-.bin/.hex)
+// → the raw Uint8Array. Pure; the byte image already has U rendered as 0.
+export function ramFileBody(ramFile, bytes) {
+  if (ramFile.toLowerCase().endsWith(".hex")) {
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(" ");
+  }
+  return bytes;
+}
+
+// fetchMemFile fetches and parses one memory file by extension (FR-114e/FR-114g):
+// `.bin` verbatim, `.hex` decoded. A bad extension or a missing/malformed file is
+// reported (FR-074) and yields null — never throws — so a load failure is
+// non-fatal and that device stays all-U. Shared by loadRomContents/loadRamContents.
+async function fetchMemFile(refdes, path, label) {
+  const lower = path.toLowerCase();
+  const format = lower.endsWith(".hex") ? "hex" : lower.endsWith(".bin") ? "bin" : null;
+  if (!format) {
+    postMessage(`${refdes}: ${label} file must be .bin or .hex: ${path}`);
+    return null;
+  }
+  try {
+    return parseRomBytes(await readRomFile(path), format);
+  } catch (e) {
+    postMessage(`${refdes}: cannot load ${label} ${path}: ${e.message}`);
+    return null;
+  }
 }
 
 // MAX_STEPS_PER_FRAME caps a paced frame's work so a huge period × speed
@@ -571,12 +645,15 @@ export function createSim({ store, renderer }) {
       return;
     }
     if (!starting) return; // Stop() was hit during the async flatten
-    // Load ROM contents from the server first (FR-114e); the build is sync.
+    // Load ROM contents (FR-114e) and load-on-start RAM saves (FR-114g) from the
+    // server first; the build is sync.
     const romContent = await loadRomContents(design);
     if (!starting) return; // Stop() was hit during the async load — abort the start
+    const ramContent = await loadRamContents(design);
+    if (!starting) return; // Stop() was hit during the async RAM load — abort the start
     starting = false;
     try {
-      sim = buildSimulation(design, { onMessage: postMessage, romContent });
+      sim = buildSimulation(design, { onMessage: postMessage, romContent, ramContent });
     } catch (err) {
       postMessage(`cannot simulate: ${err.message}`);
       return;
@@ -597,6 +674,11 @@ export function createSim({ store, renderer }) {
   function stop() {
     starting = false; // cancel a run still awaiting its ROM preload (FR-114e)
     if (!sim) return;
+    // Normal termination (FR-076): write back every persistent RAM before the
+    // run is torn down (FR-114g). Reaching stop() *is* the normal-termination
+    // signal — an abnormal end (tab/browser close, crash) never runs this, so
+    // those changes are correctly lost.
+    saveRamContents(sim.persistentRams());
     sim = null;
     if (rafId !== null) cancelAnimationFrame(rafId);
     if (timeoutId !== null) clearTimeout(timeoutId);
