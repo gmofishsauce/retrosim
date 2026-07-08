@@ -74,3 +74,5 @@ Add a built-in component that is a "magic UART". It exposes a register and when 
 Add the components that are follower type 8-bit latches: 74373 and 74573.
 
 Add an indication in the YAML file that the component has built-in behaviors.
+
+Off sheet connector botch.
