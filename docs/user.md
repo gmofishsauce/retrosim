@@ -601,6 +601,16 @@ properties panel:
   the derived value is bidir — if the wiring later becomes definite, the wiring
   wins. The effective direction drives the embedded block's pin layout and the
   [test-vector](#test-vectors) column binding.
+- **off-sheet target** (optional) — two fields, **target file** and **target
+  label**, that turn the port into an *off-sheet connector*: its net continues
+  to the port carrying that label in another sheet of the same circuit. The
+  target file must be a design file **in the same folder** as this one — enter a
+  bare filename, not a path (a value containing a folder separator is rejected).
+  Leave the file blank for no target; clearing it removes an existing one. A port
+  that has a target shows a small filled triangle at its apex. Off-sheet
+  connectors join sibling sheets of one circuit *flatly* — unlike embedding a
+  sub-design, neither sheet contains the other. (Multi-bit ports don't yet offer
+  off-sheet targets.)
 
 For a **multi-bit (bus) interface**, use the *Port / off-sheet connector
 (multi-bit)* built-in instead — you choose its width (2–16) when you drop it, and
@@ -649,6 +659,13 @@ the editing canvas. A **← back** button appears in the top bar; click it to re
 to the parent. Descending and going back are each treated as closing the current
 design, so the usual unsaved-changes prompt applies — save or discard before the
 canvas changes. A plain New or Open leaves the hierarchy and clears the back path.
+
+To **follow an off-sheet connector**, double-click a port that has a target (or
+right-click it and choose **Follow off-sheet connector**) — a plain click still
+just selects it. This opens the target sheet the same way as descending, joining
+the same **← back** path. Because the target names a file in this design's own
+folder, following from a never-saved design first prompts you to save it (so the
+name can be resolved and **back** has a sheet to return to).
 
 **Simulating a hierarchical design.** Pressing **Run** (or running
 [test vectors](#test-vectors)) **flattens** the design first: each sub-design

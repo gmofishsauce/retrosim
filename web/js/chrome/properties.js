@@ -272,6 +272,61 @@ export function initProperties({ container, store }) {
         widthRow.appendChild(el("span", "prop-value", String(inst.width ?? td.pins.length)));
         container.appendChild(widthRow);
       }
+
+      // Off-sheet target (FR-101/FR-101b), 1-wide ports only (portN defers
+      // off-sheet links, FR-071e): two text fields — the target design file
+      // (a bare filename in this design's own folder, no directory path,
+      // FR-101) and the port label within that file (FR-101a). A non-empty
+      // file sets/updates inst.target; clearing the file clears it (the label
+      // alone never creates a target). A file value containing a path
+      // separator is rejected — the field reverts and no target is written
+      // (the same-folder rule, FR-101). Both edits ride setPortPropsCmd, so
+      // they are undoable (FR-024) and honor the locks like the label field.
+      if (td.renderType === "port") {
+        const commitTarget = (file, label) => {
+          const target = file === "" ? null : { file, label };
+          store.dispatch(setPortPropsCmd(inst.refdes, { target }));
+        };
+
+        const fileRow = el("div", "prop-row");
+        fileRow.appendChild(el("label", "prop-label", "target file"));
+        const fileInput = el("input", "prop-input");
+        fileInput.type = "text";
+        fileInput.value = inst.target?.file ?? "";
+        fileInput.placeholder = "peer sheet .json (same folder)";
+        fileInput.title =
+          "Off-sheet target design file — a filename in this design's own folder (no path); blank = no target";
+        fileInput.disabled = locked;
+        fileInput.addEventListener("change", () => {
+          const file = fileInput.value.trim();
+          if (file !== "" && /[/\\]/.test(file)) {
+            render(); // same-folder rule (FR-101): reject a path, revert the field
+            return;
+          }
+          commitTarget(file, inst.target?.label ?? "");
+        });
+        fileRow.appendChild(fileInput);
+        container.appendChild(fileRow);
+
+        const tlabelRow = el("div", "prop-row");
+        tlabelRow.appendChild(el("label", "prop-label", "target label"));
+        const tlabelInput = el("input", "prop-input");
+        tlabelInput.type = "text";
+        tlabelInput.value = inst.target?.label ?? "";
+        tlabelInput.placeholder = "port label in that file";
+        tlabelInput.title = "The port label in the target file this net continues to";
+        tlabelInput.disabled = locked;
+        tlabelInput.addEventListener("change", () => {
+          const file = inst.target?.file ?? "";
+          if (file === "") {
+            render(); // no target without a file; restore display
+            return;
+          }
+          commitTarget(file, tlabelInput.value.trim());
+        });
+        tlabelRow.appendChild(tlabelInput);
+        container.appendChild(tlabelRow);
+      }
     }
 
     // overrideRow builds one editable numeric field whose value shadows the

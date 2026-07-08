@@ -287,6 +287,7 @@ async function main() {
       fileops, // FR-004b: Open/Save/Save As keyboard accelerators
       onAddSubDesign: (x, y) => fileops.addSubDesign(x, y), // §6.14
       onOpenSubDesign: (childPath) => fileops.descend(childPath), // FR-100
+      onFollowPortTarget: (target) => fileops.followTarget(target), // FR-101/FR-101b
       onNewGalPart, // FR-066c: upper-palette action tile
       onNewMemDevice, // FR-114: upper-palette action tile
     });

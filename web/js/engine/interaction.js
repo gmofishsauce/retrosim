@@ -156,7 +156,7 @@ function showToast(msg) {
 // `name` matches the ADD tile so the armed-tile highlight (FR-009a) still works.
 const ADD_TYPE = { name: "add", isAdd: true };
 
-export function initInteraction({ canvas, palette, store, renderer, library, fileops, onAddSubDesign, onOpenSubDesign, onNewGalPart, onNewMemDevice }) {
+export function initInteraction({ canvas, palette, store, renderer, library, fileops, onAddSubDesign, onOpenSubDesign, onFollowPortTarget, onNewGalPart, onNewMemDevice }) {
   let placeType = null; // ComponentType when tool === "place"
   let wireSource = null; // pending WIRE source spec
   let wireWaypoints = []; // locked intermediate waypoints for the in-progress wire/bus (FR-027e)
@@ -1260,9 +1260,16 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       onOpenSubDesign(sub.childPath);
       return;
     }
-    // Double-clicking a text note re-opens text-entry mode (FR-071f).
     const comp = hitComponent(store.design, world);
     const inst = comp && store.design.components.find((c) => c.refdes === comp.refdes);
+    // Double-clicking a port that carries an off-sheet target follows it
+    // (FR-101/FR-101b) — the FR-100 sub-design idiom, so a plain click still
+    // just selects the port. A port with no target falls through harmlessly.
+    if (inst?.typeData.renderType === "port" && inst.target?.file && onFollowPortTarget) {
+      onFollowPortTarget(inst.target);
+      return;
+    }
+    // Double-clicking a text note re-opens text-entry mode (FR-071f).
     if (inst?.typeData.renderType === "note") startNoteEdit(inst);
   });
 
@@ -1343,6 +1350,15 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
         items.push({
           label: "Open sub-design",
           onClick: () => onOpenSubDesign(inst.childPath),
+        });
+        items.push({ separator: true });
+      }
+      // A port carrying an off-sheet target offers navigation to its peer
+      // sheet (FR-101/FR-101b), mirroring the sub-design "Open" item above.
+      if (inst?.typeData?.renderType === "port" && inst.target?.file && onFollowPortTarget) {
+        items.push({
+          label: "Follow off-sheet connector",
+          onClick: () => onFollowPortTarget(inst.target),
         });
         items.push({ separator: true });
       }

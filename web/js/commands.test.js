@@ -344,6 +344,33 @@ test("setPortPropsCmd patches a port label; undo restores prior values (FR-094)"
   assert.equal(find(store.design, "A-1").label, "CLK");
 });
 
+test("setPortPropsCmd sets, updates, and clears an off-sheet target; undo restores (FR-101/FR-101b)", () => {
+  const store = newStore();
+  const port = { name: "port", builtin: true, renderType: "port", width: 2, height: 2, pins: [] };
+  store.dispatch(placeComponent(port, 0, 0, 0)); // A-1
+  assert.equal(find(store.design, "A-1").target, undefined);
+
+  // Set a target (the properties panel's non-empty target-file commit).
+  store.dispatch(setPortPropsCmd("A-1", { target: { file: "alu.json", label: "CLK" } }));
+  assert.deepEqual(find(store.design, "A-1").target, { file: "alu.json", label: "CLK" });
+
+  // Update just the label (panel re-commits file + new label).
+  store.dispatch(setPortPropsCmd("A-1", { target: { file: "alu.json", label: "EN" } }));
+  assert.deepEqual(find(store.design, "A-1").target, { file: "alu.json", label: "EN" });
+
+  // Clear it (empty target-file commit → target null).
+  store.dispatch(setPortPropsCmd("A-1", { target: null }));
+  assert.equal(find(store.design, "A-1").target, null);
+
+  // Undo walks the whole chain back to no-target.
+  store.undo(); // un-clear
+  assert.deepEqual(find(store.design, "A-1").target, { file: "alu.json", label: "EN" });
+  store.undo(); // un-update
+  assert.deepEqual(find(store.design, "A-1").target, { file: "alu.json", label: "CLK" });
+  store.undo(); // un-set
+  assert.equal(find(store.design, "A-1").target, undefined);
+});
+
 test("setOverrideCmd handles the props group independently of delays (FR-020b)", () => {
   const store = newStore();
   const t = ty();

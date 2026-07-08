@@ -185,6 +185,30 @@ export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {
     }
   }
 
+  // followTarget navigates to a port's off-sheet target sheet (FR-101/FR-101b):
+  // the target file is a bare filename in this design's own folder (FR-101), so
+  // a never-saved design is prompted to save first — resolving the sibling name
+  // needs a directory, and back (FR-100a) needs a file to return to (the same
+  // interim rule as descend). On success the referring sheet joins the
+  // back-stack exactly like a descent.
+  async function followTarget(target) {
+    if (!target?.file) return;
+    let fromPath = store.state.savePath;
+    if (!fromPath) {
+      if (!window.confirm("Save this design first? Its location is needed to resolve the off-sheet target (and so you can return to it).")) {
+        return;
+      }
+      await save();
+      fromPath = store.state.savePath;
+      if (!fromPath) return; // save cancelled
+    }
+    const abs = resolveRel(dirOf(fromPath), target.file);
+    if (await navigateTo(abs)) {
+      navStack.push(fromPath);
+      notifyNav();
+    }
+  }
+
   // back returns to the parent sheet at the top of the back-stack (FR-100a),
   // itself a save-or-lose navigation; the entry is popped only once the parent
   // has loaded, so a cancelled back leaves the breadcrumb intact.
@@ -257,5 +281,5 @@ export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {
     notifyNav();
   }
 
-  return { save, open, newDesign, addSubDesign, descend, back };
+  return { save, open, newDesign, addSubDesign, descend, followTarget, back };
 }
