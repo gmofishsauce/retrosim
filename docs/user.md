@@ -82,7 +82,8 @@ forwarding any extra flags:
 - `--data-dir` — designs root (default: the documents folder above).
 
 The component library is read once at startup. If you edit a component YAML file,
-you must restart the server and reload the page for the change to be loaded.  You must use **File ▸ Refresh Types** to update a design from the catalog (see
+restart the server and reload the page to pick up the change, then use
+**File ▸ Refresh Types** to push the new definitions into an existing design (see
 [Refreshing type data](#9-refreshing-type-data)). The one exception is creating a
 GAL part in-app (see [Creating a custom GAL part](#creating-a-custom-gal-part-22v10)),
 which is added to the running library and palette without a restart.
@@ -94,15 +95,18 @@ which is added to the running library and palette without a restart.
 The window has four regions plus a status bar:
 
 - **Menu bar** (top): the **File** menu (`New`, `Open`, `Save`, `Save As`,
-  `Refresh Types`), the **Edit** menu (`Undo`, `Redo`, `Copy`, `Paste`), and the **View** menu
-  (`Zoom In`, `Zoom Out`, `Fit to Screen`), followed by the tool buttons `Select`, `Wire`, `Bus`
-  and the `Run` button. Click a menu to open it; click an item to run it, or
+  `Export…`, `Refresh Types`), the **Edit** menu (`Undo`, `Redo`, `Copy`, `Paste`),
+  the **View** menu (`Zoom In`, `Zoom Out`, `Fit to Screen`), and the **Simulate**
+  menu (`Test Vectors…`, `Generate C…`), followed by the tool buttons `Select`,
+  `Wire`, `Bus` and the `Run` button. Menu items with a standard keyboard shortcut
+  show it in the menu (see [§15](#15-keyboard-and-mouse-reference)). Click a menu to open it; click an item to run it, or
   press `Esc` / click elsewhere to dismiss it. The current design name and tool
   mode are shown next to the buttons; an asterisk marks unsaved changes.
 - **Palette** (left): split into two scrolling regions. The **upper** region
   holds the loaded parts — 74-series parts plus any custom GAL parts you author
   (see [Creating a custom GAL part](#creating-a-custom-gal-part-22v10)), including
-  a **+ GAL** tile that opens the authoring dialog; the **lower** region holds the
+  the **NEW GAL** and **NEW MEM** action tiles that open the authoring dialogs;
+  the **lower** region holds the
   built-in objects (see [Built-in components](#11-built-in-components)).
 - **Canvas** (center): the grid drawing surface. Everything snaps to grid
   intersections.
@@ -165,7 +169,7 @@ untouched. `Q7S` is the serial output of the last stage, for daisy-chaining chip
 
 Unlike the fixed-function 74-series parts, a GAL22V10 is **programmable** — its
 logic is yours to define. Instead of hand-editing a YAML file you can author one
-in-app: click the **+ GAL** tile in the upper palette region to open the **New GAL
+in-app: click the **NEW GAL** tile in the upper palette region to open the **New GAL
 part** dialog. It presents the chip's fixed 24-pin skeleton (pin 1 is the
 clock/input, pins 2–11 and 13 are inputs, pins 14–23 are the ten I/O "OLMC" pins,
 pins 12/24 are ground/power) and collects only what varies between parts:
@@ -200,7 +204,7 @@ discards it.)
 
 ### Creating a memory device (RAM/ROM)
 
-Beside **+ GAL** is the **MEM** tile, which opens the **New memory device** dialog
+Beside **NEW GAL** is the **NEW MEM** tile, which opens the **New memory device** dialog
 to generate a RAM or ROM without writing YAML:
 
 - **Type** — **RAM** or **ROM** (the radio at the top). Switching it resets the
@@ -233,7 +237,8 @@ restart).
 ## 4. Navigating the canvas
 
 - **Zoom:** mouse wheel (zooms toward the cursor), or the **View** menu's
-  `Zoom In` / `Zoom Out` items (zoom about the canvas center).
+  `Zoom In` / `Zoom Out` items — `Ctrl/Cmd+=` / `Ctrl/Cmd+-` — which zoom about
+  the canvas center.
 - **Fit to Screen:** the **View** menu's `Fit to Screen` item sizes and centers
   the view so the whole design fits the canvas. This also happens automatically
   whenever you load a design (Open, or stepping into or back out of a
@@ -478,17 +483,30 @@ design.
 ## 10. Files
 
 - **New** — start a fresh empty design. You're warned first if the current design
-  has unsaved changes.
-- **Open** — browse the server's filesystem (a dialog backed by the server, not the
+  has unsaved changes. (No keyboard shortcut — browsers reserve `Ctrl/Cmd+N`.)
+- **Open** (`Ctrl/Cmd+O`) — browse the server's filesystem (a dialog backed by the server, not the
   browser's native picker) and open a design. You're warned about unsaved changes.
   The dialog opens in the folder you last viewed in any file dialog — remembered
   across sessions — so you don't re-navigate every time. (If that folder no longer
   exists, it falls back to the designs root.) The ROM-content and test-vector
   pickers share the same memory.
-- **Save** — the first save prompts for a filename (pre-filled with the design
+- **Save** (`Ctrl/Cmd+S`) — the first save prompts for a filename (pre-filled with the design
   name); later saves overwrite the same file silently. Saving under a different
   file name renames the design to that file's base name.
-- **Save As** — save under a new name at any time.
+- **Save As** (`Shift+Ctrl/Cmd+S`) — save under a new name at any time.
+- **Export…** — write the design to a foreign netlist format. A small dialog
+  picks the format — **NDL** (`.ndl`), a plain-text pinout/package/circuit
+  netlist language, is currently the only one — then the usual save dialog picks
+  the file. Export reads the **live** design (unsaved edits included) and never
+  modifies it; hierarchical designs are flattened first, exactly as Run does.
+  Each part's `physical:` YAML metadata (when present) supplies physical pin
+  numbers, power pins, and no-connects — a synthetic **POWER** package carries
+  the rails — and the design's ports become a connector package (`J1`). Built-ins
+  with no physical package (clocks, switches, indicators, pulls, resets,
+  transmission gates, relays) are recorded as comment lines so no connectivity
+  is silently dropped. Output is deterministic: exporting the same design twice
+  gives byte-identical text, so exports diff cleanly. Unavailable while a
+  simulation runs or the test-vector panel is open.
 
 Designs are JSON files, stored by default in `~/Documents/retrosim`; you can choose
 a different location in the dialog. The unsaved-changes indicator (an asterisk by
@@ -515,6 +533,9 @@ no behavior, and no designator — see below.)
 | **Input switch** | one output (`OUT`, right) | A user-set logic source with two states, **1** and **0**, drawn like the state indicator — a round value bubble (white **1** / black **0**) — with a small arrow toward its output pin. A **strong** driver: it overrides pull-ups/pull-downs on its net. Set its state in the properties panel while editing, or **click it during a simulation** to toggle **0 ↔ 1**. The state is saved with the design (a new switch starts at **0**). |
 | **State indicator (8-wide)** | eight inputs (`D0`–`D7`, left) | An 8-bit display, drawn as an LED **bar-graph** (eight stripes). Display only — drives nothing. The eight pins form one pin group, so an 8-wide bus snap-connects to all bits at once (see [Buses](#7-buses)); each stripe shows its bit's value (white **1** / black **0** / gray **?**) during and after a run. |
 | **Port / off-sheet connector (multi-bit)** | N pins (`P0`–`P(N-1)`, left) | A multi-bit interface port. When you drop it, a dialog asks for its **bit width** (2–16); that width is fixed for the life of the instance (to change it, delete and re-place). It is drawn as N narrow pentagons — one roughly aligned with each pin, each pointing off-sheet away from the pins. The N pins form one pin group so a matching-width bus snap-connects to all bits at once (see [Buses](#7-buses)). Like the 1-wide [port](#12-sub-designs-and-ports) it is part of the design's interface (it contributes a pin **group** when the design is embedded), with a direction derived from its wiring; it does not yet join to same-label or cross-file ports. |
+| **Port / off-sheet connector** (1-bit) | one pin (flat back edge) | The pentagon "flag" that marks its net as part of the design's external interface for embedding. See [Sub-designs and ports](#12-sub-designs-and-ports). |
+| **Transmission gate** | `A` (left), `B` (right), `EN` (top) | An ideal **bidirectional switch**: `A` and `B` are interchangeable contact terminals — neither is an input or an output, and drivers on either side may come and go. While `EN` reads **1** the two sides are electrically **joined** (they resolve as one net); while it reads **0** they are isolated. An `EN` of U (or Z) means the switch position is unknown: both sides are forced to **U**. Drives nothing, stores nothing, no properties; see the switch-element notes in [Simulation](#13-simulation). |
+| **Relay (SPDT)** | `COIL` (top); contacts `NO` / `COM` / `NC` (right, labeled on the canvas) | A changeover relay with an idealized logic-level coil (one pin — no second coil terminal, no coil current). Released (`COIL` = 0): `COM`–`NC` joined, `NO` isolated. Energized (`COIL` = 1): `COM`–`NO` joined, `NC` isolated. A U coil forces all three contact nets to **U**. Contacts follow the coil after the standard one-unit delay (no pick/drop time is modeled). For an SPST contact, leave the unused throw unwired. No moving contact arm is drawn — read the live state from wired indicators. |
 | **Text note** (`NOTE` tile) | none | A free-form text annotation — pure documentation, with no pins, no wiring, and no part in simulation. See **[Text notes](#text-notes)** below for how to type and edit one. |
 
 You can override a built-in's properties per instance via the properties panel
@@ -569,9 +590,17 @@ properties panel:
   same label are the same net**, so an interface signal can appear at several
   points on the sheet without a drawn wire between them. (A fresh port's label
   defaults to its `A-` designator, i.e. its own net until you name it.)
-- **direction** — `in`, `out`, or `bidir`, **derived from the port's wiring**
-  (shown read-only): `bidir` if its net touches a bidirectional/three-state pin
-  (e.g. a RAM/ROM data line), else `out` if a plain output drives it, else `in`.
+- **direction** — `in`, `out`, or `bidir`, **derived from the port's wiring**:
+  `bidir` if its net touches a bidirectional/three-state pin (e.g. a RAM/ROM data
+  line), else `out` if a plain output drives it, else `in`. A definite `in`/`out`
+  is shown **read-only** — it always agrees with the wiring. A derived **`bidir`**
+  is genuinely ambiguous (the wiring can't distinguish a true bidirectional bus
+  from a 3-state output used as a switchable driver), so in that case the panel
+  offers an editable selector to **override** the direction to `in` or `out`
+  (choose `bidir` again to clear the override). The override applies only while
+  the derived value is bidir — if the wiring later becomes definite, the wiring
+  wins. The effective direction drives the embedded block's pin layout and the
+  [test-vector](#test-vectors) column binding.
 
 For a **multi-bit (bus) interface**, use the *Port / off-sheet connector
 (multi-bit)* built-in instead — you choose its width (2–16) when you drop it, and
@@ -584,9 +613,11 @@ contributes one one-bit interface pin, and each multi-bit port contributes a pin
 interface and cannot be embedded.
 
 **Embedding a sub-design (ADD).** The **ADD** tile (the dashed `+` box at the end
-of the lower palette) embeds a saved design. Because the embedded design is
-referenced by a path **relative to where the parent is saved**, the parent must
-have a save location — if it doesn't, you'll be prompted to save it first.
+of the lower palette) embeds a saved design. You do **not** need to have saved
+the parent first — embedding never prompts to save. (In the saved file the child
+is recorded by a path relative to the parent, but that path is computed when you
+save; only *descending into* a child prompts for a save — see below — so there is
+a file to come back to.)
 Drop ADD on the canvas to open the *Add sub-component* dialog: choose a design
 file (it must have ports), preview its interface, and pick how it should be drawn
 — an **IC** rectangle (inputs left, outputs right) or a **connector** strip (all
@@ -675,13 +706,25 @@ directly on the editing canvas.
 - **Conflicts:** when enabled drivers of a net disagree 0-vs-1, the net goes to U,
   every segment of that net turns **red** while the conflict lasts, and the message
   tray names the conflicting drivers. The simulation keeps running.
+- **Switch elements** (the [transmission gate and relay](#11-built-in-components)):
+  a **closed** contact makes the nets on its two sides **one net** for resolution —
+  driver strength survives the contact (a weak pull-up seen through a closed relay
+  contact still loses to a strong driver on the far side), chains of closed
+  switches join transitively, and disagreeing drivers across a closed contact are
+  an ordinary red-flagged bus conflict. A control (`EN`/`COIL`) reading **U**
+  means the contact position is unknown: the nets on both sides are forced to U.
+  Contact changes follow the control by the standard one unit. An **open** switch
+  isolates its sides completely: an isolated net with no driver reads **Z** — the
+  simulator never retains a value on an isolated node (**no charge storage**), so
+  dynamic-latch and precharged-bus tricks won't work; add a pull-up or pull-down
+  as a keeper where you need retention.
 - A 74-series part whose YAML has no behavior block holds its outputs at U and is
   reported once when the run starts.
 
 While simulating, the design is **read-only** and the **selection is locked**:
-placing, wiring, moving, rotating, deleting, overrides, undo/redo, New, Open, and
-changing the selection are all disabled. Pan, zoom, right-click recenter, and Save
-remain available. Starting a run clears the current selection and the message
+placing, wiring, moving, rotating, deleting, overrides, paste, undo/redo, New,
+Open, and changing the selection are all disabled. Pan, zoom, right-click
+recenter, Save, and Save As remain available. Starting a run clears the current selection and the message
 tray; stopping a run clears the message tray again. A click that would normally
 select an item instead shows "Editor is locked while the simulator is running" in
 the status bar and changes nothing (a click on empty canvas does nothing). The one
@@ -699,8 +742,8 @@ which switches, indicators, and ports the columns correspond to. Choosing
 **Simulate ▸ Test Vectors…** again, or the **✕** in the panel's header, closes
 it. Both combinational and clocked (sequential) designs are supported.
 
-While the panel is open the design is **read-only**: you can pan, zoom, and
-Save, but the editing commands (placing, wiring, moving, deleting, undo/redo,
+While the panel is open the design is **read-only**: you can pan, zoom, Save,
+and Save As, but the editing commands (placing, wiring, moving, deleting, undo/redo,
 paste, property edits) are disabled — as they are while a simulation runs. The
 **Run/Stop** button is disabled too, since the panel and a live simulation are
 mutually exclusive. Close the panel to edit or run the design again.
@@ -876,7 +919,10 @@ ROM and shows the `--rom` option to use.
 
 Generation never modifies the design, and works whether or not it has been
 saved. Registered (`.R`) parts, independent per-output clocks, and RAM/ROM
-devices are all supported.
+devices are all supported. A design containing a **transmission gate or relay**
+is refused with a message naming the instance — the bidirectional switch
+elements (see [Built-in components](#11-built-in-components)) run only on the
+debug simulator for now.
 
 **Hierarchical designs** generate too: like Run and the test-vector panel,
 generation **flattens** the design first (see
@@ -899,7 +945,9 @@ simulation is running or the test-vector panel is open.
 Your design's source of truth is the browser tab, so editing keeps working even if
 the server goes away (the connection tray shows "disconnected"). **Do not reload
 the page** — restart the server at the same address and port and the app will
-reconnect. Server-dependent actions (Save, Open, directory listing) fail with a
+reconnect. On reconnecting it reports success and, if you have unsaved changes,
+saves them immediately (or opens the Save dialog if the design has never been
+saved). Server-dependent actions (Save, Open, directory listing) fail with a
 clear message until then, without losing your work.
 
 ---
@@ -940,6 +988,10 @@ clear message until then, without losing your work.
 | `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` | Redo |
 | `Ctrl/Cmd+C` | Copy selection to the clipboard |
 | `Ctrl/Cmd+V` | Paste (ghost follows the cursor; click to drop) |
+| `Ctrl/Cmd+O` | Open |
+| `Ctrl/Cmd+S` | Save |
+| `Shift+Ctrl/Cmd+S` | Save As |
+| `Ctrl/Cmd+=` / `Ctrl/Cmd+-` | Zoom in / out (about the canvas center) |
 | `Space` (hold) | Pan with left-drag |
 | `Enter` / `Shift+Enter` (editing a text note) | Commit the note / insert a line break |
 | `Esc` | Cancel the current gesture / tool / selection / pending paste (or commit a text note being edited) |

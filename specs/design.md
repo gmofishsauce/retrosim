@@ -1,9 +1,14 @@
 # Design: TTL Circuit Design Editor (Visual Editor + Local Server)
 
-> Audience: a developer implementing this phase with no access to the
-> requirements interview or to the architect. This document is self-contained.
-> It restates the requirements, so `requirements.md` is not required reading
-> (though it remains the authoritative source if a conflict is found).
+> Audience: a developer implementing this system with no access to the
+> requirements interviews or to the architect. §2 restates the requirements of
+> the **original editor-only phase**; the many features added since (status
+> bar, resilience, the simulators, memory devices, test vectors, hierarchy,
+> the fast C engine, export — roughly FR-072 onward) are **not** restated
+> there — they are specified directly in §6/§7 and indexed in §10.
+> `requirements.md` is the complete, current requirement index and remains
+> the authoritative source if a conflict is found. (Re-scoped 2026-07-08;
+> supersedes the claim that this document restates all requirements.)
 >
 > This document, together with `requirements.md`, is the single source of truth
 > for the system's intended state and is kept current. `CHANGELOG.md` is a
@@ -24,17 +29,26 @@ digital circuits from classic TTL (74xx-series) components. It has two parts:
    component-definition files at startup, serves the SPA and its API, and
    reads/writes design files on the local filesystem.
 
-The simulation engine and the GALasm→C transpiler from the vision statement are
-**out of scope** for this phase. This phase produces a *visual editor* whose
-saved files capture enough structure (geometry **and** electrical connectivity)
-for those later tools to consume.
+Both simulation engines from the vision statement are **in scope and
+implemented**: the slow (debug) simulator runs live in the browser (§6.13), and
+the fast engine is a code generator emitting a standalone C simulator (§6.17).
+The editor's saved files capture geometry **and** electrical connectivity, which
+is what made those engines straightforward to add. (Updated 2026-07-08;
+supersedes the original "simulation engine and transpiler out of scope for this
+phase", which matched only the first editor-only phase.)
 
 ---
 
 ## 2. Requirements Summary
 
 The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
-`OQ-###`). Grouping follows the analyst's grouping.
+`OQ-###`). Grouping follows the analyst's grouping. **Scope note (2026-07-08):**
+this summary covers the original editor-phase requirements; FRs added later
+(status bar, resilience, simulators, memory devices, test vectors, hierarchy,
+fast engine, export — roughly FR-072 onward, plus later suffixed additions)
+are not summarized here — see `requirements.md` for the full index and §6/§10
+for their design. Entries below are corrected in place when their FRs are
+reworked.
 
 ### 2.1 Functional Requirements
 
@@ -48,13 +62,18 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
   named `unnamed schematic <datetime>` (local date/time).
 
 **Component Palette**
-- **FR-005** — One fixed-size palette tile per loaded component type, labeled with
-  the type name minus its leading `74` (e.g., `138`, `00`); full name in tooltip.
+- **FR-005** — One fixed-size palette tile per loaded component type, labeled
+  with the type's full external **display name** (the unabbreviated type name;
+  a GAL part's `partnumber`, FR-005b), which also leads the tooltip. (Reworked
+  2026-06-22; supersedes the abbreviated leading-`74`-stripped tile label.)
 - **FR-005a**: the tile tooltip also carries the type's one-line `description`
   (FR-104) when present, as `"<name>: <description>"`; a type with no description
   keeps the plain full-name tooltip.
 - **FR-006** — Palette is a fixed-width grid of equal tiles (3/row), packed
-  left→right, top→bottom in ascending part-number order (supersedes flat list).
+  left→right, top→bottom: 74-series ascending by numeric part number, then the
+  free-form-named parts (GAL parts, memory devices), ties by library id
+  (reworked 2026-07-08; supersedes the flat list and the abbreviated-number
+  ordering).
 - **FR-006a** — Palette split 50/50 by a midpoint divider: upper region = 74-series
   tiles, lower region = built-in objects (FR-067) with icon+tooltip tiles; each
   region scrolls independently. Each half wraps a fixed (non-scrolling) heading
@@ -105,9 +124,11 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
   once placed they are ordinary instances (select/move/rotate/delete/persist/wire),
   designated `A-1, A-2, …`.
 - **FR-068** — State indicator: 2×2 footprint, one bottom-center input pin; a round
-  bubble showing wire state — gray `?` (undriven), white `1`, black `0`. Not
-  independently stateful; displays `?` until the simulator exists. Same bubble for
-  palette icon and placed object.
+  bubble showing wire state — gray `?` (undriven/U/Z), white `1`, black `0`. Not
+  independently stateful: during a run it displays its net's live simulated value,
+  and after a run the last values persist until the design is next modified
+  (FR-085). Same bubble for palette icon and placed object. (Reworked 2026-06-11;
+  supersedes "displays `?` until the simulator exists".)
 - **FR-069** — Pull-up: 2×2, one bottom-center pin; a two-headed up-arrow (two
   stacked up-chevrons + a vertical shaft from the pin to just below them). Tooltip
   "pull up".
@@ -263,13 +284,19 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 
 **Bus-to-Component Snap Connection**
 - **FR-041** — Dragging a bus endpoint onto a component determines which declared
-  pin groups **match the bus width** (match = member pin count == width).
-- **FR-041a** — Exactly **one** matching group → snap-connect automatically.
-- **FR-041b** — **More than one** matching group → prompt the user to choose by
+  pin groups **accept** the bus: a group accepts a width-`w` bus when it has a
+  contiguous run of ≥ `w` currently-unconnected pins (reworked 2026-06-20;
+  supersedes "match = member pin count == width" — a narrower bus may now take a
+  free sub-block of a wider group, FR-041c).
+- **FR-041a** — Exactly **one** accepting group → snap-connect automatically.
+- **FR-041b** — **More than one** accepting group → prompt the user to choose by
   name (may cancel). Supersedes the old "first declared on tie" guess.
+- **FR-041c** — A narrower bus claims the **pack-low** block: the first `w` pins
+  of the lowest free contiguous run; two buses may share one group's disjoint
+  sub-blocks. (Added 2026-06-20; §6.9 `groupFreeBlock`.)
 - **FR-042** — On connect (auto or chosen), connect each bit to the corresponding
-  group pin in declared bit order (no per-pin wiring).
-- **FR-043** — **No** matching group → leave the endpoint **unconnected**.
+  pin of the claimed block (FR-041c) in declared bit order (no per-pin wiring).
+- **FR-043** — **No** accepting group → leave the endpoint **unconnected**.
   (Supersedes the earlier nearest-pin-attach rule.)
 - **FR-043a** — The user can **break out** a single bit from a bus and route it as
   an ordinary single-bit wire; the wire joins that bus bit's net (FR-037a).
@@ -309,8 +336,10 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-055** — Designs saved as JSON.
 - **FR-056** — JSON contains at minimum three collections: (a) component
   instances, (b) wire routes, (c) bus routes.
-- **FR-057** — Each instance record includes: type name, refdes, canvas position,
-  rotation, and a **full copy** of the type's YAML data at save time.
+- **FR-057** — Each instance record includes: the type id (FR-066e), refdes,
+  optional display label (FR-011b), canvas position, rotation, and a **full
+  copy** of the type's data captured at **placement** (re-copied only by
+  Refresh Types, FR-088; persisted verbatim at save).
 - **FR-058** — Per-instance overrides stored alongside the copied type data.
 - **FR-059** — Each wire record includes two endpoint references plus an ordered
   list of bend-point grid coordinates. An endpoint is one of: (a) a component pin
@@ -337,8 +366,9 @@ The analyst's IDs are preserved exactly (`FR-###`, `NFR-###`, `IR-###`,
 - **FR-064** — The YAML file may specify propagation-delay values.
 - **FR-065** — Server exposes the parsed library to the SPA via an API endpoint.
 - **FR-066** — The YAML format is designed so behavioral logic (GALasm) can be added
-  later without changing the editor or breaking the parser. This phase **ignores**
-  any behavioral content present (but preserves it on round-trip — see §7).
+  without changing the editor or breaking the parser. The **editor** ignores
+  behavioral content (preserving it on round-trip — see §7); the slow simulator
+  evaluates it (§6.13, FR-079).
 
 ### 2.2 Non-Functional Requirements
 - **NFR-001** — Server binds exclusively to `127.0.0.1`; no other interface.
@@ -391,7 +421,10 @@ this document adopts. **None block implementation** except where noted in §12.
   the stakeholder confirmed the behavior and it is now a requirement. Group width
   = **member pin count** (FR-041); **one** match → auto-connect (FR-041a);
   **≥2** matches → **disambiguation dialog** by group name (FR-041b); **0** matches
-  → leave unconnected (FR-043). See §6.9/§6.11.
+  → leave unconnected (FR-043). See §6.9/§6.11. (Extended 2026-06-20 by
+  FR-041/FR-041c: "accepts" replaced the equal-width "matches" — a narrower bus
+  may claim a contiguous free sub-block of a wider group, pack-low; §6.9
+  carries the current semantics.)
 
 - **A4 — Net storage vs derivation (FR-059a).** "Derivable" does not say whether
   to *store* nets. **Resolution:** the save file **includes** a `nets` array
@@ -466,16 +499,20 @@ as authoritative and raise it — do not silently diverge.
   (`net/http`, `encoding/json`, `os`, `path/filepath`). No web framework needed.
 - Server binds **only** to `127.0.0.1` (NFR-001). Single local user; **no**
   auth/TLS.
-- Out of scope: copy/paste, the simulation engine, the transpiler,
-  and **electrical-rule checking** (e.g., output-to-output conflicts, direction
-  validation). Pin `direction` is captured (FR-062a) so ERC can be added later
-  without a model change; the bus disambiguation dialog (FR-041b) does **not**
-  filter candidates by direction this phase (D2).
+- Out of scope: **electrical-rule checking** (e.g., output-to-output conflicts,
+  direction validation) as an *editing-time* check. Pin `direction` is captured
+  (FR-062a) so ERC can be added later without a model change; the bus
+  disambiguation dialog (FR-041b) does **not** filter candidates by direction
+  (D2). (The simulator does detect bus conflicts at run time, FR-082.)
+  (Updated 2026-07-08; supersedes the earlier bullet that also listed
+  copy/paste, the simulation engine, and the transpiler as out of scope — all
+  three are now implemented: §6.15, §6.13, §6.17.)
 - Target browsers: modern desktop **Chrome/Firefox**. No mobile support.
 
 ### 4.2 Assumptions
-- The repository is already a Go module (`github.com/gmofishsauce/retrosim/sim/srv`); the
-  server lives under `sim/srv` as new packages. (Greenfield: no existing sim code.)
+- The Go module lives at repo-root `srv/` (its module path retains the
+  historical name `github.com/gmofishsauce/retrosim/sim/srv`); the SPA lives at
+  repo-root `web/`. (Paths updated 2026-07-08; the design began greenfield.)
 - The user authors valid YAML files; the parser reports errors but need not repair
   them.
 - Design files fit in memory; no streaming I/O for save/load.
@@ -510,11 +547,14 @@ as authoritative and raise it — do not silently diverge.
 ┌────────────────────────────────────────────────┴─────────────────── Go server ───────────┐
 │  api.go (router /api/v1/*)                                                                 │
 │   ├─ GET  /components   ─▶ components.go  ─▶ yamlparse.go  (load library at startup)      │
+│   ├─ POST /components   ─▶ components.go (create authored part, FR-007a)                   │
 │   ├─ GET  /files        ─▶ storage.go (list directory; ext filter, FR-114e)               │
 │   ├─ GET  /romfile      ─▶ storage.go (read ROM .bin/.hex bytes, FR-114e)                  │
 │   ├─ GET  /design/load  ─▶ storage.go (read JSON)                                          │
 │   ├─ POST /design/save  ─▶ storage.go (write JSON)                                         │
-│   └─ GET  /defaults     ─▶ paths.go    (platform app-data dir)                             │
+│   ├─ POST /file/save    ─▶ storage.go (write verbatim text, FR-116/FR-119)                 │
+│   ├─ GET  /ping         ─▶ (heartbeat, FR-089)                                             │
+│   └─ GET  /defaults     ─▶ paths.go    (default designs dir, FR-050)                       │
 │  static file handler  ─▶ web/ (index.html + js/ + css/)                                    │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -536,7 +576,8 @@ as authoritative and raise it — do not silently diverge.
    (FR-052/FR-053) and loads via `/design/load`.
 
 ### 5.3 New vs modified vs unchanged
-Everything is **new** (greenfield). No existing code is modified. Conventions
+The design began **greenfield** (nothing predated it; section retained for the
+record). Conventions
 adopted: Go uses standard `gofmt`/`snake_case` files, exported `CamelCase`;
 JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
@@ -551,14 +592,15 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 >   `screen = (world − pan) × scale`, where `scale = PX_PER_UNIT_DEFAULT × zoom`.
 > - Snapping a screen point to the grid: `round(screen/scale + pan)`.
 
-### 6.1 Go: `main` (package `main`, `sim/cmd/retrosim/main.go`)
+### 6.1 Go: `main` (package `main`, `srv/cmd/retrosim/main.go`)
 - **Purpose:** entry point; parse flags, build dependencies, bind localhost.
 - **Satisfies:** FR-001, NFR-001, NFR-003.
 - **Interface (CLI flags):**
   - `--addr` (default `127.0.0.1:8137`) — **must** be a loopback host; reject any
     non-loopback host at startup with a fatal error.
   - `--components-dir` (default: `./components`) — YAML library directory.
-  - `--data-dir` (default: platform app-data dir from `paths.go`) — designs root.
+  - `--data-dir` (default: the user's documents `retrosim` folder from
+    `paths.go`, FR-050) — designs root.
   - `--web-dir` (default: `./web`) — static SPA assets.
 - **Behavior:** load library (§6.2) → if zero components, log a warning but
   continue → construct `http.Server` with the router (§6.4) → `ListenAndServe`.
@@ -567,7 +609,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   non-zero. YAML parse errors → see §6.3 (server still starts).
 - **Dependencies:** `components.go`, `api.go`, `paths.go`, std `net/http`, `flag`.
 
-### 6.2 Go: component library loader (`sim/server/components.go`)
+### 6.2 Go: component library loader (`srv/server/components.go`)
 - **Purpose:** load and hold the parsed component library; expose it as JSON.
 - **Satisfies:** FR-002, FR-005, FR-007, FR-065.
 - **Types:** see §7.1 (`ComponentType`, `Pin`, `PinGroup`).
@@ -584,7 +626,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   error only on an unreadable directory.
 - **Dependencies:** `yamlparse.go`.
 
-### 6.3 Go: YAML parser (`sim/server/yamlparse.go`)
+### 6.3 Go: YAML parser (`srv/server/yamlparse.go`)
 - **Purpose:** convert one YAML file's bytes (YAML — §7.6) into a `ComponentType`.
 - **Satisfies:** FR-061, FR-062, FR-062a, FR-062b, FR-062c, FR-062d, FR-062e, FR-063, FR-064, FR-066, FR-066a, FR-104.
 - **Interface (the deferral boundary — now bound to the YAML format in §7.6):**
@@ -668,7 +710,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   loader logs and skips (§6.2). Never panic.
 - **Dependencies:** `gopkg.in/yaml.v3`; otherwise std lib.
 
-### 6.4 Go: HTTP API (`sim/server/api.go`)
+### 6.4 Go: HTTP API (`srv/server/api.go`)
 - **Purpose:** route and handle all REST endpoints; serve static SPA.
 - **Satisfies:** FR-001, FR-003, FR-046–FR-053, FR-065, FR-089 (server side),
   NFR-004, IR-001.
@@ -680,7 +722,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | Method & Path | Request | Success Response | Errors |
   |---|---|---|---|
   | `GET /api/v1/components` | – | `{"components":[ComponentType,…]}` | 500 on internal error |
-  | `POST /api/v1/components` | `{"yaml":"<authored YAML>"}` | `{"component":ComponentType}` | 400 bad body / invalid YAML, 409 duplicate part number, 500 write failure |
+  | `POST /api/v1/components` | `{"yaml":"<authored YAML>"}` | `{"component":ComponentType}` | 400 bad body / invalid YAML, 409 duplicate `id` or existing file (FR-066e/FR-007a), 500 write failure |
   | `GET /api/v1/defaults` | – | `{"dataDir":"<abs path>"}` | – |
   | `GET /api/v1/files?path=<p>&exts=<e>` | query `path` (abs; empty = data dir), optional `exts` (csv, default `json`) | `{"path","parent","entries":[{"name","isDir"}]}` | 400 bad path, 404 missing, 403 not a dir |
   | `GET /api/v1/romfile?path=<p>` | query `path` (abs, `.bin`/`.hex`) | raw bytes (`application/octet-stream`), capped at `MaxRomBytes` 64 MiB | 400 bad/!bin·hex, 404 missing, 500 too large |
@@ -718,7 +760,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   server-side.
 - **Dependencies:** `storage.go`, `components.go`, `paths.go`.
 
-### 6.5 Go: storage & paths (`sim/server/storage.go`, `sim/server/paths.go`)
+### 6.5 Go: storage & paths (`srv/server/storage.go`, `srv/server/paths.go`)
 - **Purpose:** filesystem I/O for designs; resolve the default designs dir.
 - **Satisfies:** FR-050, FR-051, FR-052, FR-053, FR-055, OQ-006 (resolved).
 - **Interface:**
@@ -1096,8 +1138,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   size; a world-unit tolerance instead shrinks to a sub-pixel target when zoomed
   out. (The pin hot region, FR-013d, stays a world-unit 0.7-radius circle: its
   size is tied to the 1-grid-unit pin pitch, not the cursor.) `junction`/`free`
-  vertices are points. Pins take priority over
-  segments take priority over component bodies when overlapping.
+  vertices are points. When targets overlap, pins take priority over
+  segments, and segments over component bodies.
   `marqueeHits(design, world0, world1, mode)` returns the selection refs for a
   rubber-band (FR-016b): **window** mode (`mode === "window"`) keeps objects whose
   whole extent is inside the rectangle — a component's bounding box, or all of a
@@ -1252,7 +1294,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   (Reworked 2026-06-17; supersedes selection remaining available during a run.)
 - **Note text-entry mode (FR-071f):** editing a note overlays a real DOM
   `<textarea>` on the page, positioned over the note, and lets the browser handle
-  the caret, text selection, and clipboard natively (OQ-011). A SELECT-mode
+  the caret, text selection, and clipboard natively (DQ-001, §12). A SELECT-mode
   sub-state, `editingNote`, holds the note's refdes and the live textarea element.
   It is entered two ways: automatically when a `note` built-in is placed (the
   one-shot placement ends in this mode rather than plain SELECT), and by a
@@ -1263,7 +1305,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   the canvas's client rect) and sized/styled from the note layout constants
   (`NOTE_PAD/NOTE_LINE/NOTE_FONT × scale`) to approximate the canvas text. The
   overlay is drawn **unrotated regardless of the note's rotation** — rotation of
-  the editing overlay is deliberately out of scope (OQ-011); the committed note
+  the editing overlay is deliberately out of scope (DQ-001, §12); the committed note
   still rotates normally (§6.8). The textarea owns keystrokes: **Shift+Enter**
   inserts a newline (native), **Enter** (no shift) commits, **Escape** commits,
   and a blur (click outside) or any tool switch commits. Commit reads the
@@ -1377,7 +1419,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `DeleteComponent`, `SetOverride`, `AddWire`, `AddBus`, `InsertBend`, `MoveBend`,
   `DeleteBend`, `DeleteWire`, `SetBusWidth`, `BranchWire`, `RefreshTypes`,
   `TranslateWiring` (shifts a set of bend points and junction/free vertices by an
-  offset — the interior wiring of a group move, FR-018c). A
+  offset — the interior wiring of a group move, FR-018c). Later features added
+  commands on the same pattern: `RotateSelection` (FR-019), `setLabelCmd`
+  (FR-011b), `setNoteText` (FR-071f), `deleteSegmentCmd` (FR-033d),
+  `SetPortProps`/`PlaceSubDesign`/`SetDefaultRender` (§6.14), and the
+  snapshot-based `pasteFragmentCmd` (§6.15, via `snapshotCommand`). A
   `composite` command bundles several of these into one undoable step — `apply`
   runs them in order, `revert` undoes them in reverse — so a group operation over
   a multi-object selection (FR-016a) applies and reverts as a single Ctrl-Z. Each
@@ -1400,20 +1446,25 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   FR-023, FR-024, FR-044, FR-046, FR-049, FR-052, FR-076, FR-087, FR-088. A
   single horizontal bar with pull-down menus on the left and always-visible
   buttons on the right (FR-004a). **Menus:** **File** — New, Open, Save, Save As,
-  Refresh Types; **Edit** — Undo, Redo, Copy, Paste (FR-111/FR-112, §6.15);
-  **View** — Zoom In, Zoom Out, Fit to Screen (FR-022a, `interaction.fitToScreen`). **Buttons:**
+  Export… (FR-119, §6.18), Refresh Types; **Edit** — Undo, Redo, Copy, Paste
+  (FR-111/FR-112, §6.15); **View** — Zoom In, Zoom Out, Fit to Screen (FR-022a,
+  `interaction.fitToScreen`); **Simulate** — Test Vectors… (FR-115b, §6.16) and
+  Generate C… (FR-116, §6.17). **Buttons:**
   Select, Wire, Bus (modal tools), then **Run/Stop**. (Pan has no control; it is
   space-drag/middle-drag or right-click-to-recenter on bare canvas —
   FR-023a/FR-023b; left-drag on bare canvas is rubber-band select, FR-016b.)
   A menu opens on click, closes on item choice / outside click / Escape, and is
-  built so future commands (Edit Copy/Paste, etc.) drop in as additional items.
+  built so future commands drop in as additional items (as Copy/Paste, Test
+  Vectors…, Generate C…, and Export… did).
   The Wire button shows the wire-cursor icon (the lower-right→upper-left
   diagonal line, inline SVG) instead of a text label (FR-025), keeping a
   `Wire tool` tooltip/aria-label. The active tool is highlighted; clicking a
   tool sets `store.tool`. The Run button calls the sim engine's `run()` and
   relabels to "Stop" (FR-076); while `simulating`, the design-modifying commands
-  (Wire, Bus buttons; Undo, Redo, New, Open, Refresh Types items) are disabled —
-  Save, the zoom items, Select, and Run/Stop stay enabled (FR-087). The **Refresh
+  (Wire, Bus buttons; Undo, Redo, Paste, New, Open, Refresh Types, Test Vectors…,
+  Generate C…, and Export… items) are disabled — Save, Save As, the zoom items,
+  Select, and Run/Stop stay enabled (FR-087; the same set is disabled under the
+  test-vector panel lock via `isReadonly()`, §6.16/FR-115h). The **Refresh
   Types** item (FR-088, tooltip "Re-copy type data from the loaded library into
   placed components") dispatches `RefreshTypes` with the library the app loaded
   at startup. (Reworked 2026-06-21; supersedes the former flat toolbar — a row of
@@ -1432,10 +1483,19 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     and the zoom keys sit *above* the simulation-lock early-return (live while
     simulating, matching the menu, FR-087); Open sits *below* it (disabled while
     simulating). New (`Ctrl/Cmd+N`, browser-reserved), Refresh Types, and Fit to
-    Screen (FR-022a) get no key and no hint.
-- **Palette (`palette.js`)** — Satisfies FR-003, FR-005, FR-006, FR-008, FR-009,
-  FR-009a. Renders one fixed-size tile per `ComponentType` in a 3-column CSS grid,
-  sorted ascending by the numeric abbreviated part number (`Number(name.slice(2))`).
+    Screen (FR-022a) get no key and no hint. The **menu-less canvas keys**
+    (FR-004c) live in the same handler below the lock early-return: `w`/`b` arm
+    the Wire/Bus tools from select mode, `r`/`Shift+r` rotate the selection
+    (`rotateSelectionCmd`), Delete/Backspace delete it (Backspace pops a locked
+    waypoint mid-conductor, FR-027e), `+`/`=`/`-` on a single bus/segment
+    selection resolve the parent bus and dispatch `setBusWidthCmd` (min width 1,
+    FR-038), and `Ctrl/Cmd+Y` is a redo alias.
+- **Palette (rendered by `app.js` `renderPalette`; there is no separate
+  `palette.js` file)** — Satisfies FR-003, FR-005, FR-006, FR-008, FR-009,
+  FR-009a. Renders one fixed-size tile per `ComponentType` in a 3-column CSS
+  grid, ordered per FR-006: 74-series ascending by numeric part number
+  (`Number(name.slice(2))`), then free-form-named parts (GAL, memory), ties by
+  library id (`partOrder`).
   Each tile is labeled with the type's full external **display name** —
   `displayName(type)` = `partnumber` for a GAL part else `name` (FR-005, no longer
   abbreviated) — with that same name leading its `title`/tooltip; `dataset.type`
@@ -1504,11 +1564,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   the other built-ins declare none. Each built-in type carries an `id` (FR-066e)
   of the form `"type-"+name` (e.g. `"type-indicator"`), the value its instances
   record as `type` and the key for the registry below. The module also exports a `BEHAVIORS`
-  registry (FR-067a) mapping type **id** → behavior function — one stub per
-  built-in until the simulator design defines the call interface; functions stay
+  registry (FR-067a) mapping type **id** → behavior function with the
+  `behave(ctx)` signature defined in §6.13; functions stay
   out of the type objects so `typeData` copies remain pure JSON (§7.1).
   `drawComponent` has a render branch per built-in renderType: the
-  indicator bubble (gray `?` until the simulator, then white `1`/black `0`), the
+  indicator bubble (gray `?` for U/Z or no run, white `1`/black `0` from the
+  live sim view, §6.8), the
   pull-up two-headed arrow, the pull-down upside-down `T`, the clock and
   reset boxes, and the switch (the same value bubble as the indicator — white
   `1`/black `0` from `inst.switchState` — plus a small arrow off the bubble
@@ -1647,8 +1708,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   (tray). A flex row
   docked at the bottom of the window (below the canvas, full width) holding
   trays styled with the palette tiles' raised drop-shadow look: a state tray at
-  the lower-left corner showing the program's operating state (text; always
-  `editing` until the simulator exists), a message tray filling the remaining
+  the lower-left corner showing the program's operating state (text: `editing`,
+  or `simulating` during a run — FR-073/FR-076), a message tray filling the remaining
   width showing the most recent posted message (empty when none; long messages
   truncate with an ellipsis), and a connection tray at the right end showing
   the server connection state — `connected` or `disconnected` (FR-089), driven
@@ -1662,7 +1723,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   priority) and surfaces the matching actions: "Delete bend point" (on a bend);
   "Delete segment" (the segment under the cursor, FR-033d) and "Delete wire" (on a wire);
   "Delete segment", "Set width…", "Edit bit names…", and "Delete bus" (on
-  a bus); "Delete component" (on a component). Dismissed by choosing an item,
+  a bus); "Delete component" (on a component; a sub-design instance additionally
+  offers "Open sub-design", FR-100/§6.14, and a port carrying an off-sheet
+  target offers "Follow off-sheet connector", FR-101/FR-101b). Dismissed by choosing an item,
   Escape, or an outside click. `interaction.js` builds the item list and dispatches
   the commands; `contextmenu.js` only renders and positions the menu. Width and
   bit-name entry use small modal prompts in `dialogs.js`.
@@ -1672,7 +1735,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Purpose:** typed-ish wrappers over `fetch`; app startup.
 - **Satisfies:** FR-003, FR-004, IR-001, NFR-002.
 - **`api.js`:** `getComponents()`, `getDefaults()`, `listDir(path)`,
-  `loadDesign(path)`, `saveDesign(path, design)`, `ping()`. All target
+  `loadDesign(path)`, `saveDesign(path, design)`, `createComponent(yaml)`
+  (FR-007a), `readRomFile(path)` (FR-114e), `saveTextFile(path, content)`
+  (FR-116/FR-119), `ping()`. All target
   same-origin
   `/api/v1/*` (localhost only — no external requests, NFR-002). Each rejects with
   the server error envelope on non-2xx.
@@ -2035,7 +2100,7 @@ no sequential part could ever leave U.)
 - **Satisfies:** FR-094–FR-103, FR-060b.
 - A new pure module `model/subdesign.js` holds the interface/flatten helpers; rendering lives in `canvas.js` (§6.8), the dialog in `dialogs.js` (§6.11), placement/navigation in `interaction.js` (§6.9), flattening is consumed by `sim.js` (§6.13). New commands (`PlaceSubDesign`, `SetPortProps`, `SetDefaultRender`) follow the §6.10 pattern.
 
-**The port built-in (FR-094/FR-094a).** A port is an ordinary built-in instance (`builtins.js`, §6.11): a synthetic `ComponentType` `name:"port"`, `builtin:true`, one **one-bit** connection pin. It carries per-instance fields beyond the usual ones (the `switchState` precedent, §6.11): `label` and optional `target` (`{file,label}`, FR-101), user-set and round-tripping with the instance (§7.2), plus `portDir` (`in`|`out`|`bidir`) which is now a **derived** value (FR-094c) — computed from the wiring by `portDirection`, and written at save (`fileops.save`) rather than hand-edited — and an optional `dirOverride` (`in`|`out`, FR-094d). The port's **effective direction** is `effectivePortDir(design, refdes) = (portDirection(...) === "bidir" && inst.dirOverride) ? inst.dirOverride : portDirection(...)` (a small helper beside `portDirection`); this effective value is what is saved and what every consumer reads. The properties panel shows the direction **read-only** when the derived value is definite (`in`/`out`); only when it is `bidir` does it render an editable in/out/bidir selector that writes `inst.dirOverride` (clearing it when set back to `bidir`), carried by the existing `SetPortProps` command. A 1-wide port has **no width** field (superseded — a pin is one bit; multi-bit interfaces are portN, FR-071e). The port's connection point is a `connector` **vertex** (§7.1a): like a `pin` vertex its position derives from the instance (so wires to it stretch for free), but its kind marks it for the netlist's label rules. `drawComponent` gains a `port` branch (`drawPort`) — a **pentagon** "flag" (FR-094b): the flat back edge sits on the connection-pin side, and the body tapers to an apex pointing **off-sheet** (opposite the pin). The pentagon is built in the instance's local grid frame and projected through `rotateOffset`, so it rotates with the instance and the apex↔pin relationship holds (FR-020); the label is drawn upright at the body center (FR-015), with a small filled triangle at the apex when it carries a `target`. Ports get `A-<n>` refdes via `addInstance` (FR-011a).
+**The port built-in (FR-094/FR-094a).** A port is an ordinary built-in instance (`builtins.js`, §6.11): a synthetic `ComponentType` `name:"port"`, `builtin:true`, one **one-bit** connection pin. It carries per-instance fields beyond the usual ones (the `switchState` precedent, §6.11): `label` and optional `target` (`{file,label}`, FR-101), user-set and round-tripping with the instance (§7.2), plus `portDir` (`in`|`out`|`bidir`) which is now a **derived** value (FR-094c) — computed from the wiring by `portDirection`, and written at save (`fileops.save`) rather than hand-edited — and an optional `dirOverride` (`in`|`out`, FR-094d). The port's **effective direction** is `effectivePortDir(design, refdes) = (portDirection(...) === "bidir" && inst.dirOverride) ? inst.dirOverride : portDirection(...)` (a small helper beside `portDirection`); this effective value is what is saved and what every consumer reads. The properties panel shows the direction **read-only** when the derived value is definite (`in`/`out`); only when it is `bidir` does it render an editable in/out/bidir selector that writes `inst.dirOverride` (clearing it when set back to `bidir`), carried by the existing `SetPortProps` command. A 1-wide port has **no width** field (superseded — a pin is one bit; multi-bit interfaces are portN, FR-071e). The port's connection point is a `connector` **vertex** (§7.1a): like a `pin` vertex its position derives from the instance (so wires to it stretch for free), but its kind marks it for the netlist's label rules. `drawComponent` gains a `port` branch (`drawPort`) — a **pentagon** "flag" (FR-094b): the flat back edge sits on the connection-pin side, and the body tapers to an apex pointing **off-sheet** (opposite the pin). The pentagon is built in the instance's local grid frame and projected through `rotateOffset`, so it rotates with the instance and the apex↔pin relationship holds (FR-020); the label is drawn upright at the body center (FR-015), with a small filled triangle at the apex when it carries a `target`. Ports get `A-<n>` refdes via `addInstance` (FR-011a). **Target editing (FR-101b, added 2026-07-08):** for a 1-wide port the properties panel (§6.11 `properties.js`) shows two text fields, **target file** (relative to the design's save directory) and **target label**, patched via the same `SetPortProps` command as `label`/`dirOverride`; a non-empty file yields `inst.target = {file, label}`, a cleared file yields `target: null`. portN shows no target fields (deferred, FR-071e).
 
 **Interface resolution (FR-095).** `designInterface(childDesign) → InterfaceSignal[]` returns one `{label,dir,width}` per distinct port — both 1-wide `port`s (`width:1`) and multi-bit `portN`s (FR-071e, `width:N` = its `P` pin-group size) — keyed by label and ordered by label; the first port seen for a label wins on a disagreement. Here `width` is the **signal's** bit count, not a pin attribute — a pin is always one bit. Each signal's `dir` is **derived from the child's wiring** by `portDirection(design, portRefdes)` (FR-094c), not read from a stored `portDir`: it builds the child's nets (`buildNets`) and inspects the non-port pins on the relevant net(s) — any `bidir`/`tristate` pin → `bidir`; else any plain `out` driver → `out`; else `in` (also when unconnected). For a 1-wide port the net is found by **label** (the connector pin is now also a net member, FR-094e, but label lookup remains the direction-derivation path); for a `portN` the direction is **aggregated across its bit nets**, found by the port's `P0..P(N-1)` pin keys (which *are* net members, joined through the snapped bus/wire). `designInterface` then applies the port's `dirOverride` (FR-094d) — so a derived-`bidir` signal carrying an override reports `in`/`out`, and the dir returned is the **effective** direction (the override is ignored unless the derived value is `bidir`). `synthTypeForInterface(iface, render) → ComponentType` builds an **in-memory, never-saved** synthetic `ComponentType` whose pins are all **one bit**: a `width:1` signal becomes one pin named by its label; a `width:N` signal **expands into N pins** `<label>0`..`<label>(N-1)` (contiguous, in bit order) **plus a `pinGroups` entry** named `<label>` so a matching-width bus snaps to it through the ordinary group machinery (FR-041/FR-042). Pins are laid out per render style (`ic`: `out` right, `in`/`bidir` left; a signal's expanded pins stay together on one side). This is the key reuse: a sub-design instance carries this synthetic `typeData` in memory, so `pinWorldPos`, vertices, wire endpoints, bus snap, hit-testing, and the rectangle renderer all work **unchanged** (§6.6–§6.9). A child with no ports has an empty interface and cannot be embedded (FR-097a).
 
@@ -2053,7 +2118,7 @@ no sequential part could ever leave U.)
 
 **Sub-design instance (FR-098/098a/099).** An entry in `design.components` with `kind:"subdesign"`, `childPath`, `render`, `iface` (the last-resolved interface record, FR-099c), `x`, `y`, `rotation`, and an `X<n>` refdes — a third series beside U and A (`addInstance` scans X-suffixes, FR-098a); a child may be embedded repeatedly as independent X-instances. It stores **no** `typeData` (supersedes FR-057 for it); its in-memory `typeData` is the synthetic interface type, recomputed on load and whenever the child changes (FR-099b). Rendering (`canvas.js`, §6.8 dispatch on `kind`): `ic` — the existing rectangle over the synthetic type (inputs left, outputs right, pins labelled by port label, `X1` + child base name upright); `connector` — a tall narrow rectangle with all interface pins ranked along **one** long edge in label order (OQ-010). Both are purely cosmetic (same interface, same connectivity, FR-099); a multi-bit interface signal appears as a **pin group** of one-bit pins (bus snaps to the group, FR-041/FR-039a). A child that fails to load renders as a **broken-link placeholder** (a red box naming the missing relative path), reported once via the message tray (FR-099a), reusing §6.8's unknown-type placeholder.
 
-**Navigation & back-stack (FR-100/100a).** Descending into a sub-design instance (double-click, or context-menu "Open sub-design") navigates to the instance's **absolute** `childPath` directly (no longer resolved against the parent dir, since the in-memory path is already absolute); following an off-sheet connector (clicking a port whose `target` is set) resolves its target path relative→absolute against the current design's save dir. Both perform a **navigation** = the existing Open flow with the FR-049a unsaved-changes guard (save or discard before the canvas is replaced). Because **back** re-opens the parent from its file, descending while the parent is unsaved first prompts to save it (FR-100a interim); declining cancels the descent. `app.js` keeps a transient `navStack` of absolute paths recording the descended chain; a breadcrumb in the chrome offers **back**, popping and re-opening the parent (itself save-or-lose). The stack is session state — not persisted, not on the undo stack.
+**Navigation & back-stack (FR-100/100a).** Descending into a sub-design instance (double-click, or context-menu "Open sub-design") navigates to the instance's **absolute** `childPath` directly (no longer resolved against the parent dir, since the in-memory path is already absolute); following an off-sheet connector — **double-clicking a port whose `target` is set, or its context-menu "Follow off-sheet connector"** (FR-101; a plain click just selects) — calls `fileops.followTarget(target)`, which resolves the target path relative→absolute against the current design's save dir (`resolveRel(dirOf(savePath), target.file)`), first prompting to save a never-saved design exactly as `descend` does (the relative path needs a directory, and back needs a file), and on success pushes the referring sheet onto the back-stack like a descent (FR-100a). (Gesture and `followTarget` implemented 2026-07-08 — FR-101b; previously specified but never wired.) Both perform a **navigation** = the existing Open flow with the FR-049a unsaved-changes guard (save or discard before the canvas is replaced). Because **back** re-opens the parent from its file, descending while the parent is unsaved first prompts to save it (FR-100a interim); declining cancels the descent. `app.js` keeps a transient `navStack` of absolute paths recording the descended chain; a breadcrumb in the chrome offers **back**, popping and re-opening the parent (itself save-or-lose). The stack is session state — not persisted, not on the undo stack.
 
 **Connectivity (FR-094a/FR-101a).** Within one open design `buildNets` (§6.6, step 6) unions lanes of `connector` vertices whose port shares a `label` (per bit for `width>1`), so same-label ports are one net with no drawn wire. Cross-file continuation is **not** applied in single-design `buildNets` (the editor edits one sheet at a time); it is composed only when the simulator assembles the sheet graph (below), and only across the **explicit** `target` links — never by coincidental label equality between unrelated files.
 
@@ -2251,8 +2316,8 @@ Built-in types additionally have a **behavior** (FR-067a): a client-JS function
 held in a registry in `builtins.js` keyed by type `id` (FR-066e) — deliberately **not** a
 `ComponentType` field, because `typeData` is deep-copied into instances and
 saved as JSON (FR-057), which would drop or corrupt a function value. The
-simulator resolves a behavior from the registry by `inst.type` (the type id) at run time; its
-signature is specified in the simulator design pass.
+simulator resolves a behavior from the registry by `inst.type` (the type id) at
+run time; its signature is `behave(ctx) → [{pin, value, weak?}]` (§6.13).
 
 Note: for `unit` components `width`/`height` are always **concrete in the parsed
 `ComponentType`** — resolution happens at parse time (§6.3) so the canvas, the
@@ -2348,7 +2413,7 @@ branch wire that meet at it share one position and cannot drift apart (A1).
 | `type` | string | the placed type's immutable **library id** (`ComponentType.id`, FR-066e), e.g. `"type-74138"` for a 74-series part, `"type-22V574"` for a GAL part, `"type-indicator"` for a built-in. It keys the simulator's per-type behavior cache and Refresh Types matching. The display name shown as the canvas label comes from `typeData` (`partnumber` or `name`), not this field |
 | `x`, `y` | int | grid coordinates of unrotated origin (FR-021) |
 | `rotation` | int | `0`\|`90`\|`180`\|`270` |
-| `typeData` | `ComponentType` | full copy at save time (FR-057) |
+| `typeData` | `ComponentType` | full copy captured at placement, persisted verbatim at save (FR-057); re-copied only by Refresh Types (FR-088) |
 | `overrides` | object | per-instance field overrides, grouped by kind: `{"delays":{"tpd":12},"props":{"period":200}}` — `delays` shadows `typeData.delays` (FR-058), `props` shadows `typeData.properties` defaults (FR-020b) |
 | `switchState` | string? | input-switch built-in only (FR-071c): current state, `"0"` \| `"1"` (default `"0"`; a legacy `"U"` reads as `0`). Per-instance interactive state, not an `overrides` entry; set via the properties panel (FR-020c) or a click during a run (FR-087a) |
 | `kind` | string? | `"subdesign"` for a sub-design instance (FR-098); absent/`"component"` for an ordinary, subunit, or built-in instance (§6.14) |
@@ -2738,61 +2803,63 @@ read/written through the same `/api/v1/design/{load,save}` endpoints as a design
 ## 9. File and Directory Plan
 
 ```
-sim/
-  cmd/retrosim/
-    main.go                 CREATE  entry point: flags, bind 127.0.0.1, wire deps (§6.1)
-  cmd/dumplib/
-    main.go                 CREATE  dump parsed library as JSON for offline tooling (refresh-types)
-  server/
-    api.go                  CREATE  /api/v1 router + handlers + static (§6.4)
-    components.go           CREATE  library load/hold/List (§6.2)
-    yamlparse.go            CREATE  ParseComponent: YAML → ComponentType (§6.3, §7.6)
-    storage.go              CREATE  ListDir/LoadDesign/SaveDesign (§6.5)
-    paths.go                CREATE  AppDataDir per-OS (§6.5)
-    types.go                CREATE  ComponentType/Pin/PinGroup/Design/Vertex/Wire/Bus/PathPoint Go structs (§7)
-  web/
-    index.html              CREATE  SPA shell + <canvas> + module entry
-    css/style.css           CREATE  layout for toolbar/palette/canvas/dialogs
-    js/app.js               CREATE  bootstrap (§6.12)
-    js/api.js               CREATE  REST client (§6.12)
-    js/store.js             CREATE  store + commands + undo/redo (§6.10)
-    js/builtins.js          CREATE  client-side built-in object registry (§6.11, FR-067/FR-068)
-    js/connection.js        CREATE  server heartbeat + reconnect (§6.12a)
-    js/backup.js            CREATE  localStorage snapshot + recovery (§6.12a)
-    js/geometry.js          CREATE  grid/viewport/rotation math (§6.7)
-    js/model/design.js      CREATE  design ops (§6.6)
-    js/model/clipboard.js   CREATE  copy/paste fragment extract + instantiate (§6.15)
-    js/model/netlist.js     CREATE  buildNets union-find (§6.6)
-    js/model/subdesign.js   CREATE  interface resolution, synthetic type, flatten/cycle (§6.14)
-    js/engine/canvas.js     CREATE  renderer + render loop (§6.8)
-    js/engine/symbols.js    CREATE  schematic symbol geometry (§6.8a)
-    js/engine/interaction.js CREATE tool FSM + event handling (§6.9)
-    js/engine/hittest.js    CREATE  hit-testing (§6.9)
-    js/engine/router.js     CREATE  Manhattan route proposal (§6.9a)
-    js/engine/galasm.js     CREATE  GALasm behavior compiler/evaluator (§6.13)
-    js/engine/sim.js        CREATE  slow simulator engine + scheduler (§6.13)
-    js/engine/cgen.js       CREATE  fast-engine C code generator (§6.17)
-    js/engine/ndl.js        CREATE  NDL netlist exporter (§6.18)
-    cgen/runtime.h          CREATE  fast-engine C runtime API, documented (§6.17)
-    cgen/runtime.c          CREATE  fast-engine C runtime implementation (§6.17)
-    tools/tv2txt.js         CREATE  .tv → generated-program stdin rows (§6.17 M2)
-    tools/parity.js         CREATE  fast-vs-slow FR-107 parity harness (§6.17 M2)
-    tools/refresh-types.js  CREATE  batch FR-088 refresh for saved designs (uses cmd/dumplib)
-    js/chrome/toolbar.js    CREATE  toolbar (§6.11)
-    js/chrome/palette.js    CREATE  palette tiles (§6.11)
-    js/chrome/dialogs.js    CREATE  save/open dialogs (§6.11)
-    js/chrome/properties.js CREATE  per-instance overrides panel (§6.11)
-    js/chrome/contextmenu.js CREATE right-click menu (§6.11)
-    js/chrome/statusbar.js  CREATE  bottom status bar trays (§6.11)
-  components/
-    74138.yaml              CREATE  (user-authored sample; §7.6)
-    74165.yaml              CREATE  8-bit PISO shift register; buried nodes (FR-079c, §6.13)
-    74xxx.yaml              CREATE  (additional user-authored samples)
-  specs/
-    design.md               (this document)
+srv/                        Go module (module path retains the historical name
+                            github.com/gmofishsauce/retrosim/sim/srv)
+  cmd/retrosim/main.go      entry point: flags, bind 127.0.0.1, wire deps (§6.1)
+  cmd/dumplib/main.go       dump parsed library as JSON for offline tooling (refresh-types)
+  server/api.go             /api/v1 router + handlers + static (§6.4)
+  server/components.go      library load/hold/List (§6.2)
+  server/yamlparse.go       ParseComponent: YAML → ComponentType (§6.3, §7.6)
+  server/storage.go         ListDir/LoadDesign/SaveDesign (§6.5)
+  server/paths.go           DesignsDir per-OS documents folder (§6.5, FR-050)
+  server/types.go           ComponentType/Pin/PinGroup/Design/Vertex/Wire/Bus/PathPoint Go structs (§7)
+  components/*.yaml         the component library (74138.yaml, 74165.yaml, …; §7.6)
+web/
+  index.html                SPA shell + <canvas> + module entry
+  css/style.css             layout for toolbar/palette/canvas/dialogs/vector panel
+  js/app.js                 bootstrap + palette rendering (§6.11/§6.12; there is no palette.js)
+  js/api.js                 REST client (§6.12)
+  js/store.js               store + undo/redo + locks (§6.10)
+  js/commands.js            Command constructors (§6.10)
+  js/builtins.js            client-side built-in object registry (§6.11)
+  js/connection.js          server heartbeat + reconnect (§6.12a)
+  js/backup.js              localStorage snapshot + recovery (§6.12a)
+  js/geometry.js            grid/viewport/rotation math (§6.7)
+  js/model/design.js        design ops (§6.6)
+  js/model/clipboard.js     copy/paste fragment extract + instantiate (§6.15)
+  js/model/netlist.js       buildNets union-find (§6.6)
+  js/model/persist.js       serialize/deserialize + formatVersion migration (§7.4)
+  js/model/subdesign.js     interface resolution, synthetic type, flatten/cycle (§6.14)
+  js/engine/canvas.js       renderer + render loop (§6.8)
+  js/engine/symbols.js      schematic symbol geometry (§6.8a)
+  js/engine/interaction.js  tool FSM + event handling (§6.9)
+  js/engine/hittest.js      hit-testing (§6.9)
+  js/engine/router.js       Manhattan route proposal (§6.9a)
+  js/engine/galasm.js       GALasm behavior compiler/evaluator (§6.13)
+  js/engine/sim.js          slow simulator engine + scheduler (§6.13)
+  js/engine/memory.js       RAM/ROM behavior core (§6.13, FR-114d)
+  js/engine/vectors.js      test-vector runner + .tv file model (§6.16)
+  js/engine/cgen.js         fast-engine C code generator (§6.17)
+  js/engine/ndl.js          NDL netlist exporter (§6.18)
+  js/chrome/toolbar.js      menu/tool bar (§6.11)
+  js/chrome/dialogs.js      dialogs + test-vector panel (§6.11, §6.16)
+  js/chrome/fileops.js      save/open/navigation flows (§6.11, §6.14)
+  js/chrome/properties.js   per-instance properties panel (§6.11)
+  js/chrome/contextmenu.js  right-click menu (§6.11)
+  js/chrome/statusbar.js    bottom status bar trays (§6.11)
+  cgen/runtime.h            fast-engine C runtime API, documented (§6.17)
+  cgen/runtime.c            fast-engine C runtime implementation (§6.17)
+  tools/tv2txt.js           .tv → generated-program stdin rows (§6.17 M2)
+  tools/parity.js           fast-vs-slow FR-107 parity harness (§6.17 M2)
+  tools/refresh-types.js    batch FR-088 refresh for saved designs (uses cmd/dumplib)
+examples/                   parity corpus: design + .tv pairs (§6.17)
+specs/                      requirements.md, design.md (this document), CHANGELOG.md
 ```
 
-No files are modified (greenfield).
+Unit tests sit beside their modules (`*.test.js` / `*_test.go`) and run via
+`./runtests.sh` (repo root). (Updated 2026-07-08 to the actual tree; supersedes
+the original greenfield plan, whose `sim/` root and never-created
+`js/chrome/palette.js` no longer described the repository.)
 
 ---
 
@@ -2802,12 +2869,12 @@ No files are modified (greenfield).
 |---|---|---|
 | FR-001 | §6.1, §6.4, §5 | `main.go`, `api.go` |
 | FR-002 | §6.2 | `components.go`, `yamlparse.go` |
-| FR-003 | §6.4, §6.11, §6.12 | `api.go`, `palette.js`, `app.js` |
+| FR-003 | §6.4, §6.11, §6.12 | `api.go`, `app.js` |
 | FR-004 | §6.12 | `app.js`, `store.js` |
-| FR-005, FR-005a, FR-006 | §6.2, §6.11 | `components.go`, `app.js` |
+| FR-005, FR-005a, FR-005b, FR-006 | §6.2, §6.11 | `components.go`, `app.js` |
 | FR-006a | §6.11 | `app.js`, `style.css`, `builtins.js` |
 | FR-007 | §6.2 | `components.go` |
-| FR-008, FR-009, FR-010 | §6.9, §6.11 | `interaction.js`, `palette.js`, `store.js` |
+| FR-008, FR-009, FR-010 | §6.9, §6.11 | `interaction.js`, `app.js`, `store.js` |
 | FR-011 | §6.6 | `model/design.js` |
 | FR-011a | §6.6 | `model/design.js` |
 | FR-067–FR-071 | §6.6, §6.8, §6.11 | `builtins.js`, `model/design.js`, `canvas.js`, `app.js` |
@@ -2840,8 +2907,8 @@ No files are modified (greenfield).
 | FR-038 | §6.9, §6.11 | `interaction.js`, `contextmenu.js` |
 | FR-039, FR-040 | §6.9 | `interaction.js` |
 | FR-039a | §6.9 | `interaction.js`, `hittest.js` |
-| FR-041, FR-041a, FR-041b | §6.9, §6.11, A3 | `interaction.js`, `dialogs.js` |
-| FR-042, FR-043 | §6.9, §7.2 | `interaction.js`, `model/design.js` |
+| FR-041, FR-041a, FR-041b, FR-041c | §6.9, §6.11, A3 | `interaction.js`, `dialogs.js`, `model/design.js` |
+| FR-042, FR-042a, FR-042b, FR-042c, FR-043 | §6.8, §6.9, §7.2 | `interaction.js`, `canvas.js`, `model/design.js` |
 | FR-043a, FR-043b | §6.6, §6.9, §7.1a | `interaction.js`, `model/design.js`, `commands.js`, `model/netlist.js` |
 | FR-044, FR-045 | §6.10, §6.12 | `store.js`, `app.js` |
 | FR-046, FR-047, FR-047a, FR-048, FR-049 | §6.5, §6.10, §6.11 | `storage.go`, `dialogs.js`, `fileops.js`, `store.js` |
@@ -2863,7 +2930,7 @@ No files are modified (greenfield).
 | FR-114e | §6.4, §6.13 | `engine/memory.js`, `sim.js`, `api.js`, `storage.go`, `api.go`, `dialogs.js` |
 | FR-114f, FR-007a | §6.4, §6.11, §7.6 | `dialogs.js` (`memDeviceYaml`), `app.js`, `api.js`, `components.go`, `yamlparse.go`, `types.go` |
 | FR-115, FR-115a–h | §6.13, §6.16, §7.7 | `engine/vectors.js`, `engine/sim.js`, `chrome/dialogs.js`, `chrome/toolbar.js`, `chrome/properties.js`, `store.js`, `app.js`, `index.html`, `style.css` |
-| FR-106–FR-110, FR-116, FR-116a, FR-117, FR-118 | §6.17 | `engine/cgen.js`, `web/cgen/runtime.h`, `web/cgen/runtime.c`, `chrome/toolbar.js`, `app.js` |
+| FR-106–FR-110, FR-116, FR-116a, FR-117, FR-117a, FR-117b, FR-118 | §6.17 | `engine/cgen.js`, `web/cgen/runtime.h`, `web/cgen/runtime.c`, `chrome/toolbar.js`, `app.js` |
 | FR-072, FR-073, FR-074 | §6.11 | `statusbar.js`, `index.html`, `style.css` |
 | FR-089, FR-090, FR-091 | §6.4, §6.11, §6.12a | `api.go`, `connection.js`, `statusbar.js`, `api.js` |
 | FR-092, FR-093 | §6.12, §6.12a | `backup.js`, `app.js`, `model/persist.js` |
@@ -2883,13 +2950,35 @@ No files are modified (greenfield).
 | FR-097, FR-097a, FR-097b | §6.9, §6.11, §6.14 | `interaction.js`, `dialogs.js`, `subdesign.js` |
 | FR-098, FR-098a, FR-099, FR-099a, FR-099b | §6.6, §6.8, §6.14, §7.2 | `subdesign.js`, `model/design.js`, `canvas.js` |
 | FR-100, FR-100a | §6.9, §6.11, §6.12, §6.14 | `interaction.js`, `app.js`, `dialogs.js` |
-| FR-101, FR-101a | §6.6, §6.14 | `subdesign.js`, `model/netlist.js` |
+| FR-101, FR-101a, FR-101b | §6.6, §6.9, §6.11, §6.14 | `subdesign.js`, `model/netlist.js`, `properties.js`, `interaction.js`, `fileops.js`, `contextmenu.js` |
 | FR-102, FR-102a, FR-103 | §6.13, §6.14 | `sim.js`, `subdesign.js` |
 | FR-060b | §6.14, §7.1a, §7.2 | `types.go`, `model/design.js` |
 | FR-060c | §7.2, §7.4 | `model/persist.js`, `chrome/fileops.js` |
 | FR-104 | §6.3, §7.1, §7.6 | `yamlparse.go`, `types.go`, `srv/components/*.yaml` |
 | FR-105 | §6.11, §7.1 | `properties.js`, `style.css` |
 | FR-111, FR-112, FR-113 | §6.15, §6.9, §6.10, §6.11 | `clipboard.js`, `interaction.js`, `commands.js`, `canvas.js`, `toolbar.js` |
+| FR-004c | §6.9, §6.11 | `interaction.js` |
+| FR-011b | §6.6, §6.10, §6.11, §7.2 | `model/design.js`, `commands.js`, `properties.js` |
+| FR-012a | §6.8 | `canvas.js` |
+| FR-013d | §6.8, §6.9 | `canvas.js`, `hittest.js`, `model/design.js` |
+| FR-015a | §6.8 | `canvas.js` |
+| FR-016a, FR-016b | §6.8, §6.9, §6.10 | `interaction.js`, `hittest.js`, `store.js`, `canvas.js` |
+| FR-018c | §6.6, §6.9, §6.10 | `model/design.js`, `interaction.js`, `commands.js` |
+| FR-020d | §6.11 | `properties.js` |
+| FR-022a | §6.9, §6.11, §6.14 | `interaction.js`, `toolbar.js`, `fileops.js` |
+| FR-023a, FR-023b | §6.9 | `interaction.js` |
+| FR-027d, FR-027e | §6.9, §6.9a | `router.js`, `interaction.js` |
+| FR-032a | §6.6, §6.9 | `model/design.js`, `interaction.js` |
+| FR-033b, FR-033c, FR-033d | §6.6, §6.7, §6.9, §6.11 | `contextmenu.js`, `geometry.js`, `interaction.js`, `model/design.js` |
+| FR-034c | §6.6, §6.9 | `model/design.js`, `interaction.js` |
+| FR-049b, FR-052a | §6.11 | `dialogs.js` |
+| FR-063a | §6.3, §6.14 | `yamlparse.go`, `dialogs.js` |
+| FR-066a, FR-079a, FR-079b | §6.3, §6.13, §7.6 | `yamlparse.go`, `galasm.js`, `sim.js` |
+| FR-066b, FR-066c, FR-066d | §6.4, §6.14 | `dialogs.js`, `app.js`, `api.go`, `yamlparse.go` |
+| FR-066e | §6.2, §6.3, §7.1, §7.4 | `yamlparse.go`, `components.go`, `model/persist.js`, `builtins.js` |
+| FR-071f | §6.8, §6.9, §6.11, §7.2 | `builtins.js`, `canvas.js`, `interaction.js`, `model/design.js` |
+| FR-094b, FR-094c, FR-094d, FR-094e | §6.6, §6.11, §6.14 | `subdesign.js`, `model/netlist.js`, `canvas.js`, `properties.js` |
+| FR-099c | §6.9a, §6.14 | `subdesign.js`, `router.js`, `fileops.js` |
 | NFR-001 | §6.1 | `main.go` |
 | NFR-002 | §6.12 | `api.js` |
 | NFR-003 | all | server `*.go`, `web/js/*` |
@@ -2899,8 +2988,9 @@ No files are modified (greenfield).
 | IR-001 | §6.4, §6.12 | `api.go`, `api.js` |
 | IR-002 | — | (none; no external integrations) |
 
-All requirements are covered. MVP-deferrable items (FR-020a, FR-049a, and the bus
-snap FR-041–043) are fully designed so they are additive when implemented.
+All current requirements are covered (table backfilled 2026-07-08; superseded
+FRs — e.g. FR-115g — carry no row, and the file column names modules, with unit
+tests beside them per §9).
 
 ---
 
@@ -2923,7 +3013,9 @@ snap FR-041–043) are fully designed so they are additive when implemented.
   a file with none of them parses fine with the documentation fields left
   zero/nil.
 - **Go `storage`:** atomic save does not corrupt an existing file when the write
-  fails midway; `ListDir` returns only `.json`+dirs with a correct `parent`;
+  fails midway; `ListDir` returns dirs plus files filtered by the `exts`
+  parameter (default `.json`; e.g. `bin,hex` for the ROM picker, FR-114e) with
+  a correct `parent`;
   load of malformed JSON → 422 (FR-046–FR-053, FR-055).
 - **Go `paths`:** `DesignsDir` returns the documents-folder path per `GOOS`
   (FR-050): darwin/linux `~/Documents/retrosim`, windows
@@ -3063,9 +3155,9 @@ snap FR-041–043) are fully designed so they are additive when implemented.
 - Fan-out: one pin with three wires forms one net (FR-034a/b).
 - Junction chain A→B→C: all three wires + their pins are one net, computed from
   ids only — moving any vertex does not change the net (FR-059a).
-- Bus width matched by a pin group whose member-pin count equals the width (A3);
-  width tie (≥2 matching groups) → disambiguation dialog, not a silent pick
-  (FR-041b).
+- Bus accepted by a pin group holding a free contiguous block ≥ the bus width,
+  claimed pack-low (FR-041/FR-041c); ≥2 accepting groups → disambiguation
+  dialog, not a silent pick (FR-041b).
 - Bus-to-bus chain bit alignment: bit 3 at one end equals bit 3 at the other; a
   breakout off bit 3 anywhere along the chain lands in that same net (FR-037a/043a).
 - Undo across a delete-that-pruned-wires restores every pruned wire and junction.
@@ -3080,8 +3172,9 @@ machine. (Confirm the target numbers in §12 if different.)
 
 ## 12. Open Questions
 
-Implementation of the **core editor and server can begin now**; these items gate
-only the noted slices.
+Every item below is **resolved**; the entries are retained as decision records
+and nothing here currently gates any work. (Intro re-scoped 2026-07-08; it
+formerly gated implementation slices that have long since shipped.)
 
 - **OQ-001 / G1 — YAML file syntax — RESOLVED.** Settled with the stakeholder: the
   YAML file is **YAML** (§7.6, binding; §6.3 parser). The package mechanism is
@@ -3096,9 +3189,10 @@ only the noted slices.
   number of member pins (each pin is one bit); on a tie the user is **prompted**
   (no silent pick). This was
   confirmed with the stakeholder and **promoted to requirements** (FR-041/041a/
-  041b); it is no longer an open question. Bus snap, breakout, and bus bit-names
-  (FR-037b/043a) are MVP-deferrable but fully designed (A7) and the save format
-  accommodates them now (FR-060a).
+  041b); it is no longer an open question. (Extended 2026-06-20 by FR-041c:
+  "accepts" replaced the equal-width "matches" — pack-low free-block claiming.)
+  Bus snap, breakout, and bus bit-names (FR-037b/043a) are all implemented (A7)
+  and the save format accommodates them (FR-060a).
 - **OQ-007 / A1 — Junction representation.** Resolved to a **graph of first-class
   `Vertex` objects shared by id** (§7.1a), chosen with the stakeholder in light of
   the planned off-sheet **connector tool** (and possible edge-connector
@@ -3108,19 +3202,26 @@ only the noted slices.
   consumes it. *(Note: the connector tool implies a future multi-**sheet**
   container, which this single-canvas phase does not provide; that is orthogonal
   to the topology model and tracked as future scope.)*
-- **OQ-004 / A5 — Grid spacing & default zoom.** Defaults chosen (8 px/unit,
-  0.25×–4.0×). Confirm or adjust the constants.
-- **U1 — NFR-005 threshold & target design size.** Proposed ≤16 ms at 200
-  components / 600 segments. Confirm the numbers (or supply real target sizes).
-- **OQ-003 — File navigation vs recent-files.** Design includes server-assisted
-  navigation with a ready `localStorage` recent-files fallback (FR-054). Decide at
-  implementation which ships first; both are designed.
+- **OQ-004 / A5 — Grid spacing & default zoom — RESOLVED (2026-07-08,
+  confirmed by use).** Defaults chosen (8 px/unit at zoom 1, range 0.25×–4.0×)
+  have served through weeks of real editing; they stand, remaining tunable
+  constants in one place (A5).
+- **U1 — NFR-005 threshold & target design size — RESOLVED (2026-07-08,
+  confirmed by use).** The ≤16 ms / 200-component / 600-segment budget stands
+  as stated in §11.4; real designs to date show no responsiveness issues.
+- **OQ-003 — File navigation vs recent-files — RESOLVED (2026-07-08).**
+  Server-assisted navigation shipped and now underpins every picker (designs,
+  ROM contents, `.tv` files — FR-052/FR-052a/FR-053); the recent-files fallback
+  (FR-054) was never needed and remains only a designed contingency.
 - **OQ-008 — Pin-direction set — RESOLVED.** Final set is `{in,out,bidir,
   tristate}`. Power and ground are not represented anywhere (file, editor, or
   simulation), so no `pwr`/`power` direction is needed; the four directions map
   cleanly to the future four-level model.
-- **OQ-011 — Text selection inside a note while editing (FR-071f) — RESOLVED.**
-  Adopted the **DOM `<textarea>` overlay**: editing a note hides the canvas note
+- **DQ-001 — Text selection inside a note while editing (FR-071f) — RESOLVED.**
+  *(Renamed 2026-07-08 from "OQ-011": that ID collided with requirements.md's
+  unrelated OQ-011 — the fast-engine output-mechanism question, resolved per
+  FR-118. `DQ-` numbers are design-local questions that never appeared in
+  requirements.md.)* Adopted the **DOM `<textarea>` overlay**: editing a note hides the canvas note
   and overlays a real textarea over it (§6.9), so caret placement, text selection,
   and clipboard are the browser's native behavior. This supersedes the original
   keystroke-capture / cosmetic-caret approach (no caret index, no selection). The
@@ -3136,7 +3237,5 @@ only the noted slices.
   **`web/tools/parity.js`** alongside `tv2txt`, run explicitly (`node
   web/tools/parity.js`), never in the `web/js/` sweep.
 
-None of the above prevent starting the server skeleton, the canvas engine, the
-store/undo pipeline, or the chrome. Only the YAML **parser body** and the **bus
-snap** slice should wait on their respective confirmations.
-```
+(The former closing note — gating the YAML parser body and the bus-snap slice
+on their confirmations — is superseded 2026-07-08: everything above shipped.)
