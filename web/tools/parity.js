@@ -28,7 +28,7 @@ import { deserializeDesign } from "../js/model/persist.js";
 import { flatten } from "../js/model/subdesign.js";
 import { generateC } from "../js/engine/cgen.js";
 import { parseRomBytes } from "../js/engine/memory.js";
-import { buildSimulation } from "../js/engine/sim.js";
+import { buildSimulation, ramFileBody } from "../js/engine/sim.js";
 import {
   deriveColumns,
   deserializeVectors,
@@ -216,6 +216,113 @@ async function checkFree(jsonPath) {
   return { name, status: "diff", detail: diff(expected, actual) };
 }
 
+// clockPeriodOf mirrors runtime.c clock_period / checkFree: the lone clock's
+// effective period when the design has exactly one clock generator, else 100 ns.
+function clockPeriodOf(flat) {
+  const clocks = (flat.components ?? []).filter((c) => c.typeData?.renderType === "clock");
+  if (clocks.length !== 1) return 100;
+  return (
+    clocks[0].overrides?.props?.period ??
+    clocks[0].typeData?.properties?.find((p) => p.name === "period")?.default ??
+    100
+  );
+}
+
+// persistentRamMems returns the flat design's persistent-RAM mem blocks (FR-117c:
+// kind ram with a save file), each with its baked save-file path.
+function persistentRamMems(flat) {
+  return (flat.components ?? [])
+    .map((c) => c.typeData?.mem)
+    .filter((m) => m && m.kind === "ram" && m.ramFile);
+}
+
+// f0Bytes builds a deterministic non-trivial initial save-file image for one RAM
+// (capacity locations, B=ceil(width/8) little-endian bytes each): location k
+// holds k, so both engines get identical prepared contents to load.
+function f0Bytes(m) {
+  const B = Math.ceil(m.dataWidth / 8);
+  const cap = 2 ** m.addressBits;
+  const bytes = new Uint8Array(cap * B);
+  for (let k = 0; k < cap; k++) {
+    for (let b = 0; b < B; b++) bytes[k * B + b] = (k >>> (b * 8)) & 0xff;
+  }
+  return bytes;
+}
+
+// checkRamPersist is the persistent-RAM round-trip leg (FR-117c): seed each RAM's
+// baked save file with a prepared image, run BOTH engines free for the same
+// FREE_CYCLES, and require the file the fast program writes back to equal the
+// slow simulator's final RAM dump (ramFileBody of core.dumpBytes). This covers
+// the new fast-engine load-on-start (mem_load_all RAM branch) and write-on-exit
+// (mem_save_all) against the slow engine's load/dump reference. Vector mode is
+// NOT checked: a slow-engine test-vector run never persists (FR-114g), so free
+// run is the only mode with a slow counterpart. The baked save-file path is a
+// bare basename, so the program resolves it in its (temp) working directory.
+async function checkRamPersist(jsonPath) {
+  const name = basename(jsonPath, ".json");
+  const design = deserializeDesign(JSON.parse(readFileSync(jsonPath, "utf8")));
+
+  let flat, gen;
+  try {
+    flat = await flatten(design, loadChildFs, { rootPath: jsonPath });
+    gen = generateC(flat, { columnsFrom: design });
+  } catch (e) {
+    return { name, status: "skip", detail: e.message };
+  }
+  const mems = persistentRamMems(flat);
+  if (!mems.length) return { name, status: "skip", detail: "no persistent RAM" };
+  const romContent = loadRomContentsFs(flat, dirname(jsonPath));
+  const period = clockPeriodOf(flat);
+
+  const dir = mkdtempSync(join(tmpdir(), "parity-ram-"));
+  try {
+    writeFileSync(join(dir, "design.c"), gen.code);
+    copyFileSync(join(RT_DIR, "runtime.c"), join(dir, "runtime.c"));
+    copyFileSync(join(RT_DIR, "runtime.h"), join(dir, "runtime.h"));
+
+    // Seed each RAM's save file (F0) in the program's cwd, and hand the same
+    // bytes to the slow engine via ramContent (keyed by the baked path).
+    const ramContent = new Map();
+    for (const m of mems) {
+      const base = basename(m.ramFile);
+      const format = base.toLowerCase().endsWith(".hex") ? "hex" : "bin";
+      const body = ramFileBody(m.ramFile, f0Bytes(m)); // hex string | raw bytes
+      writeFileSync(join(dir, base), body);
+      ramContent.set(m.ramFile, parseRomBytes(readFileSync(join(dir, base)), format));
+    }
+
+    // Slow engine: step FREE_CYCLES × period, then the final dump per RAM is the
+    // reference for what the fast program must have written.
+    const sim = buildSimulation(flat, { onMessage: () => {}, romContent, ramContent });
+    for (let i = 0; i < FREE_CYCLES * period; i++) sim.step();
+    const expected = new Map(
+      sim.persistentRams().map((r) => [basename(r.ramFile), ramFileBody(r.ramFile, r.dumpBytes())]),
+    );
+
+    // Fast engine: compile and run --cycles FREE_CYCLES; it loads each F0, runs,
+    // and writes each save file back in place.
+    const cc = spawnSync("cc", ["design.c", "runtime.c", "-o", "sim"], { cwd: dir, encoding: "utf8" });
+    if (cc.status !== 0) throw new Error(`cc failed:\n${cc.stderr}`);
+    const run = spawnSync(join(dir, "sim"), ["--cycles", String(FREE_CYCLES)], { cwd: dir, encoding: "utf8" });
+    if (run.status !== 0) throw new Error(`sim exited ${run.status}:\n${run.stderr}`);
+
+    for (const m of mems) {
+      const base = basename(m.ramFile);
+      const format = base.toLowerCase().endsWith(".hex") ? "hex" : "bin";
+      const want = expected.get(base);
+      const got = format === "hex" ? readFileSync(join(dir, base), "utf8") : readFileSync(join(dir, base));
+      const eq = format === "hex" ? got === want : Buffer.compare(got, Buffer.from(want)) === 0;
+      if (!eq) {
+        const show = (v) => (format === "hex" ? v : [...v].map((b) => b.toString(16).padStart(2, "0")).join(" "));
+        return { name, status: "diff", detail: `  ${base}\n  slow: ${show(want)}\n  fast: ${show(got)}` };
+      }
+    }
+    return { name, status: "ok", detail: `persist round-trip, ${FREE_CYCLES} cycles` };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 function diff(expected, actual) {
   const e = expected.split("\n");
   const a = actual.split("\n");
@@ -238,9 +345,27 @@ const pairs = readdirSync(EXAMPLES)
     }
   });
 
-const designs = readdirSync(EXAMPLES)
+// hasPersistentRam scans a design file for a persistent RAM (FR-117c) — a light
+// JSON probe, no deserialize — so those designs take the dedicated round-trip
+// leg instead of the generic free-run leg (whose all-U run would also emit a
+// misleading "cannot load" for the absent save file).
+function hasPersistentRam(jsonPath) {
+  try {
+    const d = JSON.parse(readFileSync(jsonPath, "utf8"));
+    return (d.components ?? []).some((c) => {
+      const m = c.typeData?.mem;
+      return m && m.kind === "ram" && m.ramFile;
+    });
+  } catch {
+    return false;
+  }
+}
+
+const allDesigns = readdirSync(EXAMPLES)
   .filter((f) => f.endsWith(".json"))
   .map((f) => join(EXAMPLES, f));
+const persistDesigns = allDesigns.filter(hasPersistentRam);
+const designs = allDesigns.filter((d) => !hasPersistentRam(d));
 
 let failed = 0;
 function report(r) {
@@ -254,5 +379,6 @@ function report(r) {
 
 for (const p of pairs) report(await checkPair(p.json, p.tv));
 for (const d of designs) report(await checkFree(d));
-console.log(`\n${pairs.length + designs.length} checks, ${failed} mismatched`);
+for (const d of persistDesigns) report(await checkRamPersist(d));
+console.log(`\n${pairs.length + designs.length + persistDesigns.length} checks, ${failed} mismatched`);
 process.exit(failed ? 1 : 0);

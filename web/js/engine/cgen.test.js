@@ -243,7 +243,7 @@ test("generateC: ROM device bakes refdes + content-file path, not bytes (M5, FR-
   const d = mkDesign();
   place(d, "U1", ROM4x2);
   const { code } = generateC(d);
-  assert.match(code, /\{ RT_MEM_ROM, 2, 2, mem_addr_U1, mem_data_U1, mem_dlbl_U1, [^,]+, [^,]+, -1, "U1", "r\.hex" \}/);
+  assert.match(code, /\{ RT_MEM_ROM, 2, 2, mem_addr_U1, mem_data_U1, mem_dlbl_U1, [^,]+, [^,]+, -1, "U1", "r\.hex", 0, 0 \}/);
   assert.doesNotMatch(code, /mem_rom_U1/);
   assert.match(code, /const int gen_mem_count = 1;/);
 });
@@ -264,11 +264,11 @@ test("generateC: RAM device emits a gen_mems entry with a WE/ net and no ROM (M3
   const d = mkDesign();
   place(d, "U1", RAM);
   const { code } = generateC(d);
-  assert.match(code, /\{ RT_MEM_RAM, 2, 1, mem_addr_U1, mem_data_U1, mem_dlbl_U1, [^,]+, [^,]+, [^,]+, "U1", 0 \}/);
+  assert.match(code, /\{ RT_MEM_RAM, 2, 1, mem_addr_U1, mem_data_U1, mem_dlbl_U1, [^,]+, [^,]+, [^,]+, "U1", 0, 0, 0 \}/);
   assert.doesNotMatch(code, /mem_rom_U1/);
 });
 
-test("generateC: refuses a RAM with a persistent save file (FR-114g/FR-116)", () => {
+test("generateC: bakes a persistent RAM's save-file path and load-on-start flag (FR-114g/FR-117c)", () => {
   const RAM = {
     name: "RAM4x1S",
     mem: { kind: "ram", addressBits: 2, dataWidth: 1, ramFile: "/s/scratch.bin", ramLoad: true },
@@ -283,7 +283,27 @@ test("generateC: refuses a RAM with a persistent save file (FR-114g/FR-116)", ()
   };
   const d = mkDesign();
   place(d, "U1", RAM);
-  assert.throws(() => generateC(d), /U1: persistent RAM .* not supported by the fast simulator \(FR-116\)/);
+  const { code } = generateC(d); // no longer refused
+  assert.match(code, /\{ RT_MEM_RAM, 2, 1, [^}]+, "U1", 0, "\/s\/scratch\.bin", 1 \}/);
+});
+
+test("generateC: a RAM with a save file but load-on-start off bakes ram_load 0 (FR-117c)", () => {
+  const RAM = {
+    name: "RAM4x1SNoLoad",
+    mem: { kind: "ram", addressBits: 2, dataWidth: 1, ramFile: "/s/scratch.bin", ramLoad: false },
+    pins: [
+      { name: "A0", side: "left", position: 1, direction: "in" },
+      { name: "A1", side: "left", position: 2, direction: "in" },
+      { name: "CE/", side: "left", position: 3, direction: "in" },
+      { name: "OE/", side: "left", position: 4, direction: "in" },
+      { name: "WE/", side: "left", position: 5, direction: "in" },
+      { name: "D0", side: "right", position: 1, direction: "bidir" },
+    ],
+  };
+  const d = mkDesign();
+  place(d, "U1", RAM);
+  const { code } = generateC(d);
+  assert.match(code, /\{ RT_MEM_RAM, 2, 1, [^}]+, "U1", 0, "\/s\/scratch\.bin", 0 \}/);
 });
 
 test("generateC: a RAM with no save file still generates (FR-114g)", () => {
@@ -311,7 +331,7 @@ test("generateC: ROM with no recorded content file bakes a NULL rom_file (M5)", 
   place(d, "U1", NOFILE);
   const { code, warnings } = generateC(d);
   assert.equal(warnings.filter((w) => w.includes("ROM content")).length, 0);
-  assert.match(code, /\{ RT_MEM_ROM, 2, 2, [^}]+, "U1", 0 \}/);
+  assert.match(code, /\{ RT_MEM_ROM, 2, 2, [^}]+, "U1", 0, 0, 0 \}/);
 });
 
 test("generateC: guards against an unflattened sub-design instance (FR-116)", () => {

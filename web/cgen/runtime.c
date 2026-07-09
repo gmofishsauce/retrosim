@@ -334,14 +334,18 @@ static int rom_arg_count;
 /* rom_read_file reads one content file per FR-114e: format by extension
  * (".bin" raw bytes; ".hex" whitespace-separated hex byte tokens, each
  * one or two hex digits), returning a malloc'd byte buffer. Returns NULL
- * only when the file cannot be opened; a format problem is a hard error
- * (exit 2) naming `who` — the flag or ROM the request came from. */
-static unsigned char *rom_read_file(const char *path, long *out_len, const char *who) {
+ * when the file cannot be opened. A format problem (bad extension, malformed
+ * hex) is fatal for a ROM (`fatal` = 1: exit 2 naming `who`) but non-fatal
+ * for a persistent RAM (`fatal` = 0: report to stderr and return NULL, so the
+ * RAM powers up all-U, FR-114g/FR-117c). */
+static unsigned char *rom_read_file(const char *path, long *out_len, const char *who,
+                                    int fatal) {
   const char *ext = strrchr(path, '.');
   int hex = ext && strcmp(ext, ".hex") == 0;
   if (!hex && !(ext && strcmp(ext, ".bin") == 0)) {
     fprintf(stderr, "%s: \"%s\" must end in .bin or .hex (FR-114e)\n", who, path);
-    exit(2);
+    if (fatal) exit(2);
+    return NULL;
   }
   FILE *f = fopen(path, "rb");
   if (!f) return NULL;
@@ -382,7 +386,10 @@ static unsigned char *rom_read_file(const char *path, long *out_len, const char 
                                      : -1;
       if (d < 0 || digits >= 2) {
         fprintf(stderr, "%s: malformed hex byte token in \"%s\"\n", who, path);
-        exit(2);
+        free(raw);
+        free(bytes);
+        if (fatal) exit(2);
+        return NULL;
       }
       v = v * 16 + d;
       digits++;
@@ -432,7 +439,7 @@ static void mem_load_all(void) {
     unsigned char *bytes;
     if (override[i]) {
       snprintf(who, sizeof who, "--rom %s=%s", m->refdes, override[i]);
-      bytes = rom_read_file(override[i], &len, who);
+      bytes = rom_read_file(override[i], &len, who, 1);
       if (!bytes) {
         fprintf(stderr, "%s: cannot read \"%s\"\n", who, override[i]);
         exit(2);
@@ -441,10 +448,10 @@ static void mem_load_all(void) {
       /* The recorded path as-is, then its basename in the cwd (the file
        * placed beside where the program runs). */
       snprintf(who, sizeof who, "ROM %s", m->refdes);
-      bytes = rom_read_file(m->rom_file, &len, who);
+      bytes = rom_read_file(m->rom_file, &len, who, 1);
       const char *slash = strrchr(m->rom_file, '/');
       const char *base = slash ? slash + 1 : m->rom_file;
-      if (!bytes && slash) bytes = rom_read_file(base, &len, who);
+      if (!bytes && slash) bytes = rom_read_file(base, &len, who, 1);
       if (!bytes) {
         fprintf(stderr,
                 "ROM %s: cannot read \"%s\"%s%s%s; use --rom %s=FILE to supply the contents\n",
@@ -469,6 +476,34 @@ static void mem_load_all(void) {
     mem_states[i].nbytes = len;
   }
   free(override);
+
+  /* Persistent RAM load-on-start (FR-114g/FR-117c): seed a load-on-start RAM
+   * from its baked save file, non-fatally — a missing/malformed file leaves
+   * the RAM all-U (bytes stays NULL) with a stderr note, rather than aborting
+   * the run. Only the recorded path is tried (no --ram override, no cwd
+   * basename fallback); same little-endian packing / over-capacity report as
+   * a ROM. mem_reset then seeds the RAM from these bytes like a ROM. */
+  for (int i = 0; i < gen_mem_count; i++) {
+    const rt_mem *m = &gen_mems[i];
+    if (m->kind != RT_MEM_RAM || !m->ram_load || !m->ram_file) continue;
+    char who[256];
+    snprintf(who, sizeof who, "RAM %s", m->refdes);
+    long len = 0;
+    unsigned char *bytes = rom_read_file(m->ram_file, &len, who, 0);
+    if (!bytes) {
+      fprintf(stderr, "RAM %s: cannot load \"%s\"; powering up all-U\n",
+              m->refdes, m->ram_file);
+      continue;
+    }
+    int nb = (m->width + 7) / 8;
+    long capacity = 1L << m->abits;
+    if (len / nb > capacity) {
+      fprintf(stderr, "RAM %s: save file exceeds capacity (%ld of %ld words used)\n",
+              m->refdes, capacity, len / nb);
+    }
+    mem_states[i].bytes = bytes;
+    mem_states[i].nbytes = len;
+  }
 }
 
 /* mem_reset restores power-up: RAM all-U, ROM seeded from its loaded
@@ -514,6 +549,47 @@ static void mem_write_all(const rt_val *curr) {
       }
     }
     mem_states[i].prev_we = we;
+  }
+}
+
+/* mem_save_all writes each persistent RAM's full contents back to its baked
+ * save file (FR-114g/FR-117c) — the write complement of the startup load,
+ * called once by main() after a run completes, in either batch mode. Format
+ * mirrors memory.js dumpBytes + ramFileBody: the whole device, B=ceil(w/8)
+ * bytes per location, little-endian, an undefined (U) or never-written bit
+ * written as 0; ".hex" as space-separated two-digit hex byte tokens, else raw
+ * bytes. A write failure reports to stderr but does not change exit status. */
+static void mem_save_all(void) {
+  for (int i = 0; i < gen_mem_count; i++) {
+    const rt_mem *m = &gen_mems[i];
+    if (m->kind != RT_MEM_RAM || !m->ram_file) continue;
+    int nb = (m->width + 7) / 8; /* B = ceil(width/8) */
+    long capacity = 1L << m->abits;
+    const char *ext = strrchr(m->ram_file, '.');
+    int hex = ext && strcmp(ext, ".hex") == 0;
+    FILE *f = fopen(m->ram_file, hex ? "w" : "wb");
+    if (!f) {
+      fprintf(stderr, "RAM %s: cannot write \"%s\"\n", m->refdes, m->ram_file);
+      continue;
+    }
+    int err = 0;
+    for (long k = 0; k < capacity && !err; k++) {
+      const rt_val *word = &mem_states[i].store[(size_t)k * m->width];
+      for (int b = 0; b < nb && !err; b++) {
+        unsigned v = 0;
+        for (int bit = 0; bit < 8; bit++) {
+          int idx = b * 8 + bit;
+          if (idx < m->width && word[idx] == RT_1) v |= 1u << bit;
+        }
+        if (hex) {
+          if (fprintf(f, "%s%02x", (k || b) ? " " : "", v) < 0) err = 1;
+        } else if (fputc((int)v, f) == EOF) {
+          err = 1;
+        }
+      }
+    }
+    if (fclose(f) != 0) err = 1;
+    if (err) fprintf(stderr, "RAM %s: error writing \"%s\"\n", m->refdes, m->ram_file);
   }
 }
 
@@ -984,6 +1060,7 @@ int main(int argc, char **argv) {
   } else {
     status = rt_run_vectors() ? 1 : 0;
   }
+  mem_save_all(); /* write persistent RAMs back on normal termination (FR-117c) */
   if (vcd_fp) fclose(vcd_fp);
   return status;
 }

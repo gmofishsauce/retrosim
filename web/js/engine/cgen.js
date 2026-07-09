@@ -284,13 +284,6 @@ export function generateC(design, { columnsFrom = design } = {}) {
       const mem = inst.typeData.mem;
       const refdes = inst.refdes;
       const isRam = mem.kind === "ram";
-      // Persistent RAM (FR-114g): the save-on-Stop / load-on-start file is
-      // slow-engine-only for now — refuse rather than silently drop persistence
-      // (FR-116), exactly as switch elements are refused above.
-      if (isRam && mem.ramFile) {
-        errors.push(`${refdes}: persistent RAM (save file) not supported by the fast simulator (FR-116)`);
-        continue;
-      }
       const addr = [];
       for (let i = 0; i < mem.addressBits; i++) addr.push(netOf(`${refdes}.A${i}`));
       const data = [];
@@ -312,6 +305,10 @@ export function generateC(design, { columnsFrom = design } = {}) {
         we: isRam ? netOf(`${refdes}.WE/`) : -1,
         refdes,
         romFile: !isRam && mem.romFile ? mem.romFile : null,
+        // Persistent RAM (FR-114g/FR-117c): bake the save-file path and
+        // load-on-start flag; the runtime loads at start-up and writes back.
+        ramFile: isRam && mem.ramFile ? mem.ramFile : null,
+        ramLoad: isRam && mem.ramFile && mem.ramLoad ? 1 : 0,
       });
       driverCount += mem.dataWidth; // drives up to w data pins
     } else if (inst.typeData.builtin) {
@@ -474,7 +471,9 @@ export function generateC(design, { columnsFrom = design } = {}) {
 
   // Memory devices (FR-114d): per-instance pin-net/label arrays, then the
   // gen_mems table referencing them. A ROM's refdes + content-file path are
-  // baked for the runtime's startup load (FR-117b); no contents are baked.
+  // baked for the runtime's startup load (FR-117b); a persistent RAM's
+  // save-file path + load-on-start flag are baked for load/write-back
+  // (FR-114g/FR-117c). No contents are baked.
   for (const m of mems) {
     L.push(`static const int mem_addr_${m.tag}[] = { ${m.addr.join(", ")} };`);
     L.push(`static const int mem_data_${m.tag}[] = { ${m.data.join(", ")} };`);
@@ -484,13 +483,14 @@ export function generateC(design, { columnsFrom = design } = {}) {
     L.push(`const rt_mem gen_mems[] = {`);
     for (const m of mems) {
       const romFile = m.romFile ? cstr(m.romFile) : "0";
+      const ramFile = m.ramFile ? cstr(m.ramFile) : "0";
       L.push(
-        `  { ${m.kind}, ${m.n}, ${m.w}, mem_addr_${m.tag}, mem_data_${m.tag}, mem_dlbl_${m.tag}, ${m.ce}, ${m.oe}, ${m.we}, ${cstr(m.refdes)}, ${romFile} }, /* ${m.tag} */`,
+        `  { ${m.kind}, ${m.n}, ${m.w}, mem_addr_${m.tag}, mem_data_${m.tag}, mem_dlbl_${m.tag}, ${m.ce}, ${m.oe}, ${m.we}, ${cstr(m.refdes)}, ${romFile}, ${ramFile}, ${m.ramLoad} }, /* ${m.tag} */`,
       );
     }
     L.push(`};`);
   } else {
-    L.push(`const rt_mem gen_mems[] = { { 0, 0, 0, 0, 0, 0, -1, -1, -1, 0, 0 } }; /* none */`);
+    L.push(`const rt_mem gen_mems[] = { { 0, 0, 0, 0, 0, 0, -1, -1, -1, 0, 0, 0, 0 } }; /* none */`);
   }
   L.push(`const int gen_mem_count = ${mems.length};`);
   L.push(``);

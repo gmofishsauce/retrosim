@@ -266,8 +266,13 @@ A few details worth knowing:
   file will then be created on the next Stop.
 - The save file is written only for an **interactive** Run/Stop. Running **test
   vectors** never reads or writes it.
-- The **standalone C simulator** (Generate C…) does **not** support persistent RAM
-  yet: generating from a design whose RAM has a save file is refused with a message.
+- The **standalone C simulator** (Generate C…) supports persistent RAM too. The
+  save-file path and *Load at start-up* setting are baked into the generated
+  program, which loads the file when it starts and writes the RAM back when the
+  run finishes (in **both** its batch modes — test vectors and free-running). A
+  missing or malformed file is non-fatal there too (the RAM starts blank and a
+  note is printed). The path is baked in, so the file is found relative to where
+  you run the program; there is no command-line option to override it.
 
 ---
 
@@ -971,14 +976,19 @@ A content file that is missing, unreadable, or malformed stops the program
 with a message rather than running with empty memory; the message names the
 ROM and shows the `--rom` option to use.
 
+A **RAM with a save file** (persistent RAM) is generated too: the program loads
+the save file when it starts and writes the RAM back when the run ends, in both
+batch modes. Unlike a ROM, a missing or malformed RAM save file is not fatal —
+the RAM just starts blank and a note is printed. The path is baked in (there is
+no override option), so put the file where you run the program. See
+[Persistent RAM](#persistent-ram) for the file format and details.
+
 Generation never modifies the design, and works whether or not it has been
 saved. Registered (`.R`) parts, independent per-output clocks, and RAM/ROM
-devices are all supported. Two things are refused with a message naming the
-instance, because they run only on the debug simulator for now: a design
-containing a **transmission gate or relay** (the bidirectional switch elements,
-see [Built-in components](#11-built-in-components)), and a **RAM with a save
-file** (persistent RAM — remove the save file to generate, or run it on the
-debug simulator).
+devices — including persistent RAM — are all supported. One thing is refused,
+with a message naming the instance, because it runs only on the debug simulator
+for now: a design containing a **transmission gate or relay** (the bidirectional
+switch elements, see [Built-in components](#11-built-in-components)).
 
 **Hierarchical designs** generate too: like Run and the test-vector panel,
 generation **flattens** the design first (see
