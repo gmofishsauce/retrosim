@@ -1,5 +1,33 @@
 # Release Notes
 
+## 0.3.1 — 2026-07-09
+
+Changes since 0.2.1. Format follows [Keep a Changelog](https://keepachangelog.com/).
+
+### Added
+
+- **Transmission gates & relays** (FR-071g/FR-071h/FR-083a): two bidirectional
+  switch built-ins with no fixed input/output side — a transmission gate
+  (terminals A/B, active-high EN) and an SPDT changeover relay (logic-level
+  COIL, contacts NO/COM/NC). A closed contact drives nothing; it merges its
+  terminal nets for that step (per-step union-find), preserving drive strength
+  and bus-conflict detection. Debug simulator only for now; Generate C… refuses
+  a switch-bearing design with a clear message.
+- **Off-sheet connector UI** (FR-101/FR-101b): the properties panel now sets a
+  1-wide port's target file and label, and double-click or **Follow off-sheet
+  connector** navigates there (joining the back-stack). Targets are a **bare
+  filename in the same folder** as the referring design — peer sheets of one
+  circuit live in one folder; a path separator is rejected.
+- **Persistent RAM save files** (FR-114g): a RAM device may back its contents
+  with a per-instance `.bin`/`.hex` save file — written on Stop, optionally
+  loaded at start-up — to retain RAM across runs or seed fixed initial contents.
+  Undefined cells save as 0; a missing/malformed load is non-fatal. Interactive
+  Run/Stop only (test-vector runs never persist).
+- **Persistent RAM in the fast C generator** (FR-117c): Generate C… now supports
+  save-file RAMs too — the path and load-on-start flag are baked into the
+  program, which loads the file at start-up and writes the RAM back on exit in
+  both batch modes. A missing/malformed file is non-fatal (starts blank).
+
 ## 0.2.1 — 2026-07-06
 
 Changes since 0.1.1. Format follows [Keep a Changelog](https://keepachangelog.com/).
