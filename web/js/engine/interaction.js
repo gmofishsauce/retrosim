@@ -73,6 +73,7 @@ import {
 import {
   chooseGroupDialog,
   chooseBitDialog,
+  chooseBusAlignDialog,
   promptWidthDialog,
   promptPortWidthDialog,
   promptBitNamesDialog,
@@ -140,15 +141,6 @@ export function planBusEndpoint(design, target, width) {
     return { spec, snap, groups, refdes: target.refdes };
   }
   return { spec: target, snap: null, groups: [] };
-}
-
-// showToast surfaces a brief non-fatal message (e.g., a rejected connection).
-function showToast(msg) {
-  const el = document.createElement("div");
-  el.className = "toast";
-  el.textContent = msg;
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2000);
 }
 
 // ADD_TYPE is the sentinel "type" armed by the ADD palette tile (§6.14): instead
@@ -833,6 +825,24 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
   // disambiguation dialog (FR-041b); the bus is still created with that endpoint
   // unconnected if the user cancels. Async because the dialog is awaited.
   async function commitBus(srcTarget, dstTarget, width) {
+    // An unequal-width bus↔bus join (FR-039b): the join endpoint is a branch/vertex
+    // onto an existing bus whose width differs from this bus's. Prompt for the bit
+    // alignment offset (which wide bit maps to the narrower bus's bit 0); Cancel
+    // aborts the whole commit. Equal-width joins need no prompt (FR-034c).
+    const joinEnd = [srcTarget, dstTarget].find(
+      (s) =>
+        (s.kind === "branch" || s.kind === "vertex") &&
+        s.busWidth != null &&
+        s.busWidth !== width,
+    );
+    let offset = null;
+    if (joinEnd) {
+      offset = await chooseBusAlignDialog(
+        Math.max(width, joinEnd.busWidth),
+        Math.min(width, joinEnd.busWidth),
+      );
+      if (offset == null) return; // cancelled
+    }
     const a = planBusEndpoint(store.design, srcTarget, width);
     const b = planBusEndpoint(store.design, dstTarget, width);
     const specs = { a: a.spec, b: b.spec };
@@ -855,7 +865,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       }
     }
     store.dispatch(
-      addBusCmd(specs.a, specs.b, width, snaps, prunedLegBends([specs.a, ...waypointSpecs(), specs.b])),
+      addBusCmd(specs.a, specs.b, width, snaps, prunedLegBends([specs.a, ...waypointSpecs(), specs.b]), offset),
     );
   }
 
@@ -1132,22 +1142,8 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
         wireWaypoints.push({ x: target.x, y: target.y });
         return;
       }
-      // Reject joining two buses of unequal width (FR-039a) — whether the target
-      // is a branch onto another bus or a join onto a dangling bus end (FR-034c).
-      const joinsBus = (s) => s.kind === "branch" || s.kind === "vertex";
-      if (
-        joinsBus(wireSource) &&
-        joinsBus(target) &&
-        wireSource.busWidth != null &&
-        target.busWidth != null &&
-        wireSource.busWidth !== target.busWidth
-      ) {
-        showToast(
-          `cannot join buses of width ${wireSource.busWidth} and ${target.busWidth}`,
-        );
-        setTool("select");
-        return;
-      }
+      // An unequal-width bus↔bus join is aligned by a user-chosen offset inside
+      // commitBus (FR-039b), no longer rejected (FR-039a).
       const finalWidth = wireSource.busWidth ?? target.busWidth ?? DEFAULT_BUS_WIDTH;
       commitBus(wireSource, target, finalWidth);
       setTool("select"); // one-shot (FR-040)

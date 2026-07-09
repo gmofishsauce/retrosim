@@ -100,24 +100,30 @@ export function buildNets(design, onWarn = (msg) => console.warn(msg)) {
     }
   }
 
-  // 3 & 4. Junctions on buses: bit==null is a full bus↔bus join (lanes aligned by
-  //    index, FR-039a); bit set is a breakout tap binding wires to one bus lane
-  //    (FR-043a).
+  // 3 & 4. Junctions on buses: bit==null is a full bus↔bus join; bit set is a
+  //    breakout tap binding wires to one bus lane (FR-043a). An equal-width join
+  //    aligns lanes by index; an unequal-width join aligns the narrower bus onto
+  //    the wider starting at the junction's alignment offset k (FR-039b): narrow
+  //    bit i ↔ wide bit k+i. An out-of-range offset (only reachable in a
+  //    hand-edited file) is warned and skipped, never silently minimized (§6.6).
   for (const v of design.vertices) {
     if (v.kind !== "junction") continue;
     const buses = busesByVertex.get(v.id) ?? [];
     if (v.bit == null) {
       for (let k = 1; k < buses.length; k++) {
-        if (buses[0].width !== buses[k].width) {
+        const [wide, narrow] =
+          buses[0].width >= buses[k].width ? [buses[0], buses[k]] : [buses[k], buses[0]];
+        const offset = wide.width === narrow.width ? 0 : v.offset ?? 0;
+        if (offset < 0 || offset + narrow.width > wide.width) {
           onWarn(
-            `buses ${buses[0].id} (width ${buses[0].width}) and ${buses[k].id} ` +
-              `(width ${buses[k].width}) are joined at ${v.id} with unequal ` +
-              `widths; joining the overlapping lanes only`,
+            `bus join at ${v.id}: alignment offset ${offset} does not fit ` +
+              `width-${narrow.width} bus ${narrow.id} onto width-${wide.width} ` +
+              `bus ${wide.id}; skipping the join`,
           );
+          continue;
         }
-        const w = Math.min(buses[0].width, buses[k].width);
-        for (let i = 0; i < w; i++) {
-          uf.union(busLane(buses[0].id, i), busLane(buses[k].id, i));
+        for (let i = 0; i < narrow.width; i++) {
+          uf.union(busLane(narrow.id, i), busLane(wide.id, offset + i));
         }
       }
     } else {

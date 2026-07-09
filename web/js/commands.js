@@ -29,6 +29,7 @@ import {
   rigidWiring,
   typeIdentity,
   joinFreeEnd,
+  promoteBusJoin,
 } from "./model/design.js";
 import { addSubDesignInstance } from "./model/subdesign.js";
 import { pasteFragment } from "./model/clipboard.js";
@@ -640,7 +641,9 @@ export function deleteBendCmd(wireId, bendIndex) {
 // into this command keeps the whole drop gesture a single undo step; the snapshot
 // revert already covers the added groupConnection and adopted bit names. bends
 // carries the proposed route's corners as initial bend points (FR-027c/FR-039).
-export function addBusCmd(specA, specB, width, snaps = [], bends = []) {
+// offset (FR-039b) is the bit-alignment for an unequal-width bus↔bus join (the
+// wider bus's bit that maps to the narrower's bit 0); null for equal-width joins.
+export function addBusCmd(specA, specB, width, snaps = [], bends = [], offset = null) {
   return snapshotCommand("Add bus", (design) => {
     const a = resolveSpec(design, specA);
     const b = resolveSpec(design, specB);
@@ -650,8 +653,20 @@ export function addBusCmd(specA, specB, width, snaps = [], bends = []) {
       const vid = s.end === "a" ? bus.path[0].v : bus.path[last].v;
       snapBusGroup(design, bus.id, vid, s.refdes, s.group);
     }
-    // Completing on a dangling end joins the two buses into one (FR-034c).
-    for (const s of [a, b]) if (s.kind === "vertex") joinFreeEnd(design, s.id);
+    // Completing on a dangling end / branch resolves the join. Two buses of equal
+    // width meeting at the vertex merge into one (FR-034c); of unequal width they
+    // stay distinct, recording the alignment offset on a junction (FR-039b).
+    for (const s of [a, b]) {
+      if (s.kind !== "vertex") continue;
+      const meeting = design.buses.filter((bb) =>
+        bb.path.some((p) => p.t === "node" && p.v === s.id),
+      );
+      if (meeting.length === 2 && meeting[0].width !== meeting[1].width) {
+        promoteBusJoin(design, s.id, offset ?? 0);
+      } else {
+        joinFreeEnd(design, s.id);
+      }
+    }
   });
 }
 

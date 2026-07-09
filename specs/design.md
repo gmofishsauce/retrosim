@@ -279,7 +279,15 @@ reworked.
 - **FR-038** — Right-click a bus to set its width.
 - **FR-039** — Bus drawing/bending/branching follow the wire interaction model
   (FR-026…FR-034).
-- **FR-039a** — Joining two buses of **unequal width** is prevented at connect time.
+- **FR-039a** — Joining two buses aligns bits by position: equal width → bit-for-bit;
+  **unequal width** → only via the FR-039b offset alignment, rejected only when no
+  alignment fits. (Reworked 2026-07-09; supersedes the blanket prohibition.)
+- **FR-039b** — An unequal-width bus join (width *m* onto width *n*, *m* ≠ *n*; end-join
+  FR-034c or T-junction FR-039/FR-034b) prompts for the alignment offset *k* — the
+  wider bus's bit that maps to the narrower's bit 0 — with narrow bit *i* ↔ wide bit
+  *k+i*. Only *k* ∈ 0…(*n*−*m*) are offered. The join is a **junction** carrying *k*
+  (`vertex.offset`), not a seamless merge (unequal widths can't be one conductor).
+  (Added 2026-07-09.)
 - **FR-040** — After placing a bus, return to select mode.
 
 **Bus-to-Component Snap Connection**
@@ -446,9 +454,11 @@ this document adopts. **None block implementation** except where noted in §12.
   is *width* independent signals, not one net. **Resolution:** the netlist treats
   each conductor as a **bit-lane** — a wire is 1 lane, a width-*w* bus is lanes
   `(busId, 0…w-1)` — and runs ordinary union-find over lanes (§6.6). A full
-  bus↔bus junction unions lanes pairwise by index (equal width enforced at connect
-  time, FR-039a); a **breakout** is a wire whose endpoint is a junction vertex on a
-  bus carrying a **bit index**, unioning that one lane (FR-043a). Buses may carry
+  bus↔bus junction unions lanes pairwise: equal-width buses align by index; an
+  unequal-width join aligns the narrower bus's lanes to the wider's starting at the
+  junction's alignment offset `k` (FR-039b), narrow bit *i* ↔ wide bit *k+i*; a
+  **breakout** is a wire whose endpoint is a junction vertex on a bus carrying a
+  **bit index**, unioning that one lane (FR-043a). Buses may carry
   per-bit names adopted from the snapped group (FR-037b); the saved `nets` carry
   per-bit **provenance** `{bus,bit,name?}` (FR-060a).
 
@@ -829,7 +839,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     same-pin destination click rather than erroring), `insertBend`, `moveBend`,
     `deleteBend`, `branchWire` (creates or reuses a `junction` vertex; if the
     branch point lands on an interior `bend` path-point, that point flips to a
-    `node` referencing the new vertex), `breakoutBit` (FR-043a: create a
+    `node` referencing the new vertex; an unequal-width bus↔bus T-junction records
+    the FR-039b alignment `offset` on that vertex), `breakoutBit` (FR-043a: create a
     `junction` vertex on a bus with `bit` set to the chosen lane, and start a
     single-bit wire from it), `danglingEndAt` (FR-034c: find a free, non-snapped
     endpoint vertex within tol of a point that is the end of exactly one conductor,
@@ -837,7 +848,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     `joinFreeEnd` (FR-034c: splice the two distinct same-type/equal-width
     conductors meeting at a free vertex into one, the shared point becoming a bend,
     pruning it if collinear per FR-033c; called by `addWire`/`addBus` commands for a
-    `vertex` endpoint), `deleteWire` (decrements junction-vertex ref counts,
+    `vertex` endpoint. An unequal-width bus end-join does **not** splice — it keeps
+    both buses and records an FR-039b `offset` junction at the shared vertex), `deleteWire` (decrements junction-vertex ref counts,
     demoting to `free`/deleting per §3.3 G2; prunes all-`free` wires per FR-030),
     `deleteSegment` (FR-033d: cut a conductor at one path edge into two parts,
     promoting a cut `bend` to a `free`-vertex endpoint and keeping a cut `node` as
@@ -865,13 +877,16 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   for each bus B, each groupConnection gc on B:
       for i, pinName in enumerate(gc.bitMap):   attach pin gc.instance.pinName → lane(B,i)
 
-  # 3. bus↔bus full junction (no bit index): align lanes by index
+  # 3. bus↔bus full junction (no bit index): align lanes by index, or — for an
+  #    unequal-width join (FR-039b) — by the junction's alignment offset k.
   for each junction vertex V shared by buses B1,B2 with V.bit == null:
-      # FR-039a guarantees equal widths at edit time, but a loaded file may
-      # violate it (e.g. hand-edited): warn — never silently minimize — and
-      # union the overlapping lanes. (Supersedes the bare assert.)
-      if width(B1) != width(B2): warn(width mismatch at V)
-      for i in 0..min(w1,w2)-1:                 union(lane(B1,i), lane(B2,i))
+      (wide, narrow) = the wider / narrower of (B1, B2)   # equal → offset 0
+      k = V.offset ?? 0                        # wide bit that maps to narrow bit 0
+      if k < 0 or k + width(narrow) > width(wide):
+          # invalid alignment (only possible in a hand-edited file): warn —
+          # never silently minimize — and skip the join.
+          warn(invalid bus-join alignment at V); continue
+      for i in 0..width(narrow)-1:             union(lane(narrow,i), lane(wide,k+i))
 
   # 4. breakout (FR-043a): wire taps one bus bit via junction vertex with V.bit set
   for each junction vertex V with V.bit == b shared by bus B and wire W:

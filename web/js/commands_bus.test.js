@@ -108,6 +108,57 @@ test("snapBusGroupCmd adds a group connection (+bit names); undo/redo restore", 
   assert.equal(store.design.buses[0].groupConnections.length, 1);
 });
 
+test("addBusCmd T-joins an unequal-width bus with an alignment offset (FR-039b)", () => {
+  const store = newStore();
+  store.dispatch(placeComponent(type74138Grp(), 40, 20, 0)); // U1 (3-bit group A)
+  store.dispatch(addBusCmd(free(0, 0), free(20, 0), 4)); // wide bus, width 4
+  const wideId = store.design.buses[0].id;
+
+  // Branch a width-3 bus onto the wide bus (segment 0), its far end snapped to
+  // U1.A, aligned so narrow bit 0 ↦ wide bit 1 (offset 1).
+  store.dispatch(
+    addBusCmd(
+      { kind: "branch", wireId: wideId, segIndex: 0, x: 8, y: 0 },
+      free(8, 10),
+      3,
+      [{ end: "b", refdes: "U1", group: "A" }],
+      [],
+      1,
+    ),
+  );
+  const narrow = store.design.buses[1];
+  assert.equal(narrow.width, 3);
+  const j = store.design.vertices.find((v) => v.kind === "junction");
+  assert.equal(j.offset, 1); // recorded on the junction
+
+  const nets = buildNets(store.design);
+  const byPin = Object.fromEntries(
+    nets.filter((n) => n.pins.length).map((n) => [n.pins[0], n]),
+  );
+  const prov = (pin) =>
+    byPin[pin].provenance.map((p) => `${p.bus}:${p.bit}`).sort();
+  assert.deepEqual(prov("U1.A0"), [`${narrow.id}:0`, `${wideId}:1`].sort());
+  assert.deepEqual(prov("U1.A2"), [`${narrow.id}:2`, `${wideId}:3`].sort());
+
+  store.undo(); // snapshot restore removes the narrow bus and its junction
+  assert.equal(store.design.buses.length, 1);
+  assert.equal(store.design.vertices.some((v) => v.kind === "junction"), false);
+});
+
+test("addBusCmd end-joins unequal-width buses as an offset junction, not a merge (FR-039b)", () => {
+  const store = newStore();
+  store.dispatch(addBusCmd(free(0, 0), free(10, 0), 4)); // wide, width 4
+  const wide = store.design.buses[0];
+  const endV = wide.path[wide.path.length - 1].v; // dangling free end
+
+  // A width-2 bus completed on the wide bus's dangling end, offset 2.
+  store.dispatch(addBusCmd(free(10, 8), { kind: "vertex", id: endV }, 2, [], [], 2));
+  assert.equal(store.design.buses.length, 2); // distinct conductors, not merged
+  const j = store.design.vertices.find((v) => v.id === endV);
+  assert.equal(j.kind, "junction"); // the free end was promoted
+  assert.equal(j.offset, 2);
+});
+
 test("breakoutBitCmd taps a bus bit onto a wire; undo restores connectivity", () => {
   const store = newStore();
   store.dispatch(placeComponent(type74138Grp(), 40, 20, 0)); // U1

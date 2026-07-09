@@ -114,6 +114,54 @@ export function chooseBitDialog(bus) {
   });
 }
 
+// chooseBusAlignDialog asks how to align an unequal-width bus join (FR-039b):
+// which bit of the wider (width `wide`) bus lines up with bit 0 of the narrower
+// (width `narrow`) bus. Offers each start k in 0..(wide-narrow). Resolves to the
+// chosen offset k, or null on cancel.
+export function chooseBusAlignDialog(wide, narrow) {
+  return new Promise((resolve) => {
+    const overlay = el("div", "dialog-overlay");
+    const box = el("div", "dialog");
+    overlay.appendChild(box);
+
+    box.appendChild(el("div", "dialog-title", "Align bus connection"));
+    box.appendChild(
+      el(
+        "div",
+        "dialog-path",
+        `Connect the width-${narrow} bus to which bits of the width-${wide} bus?`,
+      ),
+    );
+    const listEl = el("ul", "dialog-list");
+    box.appendChild(listEl);
+    for (let k = 0; k <= wide - narrow; k++) {
+      const hi = k + narrow - 1;
+      const label = narrow === 1 ? `bit ${k}` : `bits ${k}–${hi}`;
+      const li = el("li", "dialog-entry", `${label} (bit 0 ↔ wide bit ${k})`);
+      li.addEventListener("click", () => done(k));
+      listEl.appendChild(li);
+    }
+
+    const buttons = el("div", "dialog-buttons");
+    buttons.append(button("Cancel", () => done(null)));
+    box.appendChild(buttons);
+
+    function done(result) {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(null);
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+  });
+}
+
 // promptWidthDialog asks for a bus width (FR-038). Resolves to a positive integer,
 // or null on cancel / invalid input.
 export function promptWidthDialog(current) {

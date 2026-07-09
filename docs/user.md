@@ -406,8 +406,10 @@ Wires are single-bit nets, drawn as thin black lines.
 - **Joining a dangling end:** starting or ending a wire **on an existing dangling
   end** (the small red square left when, say, a component was deleted) joins the
   two wires into one continuous wire — no junction dot appears and the red square
-  goes away. Buses join the same way when their widths match. (Ending a wire on a
-  dangling **bus** end still taps a single bit instead.)
+  goes away. Buses of the **same width** join the same way. Buses of **different
+  widths** can join too, but through a junction that carries a chosen bit
+  alignment (see *Joining buses of different widths* under [Buses](#7-buses)).
+  (Ending a wire on a dangling **bus** end still taps a single bit instead.)
 - **Right-click a wire** for **Delete segment** (just the leg under the cursor) and
   **Delete wire** (the whole conductor).
 - **Moving a junction:** in Select mode, **drag a junction dot** to a new grid
@@ -461,7 +463,16 @@ with a `/N` width annotation.
   - If several groups are in range (e.g. the 574's `D` inputs and `Q` outputs) the
     brace snaps to the group **nearest the cursor**. (Clicking the part body still
     works too: one accepting group connects automatically; several prompt you to
-    choose; none connects nothing.) Joining two buses of unequal width is prevented.
+    choose; none connects nothing.)
+  - **Joining buses of different widths:** you can connect a narrower bus to a
+    wider one — either by ending it on the wider bus's dangling end or by branching
+    it onto the wider bus (a T-junction). Because the widths differ the two buses
+    stay separate conductors joined at a junction dot (they don't merge into one).
+    A small dialog asks **which bit of the wider bus lines up with bit 0 of the
+    narrower bus**; from there the narrower bus's bits map to a contiguous run of
+    the wider bus's bits (bit 0 → the chosen bit, bit 1 → the next, and so on). Only
+    alignments that fit are offered, and the wider bus's remaining bits are left
+    untouched at that point. Equal-width joins need no dialog and line up bit-for-bit.
   - A **connected** bus end is always drawn with its curly brace; a **red square**
     marks an end that is still **dangling** (unconnected). The brace tracks the part
     if you move or rotate it.

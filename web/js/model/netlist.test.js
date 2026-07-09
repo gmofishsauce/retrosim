@@ -255,6 +255,36 @@ test("a bus↔bus full junction aligns lanes by index (FR-039a)", () => {
   assert.deepEqual(sorted(byBit0.members), sorted([b1.id, b2.id]));
 });
 
+test("an unequal-width bus join aligns by the offset k: narrow i ↔ wide k+i (FR-039b)", () => {
+  const d = createDesign("t");
+  addInstance(d, tyA(), 10, 20, 0); // U1 (3-bit group A)
+  // A width-4 wide bus group-snapped to a wider type would need a 4-pin group;
+  // here we only need the lane alignment, so drive pins off the width-2 narrow bus.
+  const wide = addBus(d, { kind: "free", x: 0, y: 0 }, { kind: "free", x: 8, y: 0 }, 4);
+  const j = branchWire(d, wide, 0, 4, 0); // T-junction on the wide bus
+  j.offset = 2; // narrow bit 0 ↦ wide bit 2, narrow bit 1 ↦ wide bit 3
+  const narrow = addBus(d, { kind: "vertex", id: j.id }, { kind: "free", x: 4, y: 8 }, 2);
+  narrow.groupConnections.push({
+    vertex: narrow.path[1].v,
+    instance: "U1",
+    group: "A",
+    bitMap: ["A0", "A1"],
+  });
+
+  const nets = buildNets(d);
+  // wide lanes 2,3 join narrow 0,1 (which carry U1.A0/A1); wide lanes 0,1 have no
+  // pins, so only the two pin-bearing nets are returned (§6.6).
+  const byPin = Object.fromEntries(nets.map((n) => [n.pins[0], n]));
+  assert.deepEqual(sorted(byPin["U1.A0"].members), sorted([wide.id, narrow.id]));
+  assert.deepEqual(sorted(byPin["U1.A1"].members), sorted([wide.id, narrow.id]));
+  // Provenance shows both bus lanes on the shared net (narrow bit 0 + wide bit 2).
+  assert.deepEqual(
+    sorted(byPin["U1.A0"].provenance.map((p) => `${p.bus}:${p.bit}`)),
+    sorted([`${narrow.id}:0`, `${wide.id}:2`]),
+  );
+  assert.equal(nets.length, 2);
+});
+
 test("same-label ports join their nets across the sheet (FR-094a)", () => {
   const d = createDesign("t");
   addInstance(d, ty(), 10, 20, 0); // U1

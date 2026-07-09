@@ -813,12 +813,28 @@ function prunePath(design, conductor) {
   conductor.path = out;
 }
 
+// promoteBusJoin records an unequal-width bus↔bus join at a shared vertex
+// (FR-039b): the vertex becomes a `junction` carrying the bit-alignment `offset`
+// (the wider bus's bit that maps to the narrower's bit 0), so the netlist aligns
+// narrow bit i ↔ wide bit offset+i. The two buses stay distinct conductors —
+// unlike joinFreeEnd (FR-034c), unequal widths cannot merge into one. A free
+// endpoint (an end-join) is promoted in place; a `junction` (a T-branch already
+// created by branchWire) just gets its offset set. Both buses already reference
+// this vertex, so no path edits are needed.
+export function promoteBusJoin(design, vertexId, offset) {
+  const v = getVertex(design, vertexId);
+  if (!v) throw new Error(`no such vertex ${vertexId}`);
+  v.kind = "junction";
+  v.offset = offset;
+}
+
 // joinFreeEnd merges the two conductors meeting at a dangling free vertex into one
 // continuous conductor (FR-034c). No-op unless vertexId is a free, non-group-
 // snapped vertex that is the endpoint of exactly two distinct conductors of the
-// same type (and, for buses, equal width, FR-039a). The shared point becomes an
-// interior bend of the joined conductor, pruned if collinear (FR-033c); the now-
-// unused vertex is removed, so no junction and no dangling mark remain.
+// same type (and, for buses, equal width; an unequal-width bus join is a junction
+// via promoteBusJoin, FR-039b). The shared point becomes an interior bend of the
+// joined conductor, pruned if collinear (FR-033c); the now-unused vertex is
+// removed, so no junction and no dangling mark remain.
 export function joinFreeEnd(design, vertexId) {
   const v = getVertex(design, vertexId);
   if (!v || v.kind !== "free" || groupSnappedVertices(design).has(vertexId)) return;

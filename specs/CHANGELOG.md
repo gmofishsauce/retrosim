@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-09 — Unequal-width bus joins with a bit-alignment offset (FR-039b)
+What: unequal-width bus joins are no longer prohibited (was fable-review W8 / FR-039a). Joining a width-*m* bus to a width-*n* bus (*m* ≠ *n*), whether an end-join (FR-034c) or a T-junction (FR-039/FR-034b), prompts for an alignment offset *k* (the wider bus's bit that maps to the narrower's bit 0); narrow bit *i* ↔ wide bit *k+i*, *k* ∈ 0…(*n*−*m*). New **FR-039b**. The join is a **junction** carrying *k* on `vertex.offset` (not a seamless merge — unequal widths can't be one conductor); the netlist aligns lanes by *k* and warns only on an invalid (hand-edited) offset, superseding the earlier blanket unequal-width warning.
+Why: user confirmed unequal-width joins are a real need (e.g. tapping a sub-range of a wider bus); the prior blanket prohibition was wrong.
+Touches: FR-039a (reworked), FR-039b (new), FR-034c (width-mismatch clause), FR-060a (save format); design §3.1 (FR-039a/b bullets), §3.2 A7, §6.6 netlist step 3, §6.9 ops (`branchWire`/`joinFreeEnd`). Code follows.
+
 ## 2026-07-09 — Persistent RAM in the fast C generator (FR-117c)
 What: the fast C code generator now supports RAM save files (FR-114g), withdrawing the 2026-07-08 refusal. New **FR-117c** (the write-direction complement of FR-117b's runtime-read ROM): the generator **bakes** each RAM's save-file path and load-on-start flag into `gen_mems` (a `gen_`/runtime interface change — pre-M7 programs regenerate once); the runtime **loads** a load-on-start RAM at start-up like a ROM but **non-fatally** (missing/malformed → all-U + stderr, per FR-114g) and **writes** each save-file RAM's full contents back (little-endian, U→0, format by extension) on normal termination of **both** batch modes (vector FR-117 and free-run FR-117a), never after the hidden-clock startup refusal. The path is **baked**, not a `--ram` command-line override (contrast FR-117b's `--rom`). Edits: FR-114g / FR-116 (refusal withdrawn), FR-117b (RAM-with-save-file note). New milestone **M7**. Specs only in this step; code follows.
 Why: user wants the fast engine to retain and seed RAM across runs like the slow engine already does.
