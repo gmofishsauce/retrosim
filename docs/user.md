@@ -823,12 +823,13 @@ The table's columns come from your design automatically:
 - one **input** column per [input switch](#11-built-in-components), holding `0` or `1`;
 - one **input** column per **clock generator**, holding `0`, `1`, or `C`
   (sequential designs — see below);
-- your design's [ports](#12-sub-designs-and-ports) become **input or output
-  columns** according to their direction — an input port's cell drives its net,
-  an output port's cell is checked like an indicator; a multi-bit port
-  contributes one column per bit. A **bidirectional** port can't be a single
-  input-or-output column and is skipped with a warning; set its direction
-  override in the properties panel to include it.
+- your design's [ports](#12-sub-designs-and-ports) become columns according to
+  their direction — an **input** port's cell drives its net (`0`/`1`), an
+  **output** port's cell is checked like an indicator (`H`/`L`/`X`); a multi-bit
+  port contributes one column per bit. A **bidirectional** port — a three-state
+  bus, e.g. a net driven through `74244`-style buffers — becomes an **IO** column
+  instead (see *Bidirectional bus columns* below). To bind it as a plain input or
+  output column, set its direction override in the properties panel.
 - one **output** column per [indicator](#11-built-in-components) — a single
   indicator is one column, an 8-wide indicator becomes eight columns `D0`…`D7` —
   holding the value you expect: **H** (logic 1), **L** (logic 0), or **X**
@@ -883,6 +884,33 @@ Build the table and use the buttons:
   your switches, clocks, ports, and indicators by their internal designators, so
   renaming a label never breaks a saved file; if the design's columns have changed
   since the file was written, the mismatch is reported as a warning when you load.
+
+#### Bidirectional bus columns
+
+A **bidirectional** (three-state) port — a bus that can be driven from more than
+one side, such as a net fed through tristate buffers — becomes an **IO** column,
+shown in its own **IO** group. Each IO cell chooses, per row, whether the vector
+runner **drives** the bus or **observes** it:
+
+- **`0` / `1`** — *drive* the bus to that value on this row (like an input);
+- **`H` / `L`** — *release* the bus and *check* that it reads 1 / 0 (like an output);
+- **`X`** (the default) — release the bus and don't check it.
+
+So one bus column can be **driven on some rows and checked on others** — for
+example, drive a value onto a data bus on one row, then read the design's response
+on a later row (in a clocked design, state carries between rows). On **Run**, only
+the release cells (`H`/`L`) are scored green/red; drive cells are stimulus and are
+never marked. **Capture** fills the release cells from the settled bus and leaves
+your drive cells as you wrote them.
+
+If you drive a bus on a row where the design's *own* logic is also driving it, the
+two collide and the net reads **U** (a bus conflict) — use the design's real
+control/enable inputs (other columns) to switch the internal driver off on the
+rows you drive, just as real hardware relies on an output-enable.
+
+Bidirectional columns run in the interactive **Test Vectors** panel only; the
+[generated C simulator](#generating-a-standalone-c-simulator) does not yet emit
+them (it warns and omits any IO columns).
 
 Running test vectors **does not change your design** — it neither marks it modified
 nor disturbs an in-progress edit — and is separate from the **Run/Stop** button.

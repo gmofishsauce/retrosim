@@ -1390,11 +1390,11 @@ export function testVectorsPanel({ store, dataDir }) {
     const box = el("div", "vec-body");
     host.appendChild(box);
 
-    // Nothing to drive or observe: no switches, no indicators, and no directional
-    // ports (a bidir-only design leaves warnings but no bindable columns).
-    if (columns.inputs.length === 0 && columns.outputs.length === 0) {
+    // Nothing to drive or observe: no switches, no indicators, and no ports of
+    // any direction (in/out or a bidir three-state bus, FR-115i).
+    if (columns.inputs.length === 0 && columns.outputs.length === 0 && columns.io.length === 0) {
       const base =
-        "This design has no input switches, indicators, or directional ports to bind. Place input switches (inputs) and state indicators (outputs), or wire ports so their direction is definite (or override a bidir port), then reopen Test Vectors.";
+        "This design has no input switches, indicators, or ports to bind. Place input switches (inputs) and state indicators (outputs), or wire ports (a bidir port binds as a three-state bus column), then reopen Test Vectors.";
       box.appendChild(
         el(
           "div",
@@ -1437,6 +1437,12 @@ export function testVectorsPanel({ store, dataDir }) {
       th.colSpan = columns.outputs.length;
       grpRow.appendChild(th);
     }
+    // IO group: bidirectional three-state bus columns (FR-115i).
+    if (columns.io.length) {
+      const th = el("th", "vec-group vec-group-io", "IO");
+      th.colSpan = columns.io.length;
+      grpRow.appendChild(th);
+    }
     grpRow.appendChild(el("th", "vec-corner"));
     thead.appendChild(grpRow);
     // Column labels.
@@ -1445,6 +1451,9 @@ export function testVectorsPanel({ store, dataDir }) {
     for (const c of columns.inputs) labRow.appendChild(el("th", "vec-collabel", c.label));
     for (const c of columns.outputs) {
       labRow.appendChild(el("th", "vec-collabel vec-out", c.label));
+    }
+    for (const c of columns.io) {
+      labRow.appendChild(el("th", "vec-collabel vec-io", c.label));
     }
     labRow.appendChild(el("th", "vec-corner"));
     thead.appendChild(labRow);
@@ -1500,6 +1509,32 @@ export function testVectorsPanel({ store, dataDir }) {
           }
           tr.appendChild(td);
         });
+        // Bidirectional (io) cells (FR-115i): 0/1 drive the bus, H/L/X release it
+        // (H/L assert). Cells are tinted by role and only release cells are scored.
+        const ioRole = (v) => (v === "0" || v === "1" ? "io-drive" : v === "X" ? "io-inert" : "io-expect");
+        columns.io.forEach((col, ci) => {
+          const td = el("td", "vec-cell vec-io");
+          td.classList.add(ioRole(row.io[ci]));
+          const sel = mkSelect(["0", "1", "H", "L", "X"], row.io[ci]);
+          sel.addEventListener("change", () => {
+            row.io[ci] = sel.value;
+            td.classList.remove("io-drive", "io-expect", "io-inert");
+            td.classList.add(ioRole(sel.value));
+            clearResults();
+          });
+          td.appendChild(sel);
+          const status = el("span", "vec-status");
+          td.appendChild(status);
+          if (runResults && runResults[ri]) {
+            const cell = runResults[ri].io[ci];
+            if (cell.drive === undefined) {
+              // release cell — scored like an output
+              td.classList.add(cell.pass ? "pass" : "fail");
+              if (!cell.pass) status.textContent = `got ${cell.actual}`;
+            }
+          }
+          tr.appendChild(td);
+        });
         const delTd = el("td", "vec-cell");
         const del = button("✕", () => {
           rows.splice(ri, 1);
@@ -1525,7 +1560,7 @@ export function testVectorsPanel({ store, dataDir }) {
     // --- actions ---
     async function onRun() {
       errEl.hidden = true;
-      const doc = { inputs: columns.inputs, outputs: columns.outputs, rows };
+      const doc = { inputs: columns.inputs, outputs: columns.outputs, io: columns.io, rows };
       const check = validateVectors(doc);
       if (!check.ok) return showError(check.errors[0]);
       try {
@@ -1552,9 +1587,13 @@ export function testVectorsPanel({ store, dataDir }) {
         const romContent = await loadRomContents(flat);
         // Whole-table capture: an ordered pass for a sequential design (FR-115e),
         // independent rows for a combinational one.
-        const outs = captureVectors(flat, columns, rows.map((r) => r.in), { romContent });
+        const cap = captureVectors(flat, columns, rows.map((r) => r.in), {
+          romContent,
+          rowsIo: rows.map((r) => r.io ?? []),
+        });
         rows.forEach((row, i) => {
-          row.out = outs[i];
+          row.out = cap.out[i];
+          row.io = cap.io[i];
         });
         clearResults();
         renderBody();
@@ -1575,7 +1614,7 @@ export function testVectorsPanel({ store, dataDir }) {
       });
       if (!res) return;
       try {
-        await saveVectorFile(res.path, serializeVectors({ inputs: columns.inputs, outputs: columns.outputs, rows }));
+        await saveVectorFile(res.path, serializeVectors({ inputs: columns.inputs, outputs: columns.outputs, io: columns.io, rows }));
         showNote(`Saved ${baseName(res.path)}`);
       } catch (e) {
         showError(`cannot save: ${e.message}`);

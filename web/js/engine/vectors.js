@@ -10,8 +10,9 @@
 // Shapes used throughout:
 //   column  { refdes, pin, label, kind? }  — one bound connection point; kind
 //           "clock" marks a clock column (live-only, never persisted)
-//   doc     { inputs: column[], outputs: column[], rows: row[] }
-//   row     { in: ("0"|"1"|"C")[], out: ("H"|"L"|"X")[] }  aligned to inputs/outputs
+//   doc     { inputs: column[], outputs: column[], io: column[], rows: row[] }
+//   row     { in: ("0"|"1"|"C")[], io: ("0"|"1"|"H"|"L"|"X")[], out: ("H"|"L"|"X")[] }
+//           aligned to inputs / io / outputs (io is the bidirectional group, FR-115i)
 // The `.tv` file (§7.7) is a doc plus a `formatVersion`.
 
 import { buildSimulation, SETTLE_BOUND } from "./sim.js";
@@ -20,15 +21,23 @@ import { effectivePortDir } from "../model/subdesign.js";
 
 // FORMAT_VERSION is the `.tv` file format this client writes and understands
 // (§7.7); mirror persist.js — bump it and add a MIGRATIONS step on any change.
-// v2 marks the sequential "C" input symbol (FR-115e); the shape is unchanged.
-export const FORMAT_VERSION = 2;
+// v2 marks the sequential "C" input symbol (FR-115e); v3 adds the bidirectional
+// (io) column array and per-row io cells (FR-115i).
+export const FORMAT_VERSION = 3;
 
 // MIGRATIONS upgrades a parsed `.tv` object across a single format version:
 // MIGRATIONS[n] takes a version-n object to version-(n+1) (mirrors
 // model/persist.js §7.4). v1→v2 is the identity: the shape did not change, the
-// bump only marks that files may now contain "C" input cells (FR-115e).
+// bump only marks that files may now contain "C" input cells (FR-115e). v2→v3
+// seeds the io column array and per-row io cells empty (FR-115i) — a pre-v3 file
+// has no bidirectional columns, so this is the identity on its data.
 const MIGRATIONS = {
   1: (o) => o,
+  2: (o) => ({
+    ...o,
+    io: o.io ?? [],
+    rows: (o.rows ?? []).map((r) => ({ ...r, io: r.io ?? [] })),
+  }),
 };
 
 // migrate normalizes a parsed `.tv` object to the current format version. A file
@@ -76,11 +85,13 @@ function refdesCompare(a, b) {
 // (FR-115f): an `in` port becomes an input column, an `out` port an output
 // column, each identified by the port's own (refdes, pin) — "P" for a 1-wide
 // port, "P"i for a portN bit (N columns, one per bit). A bidir port (no
-// override) cannot be a single column and is skipped with a non-fatal warning.
-// Columns are sorted by refdes/pin for a stable table layout.
+// override) becomes a bidirectional `io` column (FR-115i): a per-row drive-or-
+// observe column, one per bit of a portN. Columns are sorted by refdes/pin for
+// a stable table layout, within each of the three groups.
 export function deriveColumns(design) {
   const inputs = [];
   const outputs = [];
+  const io = [];
   const warnings = [];
   for (const c of design.components ?? []) {
     const rt = c.typeData?.renderType;
@@ -100,27 +111,23 @@ export function deriveColumns(design) {
       }
     } else if (rt === "port" || rt === "portN") {
       const dir = effectivePortDir(design, c.refdes);
-      if (dir === "bidir") {
-        warnings.push(
-          `port ${label} (${c.refdes}) is bidirectional; set its direction ` +
-            `override to bind it as a test-vector column`,
-        );
-        continue;
-      }
-      const bucket = dir === "out" ? outputs : inputs;
+      // in → input, out → output, bidir → io (a three-state bus column, FR-115i).
+      const bucket = dir === "out" ? outputs : dir === "bidir" ? io : inputs;
+      const isIo = dir === "bidir";
       if (rt === "portN") {
         const n = (c.typeData.pins ?? []).length;
         for (let i = 0; i < n; i++) {
-          bucket.push({ refdes: c.refdes, pin: `P${i}`, label: `${label}${i}` });
+          bucket.push({ refdes: c.refdes, pin: `P${i}`, label: `${label}${i}`, ...(isIo && { io: true }) });
         }
       } else {
-        bucket.push({ refdes: c.refdes, pin: "P", label });
+        bucket.push({ refdes: c.refdes, pin: "P", label, ...(isIo && { io: true }) });
       }
     }
   }
   inputs.sort(refdesCompare);
   outputs.sort(refdesCompare);
-  return { inputs, outputs, warnings };
+  io.sort(refdesCompare);
+  return { inputs, outputs, io, warnings };
 }
 
 // refuseHiddenClocks throws when a flattened design (FR-102/FR-103, §6.14)
@@ -151,26 +158,47 @@ function captureSymbol(v) {
   return v === V1 ? "H" : v === V0 ? "L" : "X";
 }
 
+// captureIoSymbol captures a bidirectional (io) cell (FR-115i): a drive cell
+// ("0"/"1") is the author's stimulus and is preserved as-is; a release cell
+// ("H"/"L"/"X") is filled from the settled net value (1→H, 0→L, U/Z→X).
+function captureIoSymbol(sym, v) {
+  return sym === "0" || sym === "1" ? sym : captureSymbol(v);
+}
+
+// driveIoCells appends stimulus entries for a row's bidirectional (io) cells
+// (FR-115i): a "0"/"1" cell forces its net to that value; an "H"/"L"/"X" cell
+// releases the net (contributes nothing), so the design drives it alone.
+function driveIoCells(stimulus, io, rowIo = []) {
+  io.forEach((col, j) => {
+    const sym = rowIo[j];
+    if (sym === "0" || sym === "1") {
+      stimulus.push({ refdes: col.refdes, pin: col.pin, value: sym === "1" ? V1 : V0 });
+    }
+  });
+}
+
 // simulateRow runs one independent combinational case: a throwaway clone of the
 // design driven with the row's input switch states, settled to quiescence exactly
 // as the live combinational simulator does (FR-085/FR-115c). Returns the built
 // simulation so the caller can read output pins. Never mutates `design`.
-function simulateRow(design, inputs, rowIn, romContent) {
+function simulateRow(design, inputs, io, row, romContent) {
   const clone = structuredClone(design);
   const byRefdes = new Map(clone.components.map((c) => [c.refdes, c]));
   // A switch input is set via its per-instance state; a port input is driven by
-  // external stimulus on its own net (FR-115f) — no placed component.
+  // external stimulus on its own net (FR-115f) — no placed component. A bidir io
+  // drive cell forces its net too (FR-115i); a release cell adds no stimulus.
   const stimulus = [];
   inputs.forEach((col, j) => {
     const inst = byRefdes.get(col.refdes);
     if (!inst) return;
     const rt = inst.typeData?.renderType;
     if (rt === "port" || rt === "portN") {
-      stimulus.push({ refdes: col.refdes, pin: col.pin, value: rowIn[j] === "1" ? V1 : V0 });
+      stimulus.push({ refdes: col.refdes, pin: col.pin, value: row.in[j] === "1" ? V1 : V0 });
     } else {
-      inst.switchState = rowIn[j] === "1" ? "1" : "0";
+      inst.switchState = row.in[j] === "1" ? "1" : "0";
     }
   });
+  driveIoCells(stimulus, io, row.io);
   const sim = buildSimulation(clone, { romContent, stimulus });
   for (let i = 0; i < SETTLE_BOUND; i++) {
     sim.step();
@@ -200,7 +228,7 @@ function effectiveProp(inst, name) {
 // the design: power-on preamble, then each row in order — apply inputs, settle,
 // pulse the row's C clocks, settle — calling onRow(sim, rowIndex) at each row's
 // sample point. State persists across rows; the live design is never mutated.
-function runSequentialPass(design, inputs, rowsIn, romContent, onRow) {
+function runSequentialPass(design, inputs, io, rows, romContent, onRow) {
   const clone = structuredClone(design);
   const byRefdes = new Map(clone.components.map((c) => [c.refdes, c]));
   const clocks = clone.components.filter((c) => c.typeData?.renderType === "clock");
@@ -242,14 +270,15 @@ function runSequentialPass(design, inputs, rowsIn, romContent, onRow) {
     }
   }
 
-  rowsIn.forEach((rowIn, ri) => {
+  rows.forEach((row, ri) => {
     // Build the row's stimulus: resets released; each clock at its cell's level
-    // (a C cell rests low and is pulsed below); ports per their cell; switches
-    // set on the clone's instances (behaviors read switchState live each step).
+    // (a C cell rests low and is pulsed below); ports per their cell; io drive
+    // cells force their nets (FR-115i); switches set on the clone's instances
+    // (behaviors read switchState live each step).
     const base = resetEntries(Infinity);
     const pulseClocks = new Set(); // refdes of clocks with a C cell this row
     inputs.forEach((col, j) => {
-      const sym = rowIn[j];
+      const sym = row.in[j];
       const inst = byRefdes.get(col.refdes);
       if (!inst) return;
       const rt = inst.typeData?.renderType;
@@ -262,6 +291,7 @@ function runSequentialPass(design, inputs, rowsIn, romContent, onRow) {
         inst.switchState = sym === "1" ? "1" : "0";
       }
     });
+    driveIoCells(base, io, row.io);
     sim.setStimulus(base);
     settleSim(sim);
     if (pulseClocks.size) {
@@ -294,24 +324,48 @@ function scoreOutputs(sim, outputs, rowOut) {
   return { cells, pass: cells.every((c) => c.pass) };
 }
 
+// scoreIo evaluates a row's bidirectional (io) cells (FR-115i): a drive cell
+// ("0"/"1") is stimulus, reported as { drive } and never failed; a release cell
+// ("H"/"L"/"X") is read from its net and scored exactly like an output.
+function scoreIo(sim, io, rowIo = []) {
+  return io.map((col, j) => {
+    const sym = rowIo[j] ?? "X";
+    if (sym === "0" || sym === "1") return { drive: sym };
+    const v = sim.valueOfPin(col.refdes, col.pin);
+    const pass = sym === "X" || (sym === "H" && v === V1) || (sym === "L" && v === V0);
+    return { expected: sym, actual: actualSymbol(v), pass };
+  });
+}
+
+// scoreRow combines output and io scoring for one settled row; the row passes
+// when every output cell and every io release cell passes (io drive cells are
+// stimulus, not assertions). Returns { cells, io, pass }.
+function scoreRow(sim, outputs, io, row) {
+  const { cells } = scoreOutputs(sim, outputs, row.out);
+  const ioCells = scoreIo(sim, io, row.io);
+  const pass =
+    cells.every((c) => c.pass) && ioCells.every((c) => c.drive !== undefined || c.pass);
+  return { cells, io: ioCells, pass };
+}
+
 // runVectors scores a vector set (FR-115d): combinational designs evaluate each
 // row independently (FR-115c); a design with a clock generator runs its rows in
 // order with scripted clocks and the power-on preamble (FR-115e). Returns
 // { rows: [{ cells: [{ expected, actual, pass }], pass }], passed, total }.
 // `romContent` (FR-114e) is the Map from loadRomContents; null/omitted for designs
 // with no ROM. The live design is never mutated, dirtied, or undone (FR-115c).
-export function runVectors(design, { inputs, outputs, rows }, { romContent = null } = {}) {
+export function runVectors(design, { inputs, outputs, io = [], rows }, { romContent = null } = {}) {
   refuseHiddenClocks(design);
   let results;
   if (hasClockGenerators(design)) {
     results = new Array(rows.length);
-    runSequentialPass(design, inputs, rows.map((r) => r.in), romContent, (sim, ri) => {
-      results[ri] = scoreOutputs(sim, outputs, rows[ri].out);
+    runSequentialPass(design, inputs, io, rows, romContent, (sim, ri) => {
+      results[ri] = scoreRow(sim, outputs, io, rows[ri]);
     });
   } else {
     results = rows.map((row) => {
-      const sim = simulateRow(design, inputs, row.in, romContent);
-      return scoreOutputs(sim, outputs, row.out);
+      const sim = simulateRow(design, inputs, io, row, romContent);
+      return scoreRow(sim, outputs, io, row);
     });
   }
   return {
@@ -322,33 +376,45 @@ export function runVectors(design, { inputs, outputs, rows }, { romContent = nul
 }
 
 // captureRow runs one independent combinational row and returns the settled
-// outputs as expected symbols (FR-115b). A U/Z output captures as X.
-export function captureRow(design, { inputs, outputs }, rowIn, { romContent = null } = {}) {
-  const sim = simulateRow(design, inputs, rowIn, romContent);
-  return outputs.map((col) => captureSymbol(sim.valueOfPin(col.refdes, col.pin)));
+// outputs and io cells as expected symbols (FR-115b): { out, io }. A U/Z value
+// captures as X; an io drive cell (0/1) is preserved as-authored (FR-115i).
+export function captureRow(design, { inputs, outputs, io = [] }, rowIn, { romContent = null, rowIo = [] } = {}) {
+  const sim = simulateRow(design, inputs, io, { in: rowIn, io: rowIo }, romContent);
+  return {
+    out: outputs.map((col) => captureSymbol(sim.valueOfPin(col.refdes, col.pin))),
+    io: io.map((col, j) => captureIoSymbol(rowIo[j], sim.valueOfPin(col.refdes, col.pin))),
+  };
 }
 
 // captureVectors fills the whole table's expected cells from the circuit's
 // behavior (FR-115b): combinational designs capture each row independently;
 // a sequential design runs the same ordered pass as runVectors — preamble,
 // then each row's inputs and pulses — recording outputs in sequence (FR-115e).
-// Returns one out-symbol array per row.
-export function captureVectors(design, { inputs, outputs }, rowsIn, { romContent = null } = {}) {
+// Returns { out, io }: one out-symbol array and one io-symbol array per row
+// (io release cells filled from the settled net, drive cells preserved, FR-115i).
+export function captureVectors(design, { inputs, outputs, io = [] }, rowsIn, { romContent = null, rowsIo = [] } = {}) {
   refuseHiddenClocks(design);
   if (!hasClockGenerators(design)) {
-    return rowsIn.map((rowIn) => captureRow(design, { inputs, outputs }, rowIn, { romContent }));
+    const caps = rowsIn.map((rowIn, i) =>
+      captureRow(design, { inputs, outputs, io }, rowIn, { romContent, rowIo: rowsIo[i] ?? [] }),
+    );
+    return { out: caps.map((c) => c.out), io: caps.map((c) => c.io) };
   }
-  const out = new Array(rowsIn.length);
-  runSequentialPass(design, inputs, rowsIn, romContent, (sim, ri) => {
+  const rows = rowsIn.map((rowIn, i) => ({ in: rowIn, io: rowsIo[i] ?? [] }));
+  const out = new Array(rows.length);
+  const ioOut = new Array(rows.length);
+  runSequentialPass(design, inputs, io, rows, romContent, (sim, ri) => {
     out[ri] = outputs.map((col) => captureSymbol(sim.valueOfPin(col.refdes, col.pin)));
+    ioOut[ri] = io.map((col, j) => captureIoSymbol(rows[ri].io[j], sim.valueOfPin(col.refdes, col.pin)));
   });
-  return out;
+  return { out, io: ioOut };
 }
 
 // validateVectors is a pure gate over a doc (FR-115b): every row must have one
-// input cell per input column (symbol 0/1) and one output cell per output column
-// (symbol H/L/X). Returns { ok, errors }.
-export function validateVectors({ inputs, outputs, rows }) {
+// input cell per input column (symbol 0/1), one output cell per output column
+// (symbol H/L/X), and one io cell per bidirectional column (symbol 0/1/H/L/X,
+// FR-115i). Returns { ok, errors }.
+export function validateVectors({ inputs, outputs, io = [], rows }) {
   const errors = [];
   rows.forEach((r, ri) => {
     if (r.in.length !== inputs.length) {
@@ -356,6 +422,10 @@ export function validateVectors({ inputs, outputs, rows }) {
     }
     if (r.out.length !== outputs.length) {
       errors.push(`row ${ri + 1}: expected ${outputs.length} output cells, got ${r.out.length}`);
+    }
+    const rowIo = r.io ?? [];
+    if (io.length && rowIo.length !== io.length) {
+      errors.push(`row ${ri + 1}: expected ${io.length} io cells, got ${rowIo.length}`);
     }
     r.in.forEach((s, ci) => {
       // "C" (one clock pulse, FR-115e) is legal only in a clock column.
@@ -371,6 +441,12 @@ export function validateVectors({ inputs, outputs, rows }) {
         errors.push(`row ${ri + 1} output ${ci + 1}: "${s}" must be H, L, or X`);
       }
     });
+    rowIo.forEach((s, ci) => {
+      // A bidir cell drives (0/1) or observes (H/L/X) — the union alphabet.
+      if (!["0", "1", "H", "L", "X"].includes(s)) {
+        errors.push(`row ${ri + 1} io ${ci + 1}: "${s}" must be 0, 1, H, L, or X`);
+      }
+    });
   });
   return { ok: errors.length === 0, errors };
 }
@@ -380,9 +456,15 @@ const colKey = (c) => `${c.refdes}.${c.pin}`;
 // serializeVectors returns the JSON-serializable `.tv` object (§7.7). Column
 // `kind` markers are live-only (re-derived from the design on load) and are
 // stripped, so the file stays a pure (refdes, pin, label) record.
-export function serializeVectors({ inputs, outputs, rows }) {
+export function serializeVectors({ inputs, outputs, io = [], rows }) {
   const col = (c) => ({ refdes: c.refdes, pin: c.pin, label: c.label });
-  return { formatVersion: FORMAT_VERSION, inputs: inputs.map(col), outputs: outputs.map(col), rows };
+  return {
+    formatVersion: FORMAT_VERSION,
+    inputs: inputs.map(col),
+    outputs: outputs.map(col),
+    io: io.map(col),
+    rows: rows.map((r) => ({ in: r.in, io: r.io ?? [], out: r.out })),
+  };
 }
 
 // deserializeVectors migrates a parsed `.tv` object forward and normalizes it to a
@@ -394,21 +476,28 @@ export function deserializeVectors(obj) {
   return {
     inputs: (o.inputs ?? []).map(col),
     outputs: (o.outputs ?? []).map(col),
-    rows: (o.rows ?? []).map((r) => ({ in: [...(r.in ?? [])], out: [...(r.out ?? [])] })),
+    io: (o.io ?? []).map(col),
+    rows: (o.rows ?? []).map((r) => ({
+      in: [...(r.in ?? [])],
+      io: [...(r.io ?? [])],
+      out: [...(r.out ?? [])],
+    })),
   };
 }
 
 // reconcileVectors aligns a loaded file (fileDoc) to the design's current columns
 // by (refdes,pin) (FR-115a): the returned rows follow `columns` order, pulling each
 // cell from the file when that column still matches and defaulting otherwise ("0"
-// for inputs, "X" for outputs). A column present in only one side is a non-fatal
-// warning. Returns { rows, warnings }.
+// for inputs, "X" for outputs and io, FR-115i). A column present in only one side
+// is a non-fatal warning. Returns { rows, warnings }.
 export function reconcileVectors(fileDoc, columns) {
   const warnings = [];
   const inIdx = new Map(fileDoc.inputs.map((c, i) => [colKey(c), i]));
   const outIdx = new Map(fileDoc.outputs.map((c, i) => [colKey(c), i]));
+  const ioIdx = new Map((fileDoc.io ?? []).map((c, i) => [colKey(c), i]));
   const curIn = new Set(columns.inputs.map(colKey));
   const curOut = new Set(columns.outputs.map(colKey));
+  const curIo = new Set((columns.io ?? []).map(colKey));
 
   for (const c of fileDoc.inputs) {
     if (!curIn.has(colKey(c))) warnings.push(`input ${c.label} (${colKey(c)}) is in the file but not the design`);
@@ -416,11 +505,17 @@ export function reconcileVectors(fileDoc, columns) {
   for (const c of fileDoc.outputs) {
     if (!curOut.has(colKey(c))) warnings.push(`output ${c.label} (${colKey(c)}) is in the file but not the design`);
   }
+  for (const c of fileDoc.io ?? []) {
+    if (!curIo.has(colKey(c))) warnings.push(`io ${c.label} (${colKey(c)}) is in the file but not the design`);
+  }
   for (const c of columns.inputs) {
     if (!inIdx.has(colKey(c))) warnings.push(`input ${c.label} (${colKey(c)}) is in the design but not the file`);
   }
   for (const c of columns.outputs) {
     if (!outIdx.has(colKey(c))) warnings.push(`output ${c.label} (${colKey(c)}) is in the design but not the file`);
+  }
+  for (const c of columns.io ?? []) {
+    if (!ioIdx.has(colKey(c))) warnings.push(`io ${c.label} (${colKey(c)}) is in the design but not the file`);
   }
 
   const rows = fileDoc.rows.map((r) => ({
@@ -428,6 +523,10 @@ export function reconcileVectors(fileDoc, columns) {
       const dflt = c.kind === "clock" ? "C" : "0"; // match emptyRow's defaults
       const i = inIdx.get(colKey(c));
       return i !== undefined ? (r.in[i] ?? dflt) : dflt;
+    }),
+    io: (columns.io ?? []).map((c) => {
+      const i = ioIdx.get(colKey(c));
+      return i !== undefined ? (r.io?.[i] ?? "X") : "X";
     }),
     out: columns.outputs.map((c) => {
       const i = outIdx.get(colKey(c));
@@ -439,10 +538,11 @@ export function reconcileVectors(fileDoc, columns) {
 
 // emptyRow returns a fresh row sized to the columns: inputs default 0 — except a
 // clock column, which defaults C so one new row is one clock cycle (FR-115e) —
-// and outputs default X.
+// and outputs and io cells default X (FR-115i: X = release, don't-check).
 export function emptyRow(columns) {
   return {
     in: columns.inputs.map((c) => (c.kind === "clock" ? "C" : "0")),
+    io: (columns.io ?? []).map(() => "X"),
     out: columns.outputs.map(() => "X"),
   };
 }

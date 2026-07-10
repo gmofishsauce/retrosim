@@ -177,14 +177,14 @@ test("runVectors: an unconnected indicator reads Z and never matches H/L; captur
   const res = runVectors(d, { ...cols, rows: [{ in: ["1"], out: ["H"] }] });
   assert.equal(res.rows[0].cells[0].pass, false);
   assert.equal(res.rows[0].cells[0].actual, "Z");
-  assert.deepEqual(captureRow(d, cols, ["1"]), ["X"]);
+  assert.deepEqual(captureRow(d, cols, ["1"]).out, ["X"]);
 });
 
 test("captureRow: inverter captures the settled golden outputs as H/L", () => {
   const d = inverterDesign();
   const cols = deriveColumns(d);
-  assert.deepEqual(captureRow(d, cols, ["0"]), ["H"]); // /0 = 1
-  assert.deepEqual(captureRow(d, cols, ["1"]), ["L"]); // /1 = 0
+  assert.deepEqual(captureRow(d, cols, ["0"]).out, ["H"]); // /0 = 1
+  assert.deepEqual(captureRow(d, cols, ["1"]).out, ["L"]); // /1 = 0
 });
 
 test("runVectors does not mutate the live design", () => {
@@ -212,11 +212,35 @@ test("validateVectors: flags bad symbols and wrong arity", () => {
   assert.ok(bad.errors.length >= 2);
 });
 
+test("validateVectors: io cells accept 0/1/H/L/X and check arity (FR-115i)", () => {
+  const cols = {
+    inputs: [{ refdes: "A-1", pin: "OUT", label: "A" }],
+    outputs: [],
+    io: [{ refdes: "A-2", pin: "P", label: "BUS" }],
+  };
+  const ok = validateVectors({
+    ...cols,
+    rows: [{ in: ["0"], out: [], io: ["H"] }, { in: ["1"], out: [], io: ["0"] }],
+  });
+  assert.equal(ok.ok, true);
+
+  const bad = validateVectors({
+    ...cols,
+    rows: [
+      { in: ["0"], out: [], io: ["C"] }, // C is not legal in an io cell
+      { in: ["0"], out: [], io: ["H", "L"] }, // wrong io arity
+    ],
+  });
+  assert.equal(bad.ok, false);
+  assert.ok(bad.errors.some((e) => e.includes("io")));
+});
+
 test("serialize / deserialize round-trips a doc and stamps the format version", () => {
   const doc = {
     inputs: [{ refdes: "A-1", pin: "OUT", label: "A" }],
     outputs: [{ refdes: "A-2", pin: "IN", label: "Q" }],
-    rows: [{ in: ["0"], out: ["L"] }, { in: ["1"], out: ["H"] }],
+    io: [],
+    rows: [{ in: ["0"], io: [], out: ["L"] }, { in: ["1"], io: [], out: ["H"] }],
   };
   const file = serializeVectors(doc);
   assert.equal(file.formatVersion, FORMAT_VERSION);
@@ -224,17 +248,22 @@ test("serialize / deserialize round-trips a doc and stamps the format version", 
   assert.deepEqual(back, doc);
 });
 
-test("migrate: a versionless file is treated as v1 and upgraded (identity) to v2", () => {
+test("migrate: a versionless file upgrades v1→v2 (identity), then v2→v3 (adds io)", () => {
   const obj = { inputs: [], outputs: [], rows: [{ in: ["0"], out: ["L"] }] };
   // The v1→v2 step is the identity apart from the stamped formatVersion — the
   // shape is unchanged, v2 only marks the sequential "C" symbol (FR-115e/§7.7).
-  assert.deepEqual(migrate(obj), { ...obj, formatVersion: 2 });
+  assert.deepEqual(migrate(obj, { target: 2 }), { ...obj, formatVersion: 2 });
+  // v2→v3 seeds the io column array and per-row io cells empty (FR-115i/§7.7).
+  const v3 = migrate(obj); // default target = current (3)
+  assert.equal(v3.formatVersion, FORMAT_VERSION);
+  assert.deepEqual(v3.io, []);
+  assert.deepEqual(v3.rows[0].io, []);
   // A run-through deserialize still yields a usable doc.
   assert.equal(deserializeVectors(obj).rows.length, 1);
   // An unknown future-version step throws a legible error.
   assert.throws(
-    () => migrate({ formatVersion: 2 }, { target: 3, migrations: {} }),
-    /no migration from version 2 to 3/,
+    () => migrate({ formatVersion: 3 }, { target: 4, migrations: {} }),
+    /no migration from version 3 to 4/,
   );
 });
 
@@ -259,12 +288,60 @@ test("reconcileVectors: aligns file rows to current columns and warns on column 
   assert.ok(warnings.some((w) => w.includes("A-2"))); // design column absent from file
 });
 
+test("io columns: serialize/deserialize/reconcile carry io and default missing cells to X (FR-115i)", () => {
+  const doc = {
+    inputs: [],
+    outputs: [],
+    io: [{ refdes: "A-5", pin: "P", label: "BUS" }],
+    rows: [{ in: [], io: ["1"], out: [] }, { in: [], io: ["H"], out: [] }],
+  };
+  const file = serializeVectors(doc);
+  assert.equal(file.formatVersion, 3);
+  assert.deepEqual(file.io, [{ refdes: "A-5", pin: "P", label: "BUS" }]);
+  assert.deepEqual(file.rows[1].io, ["H"]);
+
+  const fileDoc = deserializeVectors(file);
+  // Design still has BUS plus a new io column DAT the file lacks.
+  const columns = {
+    inputs: [],
+    outputs: [],
+    io: [
+      { refdes: "A-5", pin: "P", label: "BUS" },
+      { refdes: "A-6", pin: "P", label: "DAT" },
+    ],
+  };
+  const { rows, warnings } = reconcileVectors(fileDoc, columns);
+  assert.deepEqual(rows[0].io, ["1", "X"]); // BUS carried over, DAT defaults X
+  assert.deepEqual(rows[1].io, ["H", "X"]);
+  assert.ok(warnings.some((w) => w.includes("DAT"))); // design io column absent from file
+});
+
+test("migrate: a v1 file gains an empty io array and per-row io cells (FR-115i)", () => {
+  const back = deserializeVectors({
+    formatVersion: 1,
+    inputs: [{ refdes: "A-1", pin: "OUT", label: "A" }],
+    outputs: [{ refdes: "A-2", pin: "IN", label: "Q" }],
+    rows: [{ in: ["0"], out: ["L"] }],
+  });
+  assert.deepEqual(back.io, []);
+  assert.deepEqual(back.rows[0].io, []);
+});
+
 test("emptyRow sizes to the columns with default 0 inputs and X outputs", () => {
   const cols = {
     inputs: [{ refdes: "A-1", pin: "OUT", label: "A" }, { refdes: "A-2", pin: "OUT", label: "B" }],
     outputs: [{ refdes: "A-3", pin: "IN", label: "Q" }],
   };
-  assert.deepEqual(emptyRow(cols), { in: ["0", "0"], out: ["X"] });
+  assert.deepEqual(emptyRow(cols), { in: ["0", "0"], io: [], out: ["X"] });
+});
+
+test("emptyRow: an io column defaults its cell to X (FR-115i)", () => {
+  const cols = {
+    inputs: [{ refdes: "A-1", pin: "OUT", label: "A" }],
+    outputs: [],
+    io: [{ refdes: "A-5", pin: "P", label: "BUS" }],
+  };
+  assert.deepEqual(emptyRow(cols), { in: ["0"], io: ["X"], out: [] });
 });
 
 // BIDIR: a unit with one bidirectional pin, so a port on its net derives bidir.
@@ -321,7 +398,7 @@ test("ports: a portN input expands to N columns and runs (FR-115f)", () => {
   assert.equal(res.passed, 1);
 });
 
-test("ports: a bidir port is skipped with a warning, bound when overridden (FR-115f)", () => {
+test("ports: a bidir port becomes an io column, or a definite column when overridden (FR-115i/FR-094d)", () => {
   const d = createDesign("t");
   const u = addInstance(d, BIDIR, 10, 0, 0);
   const p = addInstance(d, PORT, 0, 0, 0);
@@ -331,12 +408,118 @@ test("ports: a bidir port is skipped with a warning, bound when overridden (FR-1
   let cols = deriveColumns(d);
   assert.equal(cols.inputs.length, 0);
   assert.equal(cols.outputs.length, 0);
-  assert.ok(cols.warnings.some((w) => w.includes("BUS")));
+  assert.deepEqual(cols.io.map((c) => [c.refdes, c.pin]), [[p.refdes, "P"]]);
+  assert.equal(cols.warnings.length, 0);
 
-  p.dirOverride = "out"; // opt the bidir port in as an output (FR-094d)
+  p.dirOverride = "out"; // pin the bidir port to a single-role output (FR-094d)
   cols = deriveColumns(d);
   assert.deepEqual(cols.outputs.map((c) => [c.refdes, c.pin]), [[p.refdes, "P"]]);
+  assert.equal(cols.io.length, 0);
   assert.equal(cols.warnings.length, 0);
+});
+
+test("io columns: a drive cell forces the net, a release cell leaves it floating (FR-115i)", () => {
+  const d = createDesign("t");
+  const ind = addInstance(d, builtin("indicator"), 0, 0, 0);
+  const p = addInstance(d, PORT, 10, 0, 0);
+  p.label = "BUS";
+  wire(d, p.refdes, "P", ind.refdes, "IN"); // port and indicator share one net
+
+  // Hand-crafted io column: the runner treats whatever is in `io` as a
+  // bidirectional bus column, driving 0/1 and releasing H/L/X (FR-115i).
+  const cols = {
+    inputs: [],
+    outputs: [{ refdes: ind.refdes, pin: "IN", label: "Q" }],
+    io: [{ refdes: p.refdes, pin: "P", label: "BUS" }],
+  };
+  const res = runVectors(d, {
+    ...cols,
+    rows: [
+      { in: [], io: ["1"], out: ["H"] }, // drive bus high → indicator reads H
+      { in: [], io: ["L"], out: ["X"] }, // release → nothing drives → net floats Z
+    ],
+  });
+  assert.equal(res.rows[0].pass, true);
+  assert.deepEqual(res.rows[0].io[0], { drive: "1" }); // drive cell: stimulus, not scored
+  assert.equal(res.rows[1].pass, false); // io "L" fails: released net floats Z
+  assert.equal(res.rows[1].io[0].pass, false);
+  assert.equal(res.rows[1].io[0].actual, "Z");
+});
+
+test("io capture: release cells filled from the settled net, drive cells preserved (FR-115i)", () => {
+  const d = createDesign("t");
+  const sw = addInstance(d, builtin("switch"), 0, 0, 0);
+  const p = addInstance(d, PORT, 10, 0, 0);
+  p.label = "BUS";
+  wire(d, sw.refdes, "OUT", p.refdes, "P"); // the switch drives the bus net
+
+  const cols = {
+    inputs: [{ refdes: sw.refdes, pin: "OUT", label: "SW" }],
+    outputs: [],
+    io: [{ refdes: p.refdes, pin: "P", label: "BUS" }],
+  };
+  const cap = captureVectors(d, cols, [["1"], ["0"], ["1"]], { rowsIo: [["H"], ["X"], ["0"]] });
+  // row0 release H, net=1 → H; row1 release X, net=0 → L; row2 drive "0" preserved.
+  assert.deepEqual(cap.io, [["H"], ["L"], ["0"]]);
+  assert.deepEqual(cap.out, [[], [], []]);
+});
+
+// TRIB: a tristate buffer (Y = A while EN high, else high-Z). A port on Y's net
+// genuinely DERIVES bidir (Y is a tristate pin), so deriveColumns bins it as io.
+const TRIB = {
+  name: "TRIB",
+  renderType: "unit",
+  pins: [
+    { name: "A", side: "left", position: 1, direction: "in" },
+    { name: "EN", side: "left", position: 2, direction: "in" },
+    { name: "Y", side: "right", position: 1, direction: "tristate" },
+  ],
+  behavior: "Y.T = A\nY.E = EN\n",
+};
+
+test("io end-to-end: a real bidir port drives some cycles and observes others (FR-115i)", () => {
+  const d = createDesign("t");
+  const swA = addInstance(d, builtin("switch"), 0, 0, 0);
+  swA.label = "DAT";
+  const swE = addInstance(d, builtin("switch"), 0, 10, 0);
+  swE.label = "OE";
+  const u = addInstance(d, TRIB, 10, 0, 0);
+  const ind = addInstance(d, builtin("indicator"), 20, 0, 0);
+  ind.label = "OBS";
+  const p = addInstance(d, PORT, 20, 10, 0);
+  p.label = "BUS";
+  wire(d, swA.refdes, "OUT", u.refdes, "A");
+  wire(d, swE.refdes, "OUT", u.refdes, "EN");
+  wire(d, u.refdes, "Y", ind.refdes, "IN"); // observer on the bus
+  wire(d, u.refdes, "Y", p.refdes, "P"); // the bidir bus port
+
+  const cols = deriveColumns(d);
+  assert.deepEqual(cols.io.map((c) => c.label), ["BUS"]); // derived bidir → io
+  assert.deepEqual(cols.outputs.map((c) => c.label), ["OBS"]);
+  const iA = cols.inputs.findIndex((c) => c.refdes === swA.refdes);
+  const iE = cols.inputs.findIndex((c) => c.refdes === swE.refdes);
+  const mk = (a, oe, ioSym, outSym) => {
+    const inArr = [];
+    inArr[iA] = a;
+    inArr[iE] = oe;
+    return { in: inArr, io: [ioSym], out: [outSym] };
+  };
+
+  const res = runVectors(d, {
+    ...cols,
+    rows: [
+      mk("1", "1", "H", "H"), // design drives 1; observe io H
+      mk("0", "1", "L", "L"), // design drives 0; observe io L
+      mk("0", "0", "1", "H"), // design released; harness drives 1 → observer H
+      mk("0", "0", "0", "L"), // harness drives 0 → observer L
+      mk("1", "1", "0", "X"), // design drives 1 AND harness drives 0 → conflict
+    ],
+  });
+  assert.equal(res.passed, 5);
+  assert.equal(res.rows[0].io[0].pass, true); // release cell scored
+  assert.deepEqual(res.rows[2].io[0], { drive: "1" }); // drive cell not scored
+  assert.equal(res.rows[2].cells[0].actual, "1"); // harness drove the bus into the observer
+  assert.equal(res.rows[4].cells[0].actual, "U"); // contended drive → bus conflict (FR-082)
 });
 
 test("ports: port columns union with switch/indicator columns (FR-115b/FR-115f)", () => {
@@ -458,13 +641,13 @@ test("captureVectors: sequential capture records each row's settled outputs in o
   const d = dffDesign();
   const cols = deriveColumns(d);
   const outs = captureVectors(d, cols, [["1", "C"], ["0", "0"], ["0", "C"]]);
-  assert.deepEqual(outs, [["H"], ["H"], ["L"]]);
+  assert.deepEqual(outs.out, [["H"], ["H"], ["L"]]);
 });
 
 test("captureVectors: combinational designs capture rows independently", () => {
   const d = inverterDesign();
   const cols = deriveColumns(d);
-  assert.deepEqual(captureVectors(d, cols, [["0"], ["1"]]), [["H"], ["L"]]);
+  assert.deepEqual(captureVectors(d, cols, [["0"], ["1"]]).out, [["H"], ["L"]]);
 });
 
 test("sequential run does not mutate the live design (FR-115c isolation)", () => {
@@ -490,7 +673,7 @@ test("validateVectors: C is legal only in a clock column (FR-115e)", () => {
   assert.ok(bad.errors[0].includes("must be 0 or 1"));
 });
 
-test("serializeVectors: strips the live-only kind marker and stamps v2 (§7.7)", () => {
+test("serializeVectors: strips the live-only kind marker and stamps v3 (§7.7)", () => {
   const doc = {
     inputs: [{ refdes: "A-2", pin: "OUT", label: "CLK", kind: "clock" }],
     outputs: [{ refdes: "A-3", pin: "IN", label: "Q" }],

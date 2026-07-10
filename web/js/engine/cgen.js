@@ -374,6 +374,15 @@ export function generateC(design, { columnsFrom = design } = {}) {
   // root design so only the top sheet contributes, FR-116 hierarchy) ---
   const cols = deriveColumns(columnsFrom);
   warnings.push(...cols.warnings);
+  // Bidirectional (io) columns are slow-simulator only for now (FR-115i deferred
+  // scope): the fast engine has no per-cycle force/release ABI yet, so they are
+  // omitted with a warning and the FR-107 parity check skips them.
+  if (cols.io.length) {
+    warnings.push(
+      `bidirectional bus columns are not yet supported by the fast C generator ` +
+        `(FR-115i); omitted: ${cols.io.map((c) => c.label).join(", ")}`,
+    );
+  }
   const instByRefdes = new Map(design.components.map((c) => [c.refdes, c]));
   const incols = cols.inputs.map((col) => {
     // (refdes,pin) identity baked alongside the label so tv2txt can

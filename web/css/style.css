@@ -502,6 +502,14 @@ body {
 .vec-corner { background: #f3f3f3; }
 .vec-cell.vec-out { background: #fafcff; }
 .vec-table th.vec-out { background: #eef3f8; }
+/* Bidirectional (io) three-state bus group (FR-115i). */
+.vec-group-io { background: #f5efe6; }
+.vec-cell.vec-io { background: #fffdf8; }
+.vec-table th.vec-io { background: #f5efe6; }
+/* io cell role tints: driving (0/1), expected (H/L), inert (X). pass/fail below win. */
+.vec-cell.io-drive { background: #eaf4ea; }
+.vec-cell.io-expect { background: #fbf3df; }
+.vec-cell.io-inert { color: #999; }
 .vec-select { font-size: 0.85rem; padding: 0 0.1rem; }
 .vec-status { font-size: 0.7rem; margin-left: 0.2rem; color: #b00; }
 .vec-cell.pass { background: #e7f6ec; }
