@@ -126,7 +126,7 @@ func SaveDesign(path string, design json.RawMessage) error {
 
 	var pretty bytes.Buffer
 	if err := json.Indent(&pretty, design, "", "  "); err != nil {
-		return fmt.Errorf("%s: %w", err, ErrMalformedJSON)
+		return fmt.Errorf("%s: %w: %v", path, ErrMalformedJSON, err)
 	}
 	pretty.WriteByte('\n')
 

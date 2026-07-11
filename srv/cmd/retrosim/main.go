@@ -1,7 +1,7 @@
 // Command retrosim is the localhost-only HTTP server for the TTL circuit
-// design editor (design.md §6.1). This is the walking-skeleton entry point:
-// it parses flags, refuses any non-loopback bind address (NFR-001), and serves
-// an empty mux. Endpoints and the static SPA handler are added in later slices.
+// design editor (design.md §6.1): it parses flags, refuses any non-loopback
+// bind address (NFR-001), loads the YAML component library, and serves the
+// API endpoints and static SPA via server.NewRouter.
 package main
 
 import (
@@ -16,7 +16,7 @@ import (
 func main() {
 	addr := flag.String("addr", "127.0.0.1:8137", "loopback host:port to bind (must be loopback)")
 	componentsDir := flag.String("components-dir", "./components", "YAML component library directory")
-	dataDir := flag.String("data-dir", "", "designs root (default: platform app-data dir)")
+	dataDir := flag.String("data-dir", "", "designs root (default: <documents dir>/retrosim)")
 	webDir := flag.String("web-dir", "./web", "static SPA assets directory")
 	flag.Parse()
 
