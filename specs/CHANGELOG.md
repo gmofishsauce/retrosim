@@ -19,6 +19,10 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-11 — Bugfix: subunit packages recorded display name, not library id (conformance)
+What: `addSubunitPackage` stamped the display name (`"7400"`) into `inst.type` instead of the library id (`"type-7400"`), so Refresh Types (FR-088) silently skipped every placed basic-gate package and save files diverged from §7.2. Fixed to `typeIdentity(type)`; regression tests give the subunit fixtures an `id` distinct from `name`. No spec change — code brought into conformance with the existing spec (found by the 2026-07-08 code review, `Jul8-review.md`).
+Touches: FR-088, FR-066e; design §7.2 (no edits — conformance fix).
+
 ## 2026-07-10 — Bidirectional (three-state bus) test-vector columns (FR-115i)
 What: an effective-`bidir` port (FR-094c/FR-094d) now binds as a **bidirectional test-vector column** (a third `io` group) instead of being omitted with a warning. Each per-row io cell is drive-or-observe over the alphabet `0`/`1`/`H`/`L`/`X` — `0`/`1` drive the net via the simulator's external stimulus (FR-115f/FR-094e), `H`/`L` release and assert, `X` (default) releases without asserting — so one bus column can be driven on some rows/cycles and checked on others (the per-cycle force/measure discipline of §3.19a), reusing the existing per-row combinational (FR-115c) and sequential (FR-115e) runs unchanged. Contended drive (harness + design's own internal driver both enabled) resolves `U` with a normal bus-conflict report (FR-082); the author releases the internal driver via the design's real control inputs. A bidir `portN` expands to N per-bit io columns. Capture fills release cells and preserves drive cells. `.tv` format → **v3** (new `io` arrays; v2→v3 migration adds empty `io`).
 Why: user wants to test three-state boundaries (e.g. a 74381's 74244-buffered F outputs feeding a multiplexed bus) directly, rather than being forced to pin each bidir port to a single input/output role via the FR-094d override.

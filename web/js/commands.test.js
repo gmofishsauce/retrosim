@@ -31,6 +31,7 @@ function tyNote() {
 
 function ty7400() {
   return {
+    id: "type-7400", // distinct from name, as in production YAML (FR-066e)
     name: "7400",
     renderType: "subunit",
     numUnits: 2,
@@ -423,6 +424,21 @@ test("refreshTypesCmd refreshes all instances, reports, and undoes exactly (FR-0
   store.redo();
   assert.equal(find(store.design, "U2").typeData.behavior, "Y = VCC\n");
   assert.equal(find(store.design, "U1").overrides.delays, undefined);
+});
+
+test("refreshTypesCmd matches subunit packages by library id (FR-088)", () => {
+  const store = newStore();
+  store.dispatch(placeComponent(ty7400(), 0, 0, 0)); // U1A, U1B
+
+  const edited = ty7400();
+  edited.behavior = "1Y = /(1A*1B)\n";
+
+  const reports = [];
+  store.dispatch(refreshTypesCmd([edited], (m) => reports.push(m)));
+
+  assert.equal(find(store.design, "U1A").typeData.behavior, "1Y = /(1A*1B)\n");
+  assert.equal(find(store.design, "U1B").typeData.behavior, "1Y = /(1A*1B)\n");
+  assert.equal(reports.some((m) => m.includes("refreshed 2")), true);
 });
 
 test("placeSubDesign embeds a child as an X-series instance; undo/redo round-trip", async () => {

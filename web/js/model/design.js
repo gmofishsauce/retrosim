@@ -139,7 +139,7 @@ export function addSubunitPackage(design, type, x, y) {
     const fp = { width: td.width, height: td.height };
     const inst = {
       refdes: "U" + num + letter,
-      type: type.name,
+      type: typeIdentity(type),
       x,
       y: y + offsetY,
       rotation: 0,

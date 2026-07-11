@@ -197,9 +197,11 @@ test("addInstance records a GAL instance's type as its id (§7.2)", () => {
   assert.equal(a.typeData.name, "22V10");
 });
 
-// A subunit package: quad 2-input NAND (two units shown).
+// A subunit package: quad 2-input NAND (two units shown). The id is distinct
+// from the name, as in production YAML, so identity/display-name mixups fail.
 function type7400() {
   return {
+    id: "type-7400",
     name: "7400",
     renderType: "subunit",
     numUnits: 2,
@@ -221,6 +223,8 @@ test("addSubunitPackage creates one instance per unit sharing a U-number (FR-013
   const units = addSubunitPackage(d, type7400(), 10, 10);
   assert.equal(units.length, 2);
   assert.deepEqual(units.map((u) => u.refdes), ["U2A", "U2B"]);
+  // each sibling records the library id, not the display name (§7.2, FR-066e).
+  assert.deepEqual(units.map((u) => u.type), ["type-7400", "type-7400"]);
   assert.equal(d.components.length, 3);
   // each sibling carries only its own unit's pins and a symbol footprint.
   assert.deepEqual(units[0].typeData.pins.map((p) => p.name), ["1A", "1B", "1Y"]);
