@@ -310,18 +310,26 @@ reworked.
   an ordinary single-bit wire; the wire joins that bus bit's net (FR-037a).
 
 **File Operations — New**
-- **FR-044** — Create a new empty design at any time.
+- **FR-044** — Create a new empty design at any time **while a project is
+  current**; the new design belongs to the current project. With no current
+  project the action is unavailable (project-first startup, FR-121c).
+  (Reworked 2026-07-12; supersedes the unconditional "at any time".)
 - **FR-045** — A new design is named `unnamed schematic <datetime>`.
 
 **File Operations — Save**
 - **FR-046** — Save the current design.
 - **FR-047** — On first save, prompt to confirm/change the filename (prefilled
-  with the default name).
+  with the default name). The prompt is rooted at the current project root and
+  effectively asks only for a **name**: the location is the project
+  (FR-121c/FR-121e; project seeding added 2026-07-12).
 - **FR-047a** — A save under a different file name renames the design to the
   file's base name: shown in the toolbar, written inside the file, and
   pre-filled by future prompts.
 - **FR-048** — Subsequent saves overwrite without prompting.
-- **FR-049** — Save As at any time, to a new name.
+- **FR-049** — Save As at any time, to a new name **within the current
+  project**: a target outside the project directory is rejected (FR-121e;
+  forking a whole project is Duplicate Project, FR-121f). (Confinement added
+  2026-07-12.)
 - **FR-049a** — Indicate unsaved changes; warn before discarding them (New/Open).
 - **FR-049b** — A save prompt (FR-047/FR-049) that targets an existing file
   confirms the overwrite before writing and aborts if declined. Implemented in
@@ -329,14 +337,20 @@ reworked.
   when the chosen name matches a file in the current directory listing. The
   FR-048 same-file re-save skips the dialog, so it is unaffected.
 - **FR-050** — Server stores designs in `retrosim` inside the user's
-  documents directory by default (created if absent). (Reworked 2026-06-12;
+  documents directory by default (created if absent). This data directory is
+  the default **home for project directories**: the New Project prompt seeds
+  there (FR-121b; role added 2026-07-12). (Reworked 2026-06-12;
   supersedes the platform-standard application data directory.)
 - **FR-051** — The file dialog lets the user choose a different save location.
 
 **File Operations — Open**
-- **FR-052** — Open an existing design via a file-navigation dialog.
+- **FR-052** — Open an existing design via a file-navigation dialog. On load
+  the design's containing folder becomes the **current project** (FR-121b;
+  added 2026-07-12).
 - **FR-053** — Server provides an endpoint to list directory contents so the
-  browser can render a navigation dialog (no native file picker).
+  browser can render a navigation dialog (no native file picker). Design
+  listings exclude project manifests (`*-manifest.json`, FR-121a; exclusion
+  added 2026-07-12).
 - **FR-054** — If server-assisted navigation proves impractical, fall back to a
   list of recently opened designs.
 
@@ -462,11 +476,64 @@ this document adopts. **None block implementation** except where noted in §12.
   per-bit names adopted from the snapped group (FR-037b); the saved `nets` carry
   per-bit **provenance** `{bus,bit,name?}` (FR-060a).
 
+- **A8 — Startup design vs project-first startup (FR-004 vs FR-121c).**
+  FR-004 (unchanged) says the app opens with an empty, unsaved design named
+  `unnamed schematic <datetime>`; FR-121c says at startup no project is current,
+  the canvas is "empty and inert", and a design always belongs to a project.
+  **Resolution (stakeholder-confirmed 2026-07-12):** FR-004's default-named
+  design remains in the store at startup as an **inert placeholder** — every
+  editing and saving path is refused by the no-project lock (§6.10) and the
+  chrome's no-project state (§6.11) — and it is replaced by a fresh design when
+  a project becomes current (§6.19). FR-004 stays accurate (select mode, that
+  name shown); FR-121c's "always belongs to a project" holds for every design
+  that can actually be edited or saved.
+
+- **A9 — Open Project with no main design: cancel semantics (FR-121b).**
+  When the chosen project names no main design, the open-design dialog is
+  presented rooted at the project; the requirement does not say what a cancel
+  does. **Resolution (stakeholder-chosen 2026-07-12):** cancel cancels the
+  **whole action** — no project change, no canvas change. Recorded consequence:
+  a project directory containing **no designs** cannot be made current via Open
+  Project (there is nothing to pick); New Project is the flow that
+  creates-and-enters an empty project. **Duplicate Project differs by
+  necessity** (§6.19): its copy has already happened when the picker appears,
+  so a cancel there leaves the duplicate current with a fresh empty design.
+
+- **A10 — Which navigations switch the current project (FR-121b vs
+  FR-100/FR-101).** FR-121b names Open Project and plain File ▸ Open as
+  project-switching, but is silent on descend/follow/back, which can reach a
+  **legacy** outside-project child (FR-121d). **Resolution (interpretation):**
+  the containing-folder rule is applied uniformly by the one shared load path
+  (`fileops.loadIntoStore`, §6.19): any successfully loaded design whose folder
+  differs from the current project's directory makes that folder current.
+  Inside a conforming project every child/peer is in the same folder
+  (FR-121d/FR-101), so the rule fires only on plain Open, Open Project, and
+  legacy outside-project references — where switching is the only reading that
+  keeps "the current design lies inside the current project" invariant.
+
+- **A11 — FR-121b "rooted at the project" vs FR-052a remembered directory.**
+  FR-121h keeps the remembered-directory rule for open-mode dialogs, yet
+  FR-121b explicitly roots the no-main-design open-design picker at the project.
+  **Resolution (interpretation):** the specific FR-121b picker is the more
+  specific rule — it ignores the remembered directory for its **starting**
+  location (an `ignoreLastDir` option on `openFileDialog`, §6.11) but still
+  updates the remembered directory as the user navigates. All other open-mode
+  dialogs keep FR-052a unchanged.
+
 ### 3.2 Contradictions
 
 - **C1 — None material.** NFR-002 ("no external network requests") vs IR-001
   ("HTTP over localhost") is only apparent: "external" means the public internet;
   localhost API traffic is intended and allowed. Stated for the record.
+
+- **C2 — FR-051 vs FR-121e (save location freedom vs project confinement).**
+  FR-051 says the file dialog allows choosing a different save location;
+  FR-121e rejects a design-save target outside the project. **Resolution:** not
+  material — navigation stays free in every dialog; for a **design** save,
+  confirming an outside-project location is rejected with a message and the
+  dialog stays open (§6.11). FR-051 remains fully true within the project and
+  for the data-file pickers (ROM content, RAM save — FR-121d exempts data
+  files) and the New/Duplicate Project location prompts.
 
 ### 3.3 Gaps
 
@@ -558,7 +625,11 @@ as authoritative and raise it — do not silently diverge.
 │  api.go (router /api/v1/*)                                                                 │
 │   ├─ GET  /components   ─▶ components.go  ─▶ yamlparse.go  (load library at startup)      │
 │   ├─ POST /components   ─▶ components.go (create authored part, FR-007a)                   │
-│   ├─ GET  /files        ─▶ storage.go (list directory; ext filter, FR-114e)               │
+│   ├─ GET  /files        ─▶ storage.go (list directory; ext filter, FR-114e; manifest      │
+│   │                                    exclusion, FR-121a)                                 │
+│   ├─ GET  /project/info ─▶ project.go (dir → manifest/name/main design, FR-121a)           │
+│   ├─ POST /project/create   ─▶ project.go (mkdir + manifest, FR-121b)                      │
+│   ├─ POST /project/duplicate ─▶ project.go (recursive copy + manifest rename, FR-121f)     │
 │   ├─ GET  /romfile      ─▶ storage.go (read ROM .bin/.hex bytes, FR-114e)                  │
 │   ├─ POST /ramfile      ─▶ storage.go (write RAM .bin/.hex bytes, FR-114g)                  │
 │   ├─ GET  /design/load  ─▶ storage.go (read JSON)                                          │
@@ -585,6 +656,13 @@ as authoritative and raise it — do not silently diverge.
 3. **Persistence:** Save serializes the model to JSON and POSTs it to the server,
    which writes the file (FR-046…FR-051). Open lists directories via `/files`
    (FR-052/FR-053) and loads via `/design/load`.
+4. **Projects (FR-121, §6.19):** at startup no project is current and the FR-004
+   placeholder design is inert (§3.1 A8); the first effective action is New
+   Project / Open Project / plain Open, each of which establishes the **current
+   project** — a client-side store value naming the project directory. The
+   current project then scopes every file flow (save confinement, embed
+   boundary, dialog seeding). The server stays stateless: project-aware
+   requests carry the directory as a parameter.
 
 ### 5.3 New vs modified vs unchanged
 The design began **greenfield** (nothing predated it; section retained for the
@@ -735,7 +813,10 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | `GET /api/v1/components` | – | `{"components":[ComponentType,…]}` | 500 on internal error |
   | `POST /api/v1/components` | `{"yaml":"<authored YAML>"}` | `{"component":ComponentType}` | 400 bad body / invalid YAML, 409 duplicate `id` or existing file (FR-066e/FR-007a), 500 write failure |
   | `GET /api/v1/defaults` | – | `{"dataDir":"<abs path>"}` | – |
-  | `GET /api/v1/files?path=<p>&exts=<e>` | query `path` (abs; empty = data dir), optional `exts` (csv, default `json`) | `{"path","parent","entries":[{"name","isDir"}]}` | 400 bad path, 404 missing, 403 not a dir |
+  | `GET /api/v1/files?path=<p>&exts=<e>&manifests=<0\|1>` | query `path` (abs; empty = data dir), optional `exts` (csv, default `json`; the single value `-` lists **directories only**, §6.5), optional `manifests=1` to include `*-manifest.json` files (excluded from listings by default, FR-121a) | `{"path","parent","entries":[{"name","isDir"}]}` | 400 bad path, 404 missing, 403 not a dir |
+  | `GET /api/v1/project/info?dir=<d>` | query `dir` (abs project directory) | `{"dir","name","manifestFile","mainDesign","warnings":[…]}` — `manifestFile`/`mainDesign` are `""` when absent; `name` falls back to the folder base name; `warnings` carries the extra-manifest, unparseable-manifest, and dangling-`mainDesign` reports (FR-121a) | 400 bad path, 404 missing, 403 not a dir |
+  | `POST /api/v1/project/create` | `{"path":"<abs new project dir>"}` | the created project's info (shape above; fresh manifest, no main design) — FR-121b | 400 bad path / missing parent, 409 path already exists, 500 mkdir/write failure |
+  | `POST /api/v1/project/duplicate` | `{"src":"<abs>","dst":"<abs new dir>"}` | the duplicate's info (shape above) — FR-121f | 400 bad paths, 404 `src` missing, 409 `dst` exists, 500 copy failure (partial destination left; the client reports it, FR-121f) |
   | `GET /api/v1/romfile?path=<p>` | query `path` (abs, `.bin`/`.hex`) | raw bytes (`application/octet-stream`), capped at `MaxRomBytes` 64 MiB | 400 bad/!bin·hex, 404 missing, 500 too large |
   | `POST /api/v1/ramfile?path=<p>` | query `path` (abs, `.bin`/`.hex`); raw request body = the file bytes the client formatted (FR-114g), capped at `MaxRomBytes` | `{"path":"<abs>"}` | 400 bad/!bin·hex, 413 too large, 500 write failure |
   | `GET /api/v1/design/load?path=<p>` | query `path` | `{"design":Design}` | 400, 404, 422 malformed JSON |
@@ -745,7 +826,17 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
   Directory entries: subdirectories plus the files whose extension is in `exts`
   (default `.json`; the ROM picker passes `bin,hex`, FR-114e); the response
-  includes `parent` so the dialog can offer "up".
+  includes `parent` so the dialog can offer "up". Files matching the project
+  manifest pattern (`IsManifestName`, §6.5a) are filtered out by `handleFiles`
+  unless the request carries `manifests=1` (the Open Project picker does,
+  FR-121a/FR-121b) — the filter sits in the handler so `ListDir` stays generic.
+
+  The **project endpoints** (FR-121 group) keep the server stateless: no
+  open-project state is held; each request carries the project directory and
+  delegates to `project.go` (§6.5a). `project/create` makes the directory and
+  writes `<base>-manifest.json` (`{"formatVersion":1,"name":"<base>"}`);
+  `project/duplicate` copies the source directory recursively, rewriting the
+  recognized manifest under the destination's name (§6.5a).
 
   `POST /api/v1/file/save` writes **verbatim text** — the same absolute-path
   validation and `atomicWrite` as a design save, but no JSON interpretation or
@@ -768,15 +859,19 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   always picks up edited SPA assets (localhost-only authoring tool served from the
   source tree — no hard-refresh / DevTools cache toggle needed).
 - **Error handling:** consistent error envelope `{"error":"<message>"}` with the
-  HTTP status above. No stack traces leak to the client; full detail is logged
-  server-side.
-- **Dependencies:** `storage.go`, `components.go`, `paths.go`.
+  HTTP status above (`writeStorageError` gains `ErrProjectExists` → 409). No
+  stack traces leak to the client; full detail is logged server-side.
+- **Dependencies:** `storage.go`, `components.go`, `paths.go`, `project.go`.
 
 ### 6.5 Go: storage & paths (`srv/server/storage.go`, `srv/server/paths.go`)
 - **Purpose:** filesystem I/O for designs; resolve the default designs dir.
 - **Satisfies:** FR-050, FR-051, FR-052, FR-053, FR-055, OQ-006 (resolved).
 - **Interface:**
-  - `ListDir(path string) (DirListing, error)` — entries + parent (FR-053).
+  - `ListDir(path string, exts ...string) (DirListing, error)` — entries +
+    parent (FR-053). The single ext value `"-"` is the explicit
+    **directories-only** token (no file matches): the New/Duplicate Project
+    location prompt uses it (§6.19). Manifest filtering is *not* done here — it
+    lives in `handleFiles` (§6.4) so this stays a plain lister.
   - `LoadDesign(path string) (Design, error)` — read+unmarshal (FR-052, FR-055).
   - `SaveDesign(path string, d Design) error` — marshal (indented) + atomic write
     (write temp file in same dir, `fsync`, `rename`) to avoid truncating an
@@ -791,6 +886,62 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Error handling:** wrap OS errors with the attempted path; map to the HTTP
   statuses in §6.4. Refuse to save with an empty/relative `path` (400).
 - **Dependencies:** std `os`, `path/filepath`, `encoding/json`, `runtime`.
+
+### 6.5a Go: projects (`srv/server/project.go`)
+- **Purpose:** server side of the FR-121 project group: manifest discovery and
+  tolerant parsing, project info resolution, project creation, and project
+  duplication. Stateless — every function takes the project directory.
+- **Satisfies:** FR-121, FR-121a, FR-121b (server side), FR-121f (server side),
+  FR-053 (manifest exclusion helper).
+- **Interface:**
+  - `IsManifestName(name string) bool` — true when `name` ends in
+    `-manifest.json`, case-insensitively (consistent with `ListDir`'s
+    case-insensitive extension matching). Prefix-tolerant by construction
+    (FR-121a): any prefix matches, so a folder renamed outside the app never
+    orphans its manifest. Shared by `handleFiles`' listing filter (§6.4) and
+    the functions below; mirrored by the client's `isManifestName` (§6.19).
+  - `FindManifest(dir string) (file string, extras []string, err error)` —
+    non-recursive scan of `dir` for matching filenames; matches are sorted by
+    filename, the first is the recognized manifest, the rest are returned as
+    `extras` for the FR-121a multiple-manifest report. `""` when none.
+  - `ProjectInfo(dir string) (Info, error)` — `Info{Dir, Name, ManifestFile,
+    MainDesign string; Warnings []string}` (JSON per §6.4). Stats `dir`
+    (missing → 404 mapping, file → 403), runs `FindManifest`, and parses the
+    recognized manifest **tolerantly**: decode into `map[string]any`, read
+    `name`/`mainDesign` when they are strings, ignore everything else. `Name`
+    falls back to `filepath.Base(dir)` when there is no manifest or no `name`
+    (FR-121a). A manifest that exists but does not parse degrades to the
+    fallback with a warning (never an error). A recorded `mainDesign` whose
+    file no longer exists in `dir` is **cleared in the response** with a
+    warning (FR-121a's dangling-main rule, checked in one place). `extras`
+    become warnings too. The client posts every warning to the message tray
+    (FR-074).
+  - `CreateProject(path string) (Info, error)` — `path` absolute; the
+    directory must **not** exist (`ErrProjectExists` → 409; the parent must
+    exist, else 400 via `ErrInvalidPath` wrapping). `os.Mkdir`, then
+    `atomicWrite` of `<base>-manifest.json` carrying
+    `{"formatVersion":1,"name":"<base>"}` (FR-121a/FR-121b). Returns the new
+    project's `Info`.
+  - `DuplicateProject(src, dst string) (Info, error)` — `src` must be a
+    directory (missing → 404), `dst` must not exist (`ErrProjectExists` →
+    409). Creates `dst` and copies `src` **recursively**: every regular file
+    byte-verbatim (`io.Copy`; symlinks followed as files — trusted local FS,
+    §4.2), subdirectories preserved (`components/` etc. ride along, FR-121).
+    The **recognized** manifest (`FindManifest` on `src`) is not copied
+    verbatim: it is parsed tolerantly, its `name` set to
+    `filepath.Base(dst)`, all other fields (including `mainDesign` and unknown
+    keys) preserved, and written as `<base(dst)>-manifest.json` (FR-121f). An
+    unparseable recognized manifest falls back to a fresh minimal manifest
+    plus a warning in the returned `Info`. **Extra** manifests copy verbatim
+    (already a reported anomaly, FR-121a). A mid-copy failure returns the
+    error and leaves the partial destination — **no rollback**, per FR-121f;
+    the client reports it for manual cleanup.
+- **Error handling:** new sentinel `ErrProjectExists` mapped to 409 by
+  `writeStorageError` (§6.4); everything else wraps the attempted path and maps
+  through the existing table. All manifest-content problems are warnings, never
+  failures — a project must stay usable with a broken manifest (FR-121a).
+- **Dependencies:** std `os`, `io`, `path/filepath`, `encoding/json`, `sort`,
+  `strings`; `storage.go` (`atomicWrite`).
 
 ### 6.6 JS: model & netlist (`web/js/model/design.js`, `web/js/model/netlist.js`)
 - **Purpose:** the in-browser canonical design and the operations on it; net
@@ -1392,9 +1543,19 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 ### 6.10 JS: store, commands, undo/redo (`web/js/store.js`)
 - **Purpose:** single source of truth and the only mutation path; undo/redo;
   dirty tracking; pub/sub.
-- **Satisfies:** FR-024, FR-049a, NFR-006.
+- **Satisfies:** FR-024, FR-049a, FR-121c (the no-project lock), NFR-006.
 - **State:** `{ design, tool, selection, hover, viewport, dirty, savePath, designName,
-  simulating, sim }`.
+  simulating, sim, vectorPanelOpen, project }`.
+  `project` (FR-121, §6.19) is the client-held **current project**: `null` or
+  `{ dir, name, manifestFile, mainDesign }`, set via a notifying
+  `setProject(p)`. Transient session state, never persisted (the server holds
+  no open-project state). While `project` is `null` the design is the inert
+  FR-004 placeholder (§3.1 A8): `blocked()` — the same refusal mechanism as
+  the simulation lock (FR-087) — additionally refuses `dispatch`/`undo`/`redo`
+  with a tray report naming the cause ("no project is open — use File ▸ New
+  Project or Open Project"). `isReadonly()` is unchanged (it reports only the
+  sim/vector locks); chrome reads `state.project` directly for item enablement
+  (§6.11).
   `hover` is the refdes of the component currently under the cursor (or `null`),
   used only to show subunit connection ticks (FR-013c). It is transient UI state:
   set directly by the interaction layer with a plain renderer re-render, never
@@ -1460,9 +1621,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
 ### 6.11 JS: chrome widgets (`web/js/chrome/*.js`)
 - **Menu/tool bar (`toolbar.js`)** — Satisfies FR-004a, FR-004b, FR-026, FR-035, FR-022, FR-022a,
-  FR-023, FR-024, FR-044, FR-046, FR-049, FR-052, FR-076, FR-087, FR-088. A
+  FR-023, FR-024, FR-044, FR-046, FR-049, FR-052, FR-076, FR-087, FR-088,
+  FR-121b/FR-121c (chrome side). A
   single horizontal bar with pull-down menus on the left and always-visible
-  buttons on the right (FR-004a). **Menus:** **File** — New, Open, Save, Save As,
+  buttons on the right (FR-004a). **Menus:** **File** — New Project…, Open
+  Project…, Duplicate Project… (FR-121b, §6.19), New, Open, Save, Save As,
   Export… (FR-119, §6.18), Refresh Types; **Edit** — Undo, Redo, Copy, Paste
   (FR-111/FR-112, §6.15); **View** — Zoom In, Zoom Out, Fit to Screen (FR-022a,
   `interaction.fitToScreen`); **Simulate** — Test Vectors… (FR-115b, §6.16) and
@@ -1479,7 +1642,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   tool sets `store.tool`. The Run button calls the sim engine's `run()` and
   relabels to "Stop" (FR-076); while `simulating`, the design-modifying commands
   (Wire, Bus buttons; Undo, Redo, Paste, New, Open, Refresh Types, Test Vectors…,
-  Generate C…, and Export… items) are disabled — Save, Save As, the zoom items,
+  Generate C…, Export…, and the three project items, FR-121b) are disabled —
+  Save, Save As, the zoom items,
   Select, and Run/Stop stay enabled (FR-087; the same set is disabled under the
   test-vector panel lock via `isReadonly()`, §6.16/FR-115h). The **Refresh
   Types** item (FR-088, tooltip "Re-copy type data from the loaded library into
@@ -1487,6 +1651,19 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   at startup. (Reworked 2026-06-21; supersedes the former flat toolbar — a row of
   text/icon buttons — whose File ops and Undo/Redo/zoom moved into menus while the
   modal tools and Run stayed as buttons. The filename is retained for now.)
+  - *Current-project indicator (FR-121b)*: a `#project-name` label in the bar
+    (`index.html`, styled beside `#design-name`) shows the current project's
+    display name via a store subscription; before a project is current it reads
+    "(no project)".
+  - *No-project state (FR-121c)*: while `store.state.project` is `null`,
+    `refresh()` additionally disables everything except **New Project…, Open
+    Project…, Open, Select, and the View items** — i.e. it also disables Save,
+    Save As, New, Export…, Refresh Types, the Simulate items, Run, the Wire/Bus
+    tool buttons, Undo/Redo/Paste, and Duplicate Project… (nothing to
+    duplicate). The FR-004b/FR-004c key bindings honor the same enablement:
+    the store's no-project `blocked()` covers every dispatch path, and the
+    fileops entry points guard themselves (§6.19), so a bound key cannot
+    bypass a disabled item.
   - *Menu accelerators (FR-004b)*: `addItem` takes an optional accelerator
     descriptor and renders it right-aligned in the row (a `.menu-accel` span; the
     label and hint sit in a flex row). An `accelLabel(descriptor)` helper formats
@@ -1652,15 +1829,36 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   and `applyLive` wakes the simulator (§6.10, §6.13). Adding a new interactive
   input is therefore: an `INTERACTIONS` handler + a render branch, nothing in the
   scheduler or the FSM.
-- **Dialogs (`dialogs.js`)** — Satisfies FR-046–FR-049, FR-052–FR-054. Modal DOM
+- **Dialogs (`dialogs.js`)** — Satisfies FR-046–FR-049, FR-052–FR-054, plus the
+  project-aware dialog machinery of FR-121 (§6.19). Modal DOM
   dialogs:
   - *Save* — on first save (no `savePath`) prompt with name prefilled to the
-    design name (FR-047); the dialog uses `/api/v1/files` to navigate directories
+    design name (FR-047), **rooted at the current project root** (FR-121e/
+    FR-121h; formerly the data dir) so the prompt effectively asks only for a
+    name; the dialog uses `/api/v1/files` to navigate directories
     and choose a location (FR-051); subsequent saves skip the prompt (FR-048).
     The design adopts the chosen file's base name (FR-047a): fileops overrides
     `name` in the serialized payload (so the file matches) and
     `store.markSaved(path, name)` updates `design.name` and the displayed
     `designName` after the write succeeds.
+  - *Project-aware `openFileDialog` generalizations (§6.19, FR-121)*:
+    (a) `allowDir: true` (open mode) — the OK button works with no file
+    selected and resolves to the **currently listed directory**
+    (`{path: currentPath, isDir: true}`), for Open Project's folder pick
+    (FR-121b); (b) `includeManifests: true` — passes `manifests=1` to
+    `listDir` so `*-manifest.json` files appear (they are excluded by default,
+    FR-121a); (c) `exts: ["-"]` — the directories-only listing (§6.5) used by
+    the New/Duplicate Project location prompt; (d) `saveExt: null` — no
+    extension appended to the typed name (a project directory name, extending
+    `applySaveExt`); (e) `ignoreLastDir: true` — this dialog starts at the
+    caller's `startPath` even in open mode (the FR-121b main-design picker,
+    §3.1 A11) while still updating the remembered directory; and
+    (f) `validate(path) → string|null` (save mode) — run in `onOk` **before**
+    the FR-049b overwrite guard; a non-null return renders on an inline error
+    line and keeps the dialog open. fileops' design-save validator (§6.19)
+    rejects a name matching the manifest pattern (FR-121a) and a resolved path
+    outside the current project (FR-121e), also posting the rejection to the
+    message tray (FR-074).
   - *Open* — server-assisted directory navigation via `/api/v1/files` (FR-052/
     FR-053). **Fallback (FR-054):** if navigation is judged impractical, render a
     recent-files list persisted in `localStorage`. Keep the recent-files code
@@ -1751,18 +1949,29 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 ### 6.12 JS: API client & bootstrap (`web/js/api.js`, `web/js/app.js`)
 - **Purpose:** typed-ish wrappers over `fetch`; app startup.
 - **Satisfies:** FR-003, FR-004, IR-001, NFR-002.
-- **`api.js`:** `getComponents()`, `getDefaults()`, `listDir(path)`,
+- **`api.js`:** `getComponents()`, `getDefaults()`, `listDir(path, exts,
+  {includeManifests})`,
   `loadDesign(path)`, `saveDesign(path, design)`, `createComponent(yaml)`
   (FR-007a), `readRomFile(path)` (FR-114e), `saveTextFile(path, content)`
-  (FR-116/FR-119), `ping()`. All target
+  (FR-116/FR-119), `projectInfo(dir)`, `projectCreate(path)`,
+  `projectDuplicate(src, dst)` (FR-121, §6.19), `ping()`. All target
   same-origin
   `/api/v1/*` (localhost only — no external requests, NFR-002). Each rejects with
   the server error envelope on non-2xx.
 - **`app.js`:** create the store with an empty design named
-  `unnamed schematic <localDateTime>` in SELECT mode (FR-004, FR-045); fetch
+  `unnamed schematic <localDateTime>` in SELECT mode (FR-004, FR-045) — with
+  `project: null` this is the **inert placeholder** of FR-121c (§3.1 A8): the
+  store's no-project lock (§6.10) and the toolbar's no-project state (§6.11)
+  keep it uneditable until New Project / Open Project / Open establishes a
+  current project (§6.19); fetch
   components + defaults (await both, FR-003); offer backup recovery (§6.12a,
-  FR-093) before presenting the empty design; build palette, toolbar, canvas,
-  interaction; start the connection monitor and backup writer (§6.12a); remove
+  FR-093) before presenting the empty design — an accepted recovery that has a
+  `savePath` also establishes its containing folder as the current project via
+  `setCurrentProject` (§6.19), else the recovered design sits inert behind the
+  FR-049a dirty guard until a project is opened; build palette, toolbar, canvas,
+  interaction, and the project ops (`makeProjectOps`, §6.19, wired to the File
+  menu); subscribe the `#project-name` label (FR-121b); start the connection
+  monitor and backup writer (§6.12a); remove
   the loading overlay.
 - **Error handling:** if `getComponents()` fails, show a blocking error banner
   ("server unreachable — is retrosim running?") and keep the canvas disabled.
@@ -2147,13 +2356,13 @@ no sequential part could ever leave U.)
 
 **Interface resolution (FR-095).** `designInterface(childDesign) → InterfaceSignal[]` returns one `{label,dir,width}` per distinct port — both 1-wide `port`s (`width:1`) and multi-bit `portN`s (FR-071e, `width:N` = its `P` pin-group size) — keyed by label and ordered by label; the first port seen for a label wins on a disagreement. Here `width` is the **signal's** bit count, not a pin attribute — a pin is always one bit. Each signal's `dir` is **derived from the child's wiring** by `portDirection(design, portRefdes)` (FR-094c), not read from a stored `portDir`: it builds the child's nets (`buildNets`) and inspects the non-port pins on the relevant net(s) — any `bidir`/`tristate` pin → `bidir`; else any plain `out` driver → `out`; else `in` (also when unconnected). For a 1-wide port the net is found by **label** (the connector pin is now also a net member, FR-094e, but label lookup remains the direction-derivation path); for a `portN` the direction is **aggregated across its bit nets**, found by the port's `P0..P(N-1)` pin keys (which *are* net members, joined through the snapped bus/wire). `designInterface` then applies the port's `dirOverride` (FR-094d) — so a derived-`bidir` signal carrying an override reports `in`/`out`, and the dir returned is the **effective** direction (the override is ignored unless the derived value is `bidir`). `synthTypeForInterface(iface, render) → ComponentType` builds an **in-memory, never-saved** synthetic `ComponentType` whose pins are all **one bit**: a `width:1` signal becomes one pin named by its label; a `width:N` signal **expands into N pins** `<label>0`..`<label>(N-1)` (contiguous, in bit order) **plus a `pinGroups` entry** named `<label>` so a matching-width bus snaps to it through the ordinary group machinery (FR-041/FR-042). Pins are laid out per render style (`ic`: `out` right, `in`/`bidir` left; a signal's expanded pins stay together on one side). This is the key reuse: a sub-design instance carries this synthetic `typeData` in memory, so `pinWorldPos`, vertices, wire endpoints, bus snap, hit-testing, and the rectangle renderer all work **unchanged** (§6.6–§6.9). A child with no ports has an empty interface and cannot be embedded (FR-097a).
 
-**The ADD flow (FR-097/097a/097b).** `builtins.js` exposes a single non-placeable lower-palette entry **ADD**. Arming it and clicking (or dropping it on) the canvas opens the **Add sub-component dialog** (`dialogs.js`) at the grid point instead of creating an object. The dialog: (1) navigates/loads a child via `/api/v1/files`+`/design/load` (§6.4); (2) shows the child's `defaultRender` (§7.2) and resolved interface; (3) offers an `ic`/`connector` choice defaulting to `defaultRender`. OK → dispatch `PlaceSubDesign(childPath, render, @grid)`; Cancel → nothing; both return to SELECT (one-shot, FR-010). `childPath` is held **absolute in memory** (the picked child's absolute path) and relativized to the parent's save dir only at save time (§7.4), so embedding **does not require a saved parent** and shows no save prompt (FR-097b). The dialog rejects an interface-less file, and a self/cyclic embed (`wouldCycle`), with a message.
+**The ADD flow (FR-097/097a/097b).** `builtins.js` exposes a single non-placeable lower-palette entry **ADD**. Arming it and clicking (or dropping it on) the canvas opens the **Add sub-component dialog** (`dialogs.js`) at the grid point instead of creating an object. The dialog: (1) navigates/loads a child via `/api/v1/files`+`/design/load` (§6.4); (2) shows the child's `defaultRender` (§7.2) and resolved interface; (3) offers an `ic`/`connector` choice defaulting to `defaultRender`. OK → dispatch `PlaceSubDesign(childPath, render, @grid)`; Cancel → nothing; both return to SELECT (one-shot, FR-010). `childPath` is held **absolute in memory** (the picked child's absolute path) and relativized to the parent's save dir only at save time (§7.4), so embedding **does not require a saved parent** and shows no save prompt (FR-097b). The dialog rejects an interface-less file, a self/cyclic embed (`wouldCycle`), and — FR-121d — a file **outside the current project directory** (`fileops.addSubDesign` checks containment against `store.state.project.dir` before the cycle check; §6.19), each with a message. Its picker is seeded at the project root (FR-121h) under the usual FR-052a remembered-directory rule.
 
 **The New GAL part flow (FR-066b/066c/007a).** `builtins.js` exposes a non-placeable upper-palette action **New GAL part** (a tile that opens a dialog rather than arming placement). The **New GAL part dialog** (`dialogs.js`) renders the device's fixed skeleton — for the GAL22V10, the 24-pin map (pin 1 clock/in, 2–11 + 13 in, 14–23 OLMC I/O, 12 GND, 24 VCC) — and collects only the per-part data: `partnumber`, optional `description`, a label per I/O pin, a per-OLMC direction (in / comb-out / reg-out), optional named pin groups (FR-066d, below), and the `behavior` block. As the user types, the dialog assembles a candidate `typeData` (`type:"22V10"`, `gal:"GAL22V10"`, an immutable `id` generated from the `partnumber` (FR-066e), the chosen `pins`, the `behavior`) and runs `galasm.js` `compileBehavior`+`validateStrict` (§6.13) **live**, surfacing the same accept/reject diagnostics Run would (FR-079b) — the dialog reuses that one gate, adding no second validator. OK serializes the `typeData` to YAML client-side and `POST`s it to `/api/v1/components` (§6.4); on success it dispatches the live palette add (above) and returns to SELECT (one-shot, FR-010). A duplicate-`id` 409 or validation error is shown in the dialog; Cancel discards. Placement of the resulting tile is then ordinary FR-008/FR-009.
 
 **Pin-groups sub-dialog (FR-066d).** A "Pin groups…" button opens a modal sub-dialog (`dialogs.js`) that edits the part's named pin groups (FR-063). It lists the groups defined so far (each with a remove control) and offers a name field plus a checkbox per pin (labeled with the pin's *current* label) to define one more; "Add group" appends it to the working list, and the sub-dialog returns the updated list to the parent on close. Membership is stored by the **skeleton pin** (its stable DIP `number`), not the label string, so a later rename does not break a group; `galPartYaml` resolves each member to its current label and emits members in **pin-layout order** (the part's pin order, top-to-bottom) so the bus bit order is deterministic (FR-066d). The parent dialog folds the groups into the candidate `typeData` only for the YAML write (a `groups:` block, §7.3) — groups do not enter `compileBehavior`/`validateStrict`. Client checks: non-empty unique name, ≥1 member, and the **geometry rule** (FR-063a) — the checked pins must share one side and form a contiguous run (no non-member pin between them); the sub-dialog rejects an "Add group" that straddles sides or is interrupted, so it can only build groups the brace can render. Membership is by skeleton DIP number, but the side/contiguity test resolves each member to its skeleton pin's side/`pos`.
 
-**The memory-device generator (FR-114/FR-114a/FR-114b/FR-114f).** A second non-placeable **upper-palette** action tile, **NEW MEM** (built beside the New GAL part tile, labeled **NEW GAL**, in `app.js`, routed through interaction's palette-click handler to an `onNewMemDevice` callback exactly as `newgal` routes to `onNewGalPart`). Its callback opens the **New memory device dialog** (`memDeviceDialog`, `dialogs.js`). The dialog's top control is a **RAM/ROM** radio (default RAM); below it a common **name** field and a **dynamic region** holding the class-specific controls, fully rebuilt whenever the radio changes (FR-114 "completely re-initializes"): for both classes an **address-bits** number field *n* (1–24) with a live "= 2ⁿ locations" readout and a **data-width** select {4,8,16,32} (default 8); for ROM only, a **content-file** row — a "Choose file…" button that opens the server-side file browser (`openFileDialog`, FR-053, reused with a custom title) and a label showing the chosen path; for **RAM** only, an **optional** persistent **save-file** row — a "Choose file…" button (save-mode `openFileDialog` with `saveExts:["bin","hex"]`, so a typed `.bin`/`.hex` is honored and a bare name gets the `.bin` default — no `.hex.bin` doubling), a **Clear** button, and a path label — plus a **"Load save file at start-up"** checkbox (FR-114g). The **name** field (FR-114a) is common (it survives a class switch); it is pre-seeded with a size-based suggestion (`suggestName`, e.g. "RAM 256×8") that keeps tracking the class/size/width until the user types into it (a `nameEdited` flag then freezes it). A class switch re-initializes the file controls (both `romFile` and the RAM `ramFile`/`ramLoad` are discarded). `gather()` returns `{ name, kind:"ram"|"rom", addressBits, locations:2**n, dataWidth, romFile?, ramFile?, ramLoad? }` (the RAM fields only when a save file is chosen); a pure `validateMemSpec(spec)` helper (testable, no DOM) gates **Create** — name non-empty, *n* in range, width in the set, a ROM file chosen for ROM, and a RAM save file (if any) ending `.bin`/`.hex`. The RAM save file is **optional** and never blocks Create. The radio, fields, name, and file selection re-run validation live. OK resolves the gathered+validated spec to `app.js`, whose `onNewMemDevice` builds the type with `memDeviceType(spec)` (below), serializes it to component YAML with `memDeviceYaml(type)` (a `mem:` block plus the explicit pinout, §7.6/FR-114f), and **persists** it through the same `createComponent` POST the GAL flow uses (FR-007a) — the server writes the `.yaml`, registers it, and returns the parsed type, which `addCreatedPart` joins to the library + sorted upper-palette tile. A duplicate name (hence `id`) or an existing library file is rejected by the server (409); `createComponent` throws and `memDeviceDialog` surfaces it inline (the dialog stays open). A built-in id collision (built-ins are not in the server library) is still caught client-side before the POST. A placed device **simulates** via the built-in memory behavior (FR-114d, §6.13), and a ROM's content is loaded from its file at Run (FR-114e). The ROM picker calls `openFileDialog` with `exts:["bin","hex"]`, so the server file browser lists those (and dirs) rather than designs. **Cross-session persistence (FR-114f, was deferred per FR-114b/OQ-013):** the generated metatype is now written to the component library as a `.yaml` artifact carrying its `mem:` block, so it survives reload and Refresh Types (FR-088); on load the built-in behavior binds from that serializable `mem` data (not session-only code), and a *placed* instance still also round-trips via its embedded `typeData` (FR-057).
+**The memory-device generator (FR-114/FR-114a/FR-114b/FR-114f).** A second non-placeable **upper-palette** action tile, **NEW MEM** (built beside the New GAL part tile, labeled **NEW GAL**, in `app.js`, routed through interaction's palette-click handler to an `onNewMemDevice` callback exactly as `newgal` routes to `onNewGalPart`). Its callback opens the **New memory device dialog** (`memDeviceDialog`, `dialogs.js`). The dialog's top control is a **RAM/ROM** radio (default RAM); below it a common **name** field and a **dynamic region** holding the class-specific controls, fully rebuilt whenever the radio changes (FR-114 "completely re-initializes"): for both classes an **address-bits** number field *n* (1–24) with a live "= 2ⁿ locations" readout and a **data-width** select {4,8,16,32} (default 8); for ROM only, a **content-file** row — a "Choose file…" button that opens the server-side file browser (`openFileDialog`, FR-053, reused with a custom title) and a label showing the chosen path; for **RAM** only, an **optional** persistent **save-file** row — a "Choose file…" button (save-mode `openFileDialog` with `saveExts:["bin","hex"]`, so a typed `.bin`/`.hex` is honored and a bare name gets the `.bin` default — no `.hex.bin` doubling), a **Clear** button, and a path label — plus a **"Load save file at start-up"** checkbox (FR-114g). The **name** field (FR-114a) is common (it survives a class switch); it is pre-seeded with a size-based suggestion (`suggestName`, e.g. "RAM 256×8") that keeps tracking the class/size/width until the user types into it (a `nameEdited` flag then freezes it). A class switch re-initializes the file controls (both `romFile` and the RAM `ramFile`/`ramLoad` are discarded). `gather()` returns `{ name, kind:"ram"|"rom", addressBits, locations:2**n, dataWidth, romFile?, ramFile?, ramLoad? }` (the RAM fields only when a save file is chosen); a pure `validateMemSpec(spec)` helper (testable, no DOM) gates **Create** — name non-empty, *n* in range, width in the set, a ROM file chosen for ROM, and a RAM save file (if any) ending `.bin`/`.hex`. The RAM save file is **optional** and never blocks Create. The radio, fields, name, and file selection re-run validation live. OK resolves the gathered+validated spec to `app.js`, whose `onNewMemDevice` builds the type with `memDeviceType(spec)` (below), serializes it to component YAML with `memDeviceYaml(type)` (a `mem:` block plus the explicit pinout, §7.6/FR-114f), and **persists** it through the same `createComponent` POST the GAL flow uses (FR-007a) — the server writes the `.yaml`, registers it, and returns the parsed type, which `addCreatedPart` joins to the library + sorted upper-palette tile. A duplicate name (hence `id`) or an existing library file is rejected by the server (409); `createComponent` throws and `memDeviceDialog` surfaces it inline (the dialog stays open). A built-in id collision (built-ins are not in the server library) is still caught client-side before the POST. A placed device **simulates** via the built-in memory behavior (FR-114d, §6.13), and a ROM's content is loaded from its file at Run (FR-114e). The ROM picker calls `openFileDialog` with `exts:["bin","hex"]`, so the server file browser lists those (and dirs) rather than designs. Both memory-file pickers (ROM content, RAM save) are seeded at the **current project root** (FR-121h; `onNewMemDevice` reads `store.state.project.dir` at invocation, superseding the static `defaults.dataDir` seed) but may navigate anywhere on disk — data files are exempt from the project boundary (FR-121d). **Cross-session persistence (FR-114f, was deferred per FR-114b/OQ-013):** the generated metatype is now written to the component library as a `.yaml` artifact carrying its `mem:` block, so it survives reload and Refresh Types (FR-088); on load the built-in behavior binds from that serializable `mem` data (not session-only code), and a *placed* instance still also round-trips via its embedded `typeData` (FR-057).
 
 *Generated pinout (FR-114c, `memDeviceType` in `builtins.js`).* From `{name, kind, addressBits:n, dataWidth:w, locations}` it synthesizes a `ComponentType` rendered as an ordinary IC rectangle (§6.8): **left** edge top-to-bottom = `A0…A(n-1)` (an `ADDR` pin group, FR-063) followed by `CE/`, `OE/`, and — for RAM — `WE/` (the controls trail the address run so they don't break its contiguity, FR-063a); **right** edge = `D0…D(w-1)` (a `DATA` group). Address and control pins are `in`; data pins are `bidir` for RAM and `tristate` for ROM (FR-062a). The outline mirrors the server's `resolveOutline` (§6.3) — width 4 (no top/bottom pins), height = max-edge-position + 2. The type is **not** `builtin` (so it gets a U-series refdes and the default labelled-rectangle render with pin names, §6.8), takes the free-form `name` as its display name with the derived `id` `type-<name>` (FR-066e, the same rule loaded/GAL parts use — so a duplicate name is rejected by the create endpoint), and carries a `mem:{kind,addressBits,dataWidth,locations,romFile?,ramFile?,ramLoad?}` block driving the built-in behavior (FR-114d) and round-tripping through YAML persistence (FR-114f/FR-114g, via `memDeviceYaml` in `dialogs.js`). Pure, no DOM.
 
@@ -2172,9 +2381,9 @@ no sequential part could ever leave U.)
   - **Off-sheet connectors (FR-101/103).** After embedding, follow every port `target` transitively (each `target.file` is a bare filename in the **same folder** as the referencing sheet, FR-101, so it resolves within that sheet's directory), de-duplicating loaded files by absolute path; each distinct peer sheet is merged under a per-sheet tag prefix (file base name, numeric suffix on a collision; the root sheet unprefixed) applied to refdes/ids/labels exactly as above. Each declared link then becomes a **synthetic two-node wire** between the two ports' connector vertices — the ordinary wire-lane union implements the cross-file net (FR-101a). Mutual peering (A↔B) is legal (FR-102a): de-dup bounds it.
   - **Cycles (FR-102a).** A visited-set of absolute file paths along the current expansion path detects an embed of an already-open ancestor — including via a `target` that leads back into one — and `flatten` throws; the sim run and the vector runner refuse with a message-tray report. The ADD dialog refuses via a `wouldCycle(childAbsPath, parentAbsPath, loadChild)` helper that walks the candidate child's transitive embeds (FR-097a).
   - **Consumers (§6.13/§6.16).** `createSim.run()` awaits `flatten` first and feeds the FlatDesign to `loadRomContents` + `buildSimulation`, so child ROMs preload (their `mem.romFile` paths are stored absolute, §6.14 persistence) and child built-ins (clock, POR, pulls, switches) participate; child switches/indicators have no top-sheet UI presence — their effect is electrical only. The FlatDesign **shares the root's component objects** (cloning only what flatten rewrites: wires/buses/vertices, plus shallow copies of the sub-design entries it replaces), because the running sim reads mutable interactive state off the retained instances — top-sheet switch clicks (FR-087b) must stay live during a run. Vector runs flatten at the caller: the panel's Run/Capture (`dialogs.js`) flatten before `loadRomContents` + `runVectors`/`captureVectors`, keeping the runner itself synchronous and design-agnostic; the runner refuses a **hidden clock** — a clock generator whose refdes is hierarchical (inside a child/peer) — since scripted-clock mode (FR-115e) drives clocks by top-sheet columns only. The FR-107 parity harness flattens its slow leg the same way (cgen milestone), so hierarchical parity pairs depend on this. `SUBUNIT_PKG_RE` (§6.13, and its `cgen.js` twin) becomes hierarchical-prefix-tolerant — the package key is the full prefixed stem (`X1/U3`), so a child's subunits group within their own instance and never across instances.
-- **Loading (FR-098/099a):** on opening a design, `fileops` (`loadIntoStore`) converts each sub-design's stored **relative** `childPath` to **absolute** against the opened file's directory, then `resolveSubDesigns` loads each child (by its now-absolute path) far enough to resolve the interface for rendering; failures yield broken-link placeholders, never aborting the open. After load the model holds absolute paths. Deep child contents load lazily — only `flatten` (at Run) needs them. As its final step `loadIntoStore` invokes an `onLoaded` callback (wired in `app.js` to `interaction.fitToScreen`, FR-022a) so every completed load — Open and hierarchy navigation alike — frames the design in the viewport; the callback runs after `replaceDesign`, once the new geometry exists.
+- **Loading (FR-098/099a):** on opening a design, `fileops` (`loadIntoStore`) converts each sub-design's stored **relative** `childPath` to **absolute** against the opened file's directory — and likewise absolutizes relative **mem data paths** (`typeData.mem.romFile`/`ramFile`) via `absolutizeDataPaths` (FR-121g, §6.19/§7.4) — then `resolveSubDesigns` loads each child (by its now-absolute path) far enough to resolve the interface for rendering; failures yield broken-link placeholders, never aborting the open. A child reference that resolves **outside the project directory** (a legacy design, FR-121d) still loads and renders normally but is reported once per offending path via the message tray (FR-074); after any successful load the containing-folder rule may switch the current project (§3.1 A10, §6.19). After load the model holds absolute paths. Deep child contents load lazily — only `flatten` (at Run) needs them. As its final step `loadIntoStore` invokes an `onLoaded` callback (wired in `app.js` to `interaction.fitToScreen`, FR-022a) so every completed load — Open and hierarchy navigation alike — frames the design in the viewport; the callback runs after `replaceDesign`, once the new geometry exists.
 - **Interface-change re-route (FR-099c):** each instance carries `iface` — the `designInterface` array it was placed/last saved with (`addSubDesignInstance` sets it; §7.2 persists it; the comparison record FR-099c allows, never used for rendering or simulation). `resolveSubDesigns` deep-compares the freshly resolved interface against it: on a difference it updates `iface`, reports the instance, and returns the changed refdes list (`{ changed }`). `loadIntoStore` then calls `rerouteAttachedWires(design, changed)` (`engine/router.js`): for every **simple** wire — a two-point path whose ends are both `node` refs and which passes through no junction vertex — with an endpoint `pin`/`connector` vertex on a changed instance, propose a fresh route between the endpoints' derived world positions (escape vectors from the pins' rotated sides, as interaction's `routerEndpoint` does) and replace the wire's interior points, keeping the endpoint node refs; a null route keeps the old bends. Runs before `store.replaceDesign`, so like the FR-099b dangling rewrite it is load-time normalization — no command, no undo, no dirty mark. An instance with no stored `iface` (a pre-FR-099c file) skips the comparison and gains the field at the next save.
-- **Persistence:** no Go change is needed — the server already stores designs as an opaque `json.RawMessage` (§6.5), so the new instance fields (`kind`/`childPath`/`render`/`iface`/`label`/`portDir`/`dirOverride`/`width`/`target`), the design-level `defaultRender`, and the `connector` vertex kind round-trip untouched (`iface` is additive-optional like `defaultRender`/`target` were — no `formatVersion` bump). Only the client model (`model/design.js`, `model/persist.js`) is typed; `persist.js`'s structural sanity pass (§7.4) validates a `connector` vertex's `ref`/`pin` exactly as it does a `pin` vertex. The in-memory `childPath` is absolute (FR-098); **`fileops.save` relativizes** each sub-design's `childPath` against the chosen save dir just before writing, and **`loadIntoStore` absolutizes** on open — so the on-disk file stays relative/portable while the live model is absolute. `serializeDesign` itself round-trips `childPath` verbatim (a backup snapshot, §7.4, thus stores the absolute path, correct for same-session recovery). Child files are read through the existing `/api/v1/design/load` with client-resolved absolute paths.
+- **Persistence:** no Go change is needed — the server already stores designs as an opaque `json.RawMessage` (§6.5), so the new instance fields (`kind`/`childPath`/`render`/`iface`/`label`/`portDir`/`dirOverride`/`width`/`target`), the design-level `defaultRender`, and the `connector` vertex kind round-trip untouched (`iface` is additive-optional like `defaultRender`/`target` were — no `formatVersion` bump). Only the client model (`model/design.js`, `model/persist.js`) is typed; `persist.js`'s structural sanity pass (§7.4) validates a `connector` vertex's `ref`/`pin` exactly as it does a `pin` vertex. The in-memory `childPath` is absolute (FR-098); **`fileops.save` relativizes** each sub-design's `childPath` against the chosen save dir just before writing — and, by the same absolute-in-memory / relative-on-disk rule, each **in-project** mem data path via `relativizeDataPaths` (FR-121g, copy-on-write like the portDir stamping, so the live model keeps its absolute paths) — and **`loadIntoStore` absolutizes** on open — so the on-disk file stays relative/portable while the live model is absolute. `serializeDesign` itself round-trips `childPath` verbatim (a backup snapshot, §7.4, thus stores the absolute path, correct for same-session recovery). Child files are read through the existing `/api/v1/design/load` with client-resolved absolute paths.
 - **Dependencies:** `model/design.js`, `model/netlist.js`, `api.js`, store, `chrome/dialogs.js`, `engine/canvas.js`, `engine/sim.js`.
 
 ### 6.15 JS: clipboard — copy & paste (`web/js/model/clipboard.js` + interaction/canvas/chrome)
@@ -2219,7 +2428,7 @@ no sequential part could ever leave U.)
   - File model: `FORMAT_VERSION` (**3** — v2 marked the `C` input symbol, FR-115e; **v3** adds the `io` column array and per-row `io` cell array, FR-115i; the v1→v2 migration is the identity, and v2→v3 adds empty `io:[]` to the column set and to each row), `serializeVectors(doc)`, `deserializeVectors(obj)` with a `migrate()` chain mirroring `model/persist.js` (§7.4); shape per §7.7. ROM content is loaded once before a run via `loadRomContents(design)` reused from `sim.js` (FR-114e), so ROM-backed combinational logic resolves.
   - `hasClockGenerators(design) → boolean`. True when any component's `typeData.renderType` is `"clock"` — the same built-in identification `buildSimulation` uses for the sequential/combinational split (§6.13, FR-086). Selects the sequential run path (FR-115e) in `runVectors`/`captureVectors`, the clock columns in `deriveColumns`, and the dialog's sequential-mode notice. Pure and DOM-free; deliberately a design scan rather than `buildSimulation(...).hasClocks()`, which would compile every behavior just to answer a yes/no question. (Originally introduced for the FR-115g guard, now superseded.)
 
-**Panel (`chrome/dialogs.js` `testVectorsPanel({ store, dataDir })`).** A **docked, modeless panel** (FR-115b, reworked 2026-07-02 from the former `.dialog-overlay` modal so the schematic stays visible while authoring). It mounts into `#vec-panel`, the bottom-third host inside a now flex-column `#canvas-area` (canvas host on top, panel host below); opening reveals the host and shrinks the canvas box, which the `canvas.js` `ResizeObserver` refits automatically at the unchanged viewport — content keeps its scale/aspect, only the visible extent shrinks (§6.13) — and closing hides it so the canvas grows back. It exposes `open()`/`close()`/`isOpen()` and a header **✕/Close** control, and binds **no** Escape-to-close (Escape remains a canvas gesture). While open it sets `store.state.vectorPanelOpen`, imposing the FR-115h read-only lock (see toolbar/store wiring below). It renders an HTML `<table>` whose header comes from `deriveColumns(store.design)` — which includes the design's port columns (FR-115f) and bidirectional (io) columns (FR-115i) directly, so the panel and runner operate on `store.design` itself (no wrapper); any `warnings` it returns (FR-115a reconciliation mismatches — the former bidir-port skip warning is gone now that bidir ports bind as io columns, FR-115i) show in the notice line — and whose body is rows of `<select>`/`<input>` cells held in a 2-D ref array read back in `gather()` (the map-to-`{el}`-then-read pattern of the GAL pin rows). Buttons: **+ Row** / **− Row**; **Run** → `runVectors` then paint each output cell — and each io **release** cell (FR-115i) — green/red (a failing cell shows its `actual`) and write an "N of M rows passed" summary line (FR-115d); **Capture** → `captureVectors` filling every row's expected cells (ordered pass for a sequential design, FR-115e); **sequential mode** (FR-115e): when `hasClockGenerators(store.design)`, a clock column's cell `<select>` offers `0`/`1`/`C` (per its `kind:"clock"` marker) and defaults to `C`, and a persistent notice line (`vec-mode`) states that rows run in order, state persists, and `C` pulses the clock — replacing the removed FR-115g guard; an **io** column's cell `<select>` (FR-115i) offers `0`/`1`/`H`/`L`/`X`, defaults to `X`, and styles by role (driving `0`/`1`, expected `H`/`L`, inert `X`); **Load**/**Save** → `openFileDialog` (§6.11) seeded at `dirOf(store.state.savePath)` (POSIX helper from `fileops.js`) with default `<base>.tv`, then the design load/save API wrappers (`api.js`) — the `.tv` payload is JSON and rides the existing `/api/v1/design/{load,save}` endpoints (§6.4), which neither interpret nor extension-check the body. New `vec-*` CSS classes in `style.css` reuse the dialog primitives, the raised tray shadow, accent `#4a90d9`, error `#b00`, success `#1a7f37`.
+**Panel (`chrome/dialogs.js` `testVectorsPanel({ store, dataDir })`).** A **docked, modeless panel** (FR-115b, reworked 2026-07-02 from the former `.dialog-overlay` modal so the schematic stays visible while authoring). It mounts into `#vec-panel`, the bottom-third host inside a now flex-column `#canvas-area` (canvas host on top, panel host below); opening reveals the host and shrinks the canvas box, which the `canvas.js` `ResizeObserver` refits automatically at the unchanged viewport — content keeps its scale/aspect, only the visible extent shrinks (§6.13) — and closing hides it so the canvas grows back. It exposes `open()`/`close()`/`isOpen()` and a header **✕/Close** control, and binds **no** Escape-to-close (Escape remains a canvas gesture). While open it sets `store.state.vectorPanelOpen`, imposing the FR-115h read-only lock (see toolbar/store wiring below). It renders an HTML `<table>` whose header comes from `deriveColumns(store.design)` — which includes the design's port columns (FR-115f) and bidirectional (io) columns (FR-115i) directly, so the panel and runner operate on `store.design` itself (no wrapper); any `warnings` it returns (FR-115a reconciliation mismatches — the former bidir-port skip warning is gone now that bidir ports bind as io columns, FR-115i) show in the notice line — and whose body is rows of `<select>`/`<input>` cells held in a 2-D ref array read back in `gather()` (the map-to-`{el}`-then-read pattern of the GAL pin rows). Buttons: **+ Row** / **− Row**; **Run** → `runVectors` then paint each output cell — and each io **release** cell (FR-115i) — green/red (a failing cell shows its `actual`) and write an "N of M rows passed" summary line (FR-115d); **Capture** → `captureVectors` filling every row's expected cells (ordered pass for a sequential design, FR-115e); **sequential mode** (FR-115e): when `hasClockGenerators(store.design)`, a clock column's cell `<select>` offers `0`/`1`/`C` (per its `kind:"clock"` marker) and defaults to `C`, and a persistent notice line (`vec-mode`) states that rows run in order, state persists, and `C` pulses the clock — replacing the removed FR-115g guard; an **io** column's cell `<select>` (FR-115i) offers `0`/`1`/`H`/`L`/`X`, defaults to `X`, and styles by role (driving `0`/`1`, expected `H`/`L`, inert `X`); **Load**/**Save** → `openFileDialog` (§6.11) seeded at the **project root** (`store.state.project.dir`, FR-121h — identical to the former `dirOf(store.state.savePath)` under the flat project layout, and defined even for a not-yet-saved design) with default `<base>.tv`, then the design load/save API wrappers (`api.js`) — the `.tv` payload is JSON and rides the existing `/api/v1/design/{load,save}` endpoints (§6.4), which neither interpret nor extension-check the body. New `vec-*` CSS classes in `style.css` reuse the dialog primitives, the raised tray shadow, accent `#4a90d9`, error `#b00`, success `#1a7f37`.
 
 **`openFileDialog` extension (`chrome/dialogs.js`).** Its save mode hardcodes a `.json` suffix; generalize it to take an optional target extension (e.g. `saveExt`) so the picker lists and names `.tv` files. The server `ListDir`/`exts` filter already accepts arbitrary extensions (the `.bin`/`.hex` ROM precedent, §6.4/FR-114e); no server change.
 
@@ -2250,7 +2459,7 @@ no sequential part could ever leave U.)
   - **Built-ins/memory:** instance tables (type, nets, effective properties, switch's persisted state as its baked drive level — overridable by a vector input column); each ROM's **refdes and content-file path** baked for the runtime's startup load (FR-117b; superseded the M3 baked-bytes rule 2026-07-03); a plain RAM starts all-U, while a **persistent RAM** (FR-114g) additionally bakes its **save-file path and load-on-start flag** for the runtime's startup load and write-back (FR-117c).
   - **Preflight/refusals:** same compile errors as `buildSimulation` (parse failure, `.R` without `clock:`); behavior-less types generate U-drivers with a warning (FR-080 analogue). **Switch elements (FR-071g/FR-071h) are refused** (added 2026-07-07): `generateC` fails with "transmission gates / relays are not supported by the fast simulator" naming the offending refdes(es) — FR-083a's dynamic net merging is slow-engine-only for now (FR-116); the Generate C… flow surfaces the refusal via the message tray like a flatten failure. **Persistent RAM (FR-114g) is supported** (refusal withdrawn 2026-07-09, originally refused 2026-07-08): a RAM instance whose `mem.ramFile` is set bakes its save-file path and load-on-start flag into `gen_mems`, and the runtime loads it at start-up and writes it back on normal termination of either batch mode (FR-117c, M7 below); a plain RAM (no save file) bakes a NULL path and generates unchanged. If **switch-element** fast support is added later it will mirror the slow engine's per-root resolution (a union-find in `runtime.c` plus generated contact tables) with FR-107 parity coverage — no `gen_` interface provision is reserved for it now (YAGNI; the runtime pair ships verbatim per generation, so an interface change costs only a regenerate). The former FR-116 deferred-scope refusals of sub-design instances / off-sheet connectors remain **as internal guards** — the caller flattens first (FR-116 hierarchy, reworked 2026-07-04), so tripping one means an unflattened design reached the generator. `SUBUNIT_PKG_RE` is the hierarchical-prefix-tolerant form (§6.14), so a child's subunit packages group within their instance. A clock generator with a hierarchical refdes is baked normally (free-run mode drives it, FR-117a) and the **runtime's vector mode refuses it at startup** — `rt_init`/the vector runner scans `gen_clocks[].refdes` for `/`, reports the refdes with a pointer at `--cycles`, and exits 2 (the FR-115e hidden-clock rule, enforceable only at run time because one program serves both modes).
 
-**Chrome wiring (`chrome/toolbar.js`, `app.js`).** The Simulate menu (§6.16) gains a **Generate C…** item (`onGenerateC`), disabled while `state.simulating` or `state.vectorPanelOpen` (FR-116). `app.js` handles it: fetch `/cgen/runtime.h` + `/cgen/runtime.c` → `flatten(store.design, loadDesign, { rootPath: savePath })` (FR-116 hierarchy; a flatten refusal posts to the tray and aborts) → `generateC(flat, { columnsFrom: store.design })` (no ROM preload — the program reads ROM contents itself at startup, FR-117b; the `loadRomContents` preload this section originally specified was discovered at M5 never to have been wired in — a latent all-U-ROM bug in app-generated programs, mooted by FR-117b) → `openFileDialog` in save mode with a `.c` extension (the `saveExt` generalization of §6.16) seeded at `dirOf(savePath)` with default `<base>.c` → write all three files through `POST /api/v1/file/save` (§6.4), the verbatim-text endpoint added for this purpose (the design-save endpoint requires a valid-JSON body — `json.Indent` — so C source cannot ride it; corrected 2026-07-02 from the original "reuse `/design/save`" plan). Failures/warnings post via the message tray (FR-074).
+**Chrome wiring (`chrome/toolbar.js`, `app.js`).** The Simulate menu (§6.16) gains a **Generate C…** item (`onGenerateC`), disabled while `state.simulating` or `state.vectorPanelOpen` (FR-116). `app.js` handles it: fetch `/cgen/runtime.h` + `/cgen/runtime.c` → `flatten(store.design, loadDesign, { rootPath: savePath })` (FR-116 hierarchy; a flatten refusal posts to the tray and aborts) → `generateC(flat, { columnsFrom: store.design })` (no ROM preload — the program reads ROM contents itself at startup, FR-117b; the `loadRomContents` preload this section originally specified was discovered at M5 never to have been wired in — a latent all-U-ROM bug in app-generated programs, mooted by FR-117b) → `openFileDialog` in save mode with a `.c` extension (the `saveExt` generalization of §6.16) seeded at the project root (`store.state.project.dir`, FR-121h — same directory as the former `dirOf(savePath)` under the flat layout) with default `<base>.c` → write all three files through `POST /api/v1/file/save` (§6.4), the verbatim-text endpoint added for this purpose (the design-save endpoint requires a valid-JSON body — `json.Indent` — so C source cannot ride it; corrected 2026-07-02 from the original "reuse `/design/save`" plan). Failures/warnings post via the message tray (FR-074).
 
 **Milestones.** (Sequencing per the 2026-07-02 discussion recorded in `gen-open.md`.)
   1. **M1 — runtime + minimal generator, combinational:** runtime pair, `cgen.js` for GALasm parts + switch/indicator/pulls, Generate-C menu flow; settle-and-stop; conflict reports. No compiler is invoked by any tool — the user compiles by hand (`cc <design>.c runtime.c`).
@@ -2317,7 +2526,7 @@ no sequential part could ever leave U.)
   listing `NDL netlist (.ndl)` only, OK/Cancel) → `flatten(store.design,
   loadDesign, { rootPath: savePath })` (§6.14; refusal posts to the tray and
   aborts) → `generateNDL(flat, { name: designName })` → `openFileDialog` in
-  save mode (`.ndl` extension, seeded at `dirOf(savePath)`, default
+  save mode (`.ndl` extension, seeded at the project root per FR-121h, default
   `<base>.ndl`) → `saveTextFile` (`POST /api/v1/file/save`, §6.4). Warnings
   post to the message tray (FR-074).
 - **Tests (`web/js/engine/ndl.test.js`):** a small hand-built flat design (two
@@ -2327,6 +2536,170 @@ no sequential part could ever leave U.)
   subunit stem collapse; connector pinout and reference rewrite; power rail
   wiring; driver-first star statements; virtual-builtin comments;
   determinism (two runs byte-identical).
+
+### 6.19 JS: projects (`web/js/chrome/project.js` + store/fileops/dialogs/app wiring)
+- **Purpose:** the client side of the FR-121 **Projects** group: the current
+  project as store state, the New/Open/Duplicate Project lifecycle, the
+  design/data boundary rules, and project-relative data paths. This section
+  names the concrete reworks the group makes to §6.10–§6.12, §6.14, and
+  §6.16–§6.18.
+- **Satisfies:** FR-121, FR-121a–FR-121h; the FR-121-driven reworks of
+  FR-004a, FR-044, FR-047, FR-049, FR-050, FR-052, FR-053, FR-097a, FR-114e,
+  FR-114g.
+- **Background (why this shape):** the FR-120 per-project component-scope
+  design was reverted in full (CHANGELOG 2026-07-12) — its complexity all came
+  from the project being *implicit*. Naming the project as a first-class,
+  directory-backed value dissolves that: the reserved `components/`
+  subdirectory (FR-121) is where per-project component types return later as a
+  smaller Phase 2; **nothing in this design implements or anticipates Phase 2
+  beyond reserving the name.**
+
+**Current project (store state, FR-121).** `store.state.project` (§6.10):
+`null` or `{ dir, name, manifestFile, mainDesign }` — the client-side mirror of
+the server's `ProjectInfo` (§6.5a) minus its warnings, which are posted to the
+message tray at fetch time. At most one is current; the server holds no
+open-project state.
+
+**Module `web/js/chrome/project.js`.** Pure helpers (unit-tested in
+`project.test.js`) plus a `makeProjectOps({ store, dataDir, fileops, post })`
+factory whose ops `app.js` wires into the File menu:
+
+- `isManifestName(name)` — case-insensitive `-manifest.json` suffix test,
+  mirroring the Go `IsManifestName` (§6.5a). Used by the design-save validator
+  (below) and `resolveProjectPick`.
+- `resolveProjectPick({ path, isDir })` — pure mapping of an Open Project pick
+  to `{ dir, designPath|null }`: a folder → itself; a manifest file → its
+  containing folder; a design file → its containing folder plus that design
+  (FR-121b's three accepted forms).
+- `absoluteDataPaths(designObj)` — pure scan of a **saved** design object's
+  `components[].typeData.mem` for absolute `romFile`/`ramFile` values,
+  returning `[{ refdes, path }]`. By FR-121g an absolute mem path in a saved
+  design is by construction outside its project, so this is exactly the
+  Duplicate Project shared-data warning scan (FR-121f).
+- `setCurrentProject(dir, info?)` — fetches `api.projectInfo(dir)` when `info`
+  is not supplied, calls `store.setProject({dir, name, manifestFile,
+  mainDesign})`, and posts each `warnings` entry to the tray (FR-074:
+  extra manifests, unparseable manifest, dangling main design — FR-121a).
+- `newProject()` (FR-121b) — FR-049a dirty guard → location+name prompt:
+  `openFileDialog({ mode:"save", title:"New Project", startPath: dataDir
+  (FR-050), exts:["-"], saveExt:null })` (§6.11: directories-only listing, no
+  extension appended; the typed name is the folder name) →
+  `api.projectCreate(path)` (a 409/exists or other failure posts to the tray
+  and aborts) → `setCurrentProject` from the response → replace the canvas
+  with a fresh empty design (FR-004-style name, `savePath` null) and clear the
+  nav stack — the new empty project is current with a new design in it
+  (FR-121c).
+- `openProject()` (FR-121b) — dirty guard → pick dialog
+  `openFileDialog({ mode:"open", title:"Open Project", startPath: dataDir,
+  allowDir:true, includeManifests:true })` (remembered directory applies,
+  FR-052a) → `resolveProjectPick` → `api.projectInfo(dir)` →
+  `designPath := picked design ?? (info.mainDesign ? dir + "/" + mainDesign :
+  null)`. If `designPath` is set → `fileops.loadIntoStore(designPath,
+  { projectInfo: info })` — success establishes the project (containing-folder
+  rule below) with the prefetched info, including the FR-022a auto-fit; a load
+  failure aborts the whole action with a tray report. If no `designPath` → the
+  open-design dialog rooted at the project
+  (`openFileDialog({ mode:"open", startPath: dir, ignoreLastDir: true })`,
+  §3.1 A11); **cancel cancels the whole action** — no project change, no
+  canvas change (§3.1 A9).
+- `duplicateProject()` (FR-121f) — requires a current project; FR-049a dirty
+  guard **first** (duplication copies files on disk, not the unsaved canvas) →
+  destination prompt (the New Project prompt, seeded at the data dir) →
+  `api.projectDuplicate(src: project.dir, dst)`. Failure → tray report noting
+  the partial destination is left for manual cleanup (no rollback). Success →
+  `setCurrentProject` from the response, then open per FR-121b: the (copied)
+  manifest's `mainDesign` → `loadIntoStore` it; else the open-design dialog
+  rooted at the duplicate — here a cancel leaves the duplicate current with a
+  fresh empty design, because the copy has already happened (§3.1 A9's noted
+  asymmetry). Finally the **shared-data scan**: `listDir(dst)` (designs only —
+  manifests are excluded by default) → `loadDesign` each → `absoluteDataPaths`
+  → one tray message per hit naming the design file, refdes, and path as
+  "still shared with the original project" (a shared RAM save file would be
+  overwritten by running the duplicate, FR-114g). Scan failures are non-fatal
+  (tray).
+
+**fileops rework (`chrome/fileops.js`).**
+- `save` — the first-save / Save As prompt is `startPath:
+  store.state.project.dir` (FR-047/FR-049/FR-121h) with the `validate` hook
+  (§6.11): reject a name matching `isManifestName` (FR-121a) and a resolved
+  path outside `project.dir` (FR-121e), inline in the dialog plus a tray post
+  (FR-074). Serialization additionally runs `relativizeDataPaths(out, baseDir,
+  project.dir)` (below). After `markSaved`, **main-design recording**
+  (FR-121a): if `project.manifestFile` is set and `project.mainDesign` is not,
+  read the manifest (`api.loadDesign` of the manifest path — it is plain
+  JSON, the `.tv` precedent), set `mainDesign` to the saved file's base name,
+  write it back (`api.saveDesign`), and `setProject` the updated value;
+  any failure here is non-fatal (tray). Consequently no save ever changes the
+  current project (FR-121e).
+- `loadIntoStore(absPath, { projectInfo } = {})` — after the childPath
+  absolutization it runs `absolutizeDataPaths(loaded, baseDir)` (FR-121g);
+  reports each **legacy outside-project child reference** once via the tray
+  (FR-121d; containment is checked against `dirOf(absPath)`, which under the
+  flat layout *is* the project root of the design being loaded); and on
+  success applies the **containing-folder rule** (§3.1 A10): if there is no
+  current project or `dirOf(absPath)` differs from `project.dir`, it calls
+  `setCurrentProject(dirOf(absPath), projectInfo)` — `projectInfo` avoids a
+  duplicate fetch when Open Project already has it. Plain `open()`, `descend`,
+  `followTarget`, and `back` are otherwise unchanged; project switching falls
+  out of the shared load path (FR-121b/FR-121d).
+- `addSubDesign` — picker seeded at the project root (FR-121h); refuses a
+  chosen file outside `project.dir` with a toast (FR-121d/FR-097a), before the
+  existing cycle check (§6.14).
+- `save`, `newDesign`, `addSubDesign` early-return with a tray message when no
+  project is current (defense in depth — the chrome already disables them and
+  the store lock refuses dispatches, §6.10/§6.11).
+
+**Data-path conversion helpers (`model/persist.js`, FR-121g).** Two pure,
+unit-tested functions beside `serializeDesign`/`deserializeDesign` (POSIX
+forms; the fileops path helpers' existing Windows caveat applies):
+- `relativizeDataPaths(serialized, baseDir, projectDir)` — for each component
+  whose `typeData.mem` carries an absolute `romFile`/`ramFile` **inside**
+  `projectDir`, replace it with `relPath(baseDir, p)`; paths outside the
+  project stay absolute (the loose data boundary, FR-121d). **Copy-on-write**
+  (`{...c, typeData: {...td, mem: {...}}}`) because `serializeDesign` shares
+  the live component objects — the portDir-stamping precedent (§6.14) — so
+  the in-memory model keeps its absolute paths.
+- `absolutizeDataPaths(design, baseDir)` — any relative `romFile`/`ramFile` →
+  `resolveRel(baseDir, p)`, mutating the just-deserialized load copy in place.
+  A legacy absolute in-project path loads as-is and comes back **relative**
+  after its next save (FR-121g's rewrite-on-save rule, free from
+  relativization being unconditional at save).
+
+Consumers are unaffected: the run-time reads/writes (FR-114e/FR-114g), the mem
+properties/dialog, and the C generator's baked paths (FR-117b/FR-117c) all see
+the resolved absolute in-memory form. `serializeDesign` itself stays verbatim,
+so a backup snapshot (§7.4) stores absolute paths — correct for same-session
+recovery (the childPath precedent). The component-library YAML's `mem:` block
+(§7.6) keeps the absolute path captured at creation — FR-121g governs only the
+**design file**; the per-instance `typeData.mem` copy is what designs
+round-trip. Node tooling needs no change: `parity.js` already resolves a
+relative `romFile` via its basename-in-the-design's-directory candidate
+(§6.17 M2), which is exactly where a project-relative path points under the
+flat layout.
+
+**API client (`api.js`).** `projectInfo(dir)`, `projectCreate(path)`,
+`projectDuplicate(src, dst)` (thin wrappers over §6.4's endpoints);
+`listDir(path, exts, { includeManifests } = {})` grows the `manifests=1`
+query.
+
+**Dialog-seeding summary (FR-121h).** Save-mode dialogs seed at the current
+project root: design first-save/Save As (§6.11), `.tv` save (§6.16),
+Generate C… (§6.17), Export… (§6.18) — for the last three this is the same
+directory their former `dirOf(savePath)` defaults produced under the flat
+layout, now stated once as the project rule and defined even for an unsaved
+design. The ROM-content and RAM save-file pickers seed at the project root but
+may navigate anywhere (FR-121d, §6.14). Open-mode dialogs keep the
+remembered-directory rule (FR-052a) unchanged, except the FR-121b main-design
+picker (`ignoreLastDir`, §3.1 A11).
+
+- **Error handling:** every project-op failure (create/duplicate/info fetch,
+  manifest read-modify-write, shared-data scan) posts to the message tray and
+  leaves the store consistent — a failed Open Project changes nothing (§3.1
+  A9); a failed Duplicate leaves the previous project current and names the
+  partial destination. Manifest problems are never fatal (FR-121a).
+- **Dependencies:** `store.js`, `api.js`, `chrome/dialogs.js`
+  (`openFileDialog`), `chrome/fileops.js`, `chrome/statusbar.js`
+  (`postMessage`), `model/persist.js`.
 
 ---
 
@@ -2457,7 +2830,7 @@ branch wire that meet at it share one position and cannot drift apart (A1).
 | `type` | string | the placed type's immutable **library id** (`ComponentType.id`, FR-066e), e.g. `"type-74138"` for a 74-series part, `"type-22V574"` for a GAL part, `"type-indicator"` for a built-in. It keys the simulator's per-type behavior cache and Refresh Types matching. The display name shown as the canvas label comes from `typeData` (`partnumber` or `name`), not this field |
 | `x`, `y` | int | grid coordinates of unrotated origin (FR-021) |
 | `rotation` | int | `0`\|`90`\|`180`\|`270` |
-| `typeData` | `ComponentType` | full copy captured at placement, persisted verbatim at save (FR-057); re-copied only by Refresh Types (FR-088) |
+| `typeData` | `ComponentType` | full copy captured at placement, persisted verbatim at save (FR-057); re-copied only by Refresh Types (FR-088). **Exception (FR-121g):** `typeData.mem.romFile`/`ramFile` are held **absolute in memory** but written **project-relative** when they lie inside the project (relativized by `fileops.save`, absolutized by `loadIntoStore` — the `childPath` boundary-conversion pattern, §6.19); an outside-project data path stays absolute (FR-121d) |
 | `overrides` | object | per-instance field overrides, grouped by kind: `{"delays":{"tpd":12},"props":{"period":200}}` — `delays` shadows `typeData.delays` (FR-058), `props` shadows `typeData.properties` defaults (FR-020b) |
 | `switchState` | string? | input-switch built-in only (FR-071c): current state, `"0"` \| `"1"` (default `"0"`; a legacy `"U"` reads as `0`). Per-instance interactive state, not an `overrides` entry; set via the properties panel (FR-020c) or a click during a run (FR-087a) |
 | `kind` | string? | `"subdesign"` for a sub-design instance (FR-098); absent/`"component"` for an ordinary, subunit, or built-in instance (§6.14) |
@@ -2819,6 +3192,43 @@ read/written through the same `/api/v1/design/{load,save}` endpoints as a design
   **results** (pass/fail, actuals) are presentational and are **not** stored here
   (FR-115d).
 
+### 7.8 Project manifest (`*-manifest.json` — FR-121a)
+
+A JSON file at the project root:
+
+```jsonc
+{
+  "formatVersion": 1,          // migration anchor, like the design format (FR-060c)
+  "name": "WUT-4 CPU",         // project display name (top-bar indicator, FR-121b)
+  "mainDesign": "cpu.json"     // optional: bare filename of the main design at the project root
+}
+```
+
+- **Recognition is by name pattern, tolerant of the prefix:** any file at the
+  project root whose name ends `-manifest.json` (case-insensitive, §6.5a). New
+  Project writes `<folder name>-manifest.json`, but renaming the folder outside
+  the app never orphans the manifest. Several matches → the first in sorted
+  filename order is recognized and the condition is reported (FR-074).
+- **Optional:** a project with no manifest is fully functional — its display
+  name is the folder's base name and it has no main design. A manifest that
+  fails to parse degrades the same way, with a warning (never an error).
+- **`mainDesign`:** recorded by the client on the **first design save** into a
+  manifest-carrying project whose `mainDesign` is unset (§6.19); a recorded
+  main design that no longer exists is cleared in the served info with a
+  warning (§6.5a). Open Project opens it immediately when present (FR-121b).
+- **Read/write:** the server parses it tolerantly for `/project/info` and
+  rewrites it — unknown fields preserved — during Duplicate Project (§6.5a);
+  the client's `mainDesign` update is a read-modify-write over the design
+  load/save endpoints (the `.tv` precedent, §6.4). All other client access
+  goes through `/project/info`.
+- **Exclusions:** manifest files are excluded from design listings unless
+  `manifests=1` (§6.4), and a design may not be **saved** under a matching
+  name (the save validator, §6.19) — so a manifest can never be opened or
+  clobbered as a design.
+- **Migration:** `formatVersion` is the anchor; v1 is current. Future changes
+  migrate forward like §7.4; tolerance to unknown fields means older servers
+  simply ignore newer additions.
+
 ---
 
 ## 8. Key Design Decisions
@@ -2850,6 +3260,11 @@ read/written through the same `/api/v1/design/{load,save}` endpoints as a design
 | Fast-engine batch I/O (FR-117/FR-118) | Teach the C program to parse `.tv` JSON; bake vector rows into the emitted source; VCD as the primary output | **Columns baked at generate time (they derive from the design), rows as plain whitespace text on stdin; stdout transcript + stderr conflicts; VCD as a later `--vcd` flag** | Avoids a JSON parser in C; rows-on-stdin lets vectors change without regenerating; a line-oriented transcript is directly diffable against `runVectors` output — the cheapest FR-107 parity harness (`gen-open.md` sequencing) |
 | Bidirectional switch elements — transmission gate & relay (FR-071g/FR-071h/FR-083a) | (a) two back-to-back conditional tri-state drivers (drive B with `curr[A]` when closed, and A with `curr[B]`); (b) variant of (a) with "resolve the net excluding my own contribution" to cancel the reflection; (c) **dynamic net merging** — a closed contact makes its terminal nets one net: per-step union-find over net indices, one `resolveNet` per merged group; (d) support in both engines at once | **Dynamic net merging (c), slow engine only for now — `kind:"pass"` entities + per-root resolution in `sim.js`; Generate C refuses (FR-116)** | (a) is subtly wrong: once both sides carry a value the switch's own reflection sustains it — release the external driver and the net latches its old value forever, an unintended charge-storage artifact; (b) cures that only by contorting the contribution model. Merging matches what a four-state no-analog simulator can honestly claim: strength survives a closed contact (weak pull stays weak, FR-083), the existing conflict machinery works across it (FR-082), chains merge transitively, and `valueOfPin`/display need no change. Charge storage on an isolated node is declared an explicit non-goal (weak keepers cover retention); a U control conservatively forces the terminal groups U. Slow-only is a clean incremental line (stakeholder-chosen 2026-07-07): vectors run on the slow engine so they work day one, and fast support can be added later without reworking FR-083a because both engines share the net-resolution semantics (FR-107) |
 | Sub-design embedding & off-sheet connectors (FR-094–FR-103) | (a) embed a copy of the child like FR-057; (b) two separate primitives (a port object and a distinct connector object); (c) compute multi-sheet/hierarchical nets in the editor at edit time | **One `port` built-in (a new `connector` vertex kind) serving both roles; a sub-design instance is a live relative-path reference whose interface is resolved to a synthetic in-memory `ComponentType`; flatten + cross-file label-union composed only at Run** | The synthetic type lets the whole pin/vertex/wire/netlist/render pipeline serve hierarchy unchanged — only render style, navigation, and flatten are new; a live reference keeps one source of truth (no stale copy, supersedes FR-057 here); the junction-identity decision already reserved a single `connector` vertex kind for this; composing cross-file nets only at Run keeps single-sheet editing fast and local (NFR-005); render style is deliberately cosmetic so simulation semantics never depend on a symbol toggle (stakeholder-confirmed) |
+| Project identity (FR-121/FR-121a) | A required project file (KiCad-style — breaks every existing design folder); an app-side project registry/config; keep the implicit "the design's directory" conventions (the reverted FR-120 approach) | **A project *is* a directory; an optional, pattern-recognized `*-manifest.json` adds display name + main design** | Five features had already converged on the design's directory as an anonymous grouping (FR-098, FR-101, FR-115a, FR-116, reverted FR-120); naming it dissolves the reverted complexity (scope-follows-file plumbing, save-first refusals, Save As copy semantics). No required marker → zero migration for existing folders; pattern recognition rather than a fixed filename survives folder renames (KiCad-conventions review, `divergences.md`) |
+| Where "current project" lives (FR-121) | Server-side open-project session state; inferring the project from each design path per request | **Client-only store value; every project-aware request carries the directory as a parameter** | Preserves the server's total statelessness, which the resilience story depends on (§6.12a: reconnection needs no session transfer); the client already owns `savePath`/`designName` the same way |
+| Duplicate Project mechanism (FR-121f) | Client-orchestrated copy (list + per-file load/save round trips, client-side manifest rewrite); server-side copy with rollback on failure | **One `POST /project/duplicate` doing a recursive server-side copy + manifest rename; no rollback — partial destination left and reported** | One round trip and byte-verbatim fidelity (no client staging or JSON re-encode of design files); the manifest rename needs server-side tolerant JSON handling anyway (§6.5a); rollback machinery is disproportionate for a localhost tool — the report-and-manual-cleanup rule is FR-121f's stated behavior |
+| Data-path storage form (FR-121g) | Always absolute (status quo — breaks Duplicate self-containment); always relative (breaks FR-121d's anywhere-on-disk exemption) | **Absolute in memory; relative on disk iff inside the project** | Exactly the proven `childPath` boundary conversion (FR-098) — one pattern, two field families; consumers (sim run-time, cgen bake) never see a relative path; Duplicate's shared-data warning scan falls out for free — any absolute mem path in a saved design is by construction outside its project |
+| Project-boundary enforcement point (FR-121d/FR-121e) | Server-side path validation on save/load/embed | **Client-side checks (embed dialog refusal, save-dialog validator); server unchanged** | The server deliberately does not sandbox paths (§4.2: trusted single-user local FS); the boundary is a project-hygiene UX rule, not a security control — and server enforcement would break the legacy outside-project references FR-121d explicitly requires to keep loading |
 
 ---
 
@@ -2864,6 +3279,7 @@ srv/                        Go module (module path retains the historical name
   server/components.go      library load/hold/List (§6.2)
   server/yamlparse.go       ParseComponent: YAML → ComponentType (§6.3, §7.6)
   server/storage.go         ListDir/LoadDesign/SaveDesign (§6.5)
+  server/project.go         manifest discovery/parse, project create/duplicate (§6.5a, FR-121)
   server/paths.go           DesignsDir per-OS documents folder (§6.5, FR-050)
   server/types.go           ComponentType/Pin/PinGroup/Design/Vertex/Wire/Bus/PathPoint Go structs (§7)
   components/*.yaml         the component library (74138.yaml, 74165.yaml, …; §7.6)
@@ -2896,7 +3312,8 @@ web/
   js/engine/ndl.js          NDL netlist exporter (§6.18)
   js/chrome/toolbar.js      menu/tool bar (§6.11)
   js/chrome/dialogs.js      dialogs + test-vector panel (§6.11, §6.16)
-  js/chrome/fileops.js      save/open/navigation flows (§6.11, §6.14)
+  js/chrome/fileops.js      save/open/navigation flows (§6.11, §6.14, §6.19)
+  js/chrome/project.js      project lifecycle ops + manifest helpers (§6.19, FR-121)
   js/chrome/properties.js   per-instance properties panel (§6.11)
   js/chrome/contextmenu.js  right-click menu (§6.11)
   js/chrome/statusbar.js    bottom status bar trays (§6.11)
@@ -2924,6 +3341,7 @@ the original greenfield plan, whose `sim/` root and never-created
 | FR-002 | §6.2 | `components.go`, `yamlparse.go` |
 | FR-003 | §6.4, §6.11, §6.12 | `api.go`, `app.js` |
 | FR-004 | §6.12 | `app.js`, `store.js` |
+| FR-004a, FR-004b | §6.11 | `toolbar.js`, `interaction.js`, `index.html`, `style.css` |
 | FR-005, FR-005a, FR-005b, FR-006 | §6.2, §6.11 | `components.go`, `app.js` |
 | FR-006a | §6.11 | `app.js`, `style.css`, `builtins.js` |
 | FR-007 | §6.2 | `components.go` |
@@ -2963,11 +3381,11 @@ the original greenfield plan, whose `sim/` root and never-created
 | FR-041, FR-041a, FR-041b, FR-041c | §6.9, §6.11, A3 | `interaction.js`, `dialogs.js`, `model/design.js` |
 | FR-042, FR-042a, FR-042b, FR-042c, FR-043 | §6.8, §6.9, §7.2 | `interaction.js`, `canvas.js`, `model/design.js` |
 | FR-043a, FR-043b | §6.6, §6.9, §7.1a | `interaction.js`, `model/design.js`, `commands.js`, `model/netlist.js` |
-| FR-044, FR-045 | §6.10, §6.12 | `store.js`, `app.js` |
-| FR-046, FR-047, FR-047a, FR-048, FR-049 | §6.5, §6.10, §6.11 | `storage.go`, `dialogs.js`, `fileops.js`, `store.js` |
+| FR-044, FR-045 | §6.10, §6.12, §6.19 | `store.js`, `app.js`, `fileops.js`, `toolbar.js` |
+| FR-046, FR-047, FR-047a, FR-048, FR-049 | §6.5, §6.10, §6.11, §6.19 | `storage.go`, `dialogs.js`, `fileops.js`, `store.js` |
 | FR-049a | §6.10, §6.11 | `store.js`, `dialogs.js` |
-| FR-050, FR-051 | §6.5, §6.11 | `paths.go`, `storage.go`, `dialogs.js` |
-| FR-052, FR-053, FR-054 | §6.4, §6.5, §6.11 | `api.go`, `storage.go`, `dialogs.js` |
+| FR-050, FR-051 | §6.5, §6.11, §6.19 | `paths.go`, `storage.go`, `dialogs.js`, `chrome/project.js` |
+| FR-052, FR-053, FR-054 | §6.4, §6.5, §6.11, §6.19 | `api.go`, `storage.go`, `project.go`, `dialogs.js`, `fileops.js` |
 | FR-055, FR-056 | §7.2 | `types.go`, `model/design.js` |
 | FR-057, FR-058 | §7.2 | `types.go`, `model/design.js`, `properties.js` |
 | FR-059, FR-059a, FR-060 | §6.6, §7.2 | `model/netlist.js`, `types.go` |
@@ -2980,9 +3398,9 @@ the original greenfield plan, whose `sim/` root and never-created
 | FR-114, FR-114a | §6.11 | `dialogs.js`, `app.js`, `interaction.js` |
 | FR-114c | §6.11 | `builtins.js` (`memDeviceType`), `app.js` |
 | FR-114d | §6.11, §6.13 | `engine/memory.js`, `sim.js` |
-| FR-114e | §6.4, §6.13 | `engine/memory.js`, `sim.js`, `api.js`, `storage.go`, `api.go`, `dialogs.js` |
+| FR-114e | §6.4, §6.13, §6.19 (path form) | `engine/memory.js`, `sim.js`, `api.js`, `storage.go`, `api.go`, `dialogs.js`, `model/persist.js` |
 | FR-114f, FR-007a | §6.4, §6.11, §7.6 | `dialogs.js` (`memDeviceYaml`), `app.js`, `api.js`, `components.go`, `yamlparse.go`, `types.go` |
-| FR-114g | §6.4, §6.11, §6.13, §6.17 | `engine/memory.js` (`dumpBytes`), `sim.js` (load/stop-write), `dialogs.js`, `app.js`, `api.js`, `storage.go`, `api.go`, `engine/cgen.js` (bake), `web/cgen/runtime.c` (load/write, FR-117c) |
+| FR-114g | §6.4, §6.11, §6.13, §6.17, §6.19 (path form) | `engine/memory.js` (`dumpBytes`), `sim.js` (load/stop-write), `dialogs.js`, `app.js`, `api.js`, `storage.go`, `api.go`, `engine/cgen.js` (bake), `web/cgen/runtime.c` (load/write, FR-117c), `model/persist.js` |
 | FR-115, FR-115a–h | §6.13, §6.16, §7.7 | `engine/vectors.js`, `engine/sim.js`, `chrome/dialogs.js`, `chrome/toolbar.js`, `chrome/properties.js`, `store.js`, `app.js`, `index.html`, `style.css` |
 | FR-106–FR-110, FR-116, FR-116a, FR-117, FR-117a, FR-117b, FR-117c, FR-118 | §6.17 | `engine/cgen.js`, `web/cgen/runtime.h`, `web/cgen/runtime.c`, `chrome/toolbar.js`, `app.js` |
 | FR-072, FR-073, FR-074 | §6.11 | `statusbar.js`, `index.html`, `style.css` |
@@ -3001,7 +3419,7 @@ the original greenfield plan, whose `sim/` root and never-created
 | FR-088 | §6.6, §6.10, §6.11 | `model/design.js`, `commands.js`, `toolbar.js` |
 | FR-094, FR-094a, FR-095 | §6.14, §7.1a, §7.2 | `subdesign.js`, `builtins.js`, `model/design.js`, `model/netlist.js` |
 | FR-096 | §6.14, §7.2 | `model/design.js`, `dialogs.js` |
-| FR-097, FR-097a, FR-097b | §6.9, §6.11, §6.14 | `interaction.js`, `dialogs.js`, `subdesign.js` |
+| FR-097, FR-097a, FR-097b | §6.9, §6.11, §6.14, §6.19 (boundary) | `interaction.js`, `dialogs.js`, `subdesign.js`, `fileops.js` |
 | FR-098, FR-098a, FR-099, FR-099a, FR-099b | §6.6, §6.8, §6.14, §7.2 | `subdesign.js`, `model/design.js`, `canvas.js` |
 | FR-100, FR-100a | §6.9, §6.11, §6.12, §6.14 | `interaction.js`, `app.js`, `dialogs.js` |
 | FR-101, FR-101a, FR-101b | §6.6, §6.9, §6.11, §6.14 | `subdesign.js`, `model/netlist.js`, `properties.js`, `interaction.js`, `fileops.js`, `contextmenu.js` |
@@ -3033,6 +3451,7 @@ the original greenfield plan, whose `sim/` root and never-created
 | FR-071f | §6.8, §6.9, §6.11, §7.2 | `builtins.js`, `canvas.js`, `interaction.js`, `model/design.js` |
 | FR-094b, FR-094c, FR-094d, FR-094e | §6.6, §6.11, §6.14 | `subdesign.js`, `model/netlist.js`, `canvas.js`, `properties.js` |
 | FR-099c | §6.9a, §6.14 | `subdesign.js`, `router.js`, `fileops.js` |
+| FR-121, FR-121a, FR-121b, FR-121c, FR-121d, FR-121e, FR-121f, FR-121g, FR-121h | §6.19, §6.4, §6.5a, §6.10, §6.11, §6.12, §6.14, §7.8, §8, §3.1 A8–A11 | `project.go`, `api.go`, `storage.go`, `chrome/project.js`, `chrome/fileops.js`, `chrome/dialogs.js`, `chrome/toolbar.js`, `store.js`, `app.js`, `api.js`, `model/persist.js`, `index.html`, `style.css` |
 | NFR-001 | §6.1 | `main.go` |
 | NFR-002 | §6.12 | `api.js` |
 | NFR-003 | all | server `*.go`, `web/js/*` |
@@ -3068,9 +3487,23 @@ tests beside them per §9).
   zero/nil.
 - **Go `storage`:** atomic save does not corrupt an existing file when the write
   fails midway; `ListDir` returns dirs plus files filtered by the `exts`
-  parameter (default `.json`; e.g. `bin,hex` for the ROM picker, FR-114e) with
+  parameter (default `.json`; e.g. `bin,hex` for the ROM picker, FR-114e;
+  `-` lists directories only, §6.5) with
   a correct `parent`;
   load of malformed JSON → 422 (FR-046–FR-053, FR-055).
+- **Go `project` (§6.5a, FR-121a/FR-121b/FR-121f):** `IsManifestName` —
+  suffix match, case-insensitive, any prefix, non-matches (`manifest.json`
+  alone, `.json` designs); `FindManifest` — none/one/several (sorted-first
+  recognized, rest as extras); `ProjectInfo` — manifest `name`/`mainDesign`
+  extracted, folder-base fallback (no/unparseable manifest, with a warning),
+  dangling `mainDesign` cleared with a warning; `CreateProject` — directory +
+  `<base>-manifest.json` written, existing path → `ErrProjectExists` (409),
+  missing parent → error; `DuplicateProject` — files (incl. subdirectories)
+  copied byte-verbatim, recognized manifest renamed with `name` rewritten and
+  unknown fields preserved, extra manifests copied verbatim, missing `src` →
+  404, existing `dst` → 409, mid-copy failure leaves the partial destination.
+  `handleFiles` (§6.4): `*-manifest.json` excluded from `.json` listings by
+  default, included under `manifests=1`.
 - **Go `paths`:** `DesignsDir` returns the documents-folder path per `GOOS`
   (FR-050): darwin/linux `~/Documents/retrosim`, windows
   `%USERPROFILE%\Documents\retrosim`, unset `USERPROFILE` → error.
@@ -3084,7 +3517,23 @@ tests beside them per §9).
 - **JS `store`:** every command's `apply`∘`revert` restores prior state; undo
   stack honors `UNDO_CAP ≥ 50` (NFR-006); redo cleared on new dispatch;
   `markSaved(path, name)` records the path, adopts the saved file's base name
-  into `design.name`/`designName` (FR-047a), and clears `dirty`.
+  into `design.name`/`designName` (FR-047a), and clears `dirty`;
+  `dispatch`/`undo`/`redo` refused with a report while `project` is `null`
+  (the no-project lock, FR-121c) and permitted again after `setProject`.
+- **JS `project` (§6.19):** `isManifestName` mirrors the Go rule (same case
+  table); `resolveProjectPick` maps folder / manifest / design picks to
+  `{dir, designPath}`; `absoluteDataPaths` finds absolute `mem.romFile`/
+  `ramFile` values, ignores relative ones and non-mem components. Lifecycle
+  ops with stubbed api/fileops (the `connection.js` injection pattern):
+  `openProject` cancel → no state change (§3.1 A9); a manifest naming a main
+  design loads it directly; `duplicateProject` posts one warning per shared
+  absolute data path and reports a copy failure as partial-left.
+- **JS `persist` data paths (FR-121g):** `relativizeDataPaths` — an in-project
+  absolute `romFile`/`ramFile` becomes design-dir-relative, an outside-project
+  path stays absolute, and the **live objects are untouched** (copy-on-write);
+  `absolutizeDataPaths` — relative → absolute against the design dir;
+  round-trip identity both ways; a legacy absolute in-project path comes back
+  relative after one save cycle.
 - **JS `refreshInstance`/`RefreshTypes` (FR-088):** refresh replaces `typeData`
   (new behavior/delays/properties reach the instance) while preserving refdes,
   position, rotation, and overrides; an override key absent from the new
@@ -3196,6 +3645,29 @@ tests beside them per §9).
 - Save (first-time prompt, prefilled name) → overwrite silently → Save As → Open
   via navigation; round-trip equality of the model, including `bitNames`,
   breakout taps, and `nets` provenance (FR-044–FR-060a).
+- Project-first startup (FR-121c): before any project the canvas is inert
+  (place/wire/undo refused with a tray message), Save/New/Run and the Simulate
+  items disabled, only New Project / Open Project / Open live; New Project
+  creates the folder + `<name>-manifest.json` and enables editing; the top bar
+  shows the project's display name (FR-121b), falling back to the folder name
+  for a manifest-less folder (FR-121a).
+- Open Project by folder, by manifest file, and by design file all land in the
+  same project (FR-121b); a manifest carrying `mainDesign` opens that design
+  immediately (with the FR-022a auto-fit); cancelling the no-main-design picker
+  changes nothing (§3.1 A9); plain File ▸ Open switches the current project to
+  the opened design's folder.
+- Save confinement (FR-121a/FR-121e): Save As navigated outside the project is
+  rejected with the dialog open; a design named `x-manifest.json` is refused;
+  the first save into a manifest-carrying project records `mainDesign`, and a
+  second save does not overwrite it.
+- Embed boundary (FR-121d): the ADD dialog refuses a child outside the project;
+  a legacy design with an outside-project child still loads, renders, and
+  simulates, with one tray report.
+- Duplicate Project (FR-121f/FR-121g): full copy with the manifest renamed and
+  its `name` rewritten; the duplicate becomes current; an outside-project RAM
+  save file is warned as shared with the original; an in-project ROM content
+  path saves project-relative, and the duplicate's copy loads its **own** ROM
+  file at Run (self-containment).
 - Select a documented part (74138): properties panel shows the description, a
   datasheet link that opens the PDF in a new tab, and a "Pin roles" disclosure
   listing each pin's role; select a built-in with no docs → no documentation

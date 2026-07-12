@@ -63,7 +63,7 @@ After test vectors are saved, the design should be clean unless changes were mad
 
 Need to add a concept of per project memory and gal types. Need to change the creation functions to save types in the project.
 
-After opening a new design the editor should do a view: fit to screen
+DONE After opening a new design the editor should do a view: fit to screen
 
 When a subcomponent design is open in the editor, it should be possible to click (or perhaps right click) on a port icon in the design and set it to zero or one for visual test purposes
 
