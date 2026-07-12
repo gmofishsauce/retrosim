@@ -22,7 +22,7 @@ KiCad-like.
 7. [Buses](#7-buses)
 8. [Per-instance overrides](#8-per-instance-overrides)
 9. [Refreshing type data](#9-refreshing-type-data)
-10. [Files](#10-files)
+10. [Projects and files](#10-projects-and-files)
 11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
 13. [Simulation](#13-simulation) — including [Test vectors](#test-vectors) and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
@@ -94,14 +94,16 @@ which is added to the running library and palette without a restart.
 
 The window has four regions plus a status bar:
 
-- **Menu bar** (top): the **File** menu (`New`, `Open`, `Save`, `Save As`,
+- **Menu bar** (top): the **File** menu (`New Project…`, `Open Project…`,
+  `Duplicate Project…`, `New`, `Open`, `Save`, `Save As`,
   `Export…`, `Refresh Types`), the **Edit** menu (`Undo`, `Redo`, `Copy`, `Paste`),
   the **View** menu (`Zoom In`, `Zoom Out`, `Fit to Screen`), and the **Simulate**
   menu (`Test Vectors…`, `Generate C…`), followed by the tool buttons `Select`,
   `Wire`, `Bus` and the `Run` button. Menu items with a standard keyboard shortcut
   show it in the menu (see [§15](#15-keyboard-and-mouse-reference)). Click a menu to open it; click an item to run it, or
-  press `Esc` / click elsewhere to dismiss it. The current design name and tool
-  mode are shown next to the buttons; an asterisk marks unsaved changes.
+  press `Esc` / click elsewhere to dismiss it. The current **project** name, the
+  current design name, and the tool mode are shown next to the buttons; an
+  asterisk marks unsaved changes.
 - **Palette** (left): split into two scrolling regions. The **upper** region
   holds the loaded parts — 74-series parts plus any custom GAL parts you author
   (see [Creating a custom GAL part](#creating-a-custom-gal-part-22v10)), including
@@ -116,7 +118,11 @@ The window has four regions plus a status bar:
   left, a **message tray** for occasional messages, and a **connection tray**
   showing "connected" / "disconnected".
 
-The app opens with an empty, unsaved design named `unnamed schematic <date time>`.
+The app opens with **no project** — the bar reads `(no project)` and the canvas
+is empty and inert: everything except **New Project…**, **Open Project…**, and
+**Open** is disabled until you create or open a project (see
+[Projects and files](#10-projects-and-files)). Every design you edit belongs to
+a project.
 
 ---
 
@@ -261,6 +267,11 @@ A few details worth knowing:
 
 - A cell that was never written (or holds an undefined value) is saved as **0** — the
   file format has no way to record "undefined", so a blank cell reads back as 0.
+- A ROM content or RAM save file may live anywhere on disk, but keeping it
+  **inside the project folder** has an advantage: the design stores it as a
+  relative path, so **Duplicate Project** gives the copy its own file. An
+  outside-project file stays a shared absolute path — the duplicate warns
+  about it (see [Projects and files](#10-projects-and-files)).
 - If **Load at start-up** is on but the file is missing or malformed, the run still
   starts (blank) and a message appears in the status bar — it is never an error. The
   file will then be created on the next Stop.
@@ -533,20 +544,82 @@ design.
 
 ---
 
-## 10. Files
+## 10. Projects and files
 
-- **New** — start a fresh empty design. You're warned first if the current design
-  has unsaved changes. (No keyboard shortcut — browsers reserve `Ctrl/Cmd+N`.)
+### Projects
+
+A **project is a folder** — the folder that collects one circuit's designs:
+top-level designs, peer sheets, embeddable children, `.tv` test-vector files,
+and generated outputs, all directly at the folder's root. Any folder works as a
+project; no special file is required, so your existing design folders are
+already projects. Exactly one project is **current** at a time, shown in the
+top bar, and every design belongs to the project whose folder it lives in.
+
+A project may carry an optional **manifest** — a `<name>-manifest.json` file at
+its root recording a display name and the project's **main design** (the file
+Open Project opens directly). New Project writes one for you; recognition is by
+the `*-manifest.json` name pattern, so renaming the folder outside the app never
+orphans it. A project without a manifest is fully functional — its display name
+is just the folder name. Manifests never appear in design listings, and a design
+cannot be saved under a name matching the pattern.
+
+- **New Project…** — prompts for a location (starting at the designs root,
+  `~/Documents/retrosim`) and a project name, creates the folder and its
+  manifest, and enters it with a fresh empty design named after the project —
+  so the first Save prefills `<project>.json`. The **first design saved** into a
+  project is recorded in the manifest as its main design.
+- **Open Project…** — pick **a folder, a manifest file, or a design file**; each
+  resolves to its containing folder as the project (KiCad users: opening "the
+  project file" works). If the manifest names a main design it opens
+  immediately; otherwise you're shown the open-design dialog rooted at the
+  project — cancelling it cancels the whole action, changing nothing. (A folder
+  containing no designs can therefore only be entered via New Project.)
+- **Duplicate Project…** — copies the **entire current project folder** to a new
+  location chosen through the New Project prompt (the manifest is renamed and
+  its display name updated), then makes the copy current. This is how you fork a
+  project. If any design in the copy references a data file by **absolute path**
+  (a ROM content or RAM save file outside the project), a message warns that the
+  file is still **shared with the original** — a shared RAM save file would be
+  overwritten by running the duplicate. A failure mid-copy leaves the partial
+  destination for manual cleanup.
+
+**Boundary rules — strict for designs, loose for data.** Design-file references
+stay inside the project: an embedded sub-design must be a file in the current
+project (the ADD dialog refuses one outside it), off-sheet targets are bare
+same-folder filenames as before, and Save/Save As are confined to the project.
+**Data files are exempt**: ROM content and RAM save files may live anywhere on
+disk. A ROM/RAM path *inside* the project is stored in the saved design as a
+relative path (so a duplicated project uses its own copy); a path outside stays
+absolute (and triggers the Duplicate warning above). An old design whose
+sub-design reference points outside the project still loads, renders, and
+simulates — the condition is reported once in the message tray — but *new*
+outside-project references are refused.
+
+To move a design into a different project, move the file with your file manager
+(and any children/`.tv` siblings it needs); the app deliberately has no
+cross-project save.
+
+### File operations
+
+- **New** — start a fresh empty design in the current project. You're warned
+  first if the current design has unsaved changes. (No keyboard shortcut —
+  browsers reserve `Ctrl/Cmd+N`.)
 - **Open** (`Ctrl/Cmd+O`) — browse the server's filesystem (a dialog backed by the server, not the
   browser's native picker) and open a design. You're warned about unsaved changes.
+  The opened design's containing folder becomes the current project.
   The dialog opens in the folder you last viewed in any file dialog — remembered
   across sessions — so you don't re-navigate every time. (If that folder no longer
   exists, it falls back to the designs root.) The ROM-content and test-vector
   pickers share the same memory.
 - **Save** (`Ctrl/Cmd+S`) — the first save prompts for a filename (pre-filled with the design
-  name); later saves overwrite the same file silently. Saving under a different
-  file name renames the design to that file's base name.
-- **Save As** (`Shift+Ctrl/Cmd+S`) — save under a new name at any time.
+  name) with the dialog rooted at the project folder, so it effectively asks
+  only for a **name**; later saves overwrite the same file silently. Saving
+  under a different file name renames the design to that file's base name. A
+  location outside the project, or a name matching `*-manifest.json`, is
+  rejected with a message and the dialog stays open.
+- **Save As** (`Shift+Ctrl/Cmd+S`) — save under a new name at any time, within
+  the current project (same rejections as Save; to fork a whole project use
+  **Duplicate Project…**).
 - **Export…** — write the design to a foreign netlist format. A small dialog
   picks the format — **NDL** (`.ndl`), a plain-text pinout/package/circuit
   netlist language, is currently the only one — then the usual save dialog picks
@@ -561,9 +634,11 @@ design.
   gives byte-identical text, so exports diff cleanly. Unavailable while a
   simulation runs or the test-vector panel is open.
 
-Designs are JSON files, stored by default in `~/Documents/retrosim`; you can choose
-a different location in the dialog. The unsaved-changes indicator (an asterisk by
-the design name) tells you when there is work to save. Saving is allowed even while
+Designs are JSON files. The designs root `~/Documents/retrosim`
+(`%USERPROFILE%\Documents\retrosim` on Windows) is the default home for project
+folders — the New Project prompt starts there — but a project can live anywhere
+you can navigate to. The unsaved-changes indicator (an asterisk by the design
+name) tells you when there is work to save. Saving is allowed even while
 simulating.
 
 ---
@@ -686,7 +761,10 @@ file (it must have ports), preview its interface, and pick how it should be draw
 — an **IC** rectangle (inputs left, outputs right) or a **connector** strip (all
 pins along one edge). Confirm to place it. Sub-design instances are designated
 `X1`, `X2`, … and are wired through their interface pins like any component.
-A design cannot embed itself, and the dialog also refuses any choice that would
+The child must be a design **in the current project** — a file outside the
+project folder is refused (see the boundary rules in
+[Projects and files](#10-projects-and-files)). A design cannot embed itself,
+and the dialog also refuses any choice that would
 create an **embedding cycle** — a child that (directly or through its own
 sub-designs) embeds the design you're editing.
 
@@ -921,7 +999,7 @@ press Stop first.
 
 **Simulate ▸ Generate C…** turns the current design into a self-contained C
 program — the "fast" engine. A file dialog asks where to put it (defaulting to
-your design's folder); three files are written there:
+the project folder); three files are written there:
 
 - `<design>.c` — generated from your design; regenerate rather than edit it.
 - `runtime.c` / `runtime.h` — a fixed, documented support library, copied
