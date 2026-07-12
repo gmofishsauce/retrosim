@@ -39,11 +39,16 @@ const MaxRomBytes = 64 << 20
 
 // ListDir lists a directory's subdirectories and the files whose extension is in
 // `exts` (FR-053); with no `exts` it defaults to *.json (designs). The ROM-file
-// picker (FR-114e) passes .bin/.hex. Matches are case-insensitive; each ext may
-// be given with or without its leading dot.
+// picker (FR-114e) passes .bin/.hex. The single ext value "-" is the explicit
+// directories-only token (no file matches): the New/Duplicate Project location
+// prompt uses it (§6.19). Matches are case-insensitive; each ext may be given
+// with or without its leading dot.
 func ListDir(path string, exts ...string) (DirListing, error) {
 	if len(exts) == 0 {
 		exts = []string{".json"}
+	}
+	if len(exts) == 1 && exts[0] == "-" {
+		exts = nil
 	}
 	allow := make(map[string]bool, len(exts))
 	for _, e := range exts {

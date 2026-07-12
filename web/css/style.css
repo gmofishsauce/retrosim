@@ -88,6 +88,9 @@ body {
 .menu-accel { color: #aaa; }
 .menu-item:hover:not(:disabled) .menu-accel { color: #dde; }
 
+/* Current-project indicator (FR-121b): the project's display name, or
+   "(no project)" before one is current (FR-121c). */
+#project-name { color: #9ab; margin-left: 0.5rem; }
 #design-name { font-weight: 600; margin-left: 0.5rem; }
 
 #tool-mode {
@@ -460,6 +463,9 @@ body {
   font-size: 0.85rem;
   white-space: pre-wrap;
 }
+/* Inline save-dialog rejection from the validate hook (§6.19, FR-121a/FR-121e). */
+.dialog-error { color: #b00; font-size: 0.85rem; margin-top: 0.4rem; }
+
 .galdlg-validate {
   font-size: 0.85rem;
   white-space: pre-wrap;

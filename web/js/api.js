@@ -46,12 +46,43 @@ export async function getDefaults() {
 
 // listDir lists a directory for the file-navigation dialog (FR-053). An empty
 // path defaults to the designs root. `exts` overrides the default *.json filter
-// (the ROM picker passes ["bin","hex"], FR-114e).
-export async function listDir(path = "", exts = null) {
+// (the ROM picker passes ["bin","hex"], FR-114e; ["-"] lists directories only,
+// §6.5). Project manifests are excluded unless `includeManifests` is set (the
+// Open Project picker sets it, FR-121a/FR-121b).
+export async function listDir(path = "", exts = null, { includeManifests = false } = {}) {
   const params = [];
   if (path) params.push(`path=${encodeURIComponent(path)}`);
   if (exts && exts.length) params.push(`exts=${encodeURIComponent(exts.join(","))}`);
+  if (includeManifests) params.push("manifests=1");
   return request("/files" + (params.length ? "?" + params.join("&") : ""));
+}
+
+// projectInfo resolves a project directory's identity (FR-121a, §6.5a):
+// { dir, name, manifestFile, mainDesign, warnings }.
+export async function projectInfo(dir) {
+  return request("/project/info?dir=" + encodeURIComponent(dir));
+}
+
+// projectCreate makes a new project directory with a fresh manifest (FR-121b)
+// and returns its info. Rejects with the server's message when the path
+// already exists (409) or its parent is missing.
+export async function projectCreate(path) {
+  return request("/project/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path }),
+  });
+}
+
+// projectDuplicate copies the entire project directory src to the new
+// directory dst (FR-121f) and returns the duplicate's info. A mid-copy
+// failure leaves the partial destination; the caller reports it.
+export async function projectDuplicate(src, dst) {
+  return request("/project/duplicate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ src, dst }),
+  });
 }
 
 // readRomFile fetches a ROM content file's raw bytes (FR-114e), as a Uint8Array.

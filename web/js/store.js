@@ -42,6 +42,12 @@ export function createStore(initial = {}) {
     // While `vectorPanelOpen` the design is read-only too (FR-115h), sharing the
     // simulation lock's condition via isReadonly(); never persisted.
     vectorPanelOpen: false,
+    // The current project (FR-121, §6.19): null or { dir, name, manifestFile,
+    // mainDesign } — the client-side mirror of the server's ProjectInfo minus
+    // its warnings. Transient session state, never persisted (the server holds
+    // no open-project state). While null the design is the inert FR-004
+    // placeholder (§3.1 A8): every mutation path refuses via blocked().
+    project: initial.project ?? null,
   };
 
   const undoStack = [];
@@ -75,8 +81,16 @@ export function createStore(initial = {}) {
   }
 
   // blocked refuses design mutations while the design is read-only
-  // (FR-087/FR-115h), naming the active cause.
+  // (FR-087/FR-115h) or while no project is current (FR-121c, §3.1 A8),
+  // naming the active cause. isReadonly() deliberately does not cover the
+  // no-project state: chrome reads state.project directly for enablement.
   function blocked(what) {
+    if (state.project === null) {
+      onBlocked(
+        `${what} is disabled — no project is open (use File ▸ New Project or Open Project)`,
+      );
+      return true;
+    }
     if (!isReadonly()) return false;
     const why = state.simulating
       ? "the simulator is running — press Stop first"
@@ -218,6 +232,14 @@ export function createStore(initial = {}) {
       state.dirty = dirty;
       undoStack.length = 0;
       redoStack.length = 0;
+      notify();
+    },
+
+    // setProject records the current project (FR-121, §6.19): null or
+    // { dir, name, manifestFile, mainDesign }. Notifies so the top-bar
+    // indicator and item enablement react (FR-121b/FR-121c).
+    setProject(p) {
+      state.project = p;
       notify();
     },
 

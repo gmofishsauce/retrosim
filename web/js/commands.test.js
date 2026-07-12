@@ -48,7 +48,7 @@ function ty7400() {
 }
 
 function newStore() {
-  return createStore({ design: createDesign("t") });
+  return createStore({ design: createDesign("t"), project: { dir: "/proj", name: "proj" } });
 }
 
 function find(design, refdes) {
@@ -131,7 +131,7 @@ test("composite applies all in order and reverts as one undo step (FR-016a)", ()
 });
 
 test("translateWiring shifts bends/vertices and reverts on undo (FR-018c)", () => {
-  const store = createStore({ design: createDesign("t") });
+  const store = createStore({ design: createDesign("t"), project: { dir: "/proj", name: "proj" } });
   const tp = {
     name: "x", width: 6, height: 12,
     pins: [{ name: "Y", side: "right", position: 2, direction: "out" }],

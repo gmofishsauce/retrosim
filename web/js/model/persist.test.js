@@ -145,3 +145,89 @@ test("migrate 1→2 re-keys instance type to the type id", () => {
   assert.equal(gal.type, "type-22V574"); // GAL keys by part number
   assert.equal(sub.type, "child"); // sub-design path-derived type unchanged
 });
+
+// --- FR-121g data-path conversion (§6.19): absolute in memory, relative on
+// disk iff inside the project. ---
+
+import { relativizeDataPaths, absolutizeDataPaths, relPath, resolveRel } from "./persist.js";
+
+// A minimal serialized-design shape carrying one mem component.
+function memDesign(mem) {
+  return {
+    components: [
+      { refdes: "U1", typeData: { name: "RAM1", mem } },
+      { refdes: "U2", typeData: { name: "7400" } }, // non-mem: untouched
+    ],
+  };
+}
+
+test("relativizeDataPaths makes in-project absolute mem paths design-dir-relative", () => {
+  const live = memDesign({ kind: "ram", romFile: "/proj/rom.hex", ramFile: "/proj/ram.bin" });
+  const out = relativizeDataPaths(live, "/proj", "/proj");
+  const mem = out.components[0].typeData.mem;
+  assert.equal(mem.romFile, "rom.hex");
+  assert.equal(mem.ramFile, "ram.bin");
+});
+
+test("relativizeDataPaths leaves outside-project paths absolute (FR-121d)", () => {
+  const out = relativizeDataPaths(
+    memDesign({ kind: "rom", romFile: "/elsewhere/rom.bin" }),
+    "/proj",
+    "/proj",
+  );
+  assert.equal(out.components[0].typeData.mem.romFile, "/elsewhere/rom.bin");
+});
+
+test("relativizeDataPaths is copy-on-write: the live objects are untouched", () => {
+  const liveComp = { refdes: "U1", typeData: { mem: { romFile: "/proj/rom.hex" } } };
+  const serialized = { components: [liveComp] };
+  const out = relativizeDataPaths(serialized, "/proj", "/proj");
+  assert.equal(liveComp.typeData.mem.romFile, "/proj/rom.hex"); // live model keeps absolute
+  assert.equal(out.components[0].typeData.mem.romFile, "rom.hex");
+  assert.notEqual(out.components[0], liveComp);
+});
+
+test("relativizeDataPaths ignores already-relative and empty paths", () => {
+  const out = relativizeDataPaths(
+    memDesign({ kind: "ram", romFile: "rom.hex", ramFile: "" }),
+    "/proj",
+    "/proj",
+  );
+  assert.equal(out.components[0].typeData.mem.romFile, "rom.hex");
+  assert.equal(out.components[0].typeData.mem.ramFile, "");
+});
+
+test("absolutizeDataPaths resolves relative mem paths against the design dir", () => {
+  const d = memDesign({ kind: "ram", romFile: "rom.hex", ramFile: "sub/../ram.bin" });
+  absolutizeDataPaths(d, "/proj");
+  assert.equal(d.components[0].typeData.mem.romFile, "/proj/rom.hex");
+  assert.equal(d.components[0].typeData.mem.ramFile, "/proj/ram.bin");
+});
+
+test("absolutizeDataPaths leaves absolute paths as-is (legacy in-project too)", () => {
+  const d = memDesign({ kind: "rom", romFile: "/proj/rom.hex" });
+  absolutizeDataPaths(d, "/proj");
+  assert.equal(d.components[0].typeData.mem.romFile, "/proj/rom.hex");
+});
+
+test("data paths round-trip: relativize then absolutize is identity", () => {
+  const abs = { kind: "ram", romFile: "/proj/data/rom.hex", ramFile: "/other/ram.bin" };
+  const out = relativizeDataPaths(memDesign({ ...abs }), "/proj", "/proj");
+  absolutizeDataPaths(out, "/proj");
+  assert.deepEqual(out.components[0].typeData.mem, abs);
+});
+
+test("a legacy absolute in-project path comes back relative after one save cycle (FR-121g)", () => {
+  // Load: absolute in-project path is kept (absolutize is a no-op on it).
+  const loaded = memDesign({ kind: "rom", romFile: "/proj/rom.hex" });
+  absolutizeDataPaths(loaded, "/proj");
+  // Next save: relativization is unconditional, so it becomes relative.
+  const saved = relativizeDataPaths(loaded, "/proj", "/proj");
+  assert.equal(saved.components[0].typeData.mem.romFile, "rom.hex");
+});
+
+test("relPath/resolveRel handle nested and sibling directories", () => {
+  assert.equal(relPath("/proj", "/proj/data/rom.hex"), "data/rom.hex");
+  assert.equal(relPath("/proj/designs", "/proj/lib/c.json"), "../lib/c.json");
+  assert.equal(resolveRel("/proj/designs", "../lib/c.json"), "/proj/lib/c.json");
+});

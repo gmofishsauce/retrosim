@@ -16,7 +16,7 @@ import {
 } from "./commands.js";
 
 function newStore() {
-  return createStore({ design: createDesign("t") });
+  return createStore({ design: createDesign("t"), project: { dir: "/proj", name: "proj" } });
 }
 
 const free = (x, y) => ({ kind: "free", x, y });

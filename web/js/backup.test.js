@@ -33,7 +33,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 test("dirty dispatch writes a debounced snapshot (FR-092)", async () => {
   const storage = fakeStorage();
-  const store = createStore({ design: createDesign("snap test") });
+  const store = createStore({ design: createDesign("snap test"), project: { dir: "/proj", name: "proj" } });
   startBackup(store, { storage, debounceMs: 1, post: () => {} });
 
   store.dispatch(placeComponent(NOT, 4, 4, 0));
@@ -47,7 +47,7 @@ test("dirty dispatch writes a debounced snapshot (FR-092)", async () => {
 
 test("a landed save removes the snapshot immediately (FR-092)", async () => {
   const storage = fakeStorage();
-  const store = createStore({ design: createDesign("snap test") });
+  const store = createStore({ design: createDesign("snap test"), project: { dir: "/proj", name: "proj" } });
   startBackup(store, { storage, debounceMs: 1, post: () => {} });
 
   store.dispatch(placeComponent(NOT, 4, 4, 0));
@@ -78,7 +78,7 @@ test("offerRecovery round-trips the design with path, name, dirty (FR-093)", () 
     }),
   );
 
-  const store = createStore({ design: createDesign("fresh") });
+  const store = createStore({ design: createDesign("fresh"), project: { dir: "/proj", name: "proj" } });
   let prompt = null;
   const recovered = offerRecovery(store, {
     storage,
@@ -105,7 +105,7 @@ test("declining recovery discards the snapshot (FR-093)", () => {
     BACKUP_KEY,
     JSON.stringify({ design: serializeDesign(createDesign("old")), time: 1 }),
   );
-  const store = createStore({ design: createDesign("fresh") });
+  const store = createStore({ design: createDesign("fresh"), project: { dir: "/proj", name: "proj" } });
   const recovered = offerRecovery(store, {
     storage,
     confirmFn: () => false,
@@ -125,7 +125,7 @@ test("a throwing storage disables the writer without breaking dispatch (FR-092)"
     },
     removeItem: () => {},
   };
-  const store = createStore({ design: createDesign("snap test") });
+  const store = createStore({ design: createDesign("snap test"), project: { dir: "/proj", name: "proj" } });
   startBackup(store, { storage, debounceMs: 1, post: (m) => posts.push(m) });
 
   store.dispatch(placeComponent(NOT, 4, 4, 0));

@@ -7,6 +7,86 @@ import { createDesign } from "./design.js";
 import { buildNets } from "./netlist.js";
 import { placeholderTypeFromWiring } from "./subdesign.js";
 
+// --- POSIX-style path helpers (the server uses forward slashes; the dev
+// platform is macOS/Linux — Windows path handling is a follow-up). Moved here
+// from fileops.js (§6.19) so the model's data-path conversion below can share
+// them; fileops re-imports them. ---
+export const dirOf = (p) => p.replace(/\/[^/]*$/, "") || "/";
+export const baseOf = (p) => p.split(/[\\/]/).pop();
+
+// relPath expresses an absolute target relative to a base directory, e.g.
+// ("/a/designs", "/a/lib/c.json") → "../lib/c.json".
+export function relPath(fromDir, toPath) {
+  const a = fromDir.replace(/\/+$/, "").split("/");
+  const b = toPath.split("/");
+  let i = 0;
+  while (i < a.length && i < b.length - 1 && a[i] === b[i]) i++;
+  const ups = a.slice(i).map(() => "..");
+  return [...ups, ...b.slice(i)].join("/") || baseOf(toPath);
+}
+
+// resolveRel turns a child path stored relative to a base dir back into an
+// absolute path, normalizing "." and "..".
+export function resolveRel(baseDir, rel) {
+  const out = [];
+  for (const seg of (baseDir + "/" + rel).split("/")) {
+    if (seg === "" || seg === ".") continue;
+    if (seg === "..") out.pop();
+    else out.push(seg);
+  }
+  return "/" + out.join("/");
+}
+
+// inDir reports whether absolute path p lies inside (or is) directory dir.
+function inDir(p, dir) {
+  const d = dir.replace(/\/+$/, "");
+  return p === d || p.startsWith(d + "/");
+}
+
+// relativizeDataPaths converts a serialized design's in-project absolute mem
+// data paths (a ROM's content file, a RAM's save file — typeData.mem.romFile/
+// ramFile) to paths relative to the design's save directory (FR-121g, §6.19).
+// Paths outside projectDir stay absolute (the loose data boundary, FR-121d).
+// Copy-on-write: serializeDesign shares the live component objects, so a
+// touched component is replaced by a patched copy (the portDir-stamping
+// precedent, §6.14) and the in-memory model keeps its absolute paths.
+export function relativizeDataPaths(serialized, baseDir, projectDir) {
+  serialized.components = serialized.components.map((c) => {
+    const mem = c.typeData?.mem;
+    if (!mem) return c;
+    const patch = {};
+    for (const key of ["romFile", "ramFile"]) {
+      const p = mem[key];
+      if (typeof p === "string" && p.startsWith("/") && inDir(p, projectDir)) {
+        patch[key] = relPath(baseDir, p);
+      }
+    }
+    if (Object.keys(patch).length === 0) return c;
+    return { ...c, typeData: { ...c.typeData, mem: { ...mem, ...patch } } };
+  });
+  return serialized;
+}
+
+// absolutizeDataPaths resolves a just-loaded design's relative mem data paths
+// back to absolute against the design's directory (FR-121g), mutating the
+// load copy in place — the counterpart of relativizeDataPaths. A legacy
+// absolute in-project path loads as-is and comes back relative after its next
+// save (relativization is unconditional at save time). Consumers (the sim
+// run-time, the C generator) always see the absolute in-memory form.
+export function absolutizeDataPaths(design, baseDir) {
+  for (const c of design.components) {
+    const mem = c.typeData?.mem;
+    if (!mem) continue;
+    for (const key of ["romFile", "ramFile"]) {
+      const p = mem[key];
+      if (typeof p === "string" && p !== "" && !p.startsWith("/")) {
+        mem[key] = resolveRel(baseDir, p);
+      }
+    }
+  }
+  return design;
+}
+
 // FORMAT_VERSION is the save-file format this client writes and understands
 // (§7.4). On load, a file from an older format version is migrated forward to
 // this version through the MIGRATIONS chain (compatibility mode); a file from a

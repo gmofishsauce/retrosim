@@ -22,6 +22,7 @@ import { initCanvas } from "./engine/canvas.js";
 import { initInteraction } from "./engine/interaction.js";
 import { initToolbar } from "./chrome/toolbar.js";
 import { makeFileOps } from "./chrome/fileops.js";
+import { makeProjectOps } from "./chrome/project.js";
 import { initProperties } from "./chrome/properties.js";
 import { initStatusBar, postMessage } from "./chrome/statusbar.js";
 import { createSim } from "./engine/sim.js";
@@ -196,6 +197,15 @@ async function main() {
     nameEl.textContent = store.state.designName + (store.state.dirty ? " *" : "");
   });
   nameEl.textContent = name;
+
+  // Current-project indicator (FR-121b): the project's display name, or
+  // "(no project)" before one is current (FR-121c, §3.1 A8).
+  const projectEl = document.getElementById("project-name");
+  store.subscribe(() => {
+    projectEl.textContent = store.state.project
+      ? store.state.project.name
+      : "(no project)";
+  });
   document.getElementById("tool-mode").textContent = store.state.tool;
 
   // Warn before discarding unsaved changes on tab close (FR-049a, §6.10).
@@ -245,7 +255,10 @@ async function main() {
     // block on reload (FR-114d), so a persisted device places and simulates.
     const onNewMemDevice = async () => {
       await memDeviceDialog({
-        startPath: defaults.dataDir,
+        // The ROM-content / RAM save-file pickers seed at the project root
+        // (FR-121h; read at invocation) but may navigate anywhere — data
+        // files are exempt from the project boundary (FR-121d).
+        startPath: store.state.project?.dir ?? defaults.dataDir,
         submit: async (spec) => {
           const type = memDeviceType(spec);
           // A built-in id collision is caught here: built-ins are not in the server
@@ -276,8 +289,19 @@ async function main() {
       // FR-022a: frame the design after every load (interaction is created
       // just below, so the closure is safe — it only runs post-init).
       onLoaded: () => interaction.fitToScreen(),
+      // The containing-folder rule (§3.1 A10): a loaded design's folder
+      // becomes the current project (late-bound: projectops is built below
+      // from this very fileops).
+      setCurrentProject: (dir, info) => projectops.setCurrentProject(dir, info),
     });
     backBtn.addEventListener("click", () => fileops.back());
+    // Project lifecycle ops (FR-121b, §6.19), wired to the File menu below.
+    const projectops = makeProjectOps({
+      store,
+      dataDir: defaults.dataDir,
+      fileops,
+      freshDesign: () => createDesign(defaultDesignName()),
+    });
     const interaction = initInteraction({
       canvas: document.getElementById("canvas"),
       palette,
@@ -297,7 +321,12 @@ async function main() {
     // Offer recovery of unsaved work from a previous session (FR-093) before
     // the empty design is presented, then start the snapshot writer (FR-092)
     // — in that order, so a clean startup can't wipe the snapshot first.
-    offerRecovery(store);
+    // An accepted recovery with a savePath also establishes its containing
+    // folder as the current project (§6.12/§6.19); a pathless recovery sits
+    // inert behind the dirty guard until a project is opened (FR-121c).
+    if (offerRecovery(store) && store.state.savePath) {
+      projectops.setCurrentProject(store.state.savePath.replace(/\/[^/]*$/, "") || "/");
+    }
     startBackup(store);
     const sim = createSim({ store, renderer }); // slow simulator (§6.13)
     // Simulate ▸ Test Vectors toggles the docked test-vector panel (FR-115b/
@@ -326,7 +355,9 @@ async function main() {
       const sp = store.state.savePath;
       const res = await openFileDialog({
         mode: "save",
-        startPath: sp ? dirOf(sp) : defaults.dataDir,
+        // Seeded at the project root (FR-121h): the same directory the former
+        // dirOf(savePath) default produced, defined even for an unsaved design.
+        startPath: store.state.project?.dir ?? (sp ? dirOf(sp) : defaults.dataDir),
         defaultName: (sp ? baseName(sp).replace(/\.[^.]*$/, "") : "design") + ".c",
         title: "Generate C simulator (.c)",
         exts: ["c"],
@@ -372,7 +403,8 @@ async function main() {
       const sp = store.state.savePath;
       const res = await openFileDialog({
         mode: "save",
-        startPath: sp ? dirOf(sp) : defaults.dataDir,
+        // Seeded at the project root (FR-121h), like Generate C….
+        startPath: store.state.project?.dir ?? (sp ? dirOf(sp) : defaults.dataDir),
         defaultName:
           (sp ? baseName(sp).replace(/\.[^.]*$/, "") : "design") + "." + format.ext,
         title: `Export ${format.label}`,
@@ -393,6 +425,7 @@ async function main() {
       store,
       interaction,
       fileops,
+      projectops, // FR-121b: File ▸ New/Open/Duplicate Project
       sim,
       library, // for the Refresh Types action (FR-088)
       onTestVectors, // FR-115: Simulate ▸ Test Vectors…

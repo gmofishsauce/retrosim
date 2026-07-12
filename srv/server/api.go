@@ -23,6 +23,9 @@ func NewRouter(lib *Library, dataDir, componentsDir, webDir string) http.Handler
 	api.HandleFunc("/api/v1/components", handleComponents(lib, componentsDir))
 	api.HandleFunc("/api/v1/defaults", handleDefaults(dataDir))
 	api.HandleFunc("/api/v1/files", handleFiles(dataDir))
+	api.HandleFunc("/api/v1/project/info", handleProjectInfo())
+	api.HandleFunc("/api/v1/project/create", handleProjectCreate())
+	api.HandleFunc("/api/v1/project/duplicate", handleProjectDuplicate())
 	api.HandleFunc("/api/v1/romfile", handleRomFile())
 	api.HandleFunc("/api/v1/ramfile", handleRamFile())
 	api.HandleFunc("/api/v1/design/load", handleDesignLoad())
@@ -135,7 +138,88 @@ func handleFiles(dataDir string) http.HandlerFunc {
 			writeStorageError(w, err)
 			return
 		}
+		// Project manifests are excluded from file listings unless the request
+		// carries manifests=1 (the Open Project picker does, FR-121a/FR-121b).
+		// The filter sits here so ListDir stays a plain lister (§6.4/§6.5a).
+		if r.URL.Query().Get("manifests") != "1" {
+			kept := listing.Entries[:0]
+			for _, e := range listing.Entries {
+				if e.IsDir || !IsManifestName(e.Name) {
+					kept = append(kept, e)
+				}
+			}
+			listing.Entries = kept
+		}
 		writeJSON(w, http.StatusOK, listing)
+	}
+}
+
+// handleProjectInfo resolves a project directory's identity (FR-121a, §6.5a):
+// display name, recognized manifest, main design, and any manifest warnings.
+func handleProjectInfo() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !requireMethod(w, r, http.MethodGet) {
+			return
+		}
+		dir := r.URL.Query().Get("dir")
+		if dir == "" || !filepath.IsAbs(dir) {
+			writeError(w, http.StatusBadRequest, "dir must be a non-empty absolute path")
+			return
+		}
+		info, err := ProjectInfo(dir)
+		if err != nil {
+			writeStorageError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, info)
+	}
+}
+
+// handleProjectCreate makes a new project directory with a fresh manifest
+// (FR-121b, §6.5a) and returns its info.
+func handleProjectCreate() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !requireMethod(w, r, http.MethodPost) {
+			return
+		}
+		var body struct {
+			Path string `json:"path"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		info, err := CreateProject(body.Path)
+		if err != nil {
+			writeStorageError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, info)
+	}
+}
+
+// handleProjectDuplicate copies an entire project directory to a new one
+// (FR-121f, §6.5a) and returns the duplicate's info. A mid-copy failure leaves
+// the partial destination for manual cleanup; the client reports it.
+func handleProjectDuplicate() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !requireMethod(w, r, http.MethodPost) {
+			return
+		}
+		var body struct {
+			Src string `json:"src"`
+			Dst string `json:"dst"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		info, err := DuplicateProject(body.Src, body.Dst)
+		if err != nil {
+			writeStorageError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, info)
 	}
 }
 
@@ -297,6 +381,8 @@ func writeStorageError(w http.ResponseWriter, err error) {
 		status = http.StatusBadRequest
 	case errors.Is(err, ErrTooLarge):
 		status = http.StatusRequestEntityTooLarge
+	case errors.Is(err, ErrProjectExists):
+		status = http.StatusConflict
 	default:
 		status = http.StatusInternalServerError
 	}

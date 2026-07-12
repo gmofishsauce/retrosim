@@ -16,8 +16,12 @@ function addCmd(delta) {
   };
 }
 
+// Test stores carry a current project so the no-project lock (FR-121c) does
+// not refuse dispatches; the lock itself is tested explicitly below.
+const TEST_PROJECT = { dir: "/proj", name: "proj", manifestFile: "", mainDesign: "" };
+
 function newStore() {
-  return createStore({ design: { v: 0 } });
+  return createStore({ design: { v: 0 }, project: TEST_PROJECT });
 }
 
 test("dispatch applies the command, marks dirty, and notifies", () => {
@@ -122,7 +126,11 @@ test("markSaved records the path and clears dirty", () => {
 });
 
 test("markSaved adopts the saved file's base name (FR-047a)", () => {
-  const store = createStore({ design: { v: 0, name: "old" }, designName: "old" });
+  const store = createStore({
+    design: { v: 0, name: "old" },
+    designName: "old",
+    project: TEST_PROJECT,
+  });
   store.dispatch(addCmd(1));
   store.markSaved("/designs/alu.json", "alu");
   assert.equal(store.state.savePath, "/designs/alu.json");
@@ -147,7 +155,11 @@ test("subscribe returns an unsubscribe function", () => {
 
 test("dispatch/undo/redo are refused while simulating (FR-087)", () => {
   const blocked = [];
-  const store = createStore({ design: { v: 0 }, onBlocked: (m) => blocked.push(m) });
+  const store = createStore({
+    design: { v: 0 },
+    project: TEST_PROJECT,
+    onBlocked: (m) => blocked.push(m),
+  });
   store.dispatch(addCmd(5));
 
   store.setSimulating(true);
@@ -160,6 +172,33 @@ test("dispatch/undo/redo are refused while simulating (FR-087)", () => {
   store.setSimulating(false);
   store.undo();
   assert.equal(store.design.v, 0); // editable again
+});
+
+test("dispatch/undo/redo are refused while no project is current (FR-121c)", () => {
+  const blocked = [];
+  const store = createStore({ design: { v: 0 }, onBlocked: (m) => blocked.push(m) });
+  assert.equal(store.state.project, null);
+
+  store.dispatch(addCmd(1));
+  store.undo();
+  store.redo();
+  assert.equal(store.design.v, 0); // nothing mutated
+  assert.equal(blocked.length, 3); // each refusal reported
+  assert.match(blocked[0], /no project/);
+  assert.equal(store.isReadonly(), false); // the sim/vector locks are separate
+
+  store.setProject(TEST_PROJECT);
+  store.dispatch(addCmd(2));
+  assert.equal(store.design.v, 2); // editable once a project is current
+});
+
+test("setProject records the project and notifies", () => {
+  const store = createStore({ design: { v: 0 } });
+  let calls = 0;
+  store.subscribe(() => calls++);
+  store.setProject(TEST_PROJECT);
+  assert.equal(store.state.project, TEST_PROJECT);
+  assert.equal(calls, 1);
 });
 
 test("sim view is retained at stop and cleared on the next modification (FR-085)", () => {

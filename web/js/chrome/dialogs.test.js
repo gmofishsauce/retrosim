@@ -92,6 +92,11 @@ test("applySaveExt leaves an empty name unchanged", () => {
   assert.equal(applySaveExt("", "bin", ["bin", "hex"]), "");
 });
 
+test("applySaveExt with a null saveExt appends nothing (§6.19 project prompt)", () => {
+  assert.equal(applySaveExt("myproject", null), "myproject");
+  assert.equal(applySaveExt("my.project", null), "my.project");
+});
+
 // --- validateMemSpec (FR-114a/FR-114c) ---
 
 // A valid base spec; tests override one field at a time.

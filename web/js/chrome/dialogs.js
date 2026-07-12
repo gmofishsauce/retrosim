@@ -1214,16 +1214,26 @@ export function exportFormatDialog() {
 // the acceptable extensions (`saveExts`, defaulting to just `[saveExt]`) —
 // case-insensitively — so a picker allowing several (e.g. .bin/.hex for a RAM
 // save file, FR-114g) honors a typed "x.hex" instead of doubling it to
-// "x.hex.bin". An empty name is returned unchanged (the caller rejects it). Pure.
+// "x.hex.bin". A null `saveExt` appends nothing — the typed name is used
+// verbatim (the New/Duplicate Project location prompt names a directory,
+// §6.19). An empty name is returned unchanged (the caller rejects it). Pure.
 export function applySaveExt(name, saveExt, saveExts = null) {
   if (!name) return name;
-  const accept = saveExts && saveExts.length ? saveExts : [saveExt];
+  const accept = saveExts && saveExts.length ? saveExts : saveExt ? [saveExt] : [];
   const lower = name.toLowerCase();
   if (accept.some((e) => lower.endsWith("." + e.toLowerCase()))) return name;
-  return name + "." + saveExt;
+  return saveExt ? name + "." + saveExt : name;
 }
 
-export function openFileDialog({ mode, startPath, defaultName = "", title, exts = null, saveExt = "json", saveExts = null } = {}) {
+// Project-aware generalizations (§6.19, FR-121): `allowDir` (open mode) lets
+// OK with no file selected resolve to the listed directory itself, for Open
+// Project's folder pick (FR-121b); `includeManifests` lists `*-manifest.json`
+// files (excluded by default, FR-121a); `ignoreLastDir` starts at the caller's
+// startPath even in open mode (the FR-121b main-design picker, §3.1 A11)
+// while still updating the remembered directory; and `validate(path)` (save
+// mode) runs before the FR-049b overwrite guard — a non-null return shows on
+// an inline error line and keeps the dialog open (FR-121a/FR-121e).
+export function openFileDialog({ mode, startPath, defaultName = "", title, exts = null, saveExt = "json", saveExts = null, allowDir = false, includeManifests = false, ignoreLastDir = false, validate = null } = {}) {
   return new Promise((resolve) => {
     const overlay = el("div", "dialog-overlay");
     const box = el("div", "dialog");
@@ -1248,6 +1258,16 @@ export function openFileDialog({ mode, startPath, defaultName = "", title, exts 
       nameInput.value = defaultName;
       row.append(el("label", "dialog-label", "Name:"), nameInput);
       box.appendChild(row);
+      nameInput.addEventListener("input", () => setError(""));
+    }
+
+    // Inline error line for the save-mode validate hook (§6.19).
+    const errEl = el("div", "dialog-error");
+    errEl.hidden = true;
+    box.appendChild(errEl);
+    function setError(msg) {
+      errEl.textContent = msg;
+      errEl.hidden = !msg;
     }
 
     const buttons = el("div", "dialog-buttons");
@@ -1261,20 +1281,33 @@ export function openFileDialog({ mode, startPath, defaultName = "", title, exts 
       if (mode === "save") {
         const name = applySaveExt(nameInput.value.trim(), saveExt, saveExts);
         if (!name) return;
+        const path = joinPath(currentPath, name);
+        // The caller's validator runs before the overwrite guard (§6.19):
+        // a rejection keeps the dialog open with an inline message.
+        if (validate) {
+          const problem = validate(path);
+          if (problem) {
+            setError(problem);
+            return;
+          }
+        }
         // Confirm before clobbering an existing file (FR-049b).
         if (existingFiles.has(name) && !window.confirm(`"${name}" already exists. Overwrite?`)) {
           return;
         }
-        done({ path: joinPath(currentPath, name) });
+        done({ path });
       } else if (selectedFile) {
-        done({ path: selectedFile });
+        done({ path: selectedFile, isDir: false });
+      } else if (allowDir) {
+        // No file selected: the pick is the listed directory itself (FR-121b).
+        done({ path: currentPath, isDir: true });
       }
     }
 
     async function navigate(path, fallback = null) {
       let listing;
       try {
-        listing = await listDir(path, exts);
+        listing = await listDir(path, exts, { includeManifests });
       } catch (e) {
         if (fallback != null) return navigate(fallback);
         pathLabel.textContent = "error: " + e.message;
@@ -1283,6 +1316,7 @@ export function openFileDialog({ mode, startPath, defaultName = "", title, exts 
       currentPath = listing.path;
       writeLastDir(listing.path);
       selectedFile = null;
+      setError("");
       existingFiles = new Set(listing.entries.filter((e) => !e.isDir).map((e) => e.name));
       pathLabel.textContent = listing.path;
       listEl.replaceChildren();
@@ -1329,7 +1363,7 @@ export function openFileDialog({ mode, startPath, defaultName = "", title, exts 
     }
     document.addEventListener("keydown", onKey, true);
     document.body.appendChild(overlay);
-    const lastDir = mode === "open" ? readLastDir() : null;
+    const lastDir = mode === "open" && !ignoreLastDir ? readLastDir() : null;
     if (lastDir) navigate(lastDir, startPath);
     else navigate(startPath);
   });
@@ -1668,7 +1702,11 @@ export function testVectorsPanel({ store, dataDir }) {
     box.appendChild(buttons);
 
     // --- helpers ---
+    // The `.tv` dialogs seed at the current project root (FR-121h) — the same
+    // directory the former dirOf(savePath) default produced under the flat
+    // layout, now defined even for a not-yet-saved design.
     function defaultDir() {
+      if (store.state.project) return store.state.project.dir;
       const sp = store.state.savePath;
       return sp ? sp.replace(/\/[^/]*$/, "") || "/" : dataDir;
     }

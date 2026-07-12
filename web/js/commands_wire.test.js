@@ -28,7 +28,7 @@ function ty() {
 
 // Build a store with three placed components U1..U3.
 function newStore() {
-  const store = createStore({ design: createDesign("t") });
+  const store = createStore({ design: createDesign("t"), project: { dir: "/proj", name: "proj" } });
   store.dispatch(placeComponent(ty(), 10, 20, 0));
   store.dispatch(placeComponent(ty(), 40, 20, 0));
   store.dispatch(placeComponent(ty(), 70, 20, 0));

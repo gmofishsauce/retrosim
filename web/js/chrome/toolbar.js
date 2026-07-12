@@ -26,7 +26,7 @@ function accelLabel({ key, shift }) {
     : `Ctrl+${shift ? "Shift+" : ""}${key}`;
 }
 
-export function initToolbar({ container, store, interaction, fileops, sim, library, onTestVectors, onGenerateC, onExport }) {
+export function initToolbar({ container, store, interaction, fileops, projectops, sim, library, onTestVectors, onGenerateC, onExport }) {
   const tools = [
     { tool: "select", label: "Select" },
     { tool: "wire", icon: WIRE_ICON },
@@ -40,12 +40,22 @@ export function initToolbar({ container, store, interaction, fileops, sim, libra
   // --- Menus on the left: File, Edit, View (FR-004a) ---
 
   const fileMenu = createMenu("File");
+  // Project lifecycle (FR-121b, §6.19): the project items sit above the
+  // design items. Disabled while a simulation runs or under the test-vector
+  // lock, like New/Open; Duplicate additionally needs a current project.
+  const newProjectItem = addItem(fileMenu.panel, "New Project…",
+    "Create a new project folder", () => projectops?.newProject());
+  const openProjectItem = addItem(fileMenu.panel, "Open Project…",
+    "Open a project by folder, manifest, or design file", () => projectops?.openProject());
+  const dupProjectItem = addItem(fileMenu.panel, "Duplicate Project…",
+    "Copy the current project to a new folder", () => projectops?.duplicateProject());
   const newItem = addItem(fileMenu.panel, "New", "New design", () =>
     fileops.newDesign());
   const openItem = addItem(fileMenu.panel, "Open", "Open design", () =>
     fileops.open(), { key: "O" });
-  addItem(fileMenu.panel, "Save", "Save design", () => fileops.save(), { key: "S" });
-  addItem(fileMenu.panel, "Save As", "Save under a new name", () =>
+  const saveItem = addItem(fileMenu.panel, "Save", "Save design", () =>
+    fileops.save(), { key: "S" });
+  const saveAsItem = addItem(fileMenu.panel, "Save As", "Save under a new name", () =>
     fileops.save({ saveAs: true }), { key: "S", shift: true });
   // Export… writes the design to a foreign netlist format (FR-119).
   const exportItem = addItem(
@@ -212,32 +222,45 @@ export function initToolbar({ container, store, interaction, fileops, sim, libra
     const simming = store.state.simulating;
     const panelOpen = store.state.vectorPanelOpen;
     const locked = store.isReadonly(); // simming || panelOpen (FR-087/FR-115h)
+    // No-project state (FR-121c, §6.11): while no project is current the
+    // design is the inert FR-004 placeholder — everything is disabled except
+    // New Project…, Open Project…, Open, Select, and the View items.
+    const noProject = !store.state.project;
     for (const t of tools) {
       toolEls[t.tool].classList.toggle("active", store.state.tool === t.tool);
       // Wire/Bus arm design mutations; Select stays usable (FR-087/FR-115h).
-      if (t.tool !== "select") toolEls[t.tool].disabled = locked;
+      if (t.tool !== "select") toolEls[t.tool].disabled = locked || noProject;
     }
-    undoItem.disabled = locked || !store.canUndo();
-    redoItem.disabled = locked || !store.canRedo();
+    undoItem.disabled = locked || noProject || !store.canUndo();
+    redoItem.disabled = locked || noProject || !store.canRedo();
     // Copy is read-only (allowed under either lock, FR-111); enabled when a
     // component is selected. Paste mutates: needs a clipboard and no lock.
-    copyItem.disabled = !store.state.selection.some((r) => r.kind === "component");
-    pasteItem.disabled = locked || !interaction.hasClipboard();
-    newItem.disabled = locked;
-    openItem.disabled = locked;
-    refreshItem.disabled = locked;
+    copyItem.disabled =
+      noProject || !store.state.selection.some((r) => r.kind === "component");
+    pasteItem.disabled = locked || noProject || !interaction.hasClipboard();
+    newItem.disabled = locked || noProject;
+    openItem.disabled = locked; // live with no project: it establishes one (FR-121b)
+    refreshItem.disabled = locked || noProject;
+    saveItem.disabled = noProject; // otherwise live even while simulating (FR-087)
+    saveAsItem.disabled = noProject;
+    // The project items are disabled while a simulation runs and under the
+    // test-vector lock, like New/Open (FR-121b); Duplicate also needs a
+    // current project (nothing to duplicate).
+    newProjectItem.disabled = locked;
+    openProjectItem.disabled = locked;
+    dupProjectItem.disabled = locked || noProject;
     // The Test Vectors item toggles the panel, so it stays enabled while the
     // panel is open (to close it); only a running simulation disables it
     // (FR-115b).
-    vectorsItem.disabled = simming;
+    vectorsItem.disabled = simming || noProject;
     // Generate C… is disabled under either lock (FR-116): while simulating
     // and while the vector panel is open. Export… follows the same rule
     // (FR-119).
-    generateItem.disabled = locked;
-    exportItem.disabled = locked;
+    generateItem.disabled = locked || noProject;
+    exportItem.disabled = locked || noProject;
     // Run and the panel are mutually exclusive (FR-115h): Run is disabled while
     // the panel is open. Stop stays usable while simulating.
-    runBtn.disabled = panelOpen;
+    runBtn.disabled = panelOpen || noProject;
     runBtn.textContent = simming ? "Stop" : "Run";
     runBtn.title = simming ? "Stop the simulation" : "Run the simulation";
   }
