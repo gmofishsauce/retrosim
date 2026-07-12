@@ -102,9 +102,11 @@ export function makeProjectOps(
   }
 
   // freshCanvas replaces the canvas with a fresh empty design in the (new)
-  // current project (FR-121c) and starts a fresh navigation chain.
+  // current project (FR-121c) and starts a fresh navigation chain. The design
+  // is named after the project (FR-121b — not the FR-045 default), so the
+  // first save prefills `<project>.json`.
   function freshCanvas() {
-    store.replaceDesign(freshDesign(), { savePath: null });
+    store.replaceDesign(freshDesign(store.state.project?.name), { savePath: null });
     fileops.clearNavStack();
   }
 

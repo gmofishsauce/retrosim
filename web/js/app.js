@@ -300,7 +300,9 @@ async function main() {
       store,
       dataDir: defaults.dataDir,
       fileops,
-      freshDesign: () => createDesign(defaultDesignName()),
+      // A project's initial design is named after the project (FR-121b);
+      // the FR-004/FR-045 default covers the nameless case.
+      freshDesign: (projName) => createDesign(projName ?? defaultDesignName()),
     });
     const interaction = initInteraction({
       canvas: document.getElementById("canvas"),

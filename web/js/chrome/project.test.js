@@ -73,7 +73,9 @@ function harness({ dialogResults = [], api = {}, loadResult = true } = {}) {
     clearNavStack: () => navCleared++,
   };
   const ops = makeProjectOps(
-    { store, dataDir: "/data", fileops, freshDesign: () => ({ name: "fresh" }) },
+    // freshDesign mirrors app.js: named after the project when one is given
+    // (FR-121b), else a stand-in for the FR-004 default.
+    { store, dataDir: "/data", fileops, freshDesign: (name) => ({ name: name ?? "fresh" }) },
     {
       openFileDialog: async () => dialogResults.shift() ?? null,
       post: (m) => posts.push(m),
@@ -134,7 +136,10 @@ test("newProject creates, enters, and starts a fresh design (FR-121b/FR-121c)", 
   });
   await h.ops.newProject();
   assert.equal(h.store.state.project.dir, "/data/newproj");
-  assert.equal(h.store.state.design.name, "fresh");
+  // The initial design is named after the project (FR-121b), so the first
+  // save prefills "newproj.json".
+  assert.equal(h.store.state.design.name, "newproj");
+  assert.equal(h.store.state.designName, "newproj");
   assert.equal(h.store.state.savePath, null);
   assert.equal(h.navCleared(), 1);
 });
@@ -227,10 +232,11 @@ test("duplicateProject warns once per shared absolute data path (FR-121f)", asyn
   });
   h.store.setProject({ dir: "/data/orig", name: "orig", manifestFile: "", mainDesign: "" });
   await h.ops.duplicateProject();
-  // The duplicate is current with a fresh design (the §3.1 A9 asymmetry:
-  // the copy already happened, so a cancelled pick does not roll back).
+  // The duplicate is current with a fresh, project-named design (the §3.1 A9
+  // asymmetry: the copy already happened, so a cancelled pick does not roll
+  // back).
   assert.equal(h.store.state.project.dir, "/data/copy");
-  assert.equal(h.store.state.design.name, "fresh");
+  assert.equal(h.store.state.design.name, "copy");
   const shared = h.posts.filter((m) => /still shared/.test(m));
   assert.equal(shared.length, 1);
   assert.match(shared[0], /U1/);

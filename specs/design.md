@@ -2586,9 +2586,10 @@ factory whose ops `app.js` wires into the File menu:
   extension appended; the typed name is the folder name) →
   `api.projectCreate(path)` (a 409/exists or other failure posts to the tray
   and aborts) → `setCurrentProject` from the response → replace the canvas
-  with a fresh empty design (FR-004-style name, `savePath` null) and clear the
-  nav stack — the new empty project is current with a new design in it
-  (FR-121c).
+  with a fresh empty design named after the project (FR-121b — the folder
+  name, superseding the FR-045 default in this flow, so the first save
+  prefills `<project>.json`; `savePath` null) and clear the nav stack — the
+  new empty project is current with a new design in it (FR-121c).
 - `openProject()` (FR-121b) — dirty guard → pick dialog
   `openFileDialog({ mode:"open", title:"Open Project", startPath: dataDir,
   allowDir:true, includeManifests:true })` (remembered directory applies,
@@ -2610,7 +2611,8 @@ factory whose ops `app.js` wires into the File menu:
   `setCurrentProject` from the response, then open per FR-121b: the (copied)
   manifest's `mainDesign` → `loadIntoStore` it; else the open-design dialog
   rooted at the duplicate — here a cancel leaves the duplicate current with a
-  fresh empty design, because the copy has already happened (§3.1 A9's noted
+  fresh empty design (project-named, as in `newProject`), because the copy has
+  already happened (§3.1 A9's noted
   asymmetry). Finally the **shared-data scan**: `listDir(dst)` (designs only —
   manifests are excluded by default) → `loadDesign` each → `absoluteDataPaths`
   → one tray message per hit naming the design file, refdes, and path as

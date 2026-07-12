@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-12 — New Project's initial design is named after the project
+What: entering a new project (New Project, and Duplicate Project's cancelled-pick fallback) creates the fresh design named after the project folder (e.g. `example1`) instead of the FR-045 `unnamed schematic <datetime>` default, so the first save prefills `<project>.json` and becomes the main design.
+Why: stakeholder preference — the project's first design almost always shares its name.
+Touches: FR-121b (in-place rework); design §6.19.
+
 ## 2026-07-12 — Projects (FR-121 group); FR-120 group withdrawn
 What: the unpushed FR-120 per-project component-scope group (one spec commit + two implementation commits, 2026-07-11) was **reverted in full** — buggy, and judged the wrong approach: it spent its complexity compensating for the project being implicit (scope-follows-file plumbing, the Save As referenced-type copy, save-first refusals). The **FR-120 number is retired and stays unassigned.** In its place, new **§3.25 Projects** (FR-121–FR-121h): a project is a directory with an optional tolerant `<name>-manifest.json` (display name, main design); project-first lifecycle — File ▸ New/Open/Duplicate Project, current-project indicator, startup empty until a project is chosen, so a design always has a project; boundary strict for designs (children/peers inside; legacy outside refs load+warn, new ones refused) and loose for data (ROM/RAM paths may be absolute anywhere); Save As confined to the project; Duplicate Project is the fork primitive (manifest renamed, shared absolute data paths warned); in-project ROM/RAM paths stored project-relative; save-mode dialogs seed at the project root. Per-project component types return later as a smaller Phase 2 on this foundation (`components/` reserved by FR-121).
 Why: the app had converged on "the design's directory" as an anonymous grouping five separate times (FR-098, FR-101, FR-115a, FR-116, and the reverted FR-120); naming it dissolves most of the reverted complexity. A KiCad-conventions review (`divergences.md`) shaped two details: Open Project accepts folder/manifest/design file, and Duplicate Project handles data paths.
