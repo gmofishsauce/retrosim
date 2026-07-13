@@ -392,6 +392,33 @@ reworked.
   behavioral content (preserving it on round-trip — see §7); the slow simulator
   evaluates it (§6.13, FR-079).
 
+**Magic UART (§3.26)**
+
+- **FR-122** — A built-in **magic UART** output component: eight data inputs
+  D0–D7 (group DATA), an active-low chip select CS/, an active-low clock enable
+  CE/, and a clock CLK; no outputs. On CLK's rising edge while CS/=0 and CE/=0 it
+  latches D0–D7 and emits the byte as an ASCII character to the simulator's standard
+  output (Console panel for the slow sim, real stdout for generated C). Output-only,
+  heavily buffered, asynchronous with the sim; no receive path. A client-defined
+  built-in (not a library YAML type), A-series refdes, no properties; behavior is a
+  built-in (the output-device analogue of memory, FR-114d), not GALasm.
+- **FR-122a** — Drawn as an IC-style box labeled "UART"; DATA pins on one edge,
+  CS//CE//CLK on the other (trailing-slash active-low labels); lower palette region,
+  tooltip "magic UART".
+- **FR-122b** — Slow-sim behavior: unit-delay four-state; read previous-step nets
+  (Z→U); emit on CLK 0→1 **only** when CS/ and CE/ are exactly 0 (uncertain ⇒ no
+  emit — a side effect, unlike memory's pessimistic-U bus); data bits masked non-1→0
+  (U→0, FR-114g); at most one byte per edge; register state transient.
+- **FR-122c** — Optional **Console panel**: docked bottom panel toggled from View ▸
+  Console; modeless (no read-only lock); monospace, sticky-tail autoscroll; byte
+  rendering (printable + LF/TAB verbatim, CR ignored, else `\xNN`); interleaves all
+  UARTs; Clear action; cleared at Run start; bounded retained history; open state +
+  text are session-only (not saved).
+- **FR-122d** — Fast (generated C) sim reproduces FR-122b bit-for-bit (FR-107),
+  emitting each byte to real stdout in both batch modes, fully buffered; generator
+  bakes a per-UART device table, runtime owns the latch/emit. Shares stdout with the
+  free-run dump / vector transcript (dump trails UART output); parity accounts for it.
+
 ### 2.2 Non-Functional Requirements
 - **NFR-001** — Server binds exclusively to `127.0.0.1`; no other interface.
 - **NFR-002** — SPA functions in a single tab with no external (internet) network
@@ -2100,9 +2127,12 @@ no sequential part could ever leave U.)
   (`kind:"R"`, `pin:null`) and through evaluation (`updateRegisters`/`evalOutput`)
   **unchanged** — only its *drive target* differs, which is a `sim.js`/`cgen.js`
   concern (below), not a compiler one. The compiled form gains no new shape.
-- Compiled form: `{ outputs: [{signal, pin, kind: plain|T|R, lhsLow,
+- Compiled form: `{ outputs: [{signal, pin, kind: plain|T|R|L, lhsLow,
   terms: [[{signal, low}]], enable: term|null}], ar, sp }`, cached **per type
-  name** — instances share it.
+  name** — instances share it. A **transparent-latch** output (`kind:"L"`,
+  FR-079d) additionally carries a `gate` (its single-term `.G` product term) and
+  an optional `arst` (single-term `.ARST`), the level-sensitive analogue of a
+  `.R` output's `clk`/`arst`.
 - Compiled literals carry `low` = the use-negation (`{signal, low}`, true iff
   the net reads `low ? 0 : 1`); outputs carry `lhsLow` = the LHS use-negation.
 - Evaluation (selective pessimism, FR-077): a literal is true iff its net reads
@@ -2110,7 +2140,9 @@ no sequential part could ever leave U.)
   false**, else U if any literal is U, else 1; the sum is **1 if any term is
   true**, else U if any term is U, else 0. A plain/`.T` output drives `sum XOR lhsLow`; a
   `.R` output drives `register XOR lhsLow` (the sum is the D input, latched by
-  `sim.js`); a `.T`/`.R` output with `enable` false contributes Z, with enable U
+  `sim.js`); a `.L` transparent-latch output (FR-079d) likewise drives `latch XOR
+  lhsLow`, its stored value maintained level-sensitively by `sim.js` (below); a
+  `.T`/`.R`/`.L` output with `enable` false contributes Z, with enable U
   contributes U (pessimistic). `AR` true forces all the instance's registers to
   the reset state each step (async); `AR` U forces them U; `SP` true at a clock
   edge sets them (manual §3.6).
@@ -2129,11 +2161,19 @@ no sequential part could ever leave U.)
     GAL20RA10 suffixes `.CLK`/`.ARST`/`.APRST` (one product term each): a `.R`
     output may name its own clock signal in `.CLK`, and its own async reset/preset
     in `.ARST`/`.APRST`, instead of sharing the part's global `clock:`+`AR`/`SP`.
+    (c) The level-sensitive **`.L`/`.G`** suffix pair for **transparent latches**
+    (FR-079d): `Qn.L = <data>` names the latched sum-of-products and the required
+    single-term `Qn.G = <gate>` names the transparency gate (transparent while the
+    term is true). `.G` is legal only on a `.L` output; a `.L` output takes no
+    `.CLK`, may add a single-term `.E` (3-state) and a single-term `.ARST`
+    (async clear to 0), and takes no `.APRST`. The parser's suffix set therefore
+    extends to `.T`/`.R`/`.E`/`.CLK`/`.ARST`/`.APRST`/`.L`/`.G`.
   - *Strict* (`gal:` present) runs a device table — pin/OLMC counts, which
     suffixes and which of `AR`/`SP`/`.CLK`/`.ARST`/`.APRST` the device allows, and
     the per-OLMC product-term profile — and pushes a preflight error (§6.13
     `errors`) for any construct or capacity the device lacks (e.g. XOR on any
-    device, `.CLK` on a non-20RA10, `AR`/`SP` on a 16V8/20V8). The product-term
+    device, `.CLK` on a non-20RA10, `AR`/`SP` on a 16V8/20V8, the transparent-latch
+    `.L`/`.G` on any device — FR-079d, extended-only). The product-term
     profile is checked **conservatively** (terms as written, no minimization —
     FR-079b); the cheap structural limits are exact. This same `validateStrict`
     gate is what the **New GAL part dialog** (§6.11, FR-066c) runs live while
@@ -2145,6 +2185,22 @@ no sequential part could ever leave U.)
   `.CLK`). Each step latches each register on the 0→1 of *its own* clock net and
   applies that register's own `.ARST`/`.APRST` (async) — the existing rising-edge
   and `AR`/`SP` machinery, indexed per register instead of per entity.
+- **Transparent-latch state (sim.js, FR-079d).** A `.L` output owns a stored
+  four-state value held in the same per-instance state map as `.R` registers
+  (power-up **U**, FR-079). Unlike a register, it is not edge-clocked: alongside
+  the register-latch phase of the step (below), for each `.L` output the engine
+  evaluates its `.G` gate term over `curr`; while the gate is **1** (transparent)
+  it captures the `.L` sum-of-products (the D input, over `curr`) into the store,
+  while the gate is **0** it holds, and a **U** gate stores U (selective
+  pessimism, FR-077); a true `.ARST` term forces the store to 0 first (async
+  clear). The drive phase then presents the stored value exactly like a register
+  (`evalOutput` handles `kind:"L"` identically to `"R"`, gated by any `.E`). Because
+  the store is read from `curr` and written for the next step, a transparent latch
+  follows its data with the same **one-unit delay** as every other element
+  (FR-078) — no special ordering. Latch state persists across settling episodes
+  (it is seeded only at build), so hold works under the live combinational
+  scheduler with no scheduler change; the stateful classification matters only to
+  the vector runner (§6.16, FR-115e).
 - **Complementary outputs — convention, no language change.** A part that exposes
   both a true output and its complement on separate pins (74HC151 `Y`//`Y`,
   74HC175 `Qn`//`Qn`, 74HC165 `/Q7`) must **not** name the inverted pin `/Q0`:
@@ -2225,7 +2281,10 @@ no sequential part could ever leave U.)
 - **Step (1 unit = 1 simulated ns, FR-078):** (1) per registered instance,
   compare its clock net's `curr` value with the previous step's; on a 0→1
   transition latch each `.R` output's sum-of-products (evaluated over `curr`)
-  into its register. (2) Evaluate every driver against `curr`. (3) Resolve every
+  into its register; in the same phase, for each `.L` transparent-latch output
+  (FR-079d) update its store level-sensitively — capture the `.L` sum while its
+  `.G` gate reads 1, hold while 0, applying any `.ARST` clear first (all over
+  `curr`). (2) Evaluate every driver against `curr`. (3) Resolve every
   net into `next` (below). (4) Swap buffers, `simTime++`. Double-buffering makes
   the step order-independent: outputs respond exactly one unit after inputs.
 - **Net resolution (FR-081–FR-083):** a **strength-priority** reduction
@@ -2466,7 +2525,7 @@ no sequential part could ever leave U.)
   - `captureRow(design, rowInputs, { romContent }) → outSymbols[]`. Same drive + settle (switches, port stimulus, and io drive cells alike), mapping each settled output to `H`/`L`, or `X` when `VU`/`VZ` — and, for an io column (FR-115i), filling a release cell while leaving a drive cell (`0`/`1`) as authored.
   - `validateVectors(doc, columns) → { ok, warnings, errors }`. Pure gate: legal cell symbols — `0`/`1` in input cells, with `C` additionally legal **only** in a `kind:"clock"` column (FR-115e); `H`/`L`/`X` in output cells; `0`/`1`/`H`/`L`/`X` in **io** cells (FR-115i) — row arity vs column count (inputs + outputs + io), and `(refdes,pin)` reconciliation against the live `columns` (a file column absent from the design, or a design column absent from the file, is a non-fatal warning, FR-115a).
   - File model: `FORMAT_VERSION` (**3** — v2 marked the `C` input symbol, FR-115e; **v3** adds the `io` column array and per-row `io` cell array, FR-115i; the v1→v2 migration is the identity, and v2→v3 adds empty `io:[]` to the column set and to each row), `serializeVectors(doc)`, `deserializeVectors(obj)` with a `migrate()` chain mirroring `model/persist.js` (§7.4); shape per §7.7. ROM content is loaded once before a run via `loadRomContents(design)` reused from `sim.js` (FR-114e), so ROM-backed combinational logic resolves.
-  - `hasClockGenerators(design) → boolean`. True when any component's `typeData.renderType` is `"clock"` — the same built-in identification `buildSimulation` uses for the sequential/combinational split (§6.13, FR-086). Selects the sequential run path (FR-115e) in `runVectors`/`captureVectors`, the clock columns in `deriveColumns`, and the dialog's sequential-mode notice. Pure and DOM-free; deliberately a design scan rather than `buildSimulation(...).hasClocks()`, which would compile every behavior just to answer a yes/no question. (Originally introduced for the FR-115g guard, now superseded.)
+  - `isStateful(design) → boolean` (was `hasClockGenerators`, generalized for FR-079d). True when the design carries any persistent state that must survive from one vector row to the next: any component whose `typeData.renderType` is `"clock"` **or** any component whose behavior declares a transparent latch (a `.L` output, FR-079d). It selects the **ordered/persistent** run path (FR-115e) in `runVectors`/`captureVectors` — so a latch's hold spans rows even in a clock-less design — and the dialog's sequential-mode notice. A separate `hasClockGenerators(design)` (the original `renderType==="clock"` scan) still gates the **clock-specific** machinery that only applies when a clock is present: the `C`-pulse columns in `deriveColumns` and the scripted-clock preamble. Both are pure, DOM-free design scans — deliberately not `buildSimulation(...).hasClocks()`, which would compile every behavior to answer a yes/no question; the latch test reads each in-use `typeData.behavior` for a `.L`-suffixed output (cheap string/compiled-shape check). (The clock scan was originally introduced for the FR-115g guard, now superseded.)
 
 **Panel (`chrome/dialogs.js` `testVectorsPanel({ store, dataDir })`).** A **docked, modeless panel** (FR-115b, reworked 2026-07-02 from the former `.dialog-overlay` modal so the schematic stays visible while authoring). It mounts into `#vec-panel`, the bottom-third host inside a now flex-column `#canvas-area` (canvas host on top, panel host below); opening reveals the host and shrinks the canvas box, which the `canvas.js` `ResizeObserver` refits automatically at the unchanged viewport — content keeps its scale/aspect, only the visible extent shrinks (§6.13) — and closing hides it so the canvas grows back. It exposes `open()`/`close()`/`isOpen()` and a header **✕/Close** control, and binds **no** Escape-to-close (Escape remains a canvas gesture). While open it sets `store.state.vectorPanelOpen`, imposing the FR-115h read-only lock (see toolbar/store wiring below). It renders an HTML `<table>` whose header comes from `deriveColumns(store.design)` — which includes the design's port columns (FR-115f) and bidirectional (io) columns (FR-115i) directly, so the panel and runner operate on `store.design` itself (no wrapper); any `warnings` it returns (FR-115a reconciliation mismatches — the former bidir-port skip warning is gone now that bidir ports bind as io columns, FR-115i) show in the notice line — and whose body is rows of `<select>`/`<input>` cells held in a 2-D ref array read back in `gather()` (the map-to-`{el}`-then-read pattern of the GAL pin rows). Buttons: **+ Row** / **− Row**; **Run** → `runVectors` then paint each output cell — and each io **release** cell (FR-115i) — green/red (a failing cell shows its `actual`) and write an "N of M rows passed" summary line (FR-115d); **Capture** → `captureVectors` filling every row's expected cells (ordered pass for a sequential design, FR-115e); **sequential mode** (FR-115e): when `hasClockGenerators(store.design)`, a clock column's cell `<select>` offers `0`/`1`/`C` (per its `kind:"clock"` marker) and defaults to `C`, and a persistent notice line (`vec-mode`) states that rows run in order, state persists, and `C` pulses the clock — replacing the removed FR-115g guard; an **io** column's cell `<select>` (FR-115i) offers `0`/`1`/`H`/`L`/`X`, defaults to `X`, and styles by role (driving `0`/`1`, expected `H`/`L`, inert `X`); **Load**/**Save** → `openFileDialog` (§6.11) seeded at the **project root** (`store.state.project.dir`, FR-121h — identical to the former `dirOf(store.state.savePath)` under the flat project layout, and defined even for a not-yet-saved design) with default `<base>.tv`, then the design load/save API wrappers (`api.js`) — the `.tv` payload is JSON and rides the existing `/api/v1/design/{load,save}` endpoints (§6.4), which neither interpret nor extension-check the body. New `vec-*` CSS classes in `style.css` reuse the dialog primitives, the raised tray shadow, accent `#4a90d9`, error `#b00`, success `#1a7f37`.
 
@@ -2495,7 +2554,7 @@ no sequential part could ever leave U.)
 
 **Generator (`web/js/engine/cgen.js`).** Pure, DOM-free ES module (unit-tested under `node:test` like `vectors.js`). `generateC(design, { columnsFrom = design } = {}) → { code, warnings }` produces the `<design>.c` text (the `{ romContent }` option was removed at M5 — ROM contents are no longer baked, FR-117b). `design` is the **FlatDesign** (§6.14) when the source is hierarchical; `columnsFrom` is the **root** design the column tables derive from — the same root-for-columns / flat-for-netlist split the vector panel uses (§6.16), because a top-sheet port's direction derivation needs the root's wiring and a child's ports/switches/indicators must not become columns (FR-116 hierarchy). It **reuses** the existing single-source modules (FR-109): `compileBehavior` (§6.13 `galasm.js`) for behavior lowering, `buildNets` (§6.6 `netlist.js`) for connectivity, `deriveColumns` (§6.16 `vectors.js`) for the baked column tables, and the `effectiveProps` merge (FR-020b) for built-in property values. Emission:
   - **Net table:** nets indexed as in `buildNets` order; a string table of `refdes.pin` labels for conflict messages (FR-108).
-  - **GALasm entities:** each compiled output's term/sum tree is lowered to a C expression/function over `curr[]` using the `rt_*` ops — plain, `.T` (enable gating), and `.R` outputs; register state as static `rt_val` arrays; global-clock and per-output `.CLK` edge detection mirroring `updateRegisters`/`evalOutput` (§6.13, FR-079/FR-079a). Subunit packages union their siblings' pins exactly as `makeGalasmEntity`. **Buried registered nodes (FR-079c)** mirror the slow engine's virtual-net trick: `lowerGalasm` appends one placeholder net per `typeData.internal` name (bumping `gen_net_count`), maps the node to a synthetic `"<refdes>.#<node>"` key in `netOfPin`/`pinOwner` and interns a label for it; the buried `.R` output then lowers into ordinary `reg_<tag>[k]` state (`gen_init` U-seed, `gen_latch` rising-edge D-latch reading buried literals as `curr[<vnet>]`) and a `gen_drive` fragment `rt_contrib(<vnet>, reg_<tag>[k], 0, <label>)`, so `curr[<vnet>]` carries the one-unit-delayed buried value the runtime's unchanged net resolve produces — no runtime change, the two engines agree on `Q7`/`Q7N` (FR-107). New sequential parity pair `examples/74165-*` (a placed 74165 with switch-driven `D0..D7`/`DS`/`PL`//`CE`/, a clock on `CP`, indicators on `Q7`/`Q7N`, and a `.tv` exercising load-then-shift and `CE`/ inhibit) covers a buried sequential node through the FR-107 harness (`runtests.sh` step 3).
+  - **GALasm entities:** each compiled output's term/sum tree is lowered to a C expression/function over `curr[]` using the `rt_*` ops — plain, `.T` (enable gating), `.R`, and `.L` outputs; register **and latch** state as static `rt_val` arrays; global-clock and per-output `.CLK` edge detection mirroring `updateRegisters`/`evalOutput` (§6.13, FR-079/FR-079a). A **transparent latch** (`.L`/`.G`, FR-079d) lowers to a `latch_<tag>[]` state array beside the `reg_` arrays: `gen_init` seeds it U; in the `gen_latch` phase (alongside register latching, before contributions) the generated fragment evaluates the `.G` gate over `curr` and, level-sensitively, captures the `.L` sum when the gate is 1 and holds when 0 (applying any `.ARST` clear first) — no edge state, mirroring §6.13's latch bullet; and `gen_drive` contributes `latch_<tag>[k]` gated by the output's `.E` exactly as a register drives, so `curr` carries the one-unit-delayed latched value the runtime's unchanged net resolve produces (the net-resolve, drive, and latch-capture paths use only existing `rt_*` ops, so they need no runtime change). The **one** runtime touch a clock-less latch design forces is the vector runner's **stateful decision**: the generator bakes a `gen_latch_count`, and `rt_run_vectors` runs its rows in order on persistent state when `gen_clock_count > 0 || gen_latch_count > 0` — not clocks alone — the C analogue of `isStateful` (§6.16, FR-115e). A clock-less latch design still has no `C` pulses and no power-on preamble (both keyed on `gen_clock_count`), but its rows share state so a latch's hold spans rows. Subunit packages union their siblings' pins exactly as `makeGalasmEntity`. **Buried registered nodes (FR-079c)** mirror the slow engine's virtual-net trick: `lowerGalasm` appends one placeholder net per `typeData.internal` name (bumping `gen_net_count`), maps the node to a synthetic `"<refdes>.#<node>"` key in `netOfPin`/`pinOwner` and interns a label for it; the buried `.R` output then lowers into ordinary `reg_<tag>[k]` state (`gen_init` U-seed, `gen_latch` rising-edge D-latch reading buried literals as `curr[<vnet>]`) and a `gen_drive` fragment `rt_contrib(<vnet>, reg_<tag>[k], 0, <label>)`, so `curr[<vnet>]` carries the one-unit-delayed buried value the runtime's unchanged net resolve produces — no runtime change, the two engines agree on `Q7`/`Q7N` (FR-107). New sequential parity pair `examples/74165-*` (a placed 74165 with switch-driven `D0..D7`/`DS`/`PL`//`CE`/, a clock on `CP`, indicators on `Q7`/`Q7N`, and a `.tv` exercising load-then-shift and `CE`/ inhibit) covers a buried sequential node through the FR-107 harness (`runtests.sh` step 3). A further parity pair `examples/74573-*` (a placed 74573 with switch-driven `D0..D7`, `LE`, and `/OE`, indicators on `Q0..Q7`, and a `.tv` that exercises transparency while `LE` is high, hold after `LE` falls, and high-Z under `/OE`) covers the transparent-latch lowering (FR-079d) through the same harness — a **clock-less stateful** design, verifying the `isStateful`/ordered-rows path (§6.16) in both engines.
   - **Built-ins/memory:** instance tables (type, nets, effective properties, switch's persisted state as its baked drive level — overridable by a vector input column); each ROM's **refdes and content-file path** baked for the runtime's startup load (FR-117b; superseded the M3 baked-bytes rule 2026-07-03); a plain RAM starts all-U, while a **persistent RAM** (FR-114g) additionally bakes its **save-file path and load-on-start flag** for the runtime's startup load and write-back (FR-117c).
   - **Preflight/refusals:** same compile errors as `buildSimulation` (parse failure, `.R` without `clock:`); behavior-less types generate U-drivers with a warning (FR-080 analogue). **Switch elements (FR-071g/FR-071h) are refused** (added 2026-07-07): `generateC` fails with "transmission gates / relays are not supported by the fast simulator" naming the offending refdes(es) — FR-083a's dynamic net merging is slow-engine-only for now (FR-116); the Generate C… flow surfaces the refusal via the message tray like a flatten failure. **Persistent RAM (FR-114g) is supported** (refusal withdrawn 2026-07-09, originally refused 2026-07-08): a RAM instance whose `mem.ramFile` is set bakes its save-file path and load-on-start flag into `gen_mems`, and the runtime loads it at start-up and writes it back on normal termination of either batch mode (FR-117c, M7 below); a plain RAM (no save file) bakes a NULL path and generates unchanged. If **switch-element** fast support is added later it will mirror the slow engine's per-root resolution (a union-find in `runtime.c` plus generated contact tables) with FR-107 parity coverage — no `gen_` interface provision is reserved for it now (YAGNI; the runtime pair ships verbatim per generation, so an interface change costs only a regenerate). The former FR-116 deferred-scope refusals of sub-design instances / off-sheet connectors remain **as internal guards** — the caller flattens first (FR-116 hierarchy, reworked 2026-07-04), so tripping one means an unflattened design reached the generator. `SUBUNIT_PKG_RE` is the hierarchical-prefix-tolerant form (§6.14), so a child's subunit packages group within their instance. A clock generator with a hierarchical refdes is baked normally (free-run mode drives it, FR-117a) and the **runtime's vector mode refuses it at startup** — `rt_init`/the vector runner scans `gen_clocks[].refdes` for `/`, reports the refdes with a pointer at `--cycles`, and exits 2 (the FR-115e hidden-clock rule, enforceable only at run time because one program serves both modes).
 
@@ -2768,6 +2827,98 @@ picker (`ignoreLastDir`, §3.1 A11).
 - **Dependencies:** `store.js`, `api.js`, `chrome/dialogs.js`
   (`openFileDialog`), `chrome/fileops.js`, `chrome/statusbar.js`
   (`postMessage`), `model/persist.js`.
+
+### 6.20 JS/C: magic UART + Console panel (`web/js/engine/uart.js`, `chrome/console.js` + builtins/sim/canvas/cgen/runtime/store/toolbar/app wiring)
+
+- **Purpose:** a built-in, output-only character device (requirements §3.26) and the
+  slow simulator's console surface for it.
+- **Satisfies:** FR-122, FR-122a, FR-122b, FR-122c, FR-122d (and FR-107/FR-078 for it).
+
+**Component kind — a fixed built-in, not a metatype.** The UART is byte-fixed with
+no parameters, so it is a built-in in `builtins.js` `BUILTIN_DEFS` (like the
+transmission gate/relay, FR-071g/h), **not** a server-persisted generated metatype
+like the memory device (FR-114). Consequences: **no Go server change**, no dialog, no
+library YAML; a placed instance round-trips through a save via its embedded
+`typeData` (FR-057) like any built-in. The type entry (`builtins.js`, FR-122/FR-122a)
+carries `name:"uart"`, `renderType:"uart"`, `title:"magic UART"`, pins
+`D0..D7` (`BIT_PINS("D","left","in",8)`) plus `CS/`,`CE/`,`CLK` on the opposite edge,
+one `pinGroups` entry `DATA`, and **no** `properties` and **no** `BEHAVIORS` entry —
+its behavior reads input nets and keeps state, the same reason `memory.js` is a
+separate core rather than a source-only `BEHAVIORS` function.
+
+**Behavior core (`web/js/engine/uart.js`, FR-122b).** Pure, DOM-free, net-free —
+the `memory.js` analogue. `createUartCore() → { clockStep(read, emit), peek() }`,
+where `read(pinName)→V` is supplied by `sim.js` (previous-step net value, Z→U, unit
+delay FR-078) and `emit(byte)` is the side-effect sink (byte 0..255, called at most
+once per `clockStep`). It holds `prevClk` (power-up `VU`) and the latched `reg`.
+`clockStep`: normalize `CLK`; on `prevClk===V0 && clk===V1`, and **only** if
+`norm(read("CS/"))===V0` and `norm(read("CE/"))===V0`, assemble the byte from D0(LSB)
+…D7(MSB) with any non-`V1` bit as 0 (U→0, FR-114g), store it, and `emit`; update
+`prevClk`. Any uncertain/deasserted control ⇒ no emit (FR-122b — a character is
+irreversible, so unlike memory this is conservative, not pessimistic). Unit-tested in
+isolation (`uart.test.js`).
+
+**Slow engine (`sim.js`, FR-122b).** `buildSimulation` gains an `onConsole` option
+(default no-op). For each instance with `renderType==="uart"` it builds a
+`{ kind:"uart", refdes, core:createUartCore(), read }` entity, reusing the same
+per-pin previous-step `read` closure the memory entity uses. In `step()`, in the
+latch phase beside the memory `writeStep` loop, it calls
+`e.core.clockStep(e.read, onConsole)` for each UART entity. The UART deposits **no**
+contributions (drives nothing) and adds no driver. Emission order across UARTs within
+a step follows entity order (deterministic, for stable parity). `createSim.run()`
+passes `onConsole: (b)=>consolePanel.write(b)` and clears the panel at run start
+(beside the message-tray clear, FR-076). No change to `stop()`.
+
+**Console panel (`web/js/chrome/console.js`, FR-122c).** A **bottom-docked** panel
+in the canvas area, structurally like the test-vector panel (§6.16) but **modeless —
+it never contributes to `isReadonly()`** (contrast FR-115h) and coexists with a live
+run. `createConsolePanel({ store }) → { write(byte), clear(), setOpen(bool),
+isOpen() }`. `write` pushes into an in-memory buffer and schedules a single
+`requestAnimationFrame` repaint that flushes the buffer to the DOM, coalescing many
+bytes/frame into one update — the "asynchronous, non-blocking, heavily buffered"
+requirement (no backpressure ⇒ no overrun). Byte rendering is centralized in
+`renderByte(b)`: printable ASCII verbatim, LF→newline, TAB→tab, CR ignored, else
+`\xNN`. **Sticky-tail** autoscroll (scroll to bottom after a repaint only if already
+at bottom). A **retained-history cap** (`CONSOLE_MAX_CHARS`, e.g. 200 000) head-trims
+with a "…output truncated…" marker. `clear()` empties buffer+DOM (Clear button and
+Run-start). DOM skeleton (`#console-panel` with `.console-header` holding the title +
+Clear + close, and a scrolling monospace `.console-body`) lives in `web/index.html`
+with CSS; open/close is driven by `store.state.consolePanelOpen`. Accumulated text and
+open state are session-only (not saved). Unit-tested where logic allows
+(`console.test.js`: `renderByte`, buffering/coalescing, cap trim, sticky-tail, clear).
+
+**Chrome wiring.** `store.js` gains `consolePanelOpen:false` + `setConsolePanelOpen`
+(notifying subscribers) that **does not** feed `isReadonly()`/`blocked()` (modeless).
+`toolbar.js` adds a **View ▸ Console** toggle item (rendered checked when open),
+enabled while simulating (it is meant to be opened during a run). `app.js`
+instantiates the panel, wires `onConsole`, and subscribes it to
+`consolePanelOpen`. `canvas.js` gains a `renderType==="uart"` draw branch (IC-style
+box labeled "UART" + pin stubs from the type data), with pin geometry in `symbols.js`
+if needed; the same glyph is the palette icon (FR-122a).
+
+**Fast engine (`cgen.js` + `runtime.{h,c}`, FR-122d).** The `gen_mems[]` pattern
+verbatim. `cgen.js` emits a `gen_uarts[]` table: for each `renderType==="uart"`
+instance, the net indices of `D0..D7`,`CS/`,`CE/`,`CLK` (via `netOf`) plus the
+refdes; the UART drives nothing, so `driverCount` is unchanged. `runtime.h` declares
+`rt_uart { const int *data; int cs; int ce; int clk; const char *refdes; }`,
+`gen_uarts[]`, `gen_uart_count`. `runtime.c` holds per-instance `uart_states[]`
+(`prev_clk`, `RT_U` at reset via a `uart_reset` called from `rt_reset`) and
+`uart_step()` — called in the **latch phase** beside `mem_write_all`, reusing
+`mem_rd(curr,net)` (Z→U, and `-1`→U for an unwired pin): detect CLK 0→1, and if
+CS/==RT_0 and CE/==RT_0 assemble the byte (clean-`RT_1` bits only) and `putchar` to
+stdout. `main()` sets `setvbuf(stdout, NULL, _IOFBF, …)` (heavily buffered) and does
+an explicit `fflush(stdout)` before the end-of-run observable dump so UART bytes and
+the trailing dump/transcript are ordered deterministically across libc. This is a
+`gen_`/runtime **interface addition** (pre-existing generated programs regenerate
+once, as for the M5/M7 interface bumps). No generator refusal — the UART is supported
+in both batch modes.
+
+- **Error handling:** unconnected CLK/CS//CE/ (unknown pin in JS, net `-1` in C) read
+  U ⇒ never qualifies, no emit, no crash; `putchar` failure ignored; `renderByte`
+  total over 0..255.
+- **Dependencies:** `uart.js` ← `galasm.js` V-constants; `sim.js` read-closure
+  builder; `console.js` ← `store.js` + DOM; `cgen.js` `netOf`/`cstr`; `runtime.c`
+  `mem_rd` + libc `stdio`.
 
 ---
 
@@ -3127,8 +3278,8 @@ fully and consistently numbered for KiCad/NDL/BOM export.
 | `groups[].name` | — | `PinGroup.name` | optional section (FR-063) |
 | `groups[].pins` | — | `PinGroup.pins` | ordered member names (bit order) |
 | `delays` | no | `delays` | `map[string]number`, ns (FR-064) |
-| `behavior` | no | `behavior` | literal block scalar; verbatim (FR-066); evaluated by the slow simulator (FR-079) |
-| `clock` | iff `.R` | `clock` | names the global clock input pin for `.R` registered outputs (FR-062d); must exist with `dir: in`. E.g. `clock: CP` in 74574.yaml. A `.R` output that gives its own `.CLK` (extended, FR-079a) needs no global `clock:` |
+| `behavior` | no | `behavior` | literal block scalar; verbatim (FR-066); evaluated by the slow simulator (FR-079). Supports registered `.R` outputs (FR-079), the extended `:+:`/`.CLK`/`.ARST`/`.APRST` (FR-079a), and the transparent-latch `.L`/`.G` suffix pair (FR-079d, e.g. 74573.yaml) |
+| `clock` | iff `.R` | `clock` | names the global clock input pin for `.R` registered outputs (FR-062d); must exist with `dir: in`. E.g. `clock: CP` in 74574.yaml. A `.R` output that gives its own `.CLK` (extended, FR-079a) needs no global `clock:`, and a purely-latch part (only `.L` outputs, FR-079d — gated by a level, not a clock edge) omits `clock:` entirely |
 | `internal` | no | `internal` | optional list of buried registered-node names (FR-079c), e.g. `internal: [SR0, SR1, SR2, SR3, SR4, SR5, SR6]` for the 74HC165. Each must be a legal name, unique, and distinct from every pin name; each must be defined by exactly one `.R` equation in `behavior` (checked at Run). A buried node is read/written in the behavior block but drives no pin |
 | `gal` | no | `gal` | optional GAL device name selecting **strict** dialect (FR-066a): one of `GAL16V8`/`GAL20V8`/`GAL22V10`/`GAL20RA10`. Omit ⇒ **extended** dialect (default; FR-079a). Server validates the name only |
 | `partnumber` | iff `gal` | `partnumber` | GAL parts only (FR-066b): non-empty free-form **display name** (FR-005b), e.g. `"PC-DECODE-A"`; not a key and need not be unique (the library key is `id`). Absent on 74-series types |
@@ -3333,6 +3484,11 @@ A JSON file at the project root:
 | Duplicate Project mechanism (FR-121f) | Client-orchestrated copy (list + per-file load/save round trips, client-side manifest rewrite); server-side copy with rollback on failure | **One `POST /project/duplicate` doing a recursive server-side copy + manifest rename; no rollback — partial destination left and reported** | One round trip and byte-verbatim fidelity (no client staging or JSON re-encode of design files); the manifest rename needs server-side tolerant JSON handling anyway (§6.5a); rollback machinery is disproportionate for a localhost tool — the report-and-manual-cleanup rule is FR-121f's stated behavior |
 | Data-path storage form (FR-121g) | Always absolute (status quo — breaks Duplicate self-containment); always relative (breaks FR-121d's anywhere-on-disk exemption) | **Absolute in memory; relative on disk iff inside the project** | Exactly the proven `childPath` boundary conversion (FR-098) — one pattern, two field families; consumers (sim run-time, cgen bake) never see a relative path; Duplicate's shared-data warning scan falls out for free — any absolute mem path in a saved design is by construction outside its project |
 | Project-boundary enforcement point (FR-121d/FR-121e) | Server-side path validation on save/load/embed | **Client-side checks (embed dialog refusal, save-dialog validator); server unchanged** | The server deliberately does not sandbox paths (§4.2: trusted single-user local FS); the boundary is a project-hygiene UX rule, not a security control — and server enforcement would break the legacy outside-project references FR-121d explicitly requires to keep loading |
+| Magic UART: built-in vs. metatype (FR-122) | Server-persisted generated metatype with a New-UART dialog (the memory path, FR-114); a fixed built-in in `BUILTIN_DEFS` | **Fixed built-in** | The device is byte-fixed with no configurable parameters, so the FR-114 machinery (dialog, `mem`-block YAML, Go server parsing) buys nothing (YAGNI). A built-in needs no server change, no dialog, no library file — much less surface. A future width-configurable variant would migrate toward the FR-114 generator |
+| Magic UART: behavior location (FR-122b) | Inline in `sim.js`; a source-only `BEHAVIORS` function (like clock/reset) | **Dedicated net-free `uart.js` core** | The behavior reads input nets and keeps state — the exact criterion that made `memory.js` a separate, unit-testable core rather than a `BEHAVIORS` entry. Mirrors a proven pattern and gives the fast engine one semantic reference |
+| Magic UART: uncertain (U/Z) CS//CE/ at edge (FR-122b) | Emit pessimistically (as memory drives U on the bus, FR-114d); emit a placeholder byte; **do not emit** | **Emit only when CS/ and CE/ are exactly 0** | A character is an irreversible side effect; a phantom byte corrupts the console stream unrecoverably. Requiring certainty keeps output deterministic and both engines trivially in agreement — a deliberate divergence from memory's recoverable-bus pessimism. Undefined data bits mask to 0 (U→0, FR-114g), since ASCII has no U encoding |
+| Magic UART: debug-sim "stdout" (FR-122c) | Reuse the message tray; a modal log window; **a docked Console panel** | **Docked, modeless Console panel (View ▸ Console)** | The browser has no OS stdout; a persistent scrollable monospace panel matches "console" semantics and reuses the docked-panel idiom (FR-115b), while staying modeless (no design lock) because it is output-only. Buffered append + rAF repaint delivers "asynchronous, heavily buffered, no overrun" without backpressure into the engine |
+| Magic UART: fast-C output channel (FR-122d) | A separate file/fd; stderr; **real stdout, fully buffered** | **stdout (`setvbuf _IOFBF`)** | The prompt specifies "standard output"; full stdio buffering is the "heavily buffered" requirement. Interleaving with the trailing free-run dump/vector transcript is acceptable (dump trails all UART output) and handled by the parity harness's ordering |
 
 ---
 
@@ -3375,6 +3531,7 @@ web/
   js/engine/galasm.js       GALasm behavior compiler/evaluator (§6.13)
   js/engine/sim.js          slow simulator engine + scheduler (§6.13)
   js/engine/memory.js       RAM/ROM behavior core (§6.13, FR-114d)
+  js/engine/uart.js         magic-UART behavior core (§6.20, FR-122b)  [CREATE]
   js/engine/vectors.js      test-vector runner + .tv file model (§6.16)
   js/engine/cgen.js         fast-engine C code generator (§6.17)
   js/engine/ndl.js          NDL netlist exporter (§6.18)
@@ -3385,6 +3542,7 @@ web/
   js/chrome/properties.js   per-instance properties panel (§6.11)
   js/chrome/contextmenu.js  right-click menu (§6.11)
   js/chrome/statusbar.js    bottom status bar trays (§6.11)
+  js/chrome/console.js      docked debug-sim Console panel (§6.20, FR-122c)  [CREATE]
   cgen/runtime.h            fast-engine C runtime API, documented (§6.17)
   cgen/runtime.c            fast-engine C runtime implementation (§6.17)
   tools/tv2txt.js           .tv → generated-program stdin rows (§6.17 M2)
@@ -3520,6 +3678,9 @@ the original greenfield plan, whose `sim/` root and never-created
 | FR-094b, FR-094c, FR-094d, FR-094e | §6.6, §6.11, §6.14 | `subdesign.js`, `model/netlist.js`, `canvas.js`, `properties.js` |
 | FR-099c | §6.9a, §6.14 | `subdesign.js`, `router.js`, `fileops.js` |
 | FR-121, FR-121a, FR-121b, FR-121c, FR-121d, FR-121e, FR-121f, FR-121g, FR-121h | §6.19, §6.4, §6.5a, §6.10, §6.11, §6.12, §6.14, §7.8, §8, §3.1 A8–A11 | `project.go`, `api.go`, `storage.go`, `chrome/project.js`, `chrome/fileops.js`, `chrome/dialogs.js`, `chrome/toolbar.js`, `store.js`, `app.js`, `api.js`, `model/persist.js`, `index.html`, `style.css` |
+| FR-122, FR-122a, FR-122b | §6.20 | `builtins.js`, `engine/uart.js`, `engine/sim.js`, `engine/canvas.js`, `engine/symbols.js` |
+| FR-122c | §6.20 | `chrome/console.js`, `chrome/toolbar.js`, `store.js`, `app.js`, `index.html`, `style.css` |
+| FR-122d | §6.20 | `engine/cgen.js`, `cgen/runtime.h`, `cgen/runtime.c`, `tools/parity.js` |
 | NFR-001 | §6.1 | `main.go` |
 | NFR-002 | §6.12 | `api.js` |
 | NFR-003 | all | server `*.go`, `web/js/*` |
@@ -3689,6 +3850,27 @@ tests beside them per §9).
   transcript against `runVectors` (§6.16) — the FR-107 check; it is run
   explicitly, not as part of the compiler-free unit-test sweep (location TBD,
   §12).
+- **JS `uart` core (§6.20, FR-122b):** `uart.test.js` under `node:test` —
+  rising-edge latch with CS/=0/CE/=0 emits the byte once; **no** emit on held
+  clock, falling edge, CS/=1, CE/=1, or CS//CE/=U/Z; bit order D0=LSB…D7=MSB on a
+  mixed pattern; data-bit U/Z→0 masking; power-up `prevClk=U` so a first step
+  reading CLK=1 is not an edge; one emit per qualified edge. **`console.js`
+  (FR-122c):** `renderByte` truth cases (printable verbatim, LF/TAB, CR ignored,
+  control/high bytes → `\xNN`); buffered writes coalesce into one repaint; history
+  cap head-trims with the truncation marker; sticky-tail (at-bottom scrolls,
+  scrolled-up does not); `clear` empties. **`sim.js` integration:** a design with
+  a UART fed by switches/registers under a clock delivers the expected byte
+  sequence to the `onConsole` sink in order (incl. CS//CE/ gating and a
+  deterministic two-UART interleave by entity order).
+- **UART parity leg (§6.20, FR-122d/FR-107):** modeled on the RAM-persist leg —
+  for `examples/uart-demo.json` run both engines free for the shared cycle count
+  and compare emitted output. The slow side captures bytes via an `onConsole`
+  collector; the fast side runs `--cycles N` and reads stdout. Because the
+  free-run observable dump trails all UART bytes on the fast side, the harness
+  compares against a slow-side expected stdout built as the UART byte stream
+  followed by the same `LABEL=v` dump the generic free-run leg synthesizes. UART
+  designs route to this leg and are excluded from the generic free-run leg (as
+  ram-persist designs are), so the two never double-count.
 
 ### 11.2 Integration / end-to-end (Chrome + Firefox, manual or Playwright)
 - Startup blocks canvas until palette loads (FR-003); empty design named
