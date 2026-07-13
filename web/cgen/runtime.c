@@ -105,9 +105,14 @@ static void *xalloc(size_t n) {
  * these row by row; drive_builtins deposits them each step. */
 static rt_val *port_stim;
 
+/* Per-UART CLK edge state (FR-122b): the previous step's CLK level, for 0→1
+ * detection. Allocated in rt_init, RT_U at reset (uart_reset). */
+static rt_val *uart_prev_clk;
+
 static void mem_alloc(void); /* memory store allocation (FR-114d) */
 static void mem_load_all(void); /* startup ROM content read (FR-117b) */
 static void mem_reset(void); /* memory power-up: RAM U, ROM loaded bytes */
+static void uart_reset(void); /* magic UART power-up: prev_clk U (FR-122b) */
 static void vcd_sample(void); /* per-step VCD change dump (--vcd, FR-118) */
 
 /* reset_state returns every net to power-up Z and all generated state to
@@ -120,6 +125,7 @@ static void reset_state(void) {
   memset(conflicted, 0, (size_t)gen_net_count);
   gen_init();
   mem_reset();
+  uart_reset();
 }
 
 void rt_init(void) {
@@ -132,6 +138,7 @@ void rt_init(void) {
   memset(port_stim, RT_Z, (size_t)(gen_incol_count > 0 ? gen_incol_count : 1));
   mem_alloc();
   mem_load_all();
+  uart_prev_clk = xalloc((size_t)(gen_uart_count > 0 ? gen_uart_count : 1) * sizeof uart_prev_clk[0]);
   reset_state();
 }
 
@@ -552,6 +559,40 @@ static void mem_write_all(const rt_val *curr) {
   }
 }
 
+/* ------------------------------------------------------------------ *
+ *  Magic UART output device (FR-122b/FR-122d; engine/uart.js core)
+ * ------------------------------------------------------------------ *
+ * An output-only character device. On CLK's 0→1 edge, and only while CS/ and
+ * CE/ both read exactly 0, it latches D0(LSB)..D7(MSB) and writes the byte to
+ * standard output (any data bit that is not a clean RT_1 contributes 0, since
+ * ASCII has no U encoding, FR-114g). It drives no nets. An uncertain/deasserted
+ * control emits nothing — a character is irreversible, so this is conservative,
+ * not pessimistic (FR-122b), a deliberate contrast with memory's bus pessimism. */
+
+/* uart_reset restores power-up: prev_clk U, so a run starting with CLK already
+ * high is not seen as a 0→1 edge. Called from reset_state via rt_reset. */
+static void uart_reset(void) {
+  for (int i = 0; i < gen_uart_count; i++) uart_prev_clk[i] = RT_U;
+}
+
+/* uart_step latches and emits for each UART on its CLK 0→1 edge (FR-122b),
+ * reusing mem_rd (Z→U, unwired -1→U). Called in the latch phase beside
+ * mem_write_all, in gen_uarts order (deterministic interleave). */
+static void uart_step(const rt_val *curr) {
+  for (int i = 0; i < gen_uart_count; i++) {
+    const rt_uart *u = &gen_uarts[i];
+    rt_val clk = mem_rd(curr, u->clk);
+    if (uart_prev_clk[i] == RT_0 && clk == RT_1 &&
+        mem_rd(curr, u->cs) == RT_0 && mem_rd(curr, u->ce) == RT_0) {
+      unsigned byte = 0;
+      for (int b = 0; b < 8; b++)
+        if (mem_rd(curr, u->data[b]) == RT_1) byte |= 1u << b;
+      putchar((int)byte);
+    }
+    uart_prev_clk[i] = clk;
+  }
+}
+
 /* mem_save_all writes each persistent RAM's full contents back to its baked
  * save file (FR-114g/FR-117c) — the write complement of the startup load,
  * called once by main() after a run completes, in either batch mode. Format
@@ -639,6 +680,7 @@ int rt_step(void) {
    * step's values, before any contribution is evaluated (FR-079/FR-114d). */
   gen_latch(curr_buf);
   mem_write_all(curr_buf);
+  uart_step(curr_buf); /* magic UART latch + emit on CLK 0→1 (FR-122b) */
 
   /* (2) Gather every driver's contribution, all computed from curr. */
   ncontrib = 0;
@@ -889,6 +931,11 @@ void rt_run_free(long cycles) {
   long total = cycles * (long)clock_period_eff();
   for (long i = 0; i < total; i++) rt_step();
 
+  /* Flush all buffered UART output (FR-122d) before the trailing observable
+   * dump, so the two are ordered deterministically: every UART byte precedes
+   * the dump on standard output regardless of libc buffering. */
+  fflush(stdout);
+
   /* Final observable dump (FR-117a): the FR-118 observable set — input
    * columns then output columns, in column order. An unwired probe reads
    * Z, as in the vector runner. */
@@ -1031,6 +1078,10 @@ static void rt_dump_columns(void) {
 }
 
 int main(int argc, char **argv) {
+  /* Heavily buffer stdout (FR-122d): the magic UART writes here, and full
+   * buffering keeps a high-volume byte stream cheap and non-blocking. Flushed
+   * explicitly before the end-of-run dump/transcript (below) and at exit. */
+  setvbuf(stdout, NULL, _IOFBF, 1 << 16);
   long cycles = -1;            /* -1 = vector mode (no --cycles flag) */
   const char *vcd_path = NULL; /* --vcd trace file, or NULL */
   rom_args = xalloc((size_t)argc * sizeof *rom_args);

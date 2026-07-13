@@ -98,6 +98,12 @@ export function initToolbar({ container, store, interaction, fileops, projectops
   addItem(viewMenu.panel, "Fit to Screen", "Fit the design to the canvas", () =>
     interaction.fitToScreen(),
   );
+  // View ▸ Console (FR-122c): toggle the modeless Console panel. It imposes no
+  // edit lock, so it stays enabled while simulating (it is meant to be opened
+  // during a run); refresh() renders it checked when open.
+  const consoleItem = addItem(viewMenu.panel, "Console", "Show the simulator console output", () =>
+    store.setConsolePanelOpen(!store.state.consolePanelOpen),
+  );
   container.appendChild(viewMenu.menu);
 
   // Simulate menu: the test-vector table editor (FR-115). Disabled while the
@@ -265,6 +271,8 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     exportItem.disabled = locked || noProject;
     // Run and the panel are mutually exclusive (FR-115h): Run is disabled while
     // the panel is open. Stop stays usable while simulating.
+    // Console is modeless output (FR-122c): always enabled, checked when open.
+    consoleItem.classList.toggle("checked", store.state.consolePanelOpen);
     runBtn.disabled = panelOpen || noProject;
     runBtn.textContent = simming ? "Stop" : "Run";
     runBtn.title = simming ? "Stop the simulation" : "Run the simulation";

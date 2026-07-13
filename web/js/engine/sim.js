@@ -19,6 +19,7 @@ import { buildNets } from "../model/netlist.js";
 import { flatten } from "../model/subdesign.js";
 import { BEHAVIORS } from "../builtins.js";
 import { createMemoryCore, parseRomBytes } from "./memory.js";
+import { createUartCore } from "./uart.js";
 import { readRomFile, writeRamFile, loadDesign } from "../api.js";
 import { setAppState, postMessage, clearMessage } from "../chrome/statusbar.js";
 
@@ -53,6 +54,10 @@ function effectiveProps(inst) {
 //   unitsPerSecond()         pacing rate: max period × speed over clocks (FR-084)
 //   setStimulus(entries)     replace the external stimulus list between steps
 //
+// `onConsole(byte)` (FR-122b) is the magic UART's standard-output sink: each
+// qualified rising clock edge emits one latched byte here. Defaults to a no-op;
+// the live editor run routes it to the Console panel (§6.20).
+//
 // `scriptedClocks` (FR-115e): suppress the time-based built-in behaviors — the
 // clock's simTime square wave (FR-084) and the power-on reset's simTime window
 // (FR-071b) — so the caller (the sequential vector runner, §6.16) owns those
@@ -60,7 +65,7 @@ function effectiveProps(inst) {
 // live editor run never passes it.
 export function buildSimulation(
   design,
-  { onMessage = () => {}, romContent = null, ramContent = null, stimulus = [], scriptedClocks = false } = {},
+  { onMessage = () => {}, onConsole = () => {}, romContent = null, ramContent = null, stimulus = [], scriptedClocks = false } = {},
 ) {
   const nets = buildNets(design, onMessage);
 
@@ -215,6 +220,20 @@ export function buildSimulation(
     return { kind: "memory", refdes, w: mem.dataWidth, core, read, ramFile };
   }
 
+  // makeUartEntity wraps a magic UART (FR-122b) over its pure behavior core
+  // (uart.js). The core reads input pins via `read`, which — like the memory
+  // entity's — returns the previous step's net value (curr), so it sees inputs
+  // by one unit (FR-078). The UART drives no nets, so the entity carries no `w`
+  // and deposits no contributions; it only emits bytes in the latch phase.
+  function makeUartEntity(inst) {
+    const refdes = inst.refdes;
+    const read = (pinName) => {
+      const n = netOfPin.get(`${refdes}.${pinName}`);
+      return n === undefined ? VZ : curr[n];
+    };
+    return { kind: "uart", refdes, core: createUartCore(), read };
+  }
+
   // makePassEntity wraps a switch element (transmission gate / relay,
   // FR-071g/FR-071h) as a kind:"pass" entity (§6.13, FR-083a). Unlike every
   // other entity it deposits no contributions: it carries only its control net
@@ -263,6 +282,13 @@ export function buildSimulation(
       // not the BEHAVIORS source-drive path (they have no BEHAVIORS entry).
       if (inst.typeData.renderType === "tgate" || inst.typeData.renderType === "relay") {
         entities.push(makePassEntity(inst));
+        continue;
+      }
+      // The magic UART (FR-122b) reads input nets and keeps state, so it routes
+      // to a dedicated uart entity over the uart.js core rather than the
+      // BEHAVIORS source-drive path (it has no BEHAVIORS entry and drives nothing).
+      if (inst.typeData.renderType === "uart") {
+        entities.push(makeUartEntity(inst));
         continue;
       }
       const behave = BEHAVIORS[inst.type];
@@ -357,9 +383,12 @@ export function buildSimulation(
       e.prevClock = cur;
     }
     // Memory writes (RAM WE/ rising edge, FR-114d) latch from curr too, alongside
-    // register latching, before any contribution is evaluated.
+    // register latching, before any contribution is evaluated. Magic UARTs latch
+    // and emit on their CLK rising edge in the same phase (FR-122b), in entity
+    // order (deterministic interleave across UARTs, for stable parity, §6.20).
     for (const e of entities) {
       if (e.kind === "memory") e.core.writeStep(e.read);
+      else if (e.kind === "uart") e.core.clockStep(e.read, onConsole);
     }
 
     const contribs = nets.map(() => []);
@@ -371,6 +400,10 @@ export function buildSimulation(
       if (e.kind === "pass") {
         // Switch elements deposit no contributions — they merge nets in the
         // resolve phase instead (FR-083a).
+        continue;
+      }
+      if (e.kind === "uart") {
+        // The magic UART drives no nets (FR-122b); it emitted in the latch phase.
         continue;
       }
       if (e.kind === "builtin") {
@@ -627,7 +660,7 @@ const COMBINATIONAL_BATCH = 1000;
 // Combinational designs run a settling episode (unpaced) to quiescence then
 // idle, re-settling on an interactive input (FR-085/FR-087b); designs with a
 // clock run paced at period × speed units per wall second (FR-084, FR-086).
-export function createSim({ store, renderer }) {
+export function createSim({ store, renderer, consolePanel = null }) {
   let sim = null; // the running buildSimulation, or null
   let rafId = null;
   let timeoutId = null;
@@ -660,8 +693,12 @@ export function createSim({ store, renderer }) {
     const ramContent = await loadRamContents(design);
     if (!starting) return; // Stop() was hit during the async RAM load — abort the start
     starting = false;
+    // Clear the Console panel at the start of each interactive Run (FR-122c),
+    // beside the message-tray clear, and route the UART byte stream to it.
+    consolePanel?.clear();
+    const onConsole = consolePanel ? (b) => consolePanel.write(b) : undefined;
     try {
-      sim = buildSimulation(design, { onMessage: postMessage, romContent, ramContent });
+      sim = buildSimulation(design, { onMessage: postMessage, onConsole, romContent, ramContent });
     } catch (err) {
       postMessage(`cannot simulate: ${err.message}`);
       return;

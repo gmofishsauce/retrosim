@@ -248,6 +248,48 @@ body {
 
 #vec-panel[hidden] { display: none; }
 
+/* Docked, modeless Console panel (FR-122c): the magic UART's stdout surface,
+   bottom third of the canvas area like the test-vector panel. When both are
+   open they stack. The [hidden] rule below re-hides it past the flex display. */
+#console-panel {
+  flex: 0 0 33%;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+  border-top: 2px solid #bbb;
+}
+.console-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  background: #e7e7e7;
+  border-bottom: 1px solid #ccc;
+}
+.console-title { font-weight: 600; font-size: 0.9rem; margin-right: auto; }
+.console-clear { padding: 0 0.5rem; }
+.console-close { padding: 0 0.45rem; }
+/* Scrolling monospace output region; light-on-dark like a terminal. */
+.console-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.4rem 0.6rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: #e6e6e6;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+#console-panel[hidden] { display: none; }
+
+/* Checked menu item (FR-122c View ▸ Console): a leading check mark. */
+.menu-item.checked .menu-item-label::before { content: "✓ "; }
+
 #properties {
   flex: 0 0 14rem;
   overflow-y: auto;

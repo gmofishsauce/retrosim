@@ -952,3 +952,86 @@ test("transparent latch: transparent → hold → async clear → 3-state (FR-07
   set("0", "0", "1", "0"); settle();
   assert.equal(sim.valueOfPin("U1", "Q"), VZ);
 });
+
+// --- magic UART integration (FR-122b, §6.20) ---
+
+// uartByte drives U-A1's D0..D7 from data switches S0..S7 and clocks CS//CE//CLK
+// from control switches; a manual clock (toggling a switch) gives fully
+// deterministic edges. Returns the design plus helpers used by the tests below.
+function uartRig(refdes = "A-1") {
+  const d = mkDesign();
+  place(d, refdes, builtin("uart"));
+  place(d, "CSsw", builtin("switch")); // CS/ (drives 0 by default → asserted)
+  place(d, "CEsw", builtin("switch")); // CE/ (drives 0 by default → asserted)
+  place(d, "CLKsw", builtin("switch")); // CLK (manually toggled)
+  connect(d, ["CSsw", "OUT"], [refdes, "CS/"]);
+  connect(d, ["CEsw", "OUT"], [refdes, "CE/"]);
+  connect(d, ["CLKsw", "OUT"], [refdes, "CLK"]);
+  for (let i = 0; i < 8; i++) {
+    place(d, `S${i}`, builtin("switch"));
+    connect(d, [`S${i}`, "OUT"], [refdes, `D${i}`]);
+  }
+  return d;
+}
+
+const comp = (d, refdes) => d.components.find((c) => c.refdes === refdes);
+const setSw = (d, refdes, on) => (comp(d, refdes).switchState = on ? "1" : "0");
+const setByte = (d, byte) => {
+  for (let i = 0; i < 8; i++) setSw(d, `S${i}`, byte & (1 << i));
+};
+
+test("a UART driven by switches under a manual clock emits the byte sequence (FR-122b)", () => {
+  const d = uartRig();
+  const out = [];
+  const sim = buildSimulation(d, { onConsole: (b) => out.push(b) });
+
+  // pulse raises then lowers the CLK switch, settling two steps per phase so the
+  // one-step switch-drive delay and the previous-step edge read both land.
+  const step2 = () => { sim.step(); sim.step(); };
+  const pulse = () => { setSw(d, "CLKsw", true); step2(); setSw(d, "CLKsw", false); step2(); };
+
+  setByte(d, 0x48); step2(); pulse(); // 'H'
+  setByte(d, 0x69); step2(); pulse(); // 'i'
+  assert.deepEqual(out, [0x48, 0x69]);
+});
+
+test("no emit while CS/ or CE/ is deasserted; resumes when reasserted (FR-122b)", () => {
+  const d = uartRig();
+  const out = [];
+  const sim = buildSimulation(d, { onConsole: (b) => out.push(b) });
+  const step2 = () => { sim.step(); sim.step(); };
+  const pulse = () => { setSw(d, "CLKsw", true); step2(); setSw(d, "CLKsw", false); step2(); };
+
+  setByte(d, 0x41); step2();
+  setSw(d, "CSsw", true); step2(); pulse(); // CS/ deasserted → silent
+  setSw(d, "CSsw", false); setSw(d, "CEsw", true); step2(); pulse(); // CE/ deasserted → silent
+  setSw(d, "CEsw", false); step2(); pulse(); // both asserted → emit
+  assert.deepEqual(out, [0x41]);
+});
+
+test("two UARTs on one clock emit in entity (component) order (FR-122b, §6.20)", () => {
+  // U-A1 placed before U-A5; both share CLK/CS//CE/. A1's data is 0x01 (D0),
+  // A5's is 0x02 (D1), so the interleave [0x01, 0x02] proves the emission order.
+  const d = mkDesign();
+  place(d, "A-1", builtin("uart"));
+  place(d, "A-5", builtin("uart"));
+  place(d, "CSsw", builtin("switch"));
+  place(d, "CEsw", builtin("switch"));
+  place(d, "CLKsw", builtin("switch"));
+  place(d, "one", builtin("switch")); // a shared logic-1 source
+  setSw(d, "one", true);
+  for (const u of ["A-1", "A-5"]) {
+    connect(d, ["CSsw", "OUT"], [u, "CS/"]);
+    connect(d, ["CEsw", "OUT"], [u, "CE/"]);
+    connect(d, ["CLKsw", "OUT"], [u, "CLK"]);
+  }
+  connect(d, ["one", "OUT"], ["A-1", "D0"]); // A1 → 0x01
+  connect(d, ["one", "OUT"], ["A-5", "D1"]); // A5 → 0x02
+
+  const out = [];
+  const sim = buildSimulation(d, { onConsole: (b) => out.push(b) });
+  const step2 = () => { sim.step(); sim.step(); };
+  step2(); // let the data / control switches settle
+  setSw(d, "CLKsw", true); step2(); setSw(d, "CLKsw", false); step2();
+  assert.deepEqual(out, [0x01, 0x02]);
+});

@@ -140,6 +140,16 @@ const RELAY_ICON =
   '<circle cx="24.4" cy="22" r="1.4" fill="#333" stroke="none"/>' + // COM pole dot
   "</svg>";
 
+// UART_ICON: an IC-style box reading "UART" (FR-122a). The same glyph is drawn
+// on the canvas (drawLabelBox with "UART") so the palette tile and the placed
+// object match.
+const UART_ICON =
+  '<svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true">' +
+  '<rect x="3" y="10" width="30" height="16" fill="#fff" stroke="#333"/>' +
+  '<text x="18" y="18" text-anchor="middle" dominant-baseline="central"' +
+  ' font-family="system-ui,sans-serif" font-weight="bold" font-size="9" fill="#000">UART</text>' +
+  "</svg>";
+
 // BIT_NAMES returns the n bit names "<prefix>0".."<prefix>(n-1)" for a wide
 // built-in's pins and its single pin group (FR-071d/e). n defaults to 8 (the
 // fixed-width 8-wide indicator); the multi-bit port passes its chosen width.
@@ -328,6 +338,28 @@ const BUILTIN_DEFS = [
       { name: "COM", side: "right", position: 2, direction: "bidir" },
       { name: "NC", side: "right", position: 3, direction: "bidir" },
     ],
+  },
+  {
+    name: "uart",
+    builtin: true,
+    title: "magic UART", // FR-122a palette tooltip
+    icon: UART_ICON,
+    renderType: "uart",
+    width: 4,
+    height: 9,
+    // Eight data inputs D0..D7 down the left edge (one grid row each), grouped so
+    // an 8-bit bus snap-connects to all of them at once (FR-041/FR-042), adopting
+    // D0..D7 as its bit names; the control pins CS//CE//CLK on the opposite
+    // (right) edge (FR-122/FR-122a). No properties and no BEHAVIORS entry — its
+    // behavior reads input nets and keeps state, so the engine realizes it as a
+    // kind:"uart" entity over the uart.js core (§6.20, FR-122b).
+    pins: [
+      ...BIT_PINS("D", "left", "in"),
+      { name: "CS/", side: "right", position: 1, direction: "in" },
+      { name: "CE/", side: "right", position: 2, direction: "in" },
+      { name: "CLK", side: "right", position: 3, direction: "in" },
+    ],
+    pinGroups: [{ name: "DATA", pins: BIT_NAMES("D") }],
   },
   {
     name: "note",

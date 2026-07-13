@@ -323,6 +323,52 @@ async function checkRamPersist(jsonPath) {
   }
 }
 
+// checkUart is the magic-UART parity leg (FR-122d/FR-107), modeled on the
+// free-run leg: run BOTH engines free for FREE_CYCLES × clockPeriod, and require
+// the fast program's stdout to equal the slow simulator's UART byte stream
+// (onConsole) followed by the same "LABEL=v" observable dump the free-run leg
+// synthesizes. On the fast side each UART byte is putchar'd during the run and
+// the dump trails all of them (mem/uart share stdout, dump last, FR-122d), so
+// the concatenation is the expected. Designs are routed here and excluded from
+// the generic free-run leg so they do not double-count.
+async function checkUart(jsonPath) {
+  const name = basename(jsonPath, ".json");
+  const design = deserializeDesign(JSON.parse(readFileSync(jsonPath, "utf8")));
+
+  let flat, gen;
+  try {
+    flat = await flatten(design, loadChildFs, { rootPath: jsonPath });
+    gen = generateC(flat, { columnsFrom: design });
+  } catch (e) {
+    return { name, status: "skip", detail: e.message };
+  }
+  const romContent = loadRomContentsFs(flat, dirname(jsonPath));
+  const period = clockPeriodOf(flat);
+
+  const bytes = [];
+  const sim = buildSimulation(flat, { onMessage: () => {}, onConsole: (b) => bytes.push(b), romContent });
+  for (let i = 0; i < FREE_CYCLES * period; i++) sim.step();
+
+  // The observable dump exactly as runtime.c rt_run_free prints it (input then
+  // output columns, LABEL=v), trailing all UART bytes. Byte codes are identical
+  // on both engines; the demo emits printable ASCII so stdout stays clean text.
+  const SYM = ["0", "1", "U", "Z"];
+  const cols = deriveColumns(design);
+  const dump = [...cols.inputs, ...cols.outputs]
+    .map((c) => `${c.label}=${SYM[sim.valueOfPin(c.refdes, c.pin)]}`)
+    .join("\n");
+  const expected = String.fromCharCode(...bytes) + dump;
+  const actual = runFast(gen.code, "", [
+    ...romArgsFs(design, dirname(jsonPath)),
+    "--cycles",
+    String(FREE_CYCLES),
+  ]);
+
+  if (actual === expected)
+    return { name, status: "ok", detail: `UART run, ${bytes.length} bytes, ${FREE_CYCLES} cycles` };
+  return { name, status: "diff", detail: diff(expected, actual) };
+}
+
 function diff(expected, actual) {
   const e = expected.split("\n");
   const a = actual.split("\n");
@@ -361,11 +407,24 @@ function hasPersistentRam(jsonPath) {
   }
 }
 
+// hasUart scans a design file for a magic UART (FR-122) — a light JSON probe,
+// no deserialize — so those designs take the dedicated UART leg (which also
+// checks the emitted byte stream) instead of the generic free-run leg.
+function hasUart(jsonPath) {
+  try {
+    const d = JSON.parse(readFileSync(jsonPath, "utf8"));
+    return (d.components ?? []).some((c) => c.typeData?.renderType === "uart");
+  } catch {
+    return false;
+  }
+}
+
 const allDesigns = readdirSync(EXAMPLES)
   .filter((f) => f.endsWith(".json"))
   .map((f) => join(EXAMPLES, f));
 const persistDesigns = allDesigns.filter(hasPersistentRam);
-const designs = allDesigns.filter((d) => !hasPersistentRam(d));
+const uartDesigns = allDesigns.filter(hasUart);
+const designs = allDesigns.filter((d) => !hasPersistentRam(d) && !hasUart(d));
 
 let failed = 0;
 function report(r) {
@@ -380,5 +439,8 @@ function report(r) {
 for (const p of pairs) report(await checkPair(p.json, p.tv));
 for (const d of designs) report(await checkFree(d));
 for (const d of persistDesigns) report(await checkRamPersist(d));
-console.log(`\n${pairs.length + designs.length + persistDesigns.length} checks, ${failed} mismatched`);
+for (const d of uartDesigns) report(await checkUart(d));
+console.log(
+  `\n${pairs.length + designs.length + persistDesigns.length + uartDesigns.length} checks, ${failed} mismatched`,
+);
 process.exit(failed ? 1 : 0);

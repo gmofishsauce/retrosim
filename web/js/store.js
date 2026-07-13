@@ -42,6 +42,11 @@ export function createStore(initial = {}) {
     // While `vectorPanelOpen` the design is read-only too (FR-115h), sharing the
     // simulation lock's condition via isReadonly(); never persisted.
     vectorPanelOpen: false,
+    // `consolePanelOpen` toggles the docked Console panel (FR-122c). Unlike the
+    // test-vector panel it is MODELESS: it deliberately does NOT feed
+    // isReadonly()/blocked(), so it coexists with a running simulation and
+    // imposes no edit lock. Session-only UI state, never persisted.
+    consolePanelOpen: false,
     // The current project (FR-121, §6.19): null or { dir, name, manifestFile,
     // mainDesign } — the client-side mirror of the server's ProjectInfo minus
     // its warnings. Transient session state, never persisted (the server holds
@@ -254,6 +259,15 @@ export function createStore(initial = {}) {
     // the panel owns the transitions (§6.16). Notifies so chrome can react.
     setVectorPanelOpen(flag) {
       state.vectorPanelOpen = flag;
+      notify();
+    },
+
+    // setConsolePanelOpen toggles the modeless Console panel (FR-122c); the
+    // panel and the View ▸ Console item own the transitions (§6.20). It does
+    // NOT feed isReadonly()/blocked() — the panel imposes no edit lock.
+    // Notifies so chrome (the panel visibility, the menu check) can react.
+    setConsolePanelOpen(flag) {
+      state.consolePanelOpen = flag;
       notify();
     },
 

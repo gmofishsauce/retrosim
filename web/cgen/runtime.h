@@ -289,6 +289,24 @@ typedef struct {
 extern const rt_mem gen_mems[];
 extern const int gen_mem_count;
 
+/* Magic UART output device (FR-122/FR-122d; behavior in runtime.c, uart.js
+ * core). An output-only character device: on CLK's 0→1 edge, and only while
+ * CS/ and CE/ both read exactly 0, it latches D0(LSB)..D7(MSB) and writes the
+ * byte (any non-1 data bit as 0) to standard output. It drives no nets and adds
+ * no driver. The runtime owns per-instance edge state (prev_clk); this table is
+ * the const wiring. `data` points at an 8-long net-index array baked in the
+ * generated file; a control net is -1 when unwired (reads U, never qualifies).
+ * `refdes` names the instance for messages. */
+typedef struct {
+  const int *data;    /* 8 net indices, D0(LSB)..D7(MSB) */
+  int cs;             /* CS/ net index (active low), or -1 */
+  int ce;             /* CE/ net index (active low), or -1 */
+  int clk;            /* CLK net index */
+  const char *refdes; /* instance refdes (messages) */
+} rt_uart;
+extern const rt_uart gen_uarts[];
+extern const int gen_uart_count;
+
 /* gen_latch_count > 0 marks a transparent latch present (FR-079d). A clock-less
  * latch design is still STATEFUL: the vector runner runs its rows in order on
  * persistent state (FR-115e), like a clocked design — the C analogue of

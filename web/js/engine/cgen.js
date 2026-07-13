@@ -83,6 +83,7 @@ export function generateC(design, { columnsFrom = design } = {}) {
   const regUnits = []; // registered galasm entities, global-clock family (FR-079)
   const latchUnits = []; // transparent-latch entities (.L/.G outputs, FR-079d)
   const mems = []; // memory devices (RAM/ROM, FR-114d)
+  const uarts = []; // magic UART output devices (FR-122d)
   const switchIdx = new Map(); // refdes → gen_switches index
   const clockIdx = new Map(); // refdes → gen_clocks index
   const compileCache = new Map(); // type name → CompiledBehavior|null
@@ -342,6 +343,20 @@ export function generateC(design, { columnsFrom = design } = {}) {
       const refdes = inst.refdes;
       if (rt === "note" || rt === "indicator" || rt === "indicator8" || rt === "port" || rt === "portN") {
         // Annotations and probes: no drive (ports/indicators become columns).
+      } else if (rt === "uart") {
+        // Magic UART (FR-122d): collect its data/CS//CE//CLK net indices; the
+        // runtime owns the latch/gate/emit (runtime.c uart core), driven from
+        // this gen_uarts entry. It drives no nets, so driverCount is unchanged.
+        const data = [];
+        for (let i = 0; i < 8; i++) data.push(netOf(`${refdes}.D${i}`));
+        uarts.push({
+          tag: refdes.replace(/[^A-Za-z0-9_]/g, "_"),
+          data,
+          cs: netOf(`${refdes}.CS/`),
+          ce: netOf(`${refdes}.CE/`),
+          clk: netOf(`${refdes}.CLK`),
+          refdes,
+        });
       } else if (rt === "pullup" || rt === "pulldown") {
         pulls.push({
           net: netOf(`${refdes}.OUT`),
@@ -528,6 +543,26 @@ export function generateC(design, { columnsFrom = design } = {}) {
     L.push(`const rt_mem gen_mems[] = { { 0, 0, 0, 0, 0, 0, -1, -1, -1, 0, 0, 0, 0 } }; /* none */`);
   }
   L.push(`const int gen_mem_count = ${mems.length};`);
+  L.push(``);
+
+  // Magic UARTs (FR-122d): per-instance data-net array, then the gen_uarts
+  // table (data nets + CS//CE//CLK net indices + refdes). The runtime owns the
+  // latch/gate/emit; the UART drives nothing, so it adds no driver.
+  for (const u of uarts) {
+    L.push(`static const int uart_data_${u.tag}[] = { ${u.data.join(", ")} };`);
+  }
+  if (uarts.length) {
+    L.push(`const rt_uart gen_uarts[] = {`);
+    for (const u of uarts) {
+      L.push(
+        `  { uart_data_${u.tag}, ${u.cs}, ${u.ce}, ${u.clk}, ${cstr(u.refdes)} }, /* ${u.tag} */`,
+      );
+    }
+    L.push(`};`);
+  } else {
+    L.push(`const rt_uart gen_uarts[] = { { 0, -1, -1, -1, 0 } }; /* none */`);
+  }
+  L.push(`const int gen_uart_count = ${uarts.length};`);
   // gen_latch_count > 0 marks a transparent latch present (FR-079d): a
   // clock-less latch design is still STATEFUL, so the vector runner must run its
   // rows in order on persistent state (FR-115e), like a clocked design — the C

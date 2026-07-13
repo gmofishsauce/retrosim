@@ -523,6 +523,11 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
     drawTgate(ctx, inst, vp, selected);
   } else if (td.renderType === "relay") {
     drawRelay(ctx, inst, vp, selected);
+  } else if (td.renderType === "uart") {
+    // Magic UART (FR-122a): an IC-style box labeled "UART" — the same glyph as
+    // the palette tile. Unlike other built-ins it shows pin names and a type
+    // label (icLike below), since D0–D7 / CS//CE//CLK must be tellable apart.
+    drawLabelBox(ctx, inst, vp, selected, "UART");
   } else {
     const corners = [
       [0, 0],
@@ -595,8 +600,9 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
     }
     // A built-in's glyph owns its body, so skip the pin name (it would land on
     // top of the glyph). Pin labels are also culled once the symbol is small on
-    // screen (FR-012a).
-    if (!td.builtin && symPx >= LABEL_T1) {
+    // screen (FR-012a). Exception: the magic UART is an IC-style box whose pins
+    // (D0–D7, CS//CE//CLK) must be distinguishable, so it shows them (FR-122a).
+    if ((!td.builtin || td.renderType === "uart") && symPx >= LABEL_T1) {
       ctx.fillStyle = "#333";
       if (td.renderType === "subunit") {
         ctx.textAlign = "center";

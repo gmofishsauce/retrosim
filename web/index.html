@@ -31,6 +31,15 @@
         <canvas id="canvas"></canvas>
       </div>
       <div id="vec-panel" hidden></div>
+      <!-- Modeless Console panel (FR-122c): the magic UART's stdout surface. -->
+      <div id="console-panel" hidden>
+        <div class="console-header">
+          <div class="console-title">Console</div>
+          <button class="console-clear" type="button" title="Clear the console">Clear</button>
+          <button class="console-close" type="button" title="Close the console">✕</button>
+        </div>
+        <div class="console-body" aria-label="console output"></div>
+      </div>
     </section>
     <aside id="properties" aria-label="properties"></aside>
   </main>

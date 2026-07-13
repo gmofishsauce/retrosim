@@ -24,6 +24,7 @@ import { initToolbar } from "./chrome/toolbar.js";
 import { makeFileOps } from "./chrome/fileops.js";
 import { makeProjectOps } from "./chrome/project.js";
 import { initProperties } from "./chrome/properties.js";
+import { createConsolePanel } from "./chrome/console.js";
 import { initStatusBar, postMessage } from "./chrome/statusbar.js";
 import { createSim } from "./engine/sim.js";
 import { startConnectionMonitor } from "./connection.js";
@@ -370,7 +371,13 @@ async function main() {
       projectops.setCurrentProject(store.state.savePath.replace(/\/[^/]*$/, "") || "/");
     }
     startBackup(store);
-    const sim = createSim({ store, renderer }); // slow simulator (§6.13)
+    // Modeless Console panel (§6.20, FR-122c): the magic UART's standard-output
+    // surface. createSim routes each UART's emitted byte to it and clears it at
+    // Run start; View ▸ Console drives store.state.consolePanelOpen, to which the
+    // panel's visibility is subscribed below.
+    const consolePanel = createConsolePanel({ store });
+    store.subscribe(() => consolePanel.setOpen(store.state.consolePanelOpen));
+    const sim = createSim({ store, renderer, consolePanel }); // slow simulator (§6.13)
     // Simulate ▸ Test Vectors toggles the docked test-vector panel (FR-115b/
     // §6.16); opening it imposes the read-only lock (FR-115h).
     const vecPanel = testVectorsPanel({ store, dataDir: defaults.dataDir });
