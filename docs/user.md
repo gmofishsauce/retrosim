@@ -25,7 +25,7 @@ KiCad-like.
 10. [Projects and files](#10-projects-and-files)
 11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
-13. [Simulation](#13-simulation) — including [Test vectors](#test-vectors) and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
+13. [Simulation](#13-simulation) — including [Console output](#console-output), [Test vectors](#test-vectors) and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
 14. [If the server disconnects](#14-if-the-server-disconnects)
 15. [Keyboard and mouse reference](#15-keyboard-and-mouse-reference)
 
@@ -103,7 +103,7 @@ The window has four regions plus a status bar:
 - **Menu bar** (top): the **File** menu (`New Project…`, `Open Project…`,
   `Duplicate Project…`, `New`, `Open`, `Save`, `Save As`,
   `Export…`, `Refresh Types`), the **Edit** menu (`Undo`, `Redo`, `Copy`, `Paste`),
-  the **View** menu (`Zoom In`, `Zoom Out`, `Fit to Screen`), and the **Simulate**
+  the **View** menu (`Zoom In`, `Zoom Out`, `Fit to Screen`, `Console`), and the **Simulate**
   menu (`Test Vectors…`, `Generate C…`), followed by the tool buttons `Select`,
   `Wire`, `Bus` and the `Run` button. Menu items with a standard keyboard shortcut
   show it in the menu (see [§15](#15-keyboard-and-mouse-reference)). Click a menu to open it; click an item to run it, or
@@ -176,6 +176,15 @@ the shift register's contents into an 8-bit latch driving the parallel outputs
 The parallel outputs are **3-state**, enabled by `/OE` (low); the master reset `/MR`
 (low) asynchronously clears the shift register only, leaving the output latch
 untouched. `Q7S` is the serial output of the last stage, for daisy-chaining chips.
+
+The `74573` octal **transparent latch** is included too. Unlike a register it is
+**level-sensitive, not edge-clocked**: while its latch-enable `LE` is **high** the
+eight outputs `Q0`–`Q7` follow the data inputs `D0`–`D7` transparently, and the
+`LE` high→low transition **latches** the current data, which the outputs then hold
+while `LE` stays low. The outputs are **3-state**, enabled by `/OE` (low). The
+simulator models this transparent behavior directly (with the usual one-unit
+delay), so it needs no clock — a handy way to hold a bus value without a clock
+edge. `D0`–`D7` and `Q0`–`Q7` are each a pin group, so buses snap to them.
 
 ### Creating a custom GAL part (22V10)
 
@@ -675,6 +684,7 @@ no behavior, and no designator — see below.)
 | **Port / off-sheet connector** (1-bit) | one pin (flat back edge) | The pentagon "flag" that marks its net as part of the design's external interface for embedding. See [Sub-designs and ports](#12-sub-designs-and-ports). |
 | **Transmission gate** | `A` (left), `B` (right), `EN` (top) | An ideal **bidirectional switch**: `A` and `B` are interchangeable contact terminals — neither is an input or an output, and drivers on either side may come and go. While `EN` reads **1** the two sides are electrically **joined** (they resolve as one net); while it reads **0** they are isolated. An `EN` of U (or Z) means the switch position is unknown: both sides are forced to **U**. Drives nothing, stores nothing, no properties; see the switch-element notes in [Simulation](#13-simulation). |
 | **Relay (SPDT)** | `COIL` (top); contacts `NO` / `COM` / `NC` (right, labeled on the canvas) | A changeover relay with an idealized logic-level coil (one pin — no second coil terminal, no coil current). Released (`COIL` = 0): `COM`–`NC` joined, `NO` isolated. Energized (`COIL` = 1): `COM`–`NO` joined, `NC` isolated. A U coil forces all three contact nets to **U**. Contacts follow the coil after the standard one-unit delay (no pick/drop time is modeled). For an SPST contact, leave the unused throw unwired. No moving contact arm is drawn — read the live state from wired indicators. |
+| **Magic UART** | eight inputs (`D0`–`D7`, left, one pin group `DATA`); `CS/`, `CE/`, `CLK` (right) | A convenience character-output device — physically unrealistic, but handy for getting text out of a running design. Drawn as an IC-style box labeled **UART**. On each **rising edge of `CLK`**, and only while both `CS/` and `CE/` read **0**, it latches `D0`(LSB)…`D7`(MSB) and emits that byte as an **ASCII character** to the simulator's standard output — the **[Console panel](#console-output)** in the slow simulator, and real `stdout` in [generated C](#generating-a-standalone-c-simulator). It drives no nets and has no readback path. Emission is deliberately careful: if `CS/` or `CE/` is **1** (deselected) or uncertain (U/Z), nothing is emitted; any data bit that is not a clean **1** counts as **0**. The eight `DATA` pins form one pin group, so an 8-wide bus snap-connects to all of them at once (see [Buses](#7-buses)). No properties. |
 | **Text note** (`NOTE` tile) | none | A free-form text annotation — pure documentation, with no pins, no wiring, and no part in simulation. See **[Text notes](#text-notes)** below for how to type and edit one. |
 
 You can override a built-in's properties per instance via the properties panel
@@ -890,6 +900,29 @@ the status bar and changes nothing (a click on empty canvas does nothing). The o
 exception is clicking an **interactive input** (the input switch), which changes
 its value live and re-evaluates the simulation.
 
+### Console output
+
+The **[magic UART](#11-built-in-components)** built-in emits characters to a
+**Console panel** — the slow simulator's standard-output surface. Toggle it from
+**View ▸ Console** (the menu item shows a check mark while it is open). The panel
+docks along the bottom of the canvas area, like the Test Vectors panel, and shows
+the interleaved characters emitted by every placed magic UART during a run.
+
+Unlike the Test Vectors panel, the Console is **modeless**: it imposes no
+read-only lock and is meant to be opened *during* a run — you can leave it open,
+press Run, and watch text appear. It scrolls and sticks to the newest output
+unless you scroll up to read earlier lines. Characters are rendered as you'd
+expect — printable ASCII verbatim, newline and tab literally, carriage return
+ignored, and any other byte as a visible `\xNN` escape. **Clear** empties it, and
+it is cleared automatically at the start of each Run. Its contents and open/closed
+state are session-only — they are **not** saved with the design.
+
+To try it: place a **UART**, wire an 8-bit value to `D0`–`D7` (a bus snaps to the
+whole `DATA` group at once), hold `CS/` and `CE/` low, drive `CLK` from a clock
+generator, open **View ▸ Console**, and press **Run**. In the [generated C
+simulator](#generating-a-standalone-c-simulator) the same bytes go to the
+program's real standard output instead.
+
 ### Test vectors
 
 Instead of toggling switches and reading indicators by hand, you can write a
@@ -1081,6 +1114,11 @@ and after the last cycle the program prints each observable point (the same
 column set) as a `LABEL=value` line — values `0`, `1`, `U`, or `Z`. This is
 the mode for letting a design — a ROM-driven circuit, a counter, eventually a
 CPU — simply run.
+
+Any **[magic UART](#11-built-in-components)** in the design writes its emitted
+characters to the program's real standard output in both modes, so you can pipe
+or redirect them like any command output. The `LABEL=value` free-run dump (and
+the test-vector transcript) share that stream and trail all the UART bytes.
 
 **Waveform traces.** In either mode, `--vcd trace.vcd` also writes a VCD
 waveform trace of the observable columns over simulated time (1 ns per unit
