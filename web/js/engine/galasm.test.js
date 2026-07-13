@@ -8,6 +8,7 @@ import {
   evalCombinational,
   evalOutput,
   updateRegisters,
+  updateLatches,
   V0,
   V1,
   VU,
@@ -726,4 +727,86 @@ test("74165 buried-node behavior block compiles (FR-079c)", () => {
   const q7n = c.outputs.find((o) => o.signal === "Q7N");
   assert.equal(q7n.kind, "plain");
   assert.deepEqual(q7n.terms, [[lit("Q7", true)]]); // Q7N = /Q7
+});
+
+// --- Transparent latches (.L/.G, FR-079d) ---
+
+test("transparent latch: .L output carries its gate, and optional .E/.ARST (FR-079d)", () => {
+  const c = compileBehavior(
+    ty(
+      [["D", "in"], ["LE", "in"], ["/OE", "in"], ["CLR", "in"], ["Q", "tristate"]],
+      "Q.L = D\nQ.G = LE\nQ.E = /OE\nQ.ARST = CLR\n",
+    ),
+  );
+  assert.equal(c.outputs.length, 1);
+  const q = c.outputs[0];
+  assert.equal(q.kind, "L");
+  assert.deepEqual(q.terms, [[lit("D")]]); // the .L sum-of-products (D input)
+  assert.deepEqual(q.gate, [lit("LE")]); // the single-term .G gate
+  assert.deepEqual(q.enable, [lit("OE", true)]); // .E = /OE
+  assert.deepEqual(q.arst, [lit("CLR")]); // single-term async clear
+  // An active-low latch-enable /LE gates on "pin /LE is LOW".
+  const c2 = compileBehavior(
+    ty([["D", "in"], ["/LE", "in"], ["Q", "out"]], "Q.L = D\nQ.G = /LE\n"),
+  );
+  assert.deepEqual(c2.outputs[0].gate, [lit("LE", true)]);
+});
+
+test("transparent-latch compile errors: .G rules and .L suffix legality (FR-079d)", () => {
+  const p = [["D", "in"], ["LE", "in"], ["Q", "tristate"]];
+  // A .L output with no .G.
+  assert.throws(() => compileBehavior(ty(p, "Q.L = D\n")), /Q requires a \.G gate/);
+  // .G on a non-.L output.
+  assert.throws(
+    () => compileBehavior(ty([["D", "in"], ["LE", "in"], ["Q", "out"]], "Q = D\nQ.G = LE\n")),
+    /\.G on Q requires a transparent-latch/,
+  );
+  // Two .G equations for one .L output.
+  assert.throws(() => compileBehavior(ty(p, "Q.L = D\nQ.G = LE\nQ.G = LE\n")), /two \.G/);
+  // .G must be a single product term.
+  assert.throws(
+    () => compileBehavior(ty([["D", "in"], ["LE", "in"], ["EN", "in"], ["Q", "tristate"]], "Q.L = D\nQ.G = LE + EN\n")),
+    /\.G for Q takes exactly one product term/,
+  );
+  // A .L output takes no .CLK and no .APRST (only .ARST).
+  assert.throws(
+    () => compileBehavior(ty([["D", "in"], ["LE", "in"], ["CK", "in"], ["Q", "tristate"]], "Q.L = D\nQ.G = LE\nQ.CLK = CK\n")),
+    /a \.L output takes only \.ARST/,
+  );
+  assert.throws(
+    () => compileBehavior(ty([["D", "in"], ["LE", "in"], ["PR", "in"], ["Q", "tristate"]], "Q.L = D\nQ.G = LE\nQ.APRST = PR\n")),
+    /a \.L output takes only \.ARST/,
+  );
+});
+
+test("strict mode rejects transparent latches — .L/.G is extended-only (FR-079d)", () => {
+  assert.throws(
+    () => compileBehavior(ty([["D", "in"], ["LE", "in"], ["Q", "tristate"]], "Q.L = D\nQ.G = LE\n", "GAL22V10")),
+    /no transparent latch/,
+  );
+});
+
+test("updateLatches: transparent while gate 1, hold while 0, U gate → U, .ARST clears (FR-079d)", () => {
+  const c = compileBehavior(
+    ty(
+      [["D", "in"], ["LE", "in"], ["CLR", "in"], ["Q", "out"]],
+      "Q.L = D\nQ.G = LE\nQ.ARST = CLR\n",
+    ),
+  );
+  const out = c.outputs[0];
+  const store = new Map([["Q", VU]]); // power-up U
+  const rd = (nets) => (s) => nets[s] ?? VZ;
+  // Transparent (LE=1): store follows D.
+  updateLatches(c, rd({ D: V1, LE: V1, CLR: V0 }), store);
+  assert.equal(store.get("Q"), V1);
+  assert.equal(evalOutput(out, rd({ D: V1, LE: V1, CLR: V0 }), store), V1);
+  // Hold (LE=0): data change ignored.
+  updateLatches(c, rd({ D: V0, LE: V0, CLR: V0 }), store);
+  assert.equal(store.get("Q"), V1);
+  // Async clear dominates the hold: CLR=1 forces 0 even with LE=0.
+  updateLatches(c, rd({ D: V1, LE: V0, CLR: V1 }), store);
+  assert.equal(store.get("Q"), V0);
+  // U gate → U (selective pessimism).
+  updateLatches(c, rd({ D: V1, LE: VU, CLR: V0 }), store);
+  assert.equal(store.get("Q"), VU);
 });

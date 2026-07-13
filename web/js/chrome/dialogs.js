@@ -15,6 +15,7 @@ import {
   reconcileVectors,
   emptyRow,
   hasClockGenerators,
+  isStateful,
 } from "../engine/vectors.js";
 
 function el(tag, className, text) {
@@ -1404,9 +1405,12 @@ export function testVectorsPanel({ store, dataDir }) {
   function build() {
     const design = store.design;
     const columns = deriveColumns(design);
-    // Sequential mode (FR-115e): rows run in order with scripted clocks; the
-    // panel shows a persistent notice and 0/1/C cells for clock columns.
+    // Sequential mode (FR-115e): a stateful design (a clock generator or a
+    // transparent latch, FR-079d) runs its rows in order on persistent state and
+    // shows a persistent notice; only a clock generator adds 0/1/C cells and the
+    // power-on preamble.
     const clocked = hasClockGenerators(design);
+    const stateful = isStateful(design);
     const rows = [emptyRow(columns)]; // start with one blank row to fill
     let runResults = null; // [{ cells, pass }] aligned to rows, or null when stale
 
@@ -1446,10 +1450,12 @@ export function testVectorsPanel({ store, dataDir }) {
       "div",
       "vec-mode",
       "Sequential design: rows run in order on one simulation and state persists between rows. " +
-        "Clock cells take 0/1/C — C applies one clock pulse (the default for a new row). " +
-        "A power-on reset preamble runs before row 1.",
+        (clocked
+          ? "Clock cells take 0/1/C — C applies one clock pulse (the default for a new row). " +
+            "A power-on reset preamble runs before row 1."
+          : "A transparent latch holds its value across rows (level-sensitive, no clock)."),
     );
-    modeEl.hidden = !clocked;
+    modeEl.hidden = !stateful;
     const noteEl = el("div", "vec-note");
     noteEl.hidden = true;
     const errEl = el("div", "galdlg-error");

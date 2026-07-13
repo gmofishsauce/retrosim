@@ -9,6 +9,7 @@ import {
   compileBehavior,
   evalOutput,
   updateRegisters,
+  updateLatches,
   V0,
   V1,
   VU,
@@ -159,6 +160,10 @@ export function buildSimulation(
         if (out.kind === "R") {
           e.registers.set(out.signal, VU); // power-up U (FR-079)
           if (!out.clk) needsGlobalClock = true;
+        } else if (out.kind === "L") {
+          // Transparent-latch store shares the registers map, powers up U, and
+          // is level-gated — never needs a global clock (FR-079d).
+          e.registers.set(out.signal, VU);
         }
       }
       if (needsGlobalClock) {
@@ -346,6 +351,9 @@ export function buildSimulation(
       const cur = e.clockNet === undefined ? VZ : curr[e.clockNet];
       const globalRose = e.prevClock === V0 && cur === V1;
       updateRegisters(e.compiled, e.readNet, e.registers, globalRose, e.clockPrev);
+      // Transparent latches (FR-079d) update level-sensitively in the same
+      // phase — no edge, so independent of the clock comparison above.
+      updateLatches(e.compiled, e.readNet, e.registers);
       e.prevClock = cur;
     }
     // Memory writes (RAM WE/ rising edge, FR-114d) latch from curr too, alongside

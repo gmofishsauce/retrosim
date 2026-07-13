@@ -1,0 +1,103 @@
+# 74573 — octal D-type transparent latch; 3-state
+# Source: Nexperia, "74HC573; 74HCT573 Octal D-type transparent latch;
+# 3-state", product data sheet Rev. 9 — 5 August 2024.
+# https://assets.nexperia.com/documents/data-sheet/74HC_HCT573.pdf
+id: "type-74573"
+type: "74573"
+outline: [8, 12]
+# No clock: key — a transparent latch is gated by a LEVEL (LE), not a clock
+# edge (FR-062d/FR-079d). LE is the active-HIGH transparency gate: while LE is
+# HIGH the outputs follow the data inputs; the LE HIGH->LOW transition latches.
+
+description: "Octal D-type transparent latch, active-high latch enable, 3-state"
+datasheet:
+  vendor: Nexperia
+  title: "74HC573; 74HCT573 Octal D-type transparent latch; 3-state"
+  rev: "Rev. 9, 5 August 2024"
+  url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT573.pdf"
+
+physical: # exporter-only package metadata (FR-062e); not read by editor or sim
+  package: DIP-20
+  pincount: 20
+  power:
+    - { name: VCC, number: 20 }
+    - { name: GND, number: 10 }
+
+pins: # number: physical DIP20/SO20 pin (datasheet Table 2)
+  - { name: D0,  side: left,  pos: 2, dir: in,       number: 2,  desc: "data input bit 0" }
+  - { name: D1,  side: left,  pos: 3, dir: in,       number: 3,  desc: "data input bit 1" }
+  - { name: D2,  side: left,  pos: 4, dir: in,       number: 4,  desc: "data input bit 2" }
+  - { name: D3,  side: left,  pos: 5, dir: in,       number: 5,  desc: "data input bit 3" }
+  - { name: D4,  side: left,  pos: 6, dir: in,       number: 6,  desc: "data input bit 4" }
+  - { name: D5,  side: left,  pos: 7, dir: in,       number: 7,  desc: "data input bit 5" }
+  - { name: D6,  side: left,  pos: 8, dir: in,       number: 8,  desc: "data input bit 6" }
+  - { name: D7,  side: left,  pos: 9, dir: in,       number: 9,  desc: "data input bit 7" }
+  - { name: Q0,  side: right, pos: 2, dir: tristate, number: 19, desc: "3-state latch output bit 0" }
+  - { name: Q1,  side: right, pos: 3, dir: tristate, number: 18, desc: "3-state latch output bit 1" }
+  - { name: Q2,  side: right, pos: 4, dir: tristate, number: 17, desc: "3-state latch output bit 2" }
+  - { name: Q3,  side: right, pos: 5, dir: tristate, number: 16, desc: "3-state latch output bit 3" }
+  - { name: Q4,  side: right, pos: 6, dir: tristate, number: 15, desc: "3-state latch output bit 4" }
+  - { name: Q5,  side: right, pos: 7, dir: tristate, number: 14, desc: "3-state latch output bit 5" }
+  - { name: Q6,  side: right, pos: 8, dir: tristate, number: 13, desc: "3-state latch output bit 6" }
+  - { name: Q7,  side: right, pos: 9, dir: tristate, number: 12, desc: "3-state latch output bit 7" }
+  - { name: LE,  side: top,   pos: 2, dir: in,       number: 11, desc: "latch enable, active-high (transparent while HIGH)" }
+  - { name: /OE, side: top,   pos: 6, dir: in,       number: 1,  desc: "active-low output enable" }
+
+groups:
+  - { name: D, pins: [D0, D1, D2, D3, D4, D5, D6, D7] }
+  - { name: Q, pins: [Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7] }
+
+delays: # ns, 74HC573 typical at Vcc=4.5V, 25C (datasheet Table 7)
+  tpd_d:  17 # Dn -> Qn (transparent)
+  tpd_le: 18 # LE -> Qn
+  ten:    16 # /OE -> output enabled (tPZH/tPZL)
+  tdis:   20 # /OE -> output high-Z (tPHZ/tPLZ)
+  tsu:    10 # Dn setup before the LE HIGH->LOW transition (minimum)
+  th:      5 # Dn hold after the LE HIGH->LOW transition (minimum)
+
+behavior: |
+  ; 74573 — octal D-type transparent latch, 3-state, non-inverting. Derived
+  ; from the function table (datasheet Table 3):
+  ;   /OE  LE   Dn        Qn
+  ;    L   H    L / H     L / H     transparent: output follows data
+  ;    L   L    (l / h)   L / H     latched: holds the value from before LE fell
+  ;    H   X    X         Z         outputs high-Z; latch state unaffected
+  ;
+  ; TRANSPARENT-LATCH CONVENTION (FR-079d): a transparent latch is level-
+  ; sensitive, not edge-clocked, so it has NO clock: pin. Each output is a .L
+  ; latch output loaded from Dn, made transparent by a single-term .G gate. The
+  ; latch follows Dn while its .G term is true and holds when the term is false.
+  ; Here LE is the active-HIGH latch-enable pin, so the gate is simply "LE": the
+  ; latch is transparent while LE is HIGH and holds when LE is LOW.
+  ;
+  ; Equations are physical-level GALasm: '/' is the complement operator and
+  ; signal names are this file's pin names with any active-low '/' prefix
+  ; dropped (pin /OE is GAL signal OE, so '/OE' below means "pin /OE is LOW").
+  ; Each Qn is a transparent-latch output (.L) loaded from Dn, gated open by
+  ; .G = LE, and driven through a single-term tristate enable (.E) that drives
+  ; the pin only while /OE is LOW; when /OE is HIGH the .E term is false and Qn
+  ; is high-impedance, covering the disabled rows of the function table.
+  Q0.L = D0
+  Q0.G = LE
+  Q0.E = /OE
+  Q1.L = D1
+  Q1.G = LE
+  Q1.E = /OE
+  Q2.L = D2
+  Q2.G = LE
+  Q2.E = /OE
+  Q3.L = D3
+  Q3.G = LE
+  Q3.E = /OE
+  Q4.L = D4
+  Q4.G = LE
+  Q4.E = /OE
+  Q5.L = D5
+  Q5.G = LE
+  Q5.E = /OE
+  Q6.L = D6
+  Q6.G = LE
+  Q6.E = /OE
+  Q7.L = D7
+  Q7.G = LE
+  Q7.E = /OE

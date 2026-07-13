@@ -1,0 +1,1213 @@
+{
+  "formatVersion": 2,
+  "name": "74573-latch",
+  "components": [
+    {
+      "refdes": "U1",
+      "type": "type-74573",
+      "x": 6,
+      "y": 0,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-74573",
+        "name": "74573",
+        "renderType": "unit",
+        "width": 8,
+        "height": 12,
+        "pins": [
+          {
+            "name": "D0",
+            "side": "left",
+            "position": 2,
+            "direction": "in",
+            "number": 2,
+            "desc": "data input bit 0"
+          },
+          {
+            "name": "D1",
+            "side": "left",
+            "position": 3,
+            "direction": "in",
+            "number": 3,
+            "desc": "data input bit 1"
+          },
+          {
+            "name": "D2",
+            "side": "left",
+            "position": 4,
+            "direction": "in",
+            "number": 4,
+            "desc": "data input bit 2"
+          },
+          {
+            "name": "D3",
+            "side": "left",
+            "position": 5,
+            "direction": "in",
+            "number": 5,
+            "desc": "data input bit 3"
+          },
+          {
+            "name": "D4",
+            "side": "left",
+            "position": 6,
+            "direction": "in",
+            "number": 6,
+            "desc": "data input bit 4"
+          },
+          {
+            "name": "D5",
+            "side": "left",
+            "position": 7,
+            "direction": "in",
+            "number": 7,
+            "desc": "data input bit 5"
+          },
+          {
+            "name": "D6",
+            "side": "left",
+            "position": 8,
+            "direction": "in",
+            "number": 8,
+            "desc": "data input bit 6"
+          },
+          {
+            "name": "D7",
+            "side": "left",
+            "position": 9,
+            "direction": "in",
+            "number": 9,
+            "desc": "data input bit 7"
+          },
+          {
+            "name": "Q0",
+            "side": "right",
+            "position": 2,
+            "direction": "tristate",
+            "number": 19,
+            "desc": "3-state latch output bit 0"
+          },
+          {
+            "name": "Q1",
+            "side": "right",
+            "position": 3,
+            "direction": "tristate",
+            "number": 18,
+            "desc": "3-state latch output bit 1"
+          },
+          {
+            "name": "Q2",
+            "side": "right",
+            "position": 4,
+            "direction": "tristate",
+            "number": 17,
+            "desc": "3-state latch output bit 2"
+          },
+          {
+            "name": "Q3",
+            "side": "right",
+            "position": 5,
+            "direction": "tristate",
+            "number": 16,
+            "desc": "3-state latch output bit 3"
+          },
+          {
+            "name": "Q4",
+            "side": "right",
+            "position": 6,
+            "direction": "tristate",
+            "number": 15,
+            "desc": "3-state latch output bit 4"
+          },
+          {
+            "name": "Q5",
+            "side": "right",
+            "position": 7,
+            "direction": "tristate",
+            "number": 14,
+            "desc": "3-state latch output bit 5"
+          },
+          {
+            "name": "Q6",
+            "side": "right",
+            "position": 8,
+            "direction": "tristate",
+            "number": 13,
+            "desc": "3-state latch output bit 6"
+          },
+          {
+            "name": "Q7",
+            "side": "right",
+            "position": 9,
+            "direction": "tristate",
+            "number": 12,
+            "desc": "3-state latch output bit 7"
+          },
+          {
+            "name": "LE",
+            "side": "top",
+            "position": 2,
+            "direction": "in",
+            "number": 11,
+            "desc": "latch enable, active-high (transparent while HIGH)"
+          },
+          {
+            "name": "/OE",
+            "side": "top",
+            "position": 6,
+            "direction": "in",
+            "number": 1,
+            "desc": "active-low output enable"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "D",
+            "pins": [
+              "D0",
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5",
+              "D6",
+              "D7"
+            ]
+          },
+          {
+            "name": "Q",
+            "pins": [
+              "Q0",
+              "Q1",
+              "Q2",
+              "Q3",
+              "Q4",
+              "Q5",
+              "Q6",
+              "Q7"
+            ]
+          }
+        ],
+        "delays": {
+          "tdis": 20,
+          "ten": 16,
+          "th": 5,
+          "tpd_d": 17,
+          "tpd_le": 18,
+          "tsu": 10
+        },
+        "behavior": "; 74573 — octal D-type transparent latch, 3-state, non-inverting. Derived\n; from the function table (datasheet Table 3):\n;   /OE  LE   Dn        Qn\n;    L   H    L / H     L / H     transparent: output follows data\n;    L   L    (l / h)   L / H     latched: holds the value from before LE fell\n;    H   X    X         Z         outputs high-Z; latch state unaffected\n;\n; TRANSPARENT-LATCH CONVENTION (FR-079d): a transparent latch is level-\n; sensitive, not edge-clocked, so it has NO clock: pin. Each output is a .L\n; latch output loaded from Dn, made transparent by a single-term .G gate. The\n; latch follows Dn while its .G term is true and holds when the term is false.\n; Here LE is the active-HIGH latch-enable pin, so the gate is simply \"LE\": the\n; latch is transparent while LE is HIGH and holds when LE is LOW.\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (pin /OE is GAL signal OE, so '/OE' below means \"pin /OE is LOW\").\n; Each Qn is a transparent-latch output (.L) loaded from Dn, gated open by\n; .G = LE, and driven through a single-term tristate enable (.E) that drives\n; the pin only while /OE is LOW; when /OE is HIGH the .E term is false and Qn\n; is high-impedance, covering the disabled rows of the function table.\nQ0.L = D0\nQ0.G = LE\nQ0.E = /OE\nQ1.L = D1\nQ1.G = LE\nQ1.E = /OE\nQ2.L = D2\nQ2.G = LE\nQ2.E = /OE\nQ3.L = D3\nQ3.G = LE\nQ3.E = /OE\nQ4.L = D4\nQ4.G = LE\nQ4.E = /OE\nQ5.L = D5\nQ5.G = LE\nQ5.E = /OE\nQ6.L = D6\nQ6.G = LE\nQ6.E = /OE\nQ7.L = D7\nQ7.G = LE\nQ7.E = /OE\n",
+        "description": "Octal D-type transparent latch, active-high latch enable, 3-state",
+        "datasheet": {
+          "vendor": "Nexperia",
+          "title": "74HC573; 74HCT573 Octal D-type transparent latch; 3-state",
+          "rev": "Rev. 9, 5 August 2024",
+          "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT573.pdf"
+        },
+        "physical": {
+          "package": "DIP-20",
+          "pincount": 20,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 20
+            },
+            {
+              "name": "GND",
+              "number": 10
+            }
+          ]
+        }
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-1",
+      "type": "type-switch",
+      "x": -6,
+      "y": 0,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-2",
+      "type": "type-switch",
+      "x": -6,
+      "y": 1,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-3",
+      "type": "type-switch",
+      "x": -6,
+      "y": 2,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-4",
+      "type": "type-switch",
+      "x": -6,
+      "y": 3,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-5",
+      "type": "type-switch",
+      "x": -6,
+      "y": 4,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-6",
+      "type": "type-switch",
+      "x": -6,
+      "y": 5,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-7",
+      "type": "type-switch",
+      "x": -6,
+      "y": 6,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-8",
+      "type": "type-switch",
+      "x": -6,
+      "y": 7,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-9",
+      "type": "type-switch",
+      "x": -6,
+      "y": 8,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-10",
+      "type": "type-switch",
+      "x": -6,
+      "y": 9,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-11",
+      "type": "type-indicator",
+      "x": 16,
+      "y": 0,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-12",
+      "type": "type-indicator",
+      "x": 16,
+      "y": 1,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-13",
+      "type": "type-indicator",
+      "x": 16,
+      "y": 2,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-14",
+      "type": "type-indicator",
+      "x": 16,
+      "y": 3,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-15",
+      "type": "type-indicator",
+      "x": 16,
+      "y": 4,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-16",
+      "type": "type-indicator",
+      "x": 16,
+      "y": 5,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-17",
+      "type": "type-indicator",
+      "x": 16,
+      "y": 6,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-18",
+      "type": "type-indicator",
+      "x": 16,
+      "y": 7,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1"
+        },
+        {
+          "t": "node",
+          "v": "v2"
+        }
+      ]
+    },
+    {
+      "id": "w2",
+      "path": [
+        {
+          "t": "node",
+          "v": "v3"
+        },
+        {
+          "t": "node",
+          "v": "v4"
+        }
+      ]
+    },
+    {
+      "id": "w3",
+      "path": [
+        {
+          "t": "node",
+          "v": "v5"
+        },
+        {
+          "t": "node",
+          "v": "v6"
+        }
+      ]
+    },
+    {
+      "id": "w4",
+      "path": [
+        {
+          "t": "node",
+          "v": "v7"
+        },
+        {
+          "t": "node",
+          "v": "v8"
+        }
+      ]
+    },
+    {
+      "id": "w5",
+      "path": [
+        {
+          "t": "node",
+          "v": "v9"
+        },
+        {
+          "t": "node",
+          "v": "v10"
+        }
+      ]
+    },
+    {
+      "id": "w6",
+      "path": [
+        {
+          "t": "node",
+          "v": "v11"
+        },
+        {
+          "t": "node",
+          "v": "v12"
+        }
+      ]
+    },
+    {
+      "id": "w7",
+      "path": [
+        {
+          "t": "node",
+          "v": "v13"
+        },
+        {
+          "t": "node",
+          "v": "v14"
+        }
+      ]
+    },
+    {
+      "id": "w8",
+      "path": [
+        {
+          "t": "node",
+          "v": "v15"
+        },
+        {
+          "t": "node",
+          "v": "v16"
+        }
+      ]
+    },
+    {
+      "id": "w9",
+      "path": [
+        {
+          "t": "node",
+          "v": "v17"
+        },
+        {
+          "t": "node",
+          "v": "v18"
+        }
+      ]
+    },
+    {
+      "id": "w10",
+      "path": [
+        {
+          "t": "node",
+          "v": "v19"
+        },
+        {
+          "t": "node",
+          "v": "v20"
+        }
+      ]
+    },
+    {
+      "id": "w11",
+      "path": [
+        {
+          "t": "node",
+          "v": "v21"
+        },
+        {
+          "t": "node",
+          "v": "v22"
+        }
+      ]
+    },
+    {
+      "id": "w12",
+      "path": [
+        {
+          "t": "node",
+          "v": "v23"
+        },
+        {
+          "t": "node",
+          "v": "v24"
+        }
+      ]
+    },
+    {
+      "id": "w13",
+      "path": [
+        {
+          "t": "node",
+          "v": "v25"
+        },
+        {
+          "t": "node",
+          "v": "v26"
+        }
+      ]
+    },
+    {
+      "id": "w14",
+      "path": [
+        {
+          "t": "node",
+          "v": "v27"
+        },
+        {
+          "t": "node",
+          "v": "v28"
+        }
+      ]
+    },
+    {
+      "id": "w15",
+      "path": [
+        {
+          "t": "node",
+          "v": "v29"
+        },
+        {
+          "t": "node",
+          "v": "v30"
+        }
+      ]
+    },
+    {
+      "id": "w16",
+      "path": [
+        {
+          "t": "node",
+          "v": "v31"
+        },
+        {
+          "t": "node",
+          "v": "v32"
+        }
+      ]
+    },
+    {
+      "id": "w17",
+      "path": [
+        {
+          "t": "node",
+          "v": "v33"
+        },
+        {
+          "t": "node",
+          "v": "v34"
+        }
+      ]
+    },
+    {
+      "id": "w18",
+      "path": [
+        {
+          "t": "node",
+          "v": "v35"
+        },
+        {
+          "t": "node",
+          "v": "v36"
+        }
+      ]
+    }
+  ],
+  "buses": [],
+  "vertices": [
+    {
+      "id": "v1",
+      "kind": "pin",
+      "ref": "A-1",
+      "pin": "OUT",
+      "x": -5,
+      "y": 0
+    },
+    {
+      "id": "v2",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D0",
+      "x": 5,
+      "y": 0
+    },
+    {
+      "id": "v3",
+      "kind": "pin",
+      "ref": "A-2",
+      "pin": "OUT",
+      "x": -5,
+      "y": 1
+    },
+    {
+      "id": "v4",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D1",
+      "x": 5,
+      "y": 1
+    },
+    {
+      "id": "v5",
+      "kind": "pin",
+      "ref": "A-3",
+      "pin": "OUT",
+      "x": -5,
+      "y": 2
+    },
+    {
+      "id": "v6",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D2",
+      "x": 5,
+      "y": 2
+    },
+    {
+      "id": "v7",
+      "kind": "pin",
+      "ref": "A-4",
+      "pin": "OUT",
+      "x": -5,
+      "y": 3
+    },
+    {
+      "id": "v8",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D3",
+      "x": 5,
+      "y": 3
+    },
+    {
+      "id": "v9",
+      "kind": "pin",
+      "ref": "A-5",
+      "pin": "OUT",
+      "x": -5,
+      "y": 4
+    },
+    {
+      "id": "v10",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D4",
+      "x": 5,
+      "y": 4
+    },
+    {
+      "id": "v11",
+      "kind": "pin",
+      "ref": "A-6",
+      "pin": "OUT",
+      "x": -5,
+      "y": 5
+    },
+    {
+      "id": "v12",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D5",
+      "x": 5,
+      "y": 5
+    },
+    {
+      "id": "v13",
+      "kind": "pin",
+      "ref": "A-7",
+      "pin": "OUT",
+      "x": -5,
+      "y": 6
+    },
+    {
+      "id": "v14",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D6",
+      "x": 5,
+      "y": 6
+    },
+    {
+      "id": "v15",
+      "kind": "pin",
+      "ref": "A-8",
+      "pin": "OUT",
+      "x": -5,
+      "y": 7
+    },
+    {
+      "id": "v16",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D7",
+      "x": 5,
+      "y": 7
+    },
+    {
+      "id": "v17",
+      "kind": "pin",
+      "ref": "A-9",
+      "pin": "OUT",
+      "x": -5,
+      "y": 8
+    },
+    {
+      "id": "v18",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "LE",
+      "x": 5,
+      "y": 8
+    },
+    {
+      "id": "v19",
+      "kind": "pin",
+      "ref": "A-10",
+      "pin": "OUT",
+      "x": -5,
+      "y": 9
+    },
+    {
+      "id": "v20",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "/OE",
+      "x": 5,
+      "y": 9
+    },
+    {
+      "id": "v21",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Q0",
+      "x": 15,
+      "y": 0
+    },
+    {
+      "id": "v22",
+      "kind": "pin",
+      "ref": "A-11",
+      "pin": "IN",
+      "x": 17,
+      "y": 0
+    },
+    {
+      "id": "v23",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Q1",
+      "x": 15,
+      "y": 1
+    },
+    {
+      "id": "v24",
+      "kind": "pin",
+      "ref": "A-12",
+      "pin": "IN",
+      "x": 17,
+      "y": 1
+    },
+    {
+      "id": "v25",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Q2",
+      "x": 15,
+      "y": 2
+    },
+    {
+      "id": "v26",
+      "kind": "pin",
+      "ref": "A-13",
+      "pin": "IN",
+      "x": 17,
+      "y": 2
+    },
+    {
+      "id": "v27",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Q3",
+      "x": 15,
+      "y": 3
+    },
+    {
+      "id": "v28",
+      "kind": "pin",
+      "ref": "A-14",
+      "pin": "IN",
+      "x": 17,
+      "y": 3
+    },
+    {
+      "id": "v29",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Q4",
+      "x": 15,
+      "y": 4
+    },
+    {
+      "id": "v30",
+      "kind": "pin",
+      "ref": "A-15",
+      "pin": "IN",
+      "x": 17,
+      "y": 4
+    },
+    {
+      "id": "v31",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Q5",
+      "x": 15,
+      "y": 5
+    },
+    {
+      "id": "v32",
+      "kind": "pin",
+      "ref": "A-16",
+      "pin": "IN",
+      "x": 17,
+      "y": 5
+    },
+    {
+      "id": "v33",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Q6",
+      "x": 15,
+      "y": 6
+    },
+    {
+      "id": "v34",
+      "kind": "pin",
+      "ref": "A-17",
+      "pin": "IN",
+      "x": 17,
+      "y": 6
+    },
+    {
+      "id": "v35",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Q7",
+      "x": 15,
+      "y": 7
+    },
+    {
+      "id": "v36",
+      "kind": "pin",
+      "ref": "A-18",
+      "pin": "IN",
+      "x": 17,
+      "y": 7
+    }
+  ],
+  "nets": []
+}

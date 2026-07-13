@@ -13,11 +13,12 @@
 //
 // Compiled form (per type, cached by the caller):
 //   {
-//     outputs: [ { signal, pin, kind: "plain"|"T"|"R", lhsLow,
+//     outputs: [ { signal, pin, kind: "plain"|"T"|"R"|"L", lhsLow,
 //                  terms: [[{signal, low}]],   // sum of products
 //                  xor: [ terms, … ],          // :+: groups XORed with terms (FR-079a)
 //                  enable: [{signal, low}]|null,       // single .E term
-//                  clk, arst, aprst: term|null } ],    // GAL20RA10 per-output (FR-079a)
+//                  clk, arst, aprst: term|null,        // GAL20RA10 per-output (FR-079a)
+//                  gate: term|null } ],                // .L transparent-latch gate (FR-079d)
 //     ar: [{signal, low}]|null,   // async reset term (manual §3.6)
 //     sp: [{signal, low}]|null,   // sync preset term
 //   }
@@ -65,6 +66,9 @@ function validateStrict(typeData, compiled, fail) {
   for (const out of compiled.outputs) {
     if (out.xor.length) {
       fail(`${d} has no XOR operator (:+:) — XOR is extended-dialect only`);
+    }
+    if (out.kind === "L") {
+      fail(`${d} has no transparent latch (.L/.G) — transparent latches are extended-dialect only`);
     }
     if ((out.clk || out.arst || out.aprst) && !dev.ra10) {
       fail(`${d} has no per-output .CLK/.ARST/.APRST (GAL20RA10 only)`);
@@ -270,8 +274,8 @@ export function compileBehavior(typeData) {
     if (peek() === ".") {
       next();
       suffix = parseName("a suffix");
-      if (!["T", "R", "E", "CLK", "ARST", "APRST"].includes(suffix)) {
-        fail(`unknown suffix .${suffix} (want .T, .R, .E, .CLK, .ARST, or .APRST)`);
+      if (!["T", "R", "E", "CLK", "ARST", "APRST", "L", "G"].includes(suffix)) {
+        fail(`unknown suffix .${suffix} (want .T, .R, .E, .CLK, .ARST, .APRST, .L, or .G)`);
       }
     }
     if (next() !== "=") fail(`expected = after ${suffix ? `${name}.${suffix}` : name}`);
@@ -307,16 +311,36 @@ export function compileBehavior(typeData) {
 
     // .CLK/.ARST/.APRST (GAL20RA10, FR-079a): per-output clock and async
     // reset/preset, each a single product term, after the output's .R equation.
+    // A .L transparent latch (FR-079d) also accepts a single-term .ARST (async
+    // clear to 0) but no .CLK (its gate is a level) and no .APRST.
     if (suffix === "CLK" || suffix === "ARST" || suffix === "APRST") {
       const out = bySignal.get(name);
       if (!out) fail(`.${suffix} for ${name} before its output equation`);
-      if (out.kind !== "R") fail(`.${suffix} on ${name} requires a registered (.R) output`);
+      if (out.kind === "L") {
+        if (suffix !== "ARST") fail(`.${suffix} on transparent-latch output ${name} is not allowed (a .L output takes only .ARST)`);
+      } else if (out.kind !== "R") {
+        fail(`.${suffix} on ${name} requires a registered (.R) output`);
+      }
       if (lhsLow) fail(`.${suffix} left-hand side for ${name} may not be negated`);
       if (xor.length) fail(`.${suffix} for ${name} may not use XOR (:+:)`);
       if (terms.length !== 1) fail(`.${suffix} for ${name} takes exactly one product term`);
       const key = suffix === "CLK" ? "clk" : suffix === "ARST" ? "arst" : "aprst";
       if (out[key]) fail(`two .${suffix} equations for ${name}`);
       out[key] = terms[0];
+      continue;
+    }
+
+    // .G (FR-079d): the single-term transparency gate of a .L latch, after the
+    // output's .L equation. The latch is transparent while this term is true.
+    if (suffix === "G") {
+      const out = bySignal.get(name);
+      if (!out) fail(`.G for ${name} before its output equation`);
+      if (out.kind !== "L") fail(`.G on ${name} requires a transparent-latch (.L) output`);
+      if (out.gate) fail(`two .G equations for ${name}`);
+      if (lhsLow) fail(`.G left-hand side for ${name} may not be negated`);
+      if (xor.length) fail(`.G for ${name} may not use XOR (:+:)`);
+      if (terms.length !== 1) fail(`.G for ${name} takes exactly one product term`);
+      out.gate = terms[0];
       continue;
     }
 
@@ -332,6 +356,7 @@ export function compileBehavior(typeData) {
       clk: null, // per-output clock term (.CLK); null ⇒ uses the global clock: pin
       arst: null, // per-output async reset term (.ARST)
       aprst: null, // per-output async preset term (.APRST)
+      gate: null, // .L transparent-latch gate term (.G, FR-079d)
     };
     bySignal.set(name, out);
     outputs.push(out);
@@ -347,6 +372,15 @@ export function compileBehavior(typeData) {
     const out = bySignal.get(node);
     if (!out) fail(`internal node ${node} has no .R equation`);
     if (out.kind !== "R") fail(`internal node ${node} must be defined by a registered (.R) equation`);
+  }
+
+  // Every .L transparent latch (FR-079d) requires exactly one .G gate. "At most
+  // one" is enforced above (a second .G fails as "two .G equations"); a missing
+  // gate is caught here.
+  for (const out of outputs) {
+    if (out.kind === "L" && !out.gate) {
+      fail(`transparent-latch output ${out.signal} requires a .G gate equation`);
+    }
   }
 
   const compiled = { outputs, ar, sp };
@@ -422,10 +456,12 @@ export function evalCombinational(output, readNet) {
 }
 
 // evalOutput returns one output's driver contribution: V0/V1, VU, or VZ when
-// a .T/.R enable is false. A plain/.T output drives its sum XOR lhsLow; a .R
+// a .T/.R/.L enable is false. A plain/.T output drives its sum XOR lhsLow; a .R
 // output presents its register XOR lhsLow (the sum is the D input, latched by
-// updateRegisters). `registers` maps signal → V0|V1|VU for the instance's .R
-// outputs (power-up VU, FR-079).
+// updateRegisters); a .L transparent-latch output (FR-079d) likewise presents
+// its stored value XOR lhsLow (maintained by updateLatches). `registers` maps
+// signal → V0|V1|VU for the instance's stored (.R and .L) outputs (power-up VU,
+// FR-079).
 export function evalOutput(output, readNet, registers) {
   if (output.enable) {
     const e = evalTerm(output.enable, readNet);
@@ -433,7 +469,9 @@ export function evalOutput(output, readNet, registers) {
     if (e === VU) return VU; // uncertain enable: pessimistic U, not Z
   }
   const v =
-    output.kind === "R" ? registers.get(output.signal) : evalCombinational(output, readNet);
+    output.kind === "R" || output.kind === "L"
+      ? registers.get(output.signal)
+      : evalCombinational(output, readNet);
   return xorLow(v, output.lhsLow);
 }
 
@@ -492,5 +530,25 @@ export function updateRegisters(compiled, readNet, registers, globalRose, clockP
         if (out.kind === "R" && !out.clk) registers.set(out.signal, a === V1 ? V0 : VU);
       }
     }
+  }
+}
+
+// updateLatches advances one instance's .L transparent latches (FR-079d) for
+// one unit step, called by sim.js in the same phase as updateRegisters. A latch
+// is level-sensitive, not edge-clocked: a true .ARST clears the store to 0
+// first (async); then, while the .G gate reads 1 the store follows the .L
+// sum-of-products (transparent), while 0 it holds, and a U gate stores U
+// (selective pessimism, FR-077). All terms are read over the current step.
+export function updateLatches(compiled, readNet, registers) {
+  for (const out of compiled.outputs) {
+    if (out.kind !== "L") continue;
+    if (out.arst) {
+      const a = evalTerm(out.arst, readNet);
+      if (a !== V0) registers.set(out.signal, a === V1 ? V0 : VU);
+    }
+    const g = evalTerm(out.gate, readNet);
+    if (g === V1) registers.set(out.signal, evalCombinational(out, readNet));
+    else if (g === VU) registers.set(out.signal, VU);
+    // g === V0: hold the stored value
   }
 }

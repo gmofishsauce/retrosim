@@ -289,6 +289,12 @@ typedef struct {
 extern const rt_mem gen_mems[];
 extern const int gen_mem_count;
 
+/* gen_latch_count > 0 marks a transparent latch present (FR-079d). A clock-less
+ * latch design is still STATEFUL: the vector runner runs its rows in order on
+ * persistent state (FR-115e), like a clocked design — the C analogue of
+ * vectors.js isStateful (§6.16). */
+extern const int gen_latch_count;
+
 /* --- Vector columns (FR-117) --- */
 
 /* Input column kinds: what the row symbol drives. */

@@ -81,6 +81,7 @@ export function generateC(design, { columnsFrom = design } = {}) {
   const clocks = [];
   const resets = [];
   const regUnits = []; // registered galasm entities, global-clock family (FR-079)
+  const latchUnits = []; // transparent-latch entities (.L/.G outputs, FR-079d)
   const mems = []; // memory devices (RAM/ROM, FR-114d)
   const switchIdx = new Map(); // refdes → gen_switches index
   const clockIdx = new Map(); // refdes → gen_clocks index
@@ -228,6 +229,29 @@ export function generateC(design, { columnsFrom = design } = {}) {
       });
     }
 
+    // Transparent-latch (.L/.G) outputs (FR-079d): collect per-instance latch
+    // state (mirrors sim.js updateLatches). Level-sensitive — no clock, no edge.
+    // The stored value is combExpr captured while the .G gate is 1; the drive
+    // block reads back latch_<tag>[k].
+    let latchTag = null;
+    const latchIdxOf = new Map(); // .L signal → its slot in latch_<tag>[]
+    if (c.outputs.some((o) => o.kind === "L")) {
+      latchTag = insts[0].refdes.replace(/[^A-Za-z0-9_]/g, "_");
+      const latches = []; // one per .L output, in output order
+      for (const out of c.outputs) {
+        if (out.kind !== "L") continue;
+        const k = latches.length;
+        latchIdxOf.set(out.signal, k);
+        latches.push({
+          k,
+          dExpr: combExpr(out),
+          gateExpr: termExpr(out.gate),
+          arstExpr: out.arst ? termExpr(out.arst) : null, // async clear to 0
+        });
+      }
+      latchUnits.push({ tag: latchTag, latches });
+    }
+
     const lines = [`  /* ${refdesList}: ${typeName} */`];
     for (const out of c.outputs) {
       const key = pinOwner.get(out.signal);
@@ -237,6 +261,8 @@ export function generateC(design, { columnsFrom = design } = {}) {
       const body = [];
       if (out.kind === "R") {
         body.push(`v = reg_${regTag}[${regIdxOf.get(out.signal)}]; /* latched */`);
+      } else if (out.kind === "L") {
+        body.push(`v = latch_${latchTag}[${latchIdxOf.get(out.signal)}]; /* transparent latch */`);
       } else {
         body.push(`v = ${sumExpr(out.terms)};`);
         for (const group of out.xor ?? []) {
@@ -502,6 +528,12 @@ export function generateC(design, { columnsFrom = design } = {}) {
     L.push(`const rt_mem gen_mems[] = { { 0, 0, 0, 0, 0, 0, -1, -1, -1, 0, 0, 0, 0 } }; /* none */`);
   }
   L.push(`const int gen_mem_count = ${mems.length};`);
+  // gen_latch_count > 0 marks a transparent latch present (FR-079d): a
+  // clock-less latch design is still STATEFUL, so the vector runner must run its
+  // rows in order on persistent state (FR-115e), like a clocked design — the C
+  // analogue of vectors.js isStateful (§6.16).
+  const latchCount = latchUnits.reduce((n, u) => n + u.latches.length, 0);
+  L.push(`const int gen_latch_count = ${latchCount};`);
   L.push(``);
 
   L.push(`/* --- vector columns (FR-117; column order is the row format) --- */`);
@@ -533,6 +565,9 @@ export function generateC(design, { columnsFrom = design } = {}) {
     for (const r of u.regs) if (r.clkExpr) L.push(`static rt_val prevClk_${u.tag}_${r.k};`);
   }
   if (regUnits.length) L.push(``);
+  L.push(`/* --- transparent-latch state (FR-079d .L outputs) --- */`);
+  for (const u of latchUnits) L.push(`static rt_val latch_${u.tag}[${u.latches.length}];`);
+  if (latchUnits.length) L.push(``);
 
   L.push(`/* --- power-up state (FR-116a; reapplied per combinational row) --- */`);
   L.push(`void gen_init(void) {`);
@@ -544,11 +579,14 @@ export function generateC(design, { columnsFrom = design } = {}) {
     if (u.hasGlobal) L.push(`  prevClk_${u.tag} = RT_U;`);
     for (const r of u.regs) if (r.clkExpr) L.push(`  prevClk_${u.tag}_${r.k} = RT_U;`);
   }
+  for (const u of latchUnits) {
+    for (const t of u.latches) L.push(`  latch_${u.tag}[${t.k}] = RT_U; /* power-up U (FR-079d) */`);
+  }
   L.push(`}`);
   L.push(``);
   L.push(`/* --- registered latch: .R outputs (FR-079/FR-079a, sim.js updateRegisters) --- */`);
   L.push(`void gen_latch(const rt_val *curr) {`);
-  if (!regUnits.length) L.push(`  (void)curr;`);
+  if (!regUnits.length && !latchUnits.length) L.push(`  (void)curr;`);
   for (const u of regUnits) {
     L.push(`  {`);
     if (u.hasGlobal) {
@@ -582,6 +620,21 @@ export function generateC(design, { columnsFrom = design } = {}) {
       L.push(`    }`);
     }
     L.push(`  }`);
+  }
+  // Transparent latches (FR-079d, sim.js updateLatches): level-sensitive, in the
+  // same phase as registers — .ARST clears first, then capture while .G is 1,
+  // hold while 0, store U while U. No edge, no clock.
+  for (const u of latchUnits) {
+    for (const t of u.latches) {
+      L.push(`  { /* latch ${u.tag}[${t.k}] */`);
+      if (t.arstExpr)
+        L.push(`    { rt_val a = ${t.arstExpr}; if (a != RT_0) latch_${u.tag}[${t.k}] = (a == RT_1) ? RT_0 : RT_U; } /* .ARST clear first */`);
+      L.push(`    rt_val g = ${t.gateExpr}; /* .G gate */`);
+      L.push(`    if (g == RT_1) latch_${u.tag}[${t.k}] = ${t.dExpr}; /* transparent */`);
+      L.push(`    else if (g == RT_U) latch_${u.tag}[${t.k}] = RT_U; /* pessimism */`);
+      L.push(`    /* g == RT_0: hold */`);
+      L.push(`  }`);
+    }
   }
   L.push(`}`);
   L.push(``);

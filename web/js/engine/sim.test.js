@@ -887,3 +887,68 @@ test("merge feedback settles rather than spinning (FR-085)", () => {
   const sim = buildSimulation(d);
   assert.ok(settle(sim) <= 100); // converges; does not spin
 });
+
+// LATCH: a 74573-style transparent latch — .L data, .G gate, .E tristate, and a
+// single-term .ARST async clear (FR-079d).
+const LATCH = {
+  name: "LATCHX",
+  renderType: "unit",
+  pins: [
+    { name: "D", side: "left", position: 1, direction: "in" },
+    { name: "LE", side: "left", position: 2, direction: "in" },
+    { name: "/OE", side: "left", position: 3, direction: "in" },
+    { name: "CLR", side: "left", position: 4, direction: "in" },
+    { name: "Q", side: "right", position: 1, direction: "tristate" },
+  ],
+  behavior: "Q.L = D\nQ.G = LE\nQ.E = /OE\nQ.ARST = CLR\n",
+};
+
+test("transparent latch: transparent → hold → async clear → 3-state (FR-079d)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("switch")); // D
+  place(d, "A-2", builtin("switch")); // LE
+  place(d, "A-3", builtin("switch")); // /OE
+  place(d, "A-4", builtin("switch")); // CLR
+  place(d, "A-5", builtin("indicator"));
+  place(d, "U1", LATCH);
+  connect(d, ["A-1", "OUT"], ["U1", "D"]);
+  connect(d, ["A-2", "OUT"], ["U1", "LE"]);
+  connect(d, ["A-3", "OUT"], ["U1", "/OE"]);
+  connect(d, ["A-4", "OUT"], ["U1", "CLR"]);
+  connect(d, ["U1", "Q"], ["A-5", "IN"]); // Q wired so it is observable
+
+  const byRef = (r) => d.components.find((c) => c.refdes === r);
+  const set = (D, LE, OE, CLR) => {
+    byRef("A-1").switchState = D;
+    byRef("A-2").switchState = LE;
+    byRef("A-3").switchState = OE;
+    byRef("A-4").switchState = CLR;
+  };
+  const sim = buildSimulation(d);
+  const settle = () => {
+    for (let i = 0; i < 30; i++) {
+      sim.step();
+      if (!sim.lastStepChanged()) break;
+    }
+  };
+
+  // Transparent (LE=1, /OE=0): Q follows D.
+  set("1", "1", "0", "0"); settle();
+  assert.equal(sim.valueOfPin("U1", "Q"), V1);
+  set("0", "1", "0", "0"); settle();
+  assert.equal(sim.valueOfPin("U1", "Q"), V0);
+
+  // Latch a 1: transparent D=1, then drop LE → holds through a data change.
+  set("1", "1", "0", "0"); settle();
+  assert.equal(sim.valueOfPin("U1", "Q"), V1);
+  set("0", "0", "0", "0"); settle(); // LE low, D→0
+  assert.equal(sim.valueOfPin("U1", "Q"), V1); // held
+
+  // Async clear dominates the hold: CLR=1 forces 0 while latched.
+  set("0", "0", "0", "1"); settle();
+  assert.equal(sim.valueOfPin("U1", "Q"), V0);
+
+  // 3-state: /OE high → Q high-impedance.
+  set("0", "0", "1", "0"); settle();
+  assert.equal(sim.valueOfPin("U1", "Q"), VZ);
+});

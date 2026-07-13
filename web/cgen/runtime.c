@@ -815,7 +815,12 @@ int rt_run_vectors(void) {
   char *in_syms = xalloc((size_t)(gen_incol_count > 0 ? gen_incol_count : 1));
   char *out_syms = xalloc((size_t)(gen_outcol_count > 0 ? gen_outcol_count : 1));
   unsigned char *pulse = xalloc((size_t)(gen_incol_count > 0 ? gen_incol_count : 1));
-  int sequential = gen_clock_count > 0;
+  /* A design is STATEFUL — run its rows in order on persistent state (FR-115e)
+   * — when it has a clock generator OR any transparent latch (FR-079d), matching
+   * vectors.js isStateful (§6.16). A clock-less latch design has no C pulses and
+   * no preamble (both keyed on gen_clock_count below), but its rows still share
+   * state so a latch's hold spans rows. */
+  int sequential = gen_clock_count > 0 || gen_latch_count > 0;
   int rowno = 0, failed = 0;
 
   /* Sequential (FR-115e): the rows run in order on this one persistent

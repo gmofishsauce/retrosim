@@ -69,6 +69,37 @@ export function hasClockGenerators(design) {
   return (design.components ?? []).some((c) => c.typeData?.renderType === "clock");
 }
 
+// LATCH_SUFFIX_RE matches a `.L` transparent-latch output suffix (FR-079d) in a
+// comment-stripped behavior line — `.L` not followed by another name character
+// (so it is the suffix, not a longer token).
+const LATCH_SUFFIX_RE = /\.L(?![A-Za-z0-9])/;
+
+// behaviorHasLatch reports whether a behavior block declares a `.L` output — a
+// cheap per-line scan that strips GALasm ';' comments first, avoiding a full
+// compile.
+function behaviorHasLatch(behavior) {
+  if (!behavior) return false;
+  for (let line of behavior.split("\n")) {
+    const semi = line.indexOf(";");
+    if (semi >= 0) line = line.slice(0, semi);
+    if (LATCH_SUFFIX_RE.test(line)) return true;
+  }
+  return false;
+}
+
+// isStateful reports whether the design carries state that must survive from one
+// vector row to the next, selecting the ordered/persistent run path (FR-115e) in
+// runVectors/captureVectors — so a latch's hold spans rows even in a clock-less
+// design. True when the design has a clock generator OR any in-use type whose
+// behavior declares a transparent latch (a `.L` output, FR-079d). A pure,
+// DOM-free design scan — deliberately not buildSimulation(...).hasClocks(),
+// which would compile every behavior. hasClockGenerators still gates the
+// clock-specific machinery (the C-pulse columns and the scripted-clock preamble).
+export function isStateful(design) {
+  if (hasClockGenerators(design)) return true;
+  return (design.components ?? []).some((c) => behaviorHasLatch(c.typeData?.behavior));
+}
+
 // refdesCompare orders columns by reference designator (numeric-aware, e.g. A-2
 // before A-10), then by pin (so D0..D7 of an 8-wide indicator stay in order).
 function refdesCompare(a, b) {
@@ -357,7 +388,7 @@ function scoreRow(sim, outputs, io, row) {
 export function runVectors(design, { inputs, outputs, io = [], rows }, { romContent = null } = {}) {
   refuseHiddenClocks(design);
   let results;
-  if (hasClockGenerators(design)) {
+  if (isStateful(design)) {
     results = new Array(rows.length);
     runSequentialPass(design, inputs, io, rows, romContent, (sim, ri) => {
       results[ri] = scoreRow(sim, outputs, io, rows[ri]);
@@ -394,7 +425,7 @@ export function captureRow(design, { inputs, outputs, io = [] }, rowIn, { romCon
 // (io release cells filled from the settled net, drive cells preserved, FR-115i).
 export function captureVectors(design, { inputs, outputs, io = [] }, rowsIn, { romContent = null, rowsIo = [] } = {}) {
   refuseHiddenClocks(design);
-  if (!hasClockGenerators(design)) {
+  if (!isStateful(design)) {
     const caps = rowsIn.map((rowIn, i) =>
       captureRow(design, { inputs, outputs, io }, rowIn, { romContent, rowIo: rowsIo[i] ?? [] }),
     );
