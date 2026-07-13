@@ -1539,7 +1539,15 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   are. Shared endpoints (fan-out at a pin, a branch junction) likewise share
   only a vertex and stay permitted. The route's own `from`/`to` endpoints (and
   their forced escape edges) are exempt so a wire can still leave a pin that
-  already carries another wire. The cost function charges 1
+  already carries another wire. **Occupied corners (FR-027d):** in addition, the
+  interior *corners* of every existing wire and bus are collected into an
+  occupied-corner set, and the neighbour expansion forbids any step that would
+  introduce a *turn* at one of those grid points. Two coincident bends carry no
+  connection dot yet read as a junction; a straight pass-through such a point is
+  already barred by the edge rule (it reuses one of the corner's arms), so only a
+  turn there need be blocked. Like the edge constraint this is hard, so a route
+  that would require a coincident corner degrades to the straight fallback. The
+  cost function charges 1
   per step plus a turn penalty (≈ 5 steps per corner) so the search prefers
   few-bend routes over shortest-but-jagged ones; ties break toward the
   destination. The search-space bound, not the design size, caps the work: a

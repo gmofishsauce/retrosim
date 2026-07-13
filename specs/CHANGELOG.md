@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-13 — Auto-router avoids coincident corners
+What: the draw-time Manhattan router (FR-027c/FR-027d) already refused to run a new route on top of an existing conductor (edge occupancy), but nothing stopped it from turning a bend where an existing wire/bus already turns; two coincident corners draw no connection dot yet read as a T/+ junction, so they looked like connections. The router now collects existing conductors' interior corners and hard-forbids introducing a turn at one of those grid points (a straight pass-through such a point was already barred by the edge rule, since it reuses one of the corner's arms). A route needing a coincident corner degrades to the straight rat's-nest fallback, which is preferable to a misleading corner.
+Why: bug report — corner conflicts are very confusing to read.
+Touches: FR-027d (in-place rework); design §6.9a (Algorithm). Code: router.js (`occupiedCorners` + hard forbid) plus a router test.
+
 ## 2026-07-13 — Project-local component types (FR-121 Phase 2)
 What: authored component metadata — New GAL part (FR-066c) and New MEM / memory device (FR-114) — is now written into the current project's reserved `components/` subdirectory instead of the global startup library directory. The client library becomes a two-tier merge: the read-only shared startup library (FR-002) with the current project's `components/` types layered on top. Project-local types load when the project becomes current (New/Open Project, open design) and rescan on Refresh Types (FR-088); the create endpoint (FR-007a) carries the project dir and refuses an `id`/filename colliding with either the project `components/` or the shared library; `GET/POST /api/v1/components` become project-aware while the server stays stateless (project dir per request). Malformed/duplicate project-local files are skipped and reported (FR-074). No auto-migration of parts already in the shared directory (the two example RAM types are moved by hand if wanted).
 Why: this is the smaller Phase 2 foreshadowed by FR-121 and the retired FR-120 group — kept small because the explicit, always-current project (FR-121c) lets the server just scan `<project>/components/` with no scope-follows-file plumbing.

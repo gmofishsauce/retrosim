@@ -232,6 +232,25 @@ test("a collinear wire forces the route to detour off it (FR-027d)", () => {
   assert.ok(path.length > 2, "expected a detour, not the straight overlap");
 });
 
+test("a route does not turn where an existing conductor already turns (FR-027d)", () => {
+  // Existing wire has a corner at P=(5,0): arms west (x2..5,y0) and north (x5,y0..3).
+  const d = design();
+  d.wires.push(wire({ x: 2, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 3 }));
+  // A component blocks the alternative single-L corner at (8,-3), so the cheapest
+  // route is the single L that turns at P — which the router must now refuse,
+  // detouring to turn elsewhere (coincident corners read as a false junction).
+  d.components.push(comp(7, -4, 2, 2)); // bbox x7..9, y-4..-2
+  const from = { x: 5, y: -3 };
+  const to = { x: 8, y: 0 };
+  const path = proposeRoute(d, from, to);
+  assertValid(path, from, to, d);
+  assertNoOverlap(path, d);
+  // The key assertion: no bend lands on the existing corner P=(5,0).
+  for (const p of path.slice(1, -1)) {
+    assert.ok(!(p.x === 5 && p.y === 0), "route turns at the existing corner (5,0)");
+  }
+});
+
 test("a crossing wire does not block a straight route (FR-027d)", () => {
   // A vertical wire at x=5 crosses the path of a horizontal (0,0)->(10,0) route
   // at the single point (5,0): shared vertex, no shared edge — route stays

@@ -92,6 +92,9 @@ function mergeCollinear(pts) {
 const hEdgeKey = (x, y) => "H" + x + "," + y;
 const vEdgeKey = (x, y) => "V" + x + "," + y;
 
+// A corner key identifies a grid point where a conductor turns.
+const cornerKey = (x, y) => x + "," + y;
+
 // conductorWorldPoints resolves a wire/bus path to its world grid polyline:
 // node points dereference their vertex (pin positions are derived), bend
 // points carry their own coordinates (§7.1a). Points are rounded to the grid.
@@ -137,6 +140,27 @@ function occupiedEdges(design, minX, maxX, minY, maxY) {
         const hi = Math.min(Math.max(a.y, b.y), maxY);
         for (let y = lo; y < hi; y++) set.add(vEdgeKey(x, y));
       }
+    }
+  }
+  return set;
+}
+
+// occupiedCorners collects the grid points where an existing wire or bus turns
+// (an interior bend, FR-027d). The router forbids introducing a *turn* at one of
+// these points: two coincident corners carry no connection dot yet read as a T/+
+// junction, so they look like a connection where none exists. A straight
+// pass-through such a point is already barred by occupiedEdges (it reuses one of
+// the corner's two arms), so only turning there needs blocking.
+function occupiedCorners(design) {
+  const set = new Set();
+  for (const c of [...design.wires, ...design.buses]) {
+    const pts = conductorWorldPoints(design, c);
+    for (let i = 1; i < pts.length - 1; i++) {
+      const a = pts[i - 1];
+      const p = pts[i];
+      const b = pts[i + 1];
+      const straight = (a.x === p.x && p.x === b.x) || (a.y === p.y && p.y === b.y);
+      if (!straight) set.add(cornerKey(p.x, p.y));
     }
   }
   return set;
@@ -220,6 +244,10 @@ export function proposeRoute(design, from, to) {
   // exempt — a new wire may still leave a pin that already carries one (fan-out)
   // before diverging.
   const occupied = occupiedEdges(design, minX, maxX, minY, maxY);
+  // Grid points where an existing conductor turns; the search must not turn there
+  // (FR-027d — coincident corners look like connections). Out-of-bounds corners
+  // are harmless: the search never visits them.
+  const corners = occupiedCorners(design);
 
   // A* over (cell, incoming direction) states. h = Manhattan distance to B
   // (admissible: turn penalties only add cost). The B→T turn/reversal cost is
@@ -257,11 +285,20 @@ export function proposeRoute(design, from, to) {
           ? hEdgeKey(Math.min(cur.x, nx), cur.y)
           : vEdgeKey(cur.x, Math.min(cur.y, ny));
       if (occupied.has(ekey)) continue;
+      // Forbid turning at a grid point where an existing conductor already turns
+      // (FR-027d): a coincident corner reads as a false junction. A straight step
+      // (d === cur.d) is fine — a straight pass-through is already barred by the
+      // edge rule above.
+      if (d !== cur.d && corners.has(cornerKey(cur.x, cur.y))) continue;
       let g = cur.g + 1 + (d === cur.d ? 0 : TURN_PENALTY);
       if (nx === B.x && ny === B.y && dT >= 0) {
         if (d === dT) continue; // B→T would reverse the entering segment
         const exit = unitDir({ x: -DIRS[dT].x, y: -DIRS[dT].y }); // B→T direction
-        if (d !== exit) g += TURN_PENALTY;
+        if (d !== exit) {
+          // The B→T append turns at B; forbid it landing on an existing corner too.
+          if (corners.has(cornerKey(B.x, B.y))) continue;
+          g += TURN_PENALTY;
+        }
       }
       const ns = stateId(nx, ny, d);
       if (g < gScore[ns]) {
