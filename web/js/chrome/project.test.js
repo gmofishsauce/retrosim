@@ -58,6 +58,7 @@ test("absoluteDataPaths finds absolute mem paths, ignores relative and non-mem",
 function harness({ dialogResults = [], api = {}, loadResult = true } = {}) {
   const posts = [];
   const loads = []; // loadIntoStore calls: { path, projectInfo }
+  const reloads = []; // reloadLibrary calls: the project dir passed (FR-121i)
   const store = createStore({ design: { name: "d0" } });
   let navCleared = 0;
   const fileops = {
@@ -75,7 +76,13 @@ function harness({ dialogResults = [], api = {}, loadResult = true } = {}) {
   const ops = makeProjectOps(
     // freshDesign mirrors app.js: named after the project when one is given
     // (FR-121b), else a stand-in for the FR-004 default.
-    { store, dataDir: "/data", fileops, freshDesign: (name) => ({ name: name ?? "fresh" }) },
+    {
+      store,
+      dataDir: "/data",
+      fileops,
+      freshDesign: (name) => ({ name: name ?? "fresh" }),
+      reloadLibrary: async (dir) => reloads.push(dir),
+    },
     {
       openFileDialog: async () => dialogResults.shift() ?? null,
       post: (m) => posts.push(m),
@@ -87,7 +94,7 @@ function harness({ dialogResults = [], api = {}, loadResult = true } = {}) {
       loadDesign: api.loadDesign ?? (async () => ({ components: [] })),
     },
   );
-  return { store, ops, posts, loads, navCleared: () => navCleared };
+  return { store, ops, posts, loads, reloads, navCleared: () => navCleared };
 }
 
 test("setCurrentProject records the info and posts each warning (FR-074/FR-121a)", async () => {
@@ -110,6 +117,12 @@ test("setCurrentProject records the info and posts each warning (FR-074/FR-121a)
     mainDesign: "cpu.json",
   });
   assert.equal(posts.length, 2);
+});
+
+test("setCurrentProject reloads the merged library for the incoming project (FR-121i)", async () => {
+  const { ops, reloads } = harness();
+  await ops.setCurrentProject("/data/proj");
+  assert.deepEqual(reloads, ["/data/proj"]);
 });
 
 test("setCurrentProject degrades to the folder-name fallback on a fetch failure", async () => {

@@ -81,12 +81,18 @@ forwarding any extra flags:
 - `--web-dir` — directory of the web app assets (default `./web`).
 - `--data-dir` — designs root (default: the documents folder above).
 
-The component library is read once at startup. If you edit a component YAML file,
-restart the server and reload the page to pick up the change, then use
-**File ▸ Refresh Types** to push the new definitions into an existing design (see
-[Refreshing type data](#9-refreshing-type-data)). The one exception is creating a
-GAL part in-app (see [Creating a custom GAL part](#creating-a-custom-gal-part-22v10)),
-which is added to the running library and palette without a restart.
+The component library has **two tiers**. The **shared library** (`--components-dir`,
+the 74-series parts) is read once at startup; it is read-only and available in every
+project. On top of it, each project layers its **own component types** — the GAL
+parts and memory devices you author in-app — kept in a `components/` subfolder of the
+project. A project's parts appear in the palette only while that project is current,
+and layer over (never replace) the shared parts. If you edit a **shared** YAML file,
+restart the server and reload the page to pick it up; a project's own `components/`
+are re-read whenever you make that project current and by **File ▸ Refresh Types**.
+After either kind of edit, use Refresh Types to push the new definitions into an
+existing design (see [Refreshing type data](#9-refreshing-type-data)). Parts you
+create in-app (see [Creating a custom GAL part](#creating-a-custom-gal-part-22v10))
+appear in the running palette without a restart.
 
 ---
 
@@ -203,10 +209,11 @@ otherwise, and **Create** is disabled until it passes. This is the same strict
 check the simulator applies at Run, so a part you can create is one you could
 later produce on an actual device with GALasm.
 
-**Create** saves the part into the component library (as a YAML file named after
-the part number) and adds its tile to the upper palette **immediately** — no
-restart. From there it places, wires, and simulates like any other part. (Cancel
-discards it.)
+**Create** saves the part into the **current project's** `components/` folder (as a
+YAML file named after the part number) and adds its tile to the upper palette
+**immediately** — no restart. From there it places, wires, and simulates like any
+other part. The part belongs to this project: it shows in the palette while this
+project is current, and is not visible in other projects. (Cancel discards it.)
 
 ### Creating a memory device (RAM/ROM)
 
@@ -237,12 +244,13 @@ The generated chip carries its address pins (group **ADDR**) and the control pin
 **DATA**) on the right, so a bus can snap-connect to the address or data lines all
 at once.
 
-**Create** saves the device into the component library as a YAML file named after
-its name and adds its tile **immediately** — no restart. Like a custom GAL part it
-**persists across reloads**: reopen the app and the device is still in the palette,
-ready to place and simulate. Creation is one-way for now — the app never overwrites
-an existing part, so a name that already exists is refused with an inline message;
-to change a device, create one under a new name (or edit its YAML file directly and
+**Create** saves the device into the **current project's** `components/` folder as a
+YAML file named after its name and adds its tile **immediately** — no restart. Like a
+custom GAL part it belongs to that project and **persists**: reopen the project and
+the device is still in its palette, ready to place and simulate. Creation is one-way
+for now — the app never overwrites an existing part, so a name that already exists
+**in this project or in the shared library** is refused with an inline message; to
+change a device, create one under a new name (or edit its YAML file directly and
 restart).
 
 #### Persistent RAM
@@ -537,10 +545,11 @@ message tray) if the new definition is structurally incompatible — its render 
 changed, or a pin currently used by a wire or bus no longer exists. Refresh is one
 undo step and is disabled while simulating.
 
-Important: Refresh reads the library **already loaded in the browser**. To pick up
-edits you made to a YAML file on disk, you must first **restart the server and
-reload the page**, then use Refresh to push the new definitions into an existing
-design.
+Refresh also **rescans the current project's `components/` folder** first, so a
+project-local part you added or edited on disk goes live without a restart. To pick
+up edits to a **shared** library YAML file, though, you must first **restart the
+server and reload the page**; then use Refresh to push the new definitions into an
+existing design.
 
 ---
 
@@ -550,10 +559,12 @@ design.
 
 A **project is a folder** — the folder that collects one circuit's designs:
 top-level designs, peer sheets, embeddable children, `.tv` test-vector files,
-and generated outputs, all directly at the folder's root. Any folder works as a
-project; no special file is required, so your existing design folders are
-already projects. Exactly one project is **current** at a time, shown in the
-top bar, and every design belongs to the project whose folder it lives in.
+and generated outputs, all directly at the folder's root, plus a reserved
+`components/` subfolder holding the component types (GAL parts and memory
+devices) you author in that project. Any folder works as a project; no special
+file is required, so your existing design folders are already projects. Exactly
+one project is **current** at a time, shown in the top bar, and every design
+belongs to the project whose folder it lives in.
 
 A project may carry an optional **manifest** — a `<name>-manifest.json` file at
 its root recording a display name and the project's **main design** (the file

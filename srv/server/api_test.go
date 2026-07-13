@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -149,15 +150,17 @@ groups:
 `
 
 // POST /api/v1/components creates a part: 201 + the component, the YAML written
-// into the components dir under the part-number filename, and the part visible to
-// a following GET — all without restart (FR-007a).
+// into the current project's components/ subdir under the part-number filename,
+// and the part visible to a following project-scoped GET — all without restart
+// (FR-007a/FR-121i).
 func TestCreateComponent(t *testing.T) {
-	compDir := t.TempDir()
+	compDir := t.TempDir() // shared library dir
+	proj := t.TempDir()    // current project dir
 	srv := httptest.NewServer(NewRouter(newLibrary(), t.TempDir(), compDir, t.TempDir()))
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/api/v1/components", "application/json",
-		body(t, map[string]string{"yaml": galPartYAML}))
+		body(t, map[string]string{"yaml": galPartYAML, "project": proj}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,11 +178,12 @@ func TestCreateComponent(t *testing.T) {
 		t.Fatalf("component.partnumber = %q, want PC-DECODE-A", created.Component.PartNumber)
 	}
 
-	if _, err := os.Stat(filepath.Join(compDir, "type-PC-DECODE-A.yaml")); err != nil {
-		t.Fatalf("expected written YAML: %v", err)
+	// Written under the project's components/ subdir (FR-121i), not the shared dir.
+	if _, err := os.Stat(filepath.Join(proj, "components", "type-PC-DECODE-A.yaml")); err != nil {
+		t.Fatalf("expected written YAML under project components/: %v", err)
 	}
 
-	got, err := http.Get(srv.URL + "/api/v1/components")
+	got, err := http.Get(srv.URL + "/api/v1/components?project=" + url.QueryEscape(proj))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,18 +195,19 @@ func TestCreateComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(list.Components) != 1 || list.Components[0].Key() != "type-PC-DECODE-A" {
-		t.Fatalf("created part not in library listing: %+v", list.Components)
+		t.Fatalf("created part not in project-scoped listing: %+v", list.Components)
 	}
 }
 
-// Re-creating the same part number is a 409 (FR-007a).
+// Re-creating the same part number in the same project is a 409 (FR-007a).
 func TestCreateComponentDuplicate(t *testing.T) {
+	proj := t.TempDir()
 	srv := httptest.NewServer(NewRouter(newLibrary(), t.TempDir(), t.TempDir(), t.TempDir()))
 	defer srv.Close()
 
 	post := func() int {
 		resp, err := http.Post(srv.URL+"/api/v1/components", "application/json",
-			body(t, map[string]string{"yaml": galPartYAML}))
+			body(t, map[string]string{"yaml": galPartYAML, "project": proj}))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -224,7 +229,7 @@ func TestCreateComponentInvalid(t *testing.T) {
 
 	bad := "type: \"22V10\"\ngal: GAL22V10\npins:\n  - { name: I0, side: left, pos: 1, dir: in }\n"
 	resp, err := http.Post(srv.URL+"/api/v1/components", "application/json",
-		body(t, map[string]string{"yaml": bad}))
+		body(t, map[string]string{"yaml": bad, "project": t.TempDir()}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,15 +239,50 @@ func TestCreateComponentInvalid(t *testing.T) {
 	}
 }
 
-// A memory device (no partnumber, carries a mem block) creates and round-trips
-// its mem block through the library listing (FR-114f).
-func TestCreateMemDevice(t *testing.T) {
-	compDir := t.TempDir()
-	srv := httptest.NewServer(NewRouter(newLibrary(), t.TempDir(), compDir, t.TempDir()))
+// A create whose id already exists in the shared library is refused (409), even
+// with an empty project components/ — the dual-scope collision (FR-121i).
+func TestCreateComponentSharedCollision(t *testing.T) {
+	shared := newLibrary()
+	shared.add(ComponentType{ID: "type-PC-DECODE-A", Name: "22V10", PartNumber: "PC-DECODE-A", Gal: "GAL22V10"})
+	srv := httptest.NewServer(NewRouter(shared, t.TempDir(), t.TempDir(), t.TempDir()))
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/api/v1/components", "application/json",
-		body(t, map[string]string{"yaml": memDeviceYAML}))
+		body(t, map[string]string{"yaml": galPartYAML, "project": t.TempDir()}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("shared-collision create status = %d, want 409", resp.StatusCode)
+	}
+}
+
+// A create with no project directory is a 400 (FR-121i).
+func TestCreateComponentMissingProject(t *testing.T) {
+	srv := httptest.NewServer(NewRouter(newLibrary(), t.TempDir(), t.TempDir(), t.TempDir()))
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/api/v1/components", "application/json",
+		body(t, map[string]string{"yaml": galPartYAML}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("missing-project create status = %d, want 400", resp.StatusCode)
+	}
+}
+
+// A memory device (no partnumber, carries a mem block) creates and round-trips
+// its mem block through the library listing (FR-114f).
+func TestCreateMemDevice(t *testing.T) {
+	proj := t.TempDir()
+	srv := httptest.NewServer(NewRouter(newLibrary(), t.TempDir(), t.TempDir(), t.TempDir()))
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/api/v1/components", "application/json",
+		body(t, map[string]string{"yaml": memDeviceYAML, "project": proj}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,11 +290,11 @@ func TestCreateMemDevice(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("status = %d, want 201", resp.StatusCode)
 	}
-	if _, err := os.Stat(filepath.Join(compDir, "type-PROGRAM_RAM.yaml")); err != nil {
-		t.Fatalf("expected written YAML: %v", err)
+	if _, err := os.Stat(filepath.Join(proj, "components", "type-PROGRAM_RAM.yaml")); err != nil {
+		t.Fatalf("expected written YAML under project components/: %v", err)
 	}
 
-	got, err := http.Get(srv.URL + "/api/v1/components")
+	got, err := http.Get(srv.URL + "/api/v1/components?project=" + url.QueryEscape(proj))
 	if err != nil {
 		t.Fatal(err)
 	}

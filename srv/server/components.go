@@ -21,9 +21,10 @@ var ErrComponentWrite = errors.New("component write failed")
 
 // Library holds the parsed component types, keyed by library identity — the
 // type's immutable id (ComponentType.Key/ID, FR-066e), divorced from its
-// free-form display name. Built once at startup (FR-007), then extended only by in-app create
-// (FR-007a, §6.4). The mutex guards the map against concurrent create vs. the
-// /components reads served from other goroutines.
+// free-form display name. This holds the read-only shared library, built once at
+// startup (FR-007) and never mutated thereafter: an in-app create is project-local
+// and is written to disk, not added here (FR-121i). The mutex guards the map
+// against concurrent reads served from other goroutines.
 type Library struct {
 	mu    sync.RWMutex
 	types map[string]ComponentType
@@ -64,13 +65,18 @@ func (l *Library) List() []ComponentType {
 	return out
 }
 
-// Create validates submitted component YAML, writes it into dir under a filename
-// derived from the type's id, and adds the parsed type to the live library
-// (FR-007a). It is the in-app authoring path for GAL parts (FR-066c): a created
-// part must carry a part number (its display name), and a duplicate id (or a
-// filename collision) is refused with ErrDuplicateComponent. The YAML is stored
-// verbatim.
-func (l *Library) Create(dir string, yamlText []byte) (ComponentType, error) {
+// Create validates submitted component YAML and writes it into the current
+// project's components/ subdirectory (FR-007a/FR-121i), returning the parsed type
+// so the client can add the tile live. It is the in-app authoring path for GAL
+// parts (FR-066c) and generated memory devices (FR-114f): a created part must
+// carry an authored marker (a partnumber, or a mem block). The server stays
+// stateless — the created part is project-local and is NOT added to the in-memory
+// shared library; the client library is the shared ∪ project merge, refreshed on
+// project switch and Refresh Types (FR-121i). Creation only, never overwrite: the
+// id, or its derived filename, must not collide with an existing part in either
+// the project's components/ or the global shared library (sharedDir), else
+// ErrDuplicateComponent. The YAML is stored verbatim.
+func (l *Library) Create(projectDir, sharedDir string, yamlText []byte) (ComponentType, error) {
 	t, err := ParseComponentBytes(yamlText, "(submitted)")
 	if err != nil {
 		return ComponentType{}, err
@@ -84,22 +90,34 @@ func (l *Library) Create(dir string, yamlText []byte) (ComponentType, error) {
 	if err != nil {
 		return ComponentType{}, err
 	}
-	path := filepath.Join(dir, fname)
+	compDir := filepath.Join(projectDir, "components")
 
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if _, ok := l.types[t.Key()]; ok {
-		return ComponentType{}, fmt.Errorf("%w: id %q", ErrDuplicateComponent, t.ID)
+	// Reject an id colliding with the shared library (in memory, keyed by id) or
+	// with an existing project-local type (FR-121i: a project part may neither
+	// duplicate nor shadow a shared one).
+	if l.has(t.Key()) {
+		return ComponentType{}, fmt.Errorf("%w: id %q (shared library)", ErrDuplicateComponent, t.ID)
 	}
-	if _, err := os.Stat(path); err == nil {
-		return ComponentType{}, fmt.Errorf("%w: file %s", ErrDuplicateComponent, fname)
-	} else if !os.IsNotExist(err) {
+	projTypes, _ := ScanProjectComponents(projectDir)
+	for _, pt := range projTypes {
+		if pt.Key() == t.Key() {
+			return ComponentType{}, fmt.Errorf("%w: id %q (project)", ErrDuplicateComponent, t.ID)
+		}
+	}
+	// Reject a derived filename that already names a file in either scope.
+	for _, p := range []string{filepath.Join(compDir, fname), filepath.Join(sharedDir, fname)} {
+		if _, err := os.Stat(p); err == nil {
+			return ComponentType{}, fmt.Errorf("%w: file %s", ErrDuplicateComponent, fname)
+		} else if !os.IsNotExist(err) {
+			return ComponentType{}, fmt.Errorf("%w: %v", ErrComponentWrite, err)
+		}
+	}
+	if err := os.MkdirAll(compDir, 0o755); err != nil {
 		return ComponentType{}, fmt.Errorf("%w: %v", ErrComponentWrite, err)
 	}
-	if err := atomicWrite(path, yamlText); err != nil {
+	if err := atomicWrite(filepath.Join(compDir, fname), yamlText); err != nil {
 		return ComponentType{}, fmt.Errorf("%w: %v", ErrComponentWrite, err)
 	}
-	l.types[t.Key()] = t
 	return t, nil
 }
 
@@ -156,4 +174,65 @@ func LoadLibrary(dir string) (*Library, error) {
 		lib.add(t)
 	}
 	return lib, nil
+}
+
+// ScanProjectComponents reads the current project's components/ subdirectory
+// (FR-121i) and returns its project-local component types (sorted by id) plus a
+// per-file warning for each skipped file: a parse failure, or a duplicate id
+// (last wins). It mirrors LoadLibrary's walk but surfaces the warnings for the
+// message tray (FR-074) instead of only logging them. A missing components/ dir
+// is not an error — it yields no types and no warnings. The server holds no
+// project state, so the API re-invokes this per request (FR-121) and merges the
+// result over the shared library (MergedList).
+func ScanProjectComponents(projectDir string) ([]ComponentType, []string) {
+	dir := filepath.Join(projectDir, "components")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, []string{fmt.Sprintf("cannot read %s: %v", dir, err)}
+	}
+	types := map[string]ComponentType{}
+	var warnings []string
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".yaml" {
+			continue
+		}
+		t, err := ParseComponent(filepath.Join(dir, e.Name()))
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("skipping %s: %v", e.Name(), err))
+			continue
+		}
+		if _, dup := types[t.Key()]; dup {
+			warnings = append(warnings, fmt.Sprintf("%s: duplicate id %q (last wins)", e.Name(), t.ID))
+		}
+		types[t.Key()] = t
+	}
+	out := make([]ComponentType, 0, len(types))
+	for _, t := range types {
+		out = append(out, t)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key() < out[j].Key() })
+	return out, warnings
+}
+
+// MergedList composes the shared library with the given project-local types —
+// shared ∪ project (FR-121i) — returning the union sorted by id for the palette
+// (FR-006), plus a warning for any project type skipped because its id collides
+// with a shared type. The shared part always wins, so a project part can neither
+// duplicate nor silently shadow a shared one (in-app creates already refuse such a
+// collision, FR-007a).
+func (l *Library) MergedList(projectTypes []ComponentType) ([]ComponentType, []string) {
+	out := l.List()
+	var warnings []string
+	for _, t := range projectTypes {
+		if l.has(t.Key()) {
+			warnings = append(warnings, fmt.Sprintf("project component %q shadows a shared library type; skipped", t.ID))
+			continue
+		}
+		out = append(out, t)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key() < out[j].Key() })
+	return out, warnings
 }

@@ -1,9 +1,115 @@
 package server
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
+
+// writeProjectComponent writes YAML into <projectDir>/components/<name>, creating
+// the subdir — a fixture helper for the project-scan tests (FR-121i).
+func writeProjectComponent(t *testing.T, projectDir, name, yaml string) {
+	t.Helper()
+	dir := filepath.Join(projectDir, "components")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A missing components/ subdir is not an error: no types, no warnings (FR-121i).
+func TestScanProjectComponentsMissing(t *testing.T) {
+	types, warnings := ScanProjectComponents(t.TempDir())
+	if len(types) != 0 || len(warnings) != 0 {
+		t.Fatalf("missing dir: types=%v warnings=%v, want empty", types, warnings)
+	}
+}
+
+// A present components/ subdir yields its parsed project-local types (FR-121i).
+func TestScanProjectComponentsPresent(t *testing.T) {
+	proj := t.TempDir()
+	writeProjectComponent(t, proj, "type-PC-DECODE-A.yaml", galPartYAML)
+	writeProjectComponent(t, proj, "type-PROGRAM_RAM.yaml", memDeviceYAML)
+
+	types, warnings := ScanProjectComponents(proj)
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+	got := map[string]bool{}
+	for _, ct := range types {
+		got[ct.Key()] = true
+	}
+	if !got["type-PC-DECODE-A"] || !got["type-PROGRAM_RAM"] {
+		t.Fatalf("scan missing a type: %v", got)
+	}
+}
+
+// A malformed component file is skipped with a reported warning; the rest load
+// (FR-121i/FR-074).
+func TestScanProjectComponentsMalformed(t *testing.T) {
+	proj := t.TempDir()
+	writeProjectComponent(t, proj, "good.yaml", galPartYAML)
+	writeProjectComponent(t, proj, "bad.yaml",
+		"type: \"BADPART\"\npins:\n  - { name: X, side: sideways, pos: 1, dir: in }\n")
+
+	types, warnings := ScanProjectComponents(proj)
+	if len(types) != 1 || types[0].Key() != "type-PC-DECODE-A" {
+		t.Fatalf("expected only the good type, got %v", types)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("expected 1 warning for the malformed file, got %v", warnings)
+	}
+}
+
+// Two project files sharing an id collapse to one (last wins) with a reported
+// collision (FR-121i).
+func TestScanProjectComponentsDuplicateID(t *testing.T) {
+	proj := t.TempDir()
+	writeProjectComponent(t, proj, "a.yaml", galPartYAML)
+	writeProjectComponent(t, proj, "b.yaml", galPartYAML)
+
+	types, warnings := ScanProjectComponents(proj)
+	if len(types) != 1 {
+		t.Fatalf("duplicate id should collapse to one type, got %v", types)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("expected 1 duplicate warning, got %v", warnings)
+	}
+}
+
+// MergedList returns shared ∪ project, sorted by id, for the palette (FR-121i).
+func TestMergedListUnion(t *testing.T) {
+	shared := newLibrary()
+	shared.add(ComponentType{ID: "type-7400", Name: "7400"})
+	got, warnings := shared.MergedList([]ComponentType{{ID: "type-PC-DECODE-A", Name: "22V10"}})
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+	var keys []string
+	for _, ct := range got {
+		keys = append(keys, ct.Key())
+	}
+	if want := []string{"type-7400", "type-PC-DECODE-A"}; !reflect.DeepEqual(keys, want) {
+		t.Fatalf("merged keys = %v, want %v", keys, want)
+	}
+}
+
+// A project type whose id collides with a shared id is skipped and reported; the
+// shared type wins (FR-121i).
+func TestMergedListShadowSkipped(t *testing.T) {
+	shared := newLibrary()
+	shared.add(ComponentType{ID: "type-7400", Name: "7400", Width: 1})
+	got, warnings := shared.MergedList([]ComponentType{{ID: "type-7400", Name: "IMPOSTER", Width: 9}})
+	if len(got) != 1 || got[0].Name != "7400" {
+		t.Fatalf("shared type should win the shadow: %+v", got)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("expected 1 shadow warning, got %v", warnings)
+	}
+}
 
 // List returns component types sorted by name (FR-005/FR-006 palette order, §6.2).
 func TestLibraryListSortedByName(t *testing.T) {

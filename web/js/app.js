@@ -172,7 +172,19 @@ function renderPalette({ partsEl, builtinsEl, components, builtins, store }) {
     parts.splice(at, 0, type);
     partsEl.insertBefore(tile, partsEl.children[at] ?? null);
   }
-  return { addPart };
+  // setParts replaces the upper-region part tiles wholesale (FR-121i, §6.19): a
+  // project switch discards the outgoing project's local parts and lays in the new
+  // merged set. The NEW GAL / NEW MEM action tiles and the built-ins are untouched.
+  function setParts(components) {
+    for (const p of parts) {
+      const id = typeIdentity(p);
+      tiles[id]?.remove();
+      delete tiles[id];
+    }
+    parts.length = 0;
+    for (const type of [...components].sort(partOrder)) addPart(type);
+  }
+  return { addPart, setParts };
 }
 
 async function main() {
@@ -220,7 +232,10 @@ async function main() {
 
   try {
     // Await the library (FR-003) and the server defaults before enabling the UI.
-    const [components, defaults] = await Promise.all([
+    // At startup no project is current (FR-121c), so this is the shared library
+    // alone; the merged project-local library is (re)fetched by reloadLibrary when
+    // a project becomes current (FR-121i, §6.19).
+    const [{ components }, defaults] = await Promise.all([
       getComponents(),
       getDefaults().catch(() => ({ dataDir: "" })),
     ]);
@@ -241,9 +256,31 @@ async function main() {
       library.push(type);
       paletteApi.addPart(type);
     };
+    // reloadLibrary refetches the merged shared ∪ project library for projectDir
+    // and rebuilds the placement library + palette in place (FR-121i, §6.19): a
+    // project switch discards the outgoing project's local parts, and Refresh Types
+    // picks up externally-added/-edited project files. The `library` array keeps its
+    // identity so interaction/toolbar (which hold the reference) see the new set.
+    // Scan warnings post to the message tray (FR-074). Built-ins are always present.
+    const reloadLibrary = async (projectDir) => {
+      let components, warnings;
+      try {
+        ({ components, warnings } = await getComponents(projectDir));
+      } catch (e) {
+        postMessage(`Could not load component library: ${e.message}`);
+        return;
+      }
+      library.length = 0;
+      library.push(...components, ...BUILTINS);
+      paletteApi.setParts(components);
+      for (const w of warnings) postMessage("Component: " + w);
+    };
     // Open the New GAL part dialog (FR-066c); on success register the part live.
+    // The create writes into the current project's components/ (FR-007a/FR-121i).
     const onNewGalPart = async () => {
-      const created = await newGalPartDialog({ submit: createComponent });
+      const created = await newGalPartDialog({
+        submit: (yaml) => createComponent(yaml, store.state.project?.dir),
+      });
       if (created) {
         addCreatedPart(created);
         toast(`Added GAL part ${created.partnumber}`);
@@ -268,7 +305,7 @@ async function main() {
           if (BUILTINS.some((t) => typeIdentity(t) === type.id)) {
             throw new Error(`A component named "${type.name}" already exists.`);
           }
-          const created = await createComponent(memDeviceYaml(type));
+          const created = await createComponent(memDeviceYaml(type), store.state.project?.dir);
           addCreatedPart(created);
           toast(`Added memory device ${created.name}`);
           return created;
@@ -303,6 +340,9 @@ async function main() {
       // A project's initial design is named after the project (FR-121b);
       // the FR-004/FR-045 default covers the nameless case.
       freshDesign: (projName) => createDesign(projName ?? defaultDesignName()),
+      // Reload the merged shared ∪ project library when the project changes
+      // (FR-121i, §6.19): setCurrentProject calls this after recording the project.
+      reloadLibrary,
     });
     const interaction = initInteraction({
       canvas: document.getElementById("canvas"),
@@ -430,6 +470,7 @@ async function main() {
       projectops, // FR-121b: File ▸ New/Open/Duplicate Project
       sim,
       library, // for the Refresh Types action (FR-088)
+      reloadLibrary, // Refresh Types rescans the project's components/ first (FR-121i)
       onTestVectors, // FR-115: Simulate ▸ Test Vectors…
       onGenerateC, // FR-116: Simulate ▸ Generate C…
       onExport, // FR-119: File ▸ Export…

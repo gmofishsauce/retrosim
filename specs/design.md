@@ -623,8 +623,8 @@ as authoritative and raise it — do not silently diverge.
                                                  │ HTTP/REST (localhost only)
 ┌────────────────────────────────────────────────┴─────────────────── Go server ───────────┐
 │  api.go (router /api/v1/*)                                                                 │
-│   ├─ GET  /components   ─▶ components.go  ─▶ yamlparse.go  (load library at startup)      │
-│   ├─ POST /components   ─▶ components.go (create authored part, FR-007a)                   │
+│   ├─ GET  /components   ─▶ components.go  ─▶ yamlparse.go  (shared lib ∪ project/,FR-121i) │
+│   ├─ POST /components   ─▶ components.go (create authored part → project/, FR-007a/121i)   │
 │   ├─ GET  /files        ─▶ storage.go (list directory; ext filter, FR-114e; manifest      │
 │   │                                    exclusion, FR-121a)                                 │
 │   ├─ GET  /project/info ─▶ project.go (dir → manifest/name/main design, FR-121a)           │
@@ -699,20 +699,35 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Dependencies:** `components.go`, `api.go`, `paths.go`, std `net/http`, `flag`.
 
 ### 6.2 Go: component library loader (`srv/server/components.go`)
-- **Purpose:** load and hold the parsed component library; expose it as JSON.
-- **Satisfies:** FR-002, FR-005, FR-007, FR-065.
+- **Purpose:** load and hold the parsed **shared** component library, and scan a
+  project's local `components/` types on request; expose both as JSON.
+- **Satisfies:** FR-002, FR-005, FR-007, FR-065, FR-121i.
 - **Types:** see §7.1 (`ComponentType`, `Pin`, `PinGroup`).
 - **Interface:**
   - `LoadLibrary(dir string) (*Library, error)` — read every `*.yaml` in `dir`
     (non-recursive), parse each (§6.3), collect into a `Library` keyed by type
-    `id` (FR-066e). Loaded **once** (FR-007).
+    `id` (FR-066e). Used for the **shared** startup library, loaded **once**
+    (FR-007), and — the same routine — for a project's `components/` scan
+    (FR-121i), which is re-invoked per request since the server holds no project
+    state (FR-121).
+  - `ScanProjectComponents(projectDir string) ([]ComponentType, []string)` —
+    when `<projectDir>/components/` exists, `LoadLibrary` it and return the parsed
+    types plus any per-file warnings (missing dir → empty, no error, FR-121i);
+    the API layer merges these over the shared library and posts warnings to the
+    tray (FR-074).
   - `(*Library) List() []ComponentType` — stable, deterministic order (sorted by
     `id`) for the palette.
 - **Behavior:** for each file, call `ParseComponent`. Duplicate `id`s →
-  last-wins with a logged warning. The library is immutable after load.
-- **Error handling:** a single file's parse error does **not** abort startup; the
-  bad file is skipped and logged (file + line + reason). `LoadLibrary` returns an
-  error only on an unreadable directory.
+  last-wins with a logged warning. The shared library is immutable after load; a
+  project scan is recomputed each time (project-switch and Refresh Types,
+  FR-121i). **Merge rule (FR-121i):** the API composes `shared ∪ project`; a
+  project-local `id` that collides with a shared `id` is skipped and reported
+  (in-app creates already refuse such a collision, FR-007a), so the shared part
+  wins and shadowing cannot happen silently.
+- **Error handling:** a single file's parse error does **not** abort startup or a
+  project scan; the bad file is skipped and logged/reported (file + line +
+  reason). `LoadLibrary` returns an error only on an unreadable directory; a
+  **missing** project `components/` dir is not an error (FR-121i).
 - **Dependencies:** `yamlparse.go`.
 
 ### 6.3 Go: YAML parser (`srv/server/yamlparse.go`)
@@ -810,8 +825,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
   | Method & Path | Request | Success Response | Errors |
   |---|---|---|---|
-  | `GET /api/v1/components` | – | `{"components":[ComponentType,…]}` | 500 on internal error |
-  | `POST /api/v1/components` | `{"yaml":"<authored YAML>"}` | `{"component":ComponentType}` | 400 bad body / invalid YAML, 409 duplicate `id` or existing file (FR-066e/FR-007a), 500 write failure |
+  | `GET /api/v1/components?project=<d>` | optional `project` (abs project dir) | `{"components":[ComponentType,…],"warnings":[…]}` — shared library, unioned with the project's `components/` types when `project` is given (FR-121i); `warnings` carries per-file scan reports | 500 on internal error |
+  | `POST /api/v1/components` | `{"yaml":"<authored YAML>","project":"<abs project dir>"}` | `{"component":ComponentType}` | 400 bad body / invalid YAML / missing `project`, 409 duplicate `id` or existing file in project `components/` **or** shared library (FR-066e/FR-007a/FR-121i), 500 write failure |
   | `GET /api/v1/defaults` | – | `{"dataDir":"<abs path>"}` | – |
   | `GET /api/v1/files?path=<p>&exts=<e>&manifests=<0\|1>` | query `path` (abs; empty = data dir), optional `exts` (csv, default `json`; the single value `-` lists **directories only**, §6.5), optional `manifests=1` to include `*-manifest.json` files (excluded from listings by default, FR-121a) | `{"path","parent","entries":[{"name","isDir"}]}` | 400 bad path, 404 missing, 403 not a dir |
   | `GET /api/v1/project/info?dir=<d>` | query `dir` (abs project directory) | `{"dir","name","manifestFile","mainDesign","warnings":[…]}` — `manifestFile`/`mainDesign` are `""` when absent; `name` falls back to the folder base name; `warnings` carries the extra-manifest, unparseable-manifest, and dangling-`mainDesign` reports (FR-121a) | 400 bad path, 404 missing, 403 not a dir |
@@ -846,14 +861,21 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   a discovered flaw in §6.17's original "ride the design-save endpoint" plan
   (corrected 2026-07-02).
 - **Behavior:** decode JSON, delegate to `storage.go`/`components.go`, encode
-  JSON. All responses `Content-Type: application/json`. `POST /api/v1/components`
+  JSON. All responses `Content-Type: application/json`. `GET /api/v1/components`
+  returns the shared library, unioned with `ScanProjectComponents(project)` when a
+  `project` query param is present (FR-121i, §6.2); its `warnings` carry per-file
+  scan reports for the tray. `POST /api/v1/components`
   (FR-007a) parses the submitted YAML through the same `yamlparse.go` path as a
   startup load, requires an authored marker — a non-empty `partnumber` (a GAL part,
-  FR-066b) **or** a `mem` block (a memory device, FR-114f) — and an immutable
-  library-unique `id` (FR-066e), writes `<id>.yaml` into the library dir (filename
+  FR-066b) **or** a `mem` block (a memory device, FR-114f) — an immutable
+  library-unique `id` (FR-066e), **and** a `project` directory (FR-121i), then
+  writes `<id>.yaml` into `<project>/components/` (created if absent; filename
   sanitized from the `id`; reject on `id` collision **or** an existing file of that
-  name → 409, never overwriting), appends the parsed `ComponentType` to
-  the in-memory library, and returns it so the client can add the tile live. Static handler serves
+  name in **either** the project `components/` **or** the shared library → 409,
+  never overwriting), and returns the parsed `ComponentType` so the client can add
+  the tile live (the server keeps no per-project in-memory library — the client
+  library is the merge, refreshed on project switch and Refresh Types, FR-121i).
+  Static handler serves
   `web/` for any non-`/api/` path; unknown SPA routes fall back to `index.html`.
   Static responses carry `Cache-Control: no-store` so a plain browser reload
   always picks up edited SPA assets (localhost-only authoring tool served from the
@@ -1647,8 +1669,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   Select, and Run/Stop stay enabled (FR-087; the same set is disabled under the
   test-vector panel lock via `isReadonly()`, §6.16/FR-115h). The **Refresh
   Types** item (FR-088, tooltip "Re-copy type data from the loaded library into
-  placed components") dispatches `RefreshTypes` with the library the app loaded
-  at startup. (Reworked 2026-06-21; supersedes the former flat toolbar — a row of
+  placed components") first **re-fetches the merged library** for the current
+  project (`getComponents(store.state.project.dir)`, §6.12), so externally
+  added/edited `<project>/components/` types are picked up live (FR-121i; the
+  shared startup library still needs a restart, FR-007), then dispatches
+  `RefreshTypes` with that refreshed library. (Reworked 2026-06-21; supersedes the former flat toolbar — a row of
   text/icon buttons — whose File ops and Undo/Redo/zoom moved into menus while the
   modal tools and Run stayed as buttons. The filename is retained for now.)
   - *Current-project indicator (FR-121b)*: a `#project-name` label in the bar
@@ -1949,10 +1974,14 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 ### 6.12 JS: API client & bootstrap (`web/js/api.js`, `web/js/app.js`)
 - **Purpose:** typed-ish wrappers over `fetch`; app startup.
 - **Satisfies:** FR-003, FR-004, IR-001, NFR-002.
-- **`api.js`:** `getComponents()`, `getDefaults()`, `listDir(path, exts,
+- **`api.js`:** `getComponents(projectDir?)` — passes `?project=<dir>` so the
+  response is `shared ∪ project` types plus scan `warnings` (FR-121i; omitted
+  when no project is current), `getDefaults()`, `listDir(path, exts,
   {includeManifests})`,
-  `loadDesign(path)`, `saveDesign(path, design)`, `createComponent(yaml)`
-  (FR-007a), `readRomFile(path)` (FR-114e), `saveTextFile(path, content)`
+  `loadDesign(path)`, `saveDesign(path, design)`, `createComponent(yaml,
+  projectDir)` — sends the current project dir so the server writes under
+  `<project>/components/` (FR-007a/FR-121i), `readRomFile(path)` (FR-114e),
+  `saveTextFile(path, content)`
   (FR-116/FR-119), `projectInfo(dir)`, `projectCreate(path)`,
   `projectDuplicate(src, dst)` (FR-121, §6.19), `ping()`. All target
   same-origin
@@ -1964,7 +1993,10 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   store's no-project lock (§6.10) and the toolbar's no-project state (§6.11)
   keep it uneditable until New Project / Open Project / Open establishes a
   current project (§6.19); fetch
-  components + defaults (await both, FR-003); offer backup recovery (§6.12a,
+  components + defaults (await both, FR-003) — at startup `project: null`, so
+  `getComponents()` returns the **shared** library only, and the merged
+  project-local library is (re)fetched when a project becomes current (FR-121i,
+  §6.19); offer backup recovery (§6.12a,
   FR-093) before presenting the empty design — an accepted recovery that has a
   `savePath` also establishes its containing folder as the current project via
   `setCurrentProject` (§6.19), else the recovered design sits inert behind the
@@ -2358,11 +2390,11 @@ no sequential part could ever leave U.)
 
 **The ADD flow (FR-097/097a/097b).** `builtins.js` exposes a single non-placeable lower-palette entry **ADD**. Arming it and clicking (or dropping it on) the canvas opens the **Add sub-component dialog** (`dialogs.js`) at the grid point instead of creating an object. The dialog: (1) navigates/loads a child via `/api/v1/files`+`/design/load` (§6.4); (2) shows the child's `defaultRender` (§7.2) and resolved interface; (3) offers an `ic`/`connector` choice defaulting to `defaultRender`. OK → dispatch `PlaceSubDesign(childPath, render, @grid)`; Cancel → nothing; both return to SELECT (one-shot, FR-010). `childPath` is held **absolute in memory** (the picked child's absolute path) and relativized to the parent's save dir only at save time (§7.4), so embedding **does not require a saved parent** and shows no save prompt (FR-097b). The dialog rejects an interface-less file, a self/cyclic embed (`wouldCycle`), and — FR-121d — a file **outside the current project directory** (`fileops.addSubDesign` checks containment against `store.state.project.dir` before the cycle check; §6.19), each with a message. Its picker is seeded at the project root (FR-121h) under the usual FR-052a remembered-directory rule.
 
-**The New GAL part flow (FR-066b/066c/007a).** `builtins.js` exposes a non-placeable upper-palette action **New GAL part** (a tile that opens a dialog rather than arming placement). The **New GAL part dialog** (`dialogs.js`) renders the device's fixed skeleton — for the GAL22V10, the 24-pin map (pin 1 clock/in, 2–11 + 13 in, 14–23 OLMC I/O, 12 GND, 24 VCC) — and collects only the per-part data: `partnumber`, optional `description`, a label per I/O pin, a per-OLMC direction (in / comb-out / reg-out), optional named pin groups (FR-066d, below), and the `behavior` block. As the user types, the dialog assembles a candidate `typeData` (`type:"22V10"`, `gal:"GAL22V10"`, an immutable `id` generated from the `partnumber` (FR-066e), the chosen `pins`, the `behavior`) and runs `galasm.js` `compileBehavior`+`validateStrict` (§6.13) **live**, surfacing the same accept/reject diagnostics Run would (FR-079b) — the dialog reuses that one gate, adding no second validator. OK serializes the `typeData` to YAML client-side and `POST`s it to `/api/v1/components` (§6.4); on success it dispatches the live palette add (above) and returns to SELECT (one-shot, FR-010). A duplicate-`id` 409 or validation error is shown in the dialog; Cancel discards. Placement of the resulting tile is then ordinary FR-008/FR-009.
+**The New GAL part flow (FR-066b/066c/007a).** `builtins.js` exposes a non-placeable upper-palette action **New GAL part** (a tile that opens a dialog rather than arming placement). The **New GAL part dialog** (`dialogs.js`) renders the device's fixed skeleton — for the GAL22V10, the 24-pin map (pin 1 clock/in, 2–11 + 13 in, 14–23 OLMC I/O, 12 GND, 24 VCC) — and collects only the per-part data: `partnumber`, optional `description`, a label per I/O pin, a per-OLMC direction (in / comb-out / reg-out), optional named pin groups (FR-066d, below), and the `behavior` block. As the user types, the dialog assembles a candidate `typeData` (`type:"22V10"`, `gal:"GAL22V10"`, an immutable `id` generated from the `partnumber` (FR-066e), the chosen `pins`, the `behavior`) and runs `galasm.js` `compileBehavior`+`validateStrict` (§6.13) **live**, surfacing the same accept/reject diagnostics Run would (FR-079b) — the dialog reuses that one gate, adding no second validator. OK serializes the `typeData` to YAML client-side and `POST`s it to `/api/v1/components` **with the current project dir** (`store.state.project.dir`), so the server writes the `.yaml` under `<project>/components/` (FR-007a/FR-121i); on success it dispatches the live palette add (above) and returns to SELECT (one-shot, FR-010). A duplicate-`id`/existing-file 409 — collision against the project `components/` **or** the shared library (FR-121i) — or validation error is shown in the dialog; Cancel discards. Placement of the resulting tile is then ordinary FR-008/FR-009.
 
 **Pin-groups sub-dialog (FR-066d).** A "Pin groups…" button opens a modal sub-dialog (`dialogs.js`) that edits the part's named pin groups (FR-063). It lists the groups defined so far (each with a remove control) and offers a name field plus a checkbox per pin (labeled with the pin's *current* label) to define one more; "Add group" appends it to the working list, and the sub-dialog returns the updated list to the parent on close. Membership is stored by the **skeleton pin** (its stable DIP `number`), not the label string, so a later rename does not break a group; `galPartYaml` resolves each member to its current label and emits members in **pin-layout order** (the part's pin order, top-to-bottom) so the bus bit order is deterministic (FR-066d). The parent dialog folds the groups into the candidate `typeData` only for the YAML write (a `groups:` block, §7.3) — groups do not enter `compileBehavior`/`validateStrict`. Client checks: non-empty unique name, ≥1 member, and the **geometry rule** (FR-063a) — the checked pins must share one side and form a contiguous run (no non-member pin between them); the sub-dialog rejects an "Add group" that straddles sides or is interrupted, so it can only build groups the brace can render. Membership is by skeleton DIP number, but the side/contiguity test resolves each member to its skeleton pin's side/`pos`.
 
-**The memory-device generator (FR-114/FR-114a/FR-114b/FR-114f).** A second non-placeable **upper-palette** action tile, **NEW MEM** (built beside the New GAL part tile, labeled **NEW GAL**, in `app.js`, routed through interaction's palette-click handler to an `onNewMemDevice` callback exactly as `newgal` routes to `onNewGalPart`). Its callback opens the **New memory device dialog** (`memDeviceDialog`, `dialogs.js`). The dialog's top control is a **RAM/ROM** radio (default RAM); below it a common **name** field and a **dynamic region** holding the class-specific controls, fully rebuilt whenever the radio changes (FR-114 "completely re-initializes"): for both classes an **address-bits** number field *n* (1–24) with a live "= 2ⁿ locations" readout and a **data-width** select {4,8,16,32} (default 8); for ROM only, a **content-file** row — a "Choose file…" button that opens the server-side file browser (`openFileDialog`, FR-053, reused with a custom title) and a label showing the chosen path; for **RAM** only, an **optional** persistent **save-file** row — a "Choose file…" button (save-mode `openFileDialog` with `saveExts:["bin","hex"]`, so a typed `.bin`/`.hex` is honored and a bare name gets the `.bin` default — no `.hex.bin` doubling), a **Clear** button, and a path label — plus a **"Load save file at start-up"** checkbox (FR-114g). The **name** field (FR-114a) is common (it survives a class switch); it is pre-seeded with a size-based suggestion (`suggestName`, e.g. "RAM 256×8") that keeps tracking the class/size/width until the user types into it (a `nameEdited` flag then freezes it). A class switch re-initializes the file controls (both `romFile` and the RAM `ramFile`/`ramLoad` are discarded). `gather()` returns `{ name, kind:"ram"|"rom", addressBits, locations:2**n, dataWidth, romFile?, ramFile?, ramLoad? }` (the RAM fields only when a save file is chosen); a pure `validateMemSpec(spec)` helper (testable, no DOM) gates **Create** — name non-empty, *n* in range, width in the set, a ROM file chosen for ROM, and a RAM save file (if any) ending `.bin`/`.hex`. The RAM save file is **optional** and never blocks Create. The radio, fields, name, and file selection re-run validation live. OK resolves the gathered+validated spec to `app.js`, whose `onNewMemDevice` builds the type with `memDeviceType(spec)` (below), serializes it to component YAML with `memDeviceYaml(type)` (a `mem:` block plus the explicit pinout, §7.6/FR-114f), and **persists** it through the same `createComponent` POST the GAL flow uses (FR-007a) — the server writes the `.yaml`, registers it, and returns the parsed type, which `addCreatedPart` joins to the library + sorted upper-palette tile. A duplicate name (hence `id`) or an existing library file is rejected by the server (409); `createComponent` throws and `memDeviceDialog` surfaces it inline (the dialog stays open). A built-in id collision (built-ins are not in the server library) is still caught client-side before the POST. A placed device **simulates** via the built-in memory behavior (FR-114d, §6.13), and a ROM's content is loaded from its file at Run (FR-114e). The ROM picker calls `openFileDialog` with `exts:["bin","hex"]`, so the server file browser lists those (and dirs) rather than designs. Both memory-file pickers (ROM content, RAM save) are seeded at the **current project root** (FR-121h; `onNewMemDevice` reads `store.state.project.dir` at invocation, superseding the static `defaults.dataDir` seed) but may navigate anywhere on disk — data files are exempt from the project boundary (FR-121d). **Cross-session persistence (FR-114f, was deferred per FR-114b/OQ-013):** the generated metatype is now written to the component library as a `.yaml` artifact carrying its `mem:` block, so it survives reload and Refresh Types (FR-088); on load the built-in behavior binds from that serializable `mem` data (not session-only code), and a *placed* instance still also round-trips via its embedded `typeData` (FR-057).
+**The memory-device generator (FR-114/FR-114a/FR-114b/FR-114f).** A second non-placeable **upper-palette** action tile, **NEW MEM** (built beside the New GAL part tile, labeled **NEW GAL**, in `app.js`, routed through interaction's palette-click handler to an `onNewMemDevice` callback exactly as `newgal` routes to `onNewGalPart`). Its callback opens the **New memory device dialog** (`memDeviceDialog`, `dialogs.js`). The dialog's top control is a **RAM/ROM** radio (default RAM); below it a common **name** field and a **dynamic region** holding the class-specific controls, fully rebuilt whenever the radio changes (FR-114 "completely re-initializes"): for both classes an **address-bits** number field *n* (1–24) with a live "= 2ⁿ locations" readout and a **data-width** select {4,8,16,32} (default 8); for ROM only, a **content-file** row — a "Choose file…" button that opens the server-side file browser (`openFileDialog`, FR-053, reused with a custom title) and a label showing the chosen path; for **RAM** only, an **optional** persistent **save-file** row — a "Choose file…" button (save-mode `openFileDialog` with `saveExts:["bin","hex"]`, so a typed `.bin`/`.hex` is honored and a bare name gets the `.bin` default — no `.hex.bin` doubling), a **Clear** button, and a path label — plus a **"Load save file at start-up"** checkbox (FR-114g). The **name** field (FR-114a) is common (it survives a class switch); it is pre-seeded with a size-based suggestion (`suggestName`, e.g. "RAM 256×8") that keeps tracking the class/size/width until the user types into it (a `nameEdited` flag then freezes it). A class switch re-initializes the file controls (both `romFile` and the RAM `ramFile`/`ramLoad` are discarded). `gather()` returns `{ name, kind:"ram"|"rom", addressBits, locations:2**n, dataWidth, romFile?, ramFile?, ramLoad? }` (the RAM fields only when a save file is chosen); a pure `validateMemSpec(spec)` helper (testable, no DOM) gates **Create** — name non-empty, *n* in range, width in the set, a ROM file chosen for ROM, and a RAM save file (if any) ending `.bin`/`.hex`. The RAM save file is **optional** and never blocks Create. The radio, fields, name, and file selection re-run validation live. OK resolves the gathered+validated spec to `app.js`, whose `onNewMemDevice` builds the type with `memDeviceType(spec)` (below), serializes it to component YAML with `memDeviceYaml(type)` (a `mem:` block plus the explicit pinout, §7.6/FR-114f), and **persists** it through the same `createComponent` POST the GAL flow uses — now carrying the current project dir so the server writes under `<project>/components/` (FR-007a/FR-121i) — returning the parsed type, which `addCreatedPart` joins to the library + sorted upper-palette tile. A duplicate name (hence `id`) or an existing file — in the project `components/` **or** the shared library (FR-121i) — is rejected by the server (409); `createComponent` throws and `memDeviceDialog` surfaces it inline (the dialog stays open). A built-in id collision (built-ins are not in the server library) is still caught client-side before the POST. A placed device **simulates** via the built-in memory behavior (FR-114d, §6.13), and a ROM's content is loaded from its file at Run (FR-114e). The ROM picker calls `openFileDialog` with `exts:["bin","hex"]`, so the server file browser lists those (and dirs) rather than designs. Both memory-file pickers (ROM content, RAM save) are seeded at the **current project root** (FR-121h; `onNewMemDevice` reads `store.state.project.dir` at invocation, superseding the static `defaults.dataDir` seed) but may navigate anywhere on disk — data files are exempt from the project boundary (FR-121d). **Cross-session persistence (FR-114f, was deferred per FR-114b/OQ-013):** the generated metatype is now written to the component library as a `.yaml` artifact carrying its `mem:` block, so it survives reload and Refresh Types (FR-088); on load the built-in behavior binds from that serializable `mem` data (not session-only code), and a *placed* instance still also round-trips via its embedded `typeData` (FR-057).
 
 *Generated pinout (FR-114c, `memDeviceType` in `builtins.js`).* From `{name, kind, addressBits:n, dataWidth:w, locations}` it synthesizes a `ComponentType` rendered as an ordinary IC rectangle (§6.8): **left** edge top-to-bottom = `A0…A(n-1)` (an `ADDR` pin group, FR-063) followed by `CE/`, `OE/`, and — for RAM — `WE/` (the controls trail the address run so they don't break its contiguity, FR-063a); **right** edge = `D0…D(w-1)` (a `DATA` group). Address and control pins are `in`; data pins are `bidir` for RAM and `tristate` for ROM (FR-062a). The outline mirrors the server's `resolveOutline` (§6.3) — width 4 (no top/bottom pins), height = max-edge-position + 2. The type is **not** `builtin` (so it gets a U-series refdes and the default labelled-rectangle render with pin names, §6.8), takes the free-form `name` as its display name with the derived `id` `type-<name>` (FR-066e, the same rule loaded/GAL parts use — so a duplicate name is rejected by the create endpoint), and carries a `mem:{kind,addressBits,dataWidth,locations,romFile?,ramFile?,ramLoad?}` block driving the built-in behavior (FR-114d) and round-tripping through YAML persistence (FR-114f/FR-114g, via `memDeviceYaml` in `dialogs.js`). Pure, no DOM.
 
@@ -2543,16 +2575,42 @@ no sequential part could ever leave U.)
   design/data boundary rules, and project-relative data paths. This section
   names the concrete reworks the group makes to §6.10–§6.12, §6.14, and
   §6.16–§6.18.
-- **Satisfies:** FR-121, FR-121a–FR-121h; the FR-121-driven reworks of
+- **Satisfies:** FR-121, FR-121a–FR-121i; the FR-121-driven reworks of
   FR-004a, FR-044, FR-047, FR-049, FR-050, FR-052, FR-053, FR-097a, FR-114e,
-  FR-114g.
+  FR-114g; and the Phase 2 reworks of FR-002, FR-007, FR-007a, FR-088.
 - **Background (why this shape):** the FR-120 per-project component-scope
   design was reverted in full (CHANGELOG 2026-07-12) — its complexity all came
   from the project being *implicit*. Naming the project as a first-class,
   directory-backed value dissolves that: the reserved `components/`
-  subdirectory (FR-121) is where per-project component types return later as a
-  smaller Phase 2; **nothing in this design implements or anticipates Phase 2
-  beyond reserving the name.**
+  subdirectory (FR-121) is where per-project component types live. **Phase 2
+  (FR-121i) is now implemented** on this foundation — see "Project-local
+  component types" below — and stays small precisely because the project is
+  explicit and always current (FR-121c), so the server just scans
+  `<current project>/components/` per request with no scope-follows-file
+  plumbing.
+
+**Project-local component types (Phase 2, FR-121i).** The client library is a
+**two-tier merge**: the read-only shared library fetched once at bootstrap
+(§6.2/§6.12), with the current project's `components/` types layered on top.
+- **Fetch.** `api.components(projectDir?)` (§6.12) calls
+  `GET /api/v1/components?project=<dir>`; the server returns `shared ∪ project`
+  and per-file `warnings` (posted to the tray, FR-074). With no project the call
+  omits `project` and returns the shared library alone (startup, FR-121c).
+- **Reload triggers.** `setCurrentProject` (and the New/Open Project and
+  open-design paths that call it) re-fetches the merged library for the incoming
+  project and rebuilds the palette, discarding the outgoing project's local
+  parts; **Refresh Types** (FR-088, §6.11) additionally re-fetches so
+  externally-added/-edited `components/` files go live. The palette keeps FR-006
+  ordering — authored parts are free-form-named and sort within that group; no
+  separate region.
+- **Create.** The New GAL / New MEM create call (§6.11/§6.12) now passes the
+  current project dir; the server writes under `<project>/components/` and refuses
+  an `id`/filename that collides with the project **or** the shared library
+  (FR-007a/FR-121i). On success the client appends the tile live (FR-007a), no
+  re-fetch needed.
+- **Non-goals.** No auto-migration of parts already in the shared startup
+  directory (the two example RAM types authored under the old behavior are moved
+  by hand if wanted, FR-121i); no filesystem watching beyond Refresh Types.
 
 **Current project (store state, FR-121).** `store.state.project` (§6.10):
 `null` or `{ dir, name, manifestFile, mainDesign }` — the client-side mirror of

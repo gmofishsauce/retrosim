@@ -20,21 +20,26 @@ async function request(path, options) {
   return resp.json();
 }
 
-// getComponents returns the parsed component library (FR-065).
-export async function getComponents() {
-  const body = await request("/components");
-  return body.components;
+// getComponents returns the component library for the palette (FR-065). With a
+// projectDir it requests the merged shared ∪ project library plus per-file scan
+// warnings (FR-121i); with none it returns the shared library alone. Resolves to
+// { components, warnings } (warnings defaults to []).
+export async function getComponents(projectDir) {
+  const q = projectDir ? "?project=" + encodeURIComponent(projectDir) : "";
+  const body = await request("/components" + q);
+  return { components: body.components, warnings: body.warnings ?? [] };
 }
 
-// createComponent submits authored component YAML, persisting it into the
-// library and returning the parsed ComponentType so the caller can add the tile
-// live (FR-007a). Rejects with the server's message on a duplicate part number or
-// a validation failure.
-export async function createComponent(yaml) {
+// createComponent submits authored component YAML for the current project
+// (FR-007a/FR-121i): the server writes it under <projectDir>/components/ and
+// returns the parsed ComponentType so the caller can add the tile live. Rejects
+// with the server's message on a duplicate id/filename (in the project or the
+// shared library) or a validation failure.
+export async function createComponent(yaml, projectDir) {
   const body = await request("/components", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ yaml }),
+    body: JSON.stringify({ yaml, project: projectDir }),
   });
   return body.component;
 }

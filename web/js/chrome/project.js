@@ -58,7 +58,7 @@ export function absoluteDataPaths(designObj) {
 // factory for an FR-004-style empty design (app.js supplies it); deps are
 // injectable for tests (the connection.js pattern).
 export function makeProjectOps(
-  { store, dataDir, fileops, freshDesign },
+  { store, dataDir, fileops, freshDesign, reloadLibrary = async () => {} },
   {
     projectInfo = apiProjectInfo,
     projectCreate = apiProjectCreate,
@@ -93,6 +93,10 @@ export function makeProjectOps(
       manifestFile: info.manifestFile,
       mainDesign: info.mainDesign,
     });
+    // Reload the merged shared ∪ project component library for the incoming
+    // project and rebuild the palette, discarding the outgoing project's local
+    // parts (FR-121i). Scan warnings post to the tray inside reloadLibrary.
+    await reloadLibrary(dir);
   }
 
   // dirtyGuard is the FR-049a unsaved-changes warning shared by the three

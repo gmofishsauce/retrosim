@@ -65,25 +65,40 @@ func handlePing() http.HandlerFunc {
 	}
 }
 
-// handleComponents serves the parsed component library on GET (FR-065) and
-// creates a new component on POST (FR-007a). POST parses the submitted YAML with
-// the same validation as a startup load, persists it into componentsDir under a
-// part-number-derived filename, adds it to the live library, and returns it so
-// the client can add the tile without a restart.
+// handleComponents serves the component library on GET (FR-065) and creates a new
+// component on POST (FR-007a). GET returns the shared library unioned with the
+// current project's components/ types when a ?project=<dir> query is present
+// (FR-121i), plus per-file scan warnings for the tray. POST parses the submitted
+// YAML with the same validation as a startup load, requires a project directory,
+// persists it under <project>/components/, and returns it so the client can add
+// the tile live without a restart (the server keeps no per-project state).
 func handleComponents(lib *Library, componentsDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			writeJSON(w, http.StatusOK, map[string]any{"components": lib.List()})
+			components := lib.List()
+			var warnings []string
+			if project := r.URL.Query().Get("project"); project != "" {
+				projTypes, scanWarn := ScanProjectComponents(project)
+				var mergeWarn []string
+				components, mergeWarn = lib.MergedList(projTypes)
+				warnings = append(scanWarn, mergeWarn...)
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"components": components, "warnings": warnings})
 		case http.MethodPost:
 			var body struct {
-				YAML string `json:"yaml"`
+				YAML    string `json:"yaml"`
+				Project string `json:"project"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				writeError(w, http.StatusBadRequest, "invalid request body")
 				return
 			}
-			comp, err := lib.Create(componentsDir, []byte(body.YAML))
+			if body.Project == "" {
+				writeError(w, http.StatusBadRequest, "missing project directory")
+				return
+			}
+			comp, err := lib.Create(body.Project, componentsDir, []byte(body.YAML))
 			switch {
 			case err == nil:
 				writeJSON(w, http.StatusCreated, map[string]any{"component": comp})

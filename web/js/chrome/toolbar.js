@@ -26,7 +26,7 @@ function accelLabel({ key, shift }) {
     : `Ctrl+${shift ? "Shift+" : ""}${key}`;
 }
 
-export function initToolbar({ container, store, interaction, fileops, projectops, sim, library, onTestVectors, onGenerateC, onExport }) {
+export function initToolbar({ container, store, interaction, fileops, projectops, sim, library, reloadLibrary = async () => {}, onTestVectors, onGenerateC, onExport }) {
   const tools = [
     { tool: "select", label: "Select" },
     { tool: "wire", icon: WIRE_ICON },
@@ -65,12 +65,17 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     () => onExport?.(),
   );
   // Refresh Types re-copies type data from the loaded library into placed
-  // instances (FR-088), e.g. after editing a YAML behavior and restarting.
+  // instances (FR-088). It first rescans the current project's components/ for
+  // externally-added/-edited project-local types (FR-121i) — reloadLibrary
+  // refreshes the shared `library` array in place — then dispatches the refresh.
   const refreshItem = addItem(
     fileMenu.panel,
     "Refresh Types",
     "Re-copy type data from the loaded library into placed components",
-    () => store.dispatch(refreshTypesCmd(library, postMessage)),
+    async () => {
+      await reloadLibrary(store.state.project?.dir);
+      store.dispatch(refreshTypesCmd(library, postMessage));
+    },
   );
   container.appendChild(fileMenu.menu);
 
