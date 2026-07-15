@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { createDesign } from "./model/design.js";
 import { buildNets } from "./model/netlist.js";
 import { createStore } from "./store.js";
+import { describeEndpoint } from "./chrome/properties.js";
 import {
   addBusCmd,
   setBusWidthCmd,
@@ -11,6 +12,7 @@ import {
   snapBusGroupCmd,
   breakoutBitCmd,
   setBusBitNamesCmd,
+  setBusNameCmd,
   placeComponent,
   addWireCmd,
 } from "./commands.js";
@@ -157,6 +159,41 @@ test("addBusCmd end-joins unequal-width buses as an offset junction, not a merge
   const j = store.design.vertices.find((v) => v.id === endV);
   assert.equal(j.kind, "junction"); // the free end was promoted
   assert.equal(j.offset, 2);
+
+  // FR-020d: the join junction describes the *other* bus and its joined bit
+  // range, not raw coordinates. Selecting the narrow (width-2) bus, its endpoint
+  // reads the wide bus's aligned bits 2..3 (offset 2); selecting the wide bus, it
+  // reads the whole narrow bus, bits 0..1.
+  const narrow = store.design.buses[1];
+  assert.equal(describeEndpoint(store.design, endV, narrow), `${wide.id}[2:3]`);
+  assert.equal(describeEndpoint(store.design, endV, wide), `${narrow.id}[0:1]`);
+
+  // FR-040a: an explicit bus name overrides the id fallback in the endpoint
+  // description, for both directions of the join.
+  store.dispatch(setBusNameCmd(wide.id, "data"));
+  store.dispatch(setBusNameCmd(narrow.id, "input"));
+  assert.equal(describeEndpoint(store.design, endV, narrow), "data[2:3]");
+  assert.equal(describeEndpoint(store.design, endV, wide), "input[0:1]");
+});
+
+test("setBusNameCmd sets, clears, and undoes a bus name (FR-040a)", () => {
+  const store = newStore();
+  store.dispatch(addBusCmd(free(0, 0), free(10, 0), 4));
+  const bus = store.design.buses[0];
+  assert.equal(bus.name, null); // unnamed by default
+
+  store.dispatch(setBusNameCmd(bus.id, "  addr  ")); // trimmed on commit
+  assert.equal(bus.name, "addr");
+
+  store.dispatch(setBusNameCmd(bus.id, "")); // blank clears back to default
+  assert.equal(bus.name, null);
+
+  store.undo(); // restores "addr"
+  assert.equal(store.design.buses[0].name, "addr");
+  store.undo(); // restores unnamed
+  assert.equal(store.design.buses[0].name, null);
+  store.redo();
+  assert.equal(store.design.buses[0].name, "addr");
 });
 
 test("breakoutBitCmd taps a bus bit onto a wire; undo restores connectivity", () => {

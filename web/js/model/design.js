@@ -463,6 +463,7 @@ export function addBus(design, a, b, width, bends = []) {
       { t: "node", v: vb.id },
     ],
     width,
+    name: null,
     groupConnections: [],
     bitNames: null,
   };
@@ -576,6 +577,17 @@ export function setBusBitNames(design, busId, names) {
     throw new Error(`expected ${bus.width} bit names, got ${names.length}`);
   }
   bus.bitNames = names == null ? null : [...names];
+}
+
+// setBusName sets a bus's user-editable display name (FR-040a); pass null or an
+// empty string to clear it back to the default (group/id) naming. Cosmetic only:
+// it does not affect connectivity, width, or bit names — it is the name shown in
+// the properties panel and in endpoint descriptions (FR-020d/FR-042).
+export function setBusName(design, busId, name) {
+  const bus = design.buses.find((b) => b.id === busId);
+  if (!bus) throw new Error(`no such bus ${busId}`);
+  const trimmed = name == null ? "" : String(name).trim();
+  bus.name = trimmed === "" ? null : trimmed;
 }
 
 // breakoutBit taps a single bit of a bus and routes it on as an ordinary

@@ -4,7 +4,7 @@
 // dispatch setOverrideCmd through the store; the panel re-renders on every
 // store notification.
 
-import { setOverrideCmd, setSwitchStateCmd, setPortPropsCmd, setLabelCmd } from "../commands.js";
+import { setOverrideCmd, setSwitchStateCmd, setPortPropsCmd, setLabelCmd, setBusNameCmd } from "../commands.js";
 import { getVertex } from "../model/design.js";
 import { portDirection } from "../model/subdesign.js";
 
@@ -26,9 +26,17 @@ function fmt(n) {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }
 
+// busLabel names a bus for display (FR-042). Precedence (FR-040a): the user's
+// explicit name, else its snapped pin-group name, else the internal bus id.
+function busLabel(bus) {
+  return bus?.name ?? bus?.groupConnections?.[0]?.group ?? bus?.id ?? "bus";
+}
+
 // describeEndpoint resolves a conductor endpoint vertex to display text (FR-020d).
 // Recomputed on every render so a renamed designator (FR-011b) is reflected.
-function describeEndpoint(design, vertexId) {
+// `self` is the selected conductor (a bus or wire), needed so a bus↔bus join
+// junction can be described relative to the *other* bus.
+export function describeEndpoint(design, vertexId, self) {
   const v = getVertex(design, vertexId);
   if (!v) return "unconnected";
 
@@ -44,8 +52,7 @@ function describeEndpoint(design, vertexId) {
     const bus = design.buses.find((b) =>
       b.path.some((p) => p.t === "node" && p.v === v.id),
     );
-    const group = bus?.groupConnections?.[0]?.group ?? bus?.id ?? "bus";
-    return `${group}[${v.bit}]`;
+    return `${busLabel(bus)}[${v.bit}]`;
   }
 
   // Group-snapped bus endpoint (FR-042): a free vertex named by some bus's
@@ -55,6 +62,29 @@ function describeEndpoint(design, vertexId) {
     if (gc) {
       const inst = design.components.find((c) => c.refdes === gc.instance);
       return `${inst?.label ?? gc.instance} ${gc.group}`;
+    }
+  }
+
+  // Bus↔bus join (FR-039b): when the selected conductor is a bus whose endpoint
+  // junction ties it to another bus, name that bus and the range of *its* bits
+  // joined here, instead of the raw coordinates (FR-020d). The wide/narrow split
+  // and offset alignment mirror netlist.js: narrow bit i ↔ wide bit offset+i.
+  if (v.kind === "junction" && v.bit == null && self && design.buses.includes(self)) {
+    const others = design.buses.filter(
+      (b) => b !== self && b.path.some((p) => p.t === "node" && p.v === v.id),
+    );
+    if (others.length > 0) {
+      return others
+        .map((o) => {
+          const [wide, narrow] = self.width >= o.width ? [self, o] : [o, self];
+          const offset = wide.width === narrow.width ? 0 : v.offset ?? 0;
+          // The other bus's participating bits: the aligned window when it is the
+          // wider partner, otherwise its whole range (it is the narrower/equal one).
+          const [lo, hi] =
+            o === wide ? [offset, offset + narrow.width - 1] : [0, o.width - 1];
+          return `${busLabel(o)}[${lo}:${hi}]`;
+        })
+        .join(", ");
     }
   }
 
@@ -135,9 +165,28 @@ export function initProperties({ container, store }) {
       }
       const nodes = cond.path.filter((p) => p.t === "node");
       container.appendChild(el("div", "prop-title", isWire ? "Wire" : "Bus"));
+
+      // Editable bus name (FR-040a): free-form, duplicate-allowed, cosmetic. A
+      // blank value clears it, so the bus falls back to its group/id name
+      // (busLabel). Disabled while simulating (FR-087), like the component label.
+      if (!isWire) {
+        const nameRow = el("div", "prop-row");
+        nameRow.appendChild(el("label", "prop-label", "name"));
+        const nameInput = el("input", "prop-input");
+        nameInput.type = "text";
+        nameInput.value = cond.name ?? "";
+        nameInput.placeholder = busLabel({ ...cond, name: null }); // the fallback
+        nameInput.disabled = store.isReadonly();
+        nameInput.addEventListener("change", () => {
+          store.dispatch(setBusNameCmd(cond.id, nameInput.value));
+        });
+        nameRow.appendChild(nameInput);
+        container.appendChild(nameRow);
+      }
+
       container.append(
-        infoRow("From", describeEndpoint(design, nodes[0].v)),
-        infoRow("To", describeEndpoint(design, nodes[nodes.length - 1].v)),
+        infoRow("From", describeEndpoint(design, nodes[0].v, cond)),
+        infoRow("To", describeEndpoint(design, nodes[nodes.length - 1].v, cond)),
       );
       return;
     }

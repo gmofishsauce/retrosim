@@ -1955,19 +1955,35 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   full-instance save (FR-058). The panel re-renders on every store notification,
   which is why selection now flows through `store.setSelection` (notifying).
   - *Wire/bus synthetic sheet (FR-020d)*: when the single selection is a wire or a
-    bus (`only.kind === "wire" | "bus"`) the panel instead renders a read-only sheet
-    describing the conductor's two endpoints — its `path`'s first and last `node`
-    entries. A shared `describeEndpoint(design, vertexId)` resolves each endpoint
-    vertex to text, recomputed on every render so a renamed designator (FR-011b) is
-    reflected: a `pin`/`connector` vertex → "`<label> <pin>`" (label via the
-    instance's `label ?? refdes`); a `junction` carrying a `bit` (a bus-breakout
-    tap, FR-043a) → "`<group>[<bit>]`", the group taken from the owning bus's first
-    `groupConnections` entry (else the bus id); a `free` vertex named by some bus's
-    `groupConnections` (group-snapped, FR-042) → "`<label> <group>`"; a plain
+    bus (`only.kind === "wire" | "bus"`) the panel renders a sheet describing the
+    conductor's two endpoints — its `path`'s first and last `node` entries. For a
+    **bus** the sheet additionally leads with one **editable** field, a free-form
+    **name** (FR-040a) committed via `setBusNameCmd` (blank clears it back to the
+    default), disabled while `store.isReadonly()` (FR-087/FR-115h); wires have no
+    name field, so their sheet is fully read-only. A shared `busLabel(bus)` gives a
+    bus's display name with precedence (FR-040a): `bus.name ??` its first
+    `groupConnections` group `?? bus.id`. A shared `describeEndpoint(design,
+    vertexId, self)` resolves each endpoint vertex to text, recomputed on every
+    render so a renamed designator (FR-011b) or bus name is reflected: a
+    `pin`/`connector` vertex → "`<label> <pin>`" (label via the instance's
+    `label ?? refdes`); a `junction` carrying a `bit` (a bus-breakout tap,
+    FR-043a) → "`<bus>[<bit>]`" via `busLabel` of the owning bus; a `free` vertex
+    named by some bus's `groupConnections` (group-snapped, FR-042) →
+    "`<label> <group>`"; a plain
     `junction` (no `bit`, FR-034) → "`junction (x, y)`" (a junction ties ≥2
-    conductors, so it is connected); otherwise (a dangling `free` end, FR-029) →
-    "`unconnected (x, y)`" from the vertex position. No editable fields, so the sheet
-    ignores the simulating lock.
+    conductors, so it is connected) — **except**, when the selected conductor is a
+    bus and the junction ties it to **another bus** (a bus↔bus join, FR-039b), →
+    "`<bus>[<lo>:<hi>]`", found by locating the other bus(es) whose `path` also
+    passes through this junction node and computing the range of the *other* bus's
+    bits that this bus joins: identify wide/narrow by width as in `netlist.js`
+    (`offset = wide.width === narrow.width ? 0 : v.offset ?? 0`; narrow bit i ↔
+    wide bit offset+i), so the other bus contributes bits `offset..offset+width-1`
+    when it is the wider partner and its full `0..width-1` when it is the narrower
+    (or equal-width) partner; the other bus is named by `busLabel`; otherwise (a
+    dangling `free` end, FR-029) → "`unconnected (x, y)`" from the vertex position.
+    This requires `describeEndpoint` to also receive the selected conductor so it
+    can exclude it when finding the "other" bus. The endpoint rows are read-only;
+    only the bus name field (above) is editable, so it alone honors the sim lock.
   - *Documentation section (FR-105)*: a read-only block rendered from the
     instance's type data (FR-104), placed after the read-only `Type/Size/Pins`
     rows and before the editable delay/property sections. The one-line

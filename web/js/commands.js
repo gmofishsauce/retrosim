@@ -22,6 +22,7 @@ import {
   snapBusGroup,
   breakoutBit,
   setBusBitNames,
+  setBusName,
   setOverride,
   noteSize,
   refreshInstance,
@@ -752,6 +753,24 @@ export function setBusBitNamesCmd(busId, names) {
     revert(design) {
       const bus = design.buses.find((b) => b.id === busId);
       bus.bitNames = old.bitNames;
+    },
+  };
+}
+
+// setBusNameCmd sets a bus's user-editable display name (FR-040a), capturing the
+// old name so undo restores it. Cosmetic only — no connectivity change.
+export function setBusNameCmd(busId, name) {
+  let old = null;
+  return {
+    label: "Set bus name",
+    apply(design) {
+      const bus = design.buses.find((b) => b.id === busId);
+      if (old === null) old = { name: bus.name ?? null };
+      setBusName(design, busId, name);
+    },
+    revert(design) {
+      const bus = design.buses.find((b) => b.id === busId);
+      bus.name = old.name;
     },
   };
 }
