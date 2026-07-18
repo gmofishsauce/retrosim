@@ -206,21 +206,47 @@ export function placeSubDesign(opts, x, y) {
 
 // pasteFragmentCmd instantiates a clipboard fragment into the design, offset by
 // (dx,dy) (FR-112/FR-113, §6.15). Like the other connectivity cascades it is
-// snapshot-based: paste touches components/wires/buses/vertices and the id
-// counters — exactly the snapshot set — so apply captures a snapshot on first
-// run and revert restores it; redo re-runs pasteFragment against the restored
-// counters, reproducing the same designators and ids deterministically. The
+// snapshot-based: apply captures a snapshot on first run and revert restores
+// it. Redo does NOT re-run pasteFragment — the FR-011c refdes counters are
+// monotonic (never restored by the snapshot), so a re-run would allocate fresh
+// designators, renumbering the redone copies and breaking any later redone
+// command that references the first-apply refdeses. Instead the first apply
+// captures everything the paste appended (components, wires, buses, vertices,
+// and the post-paste internal id counters) and redo replays it verbatim. The
 // command exposes the pasted components' refdeses (`created`, set on apply) so
 // the caller can select them (FR-112).
 export function pasteFragmentCmd(fragment, dx, dy) {
   let snap = null;
+  let made = null; // additions captured on first apply, replayed on redo
+  let ids = null; // post-paste internal id counters
   const cmd = {
     label: "Paste",
     created: [],
     apply(design) {
-      if (snap === null) snap = snapshotConnectivity(design);
-      const made = pasteFragment(design, fragment, dx, dy);
-      cmd.created = made.components.map((c) => c.refdes);
+      if (snap === null) {
+        snap = snapshotConnectivity(design);
+        const res = pasteFragment(design, fragment, dx, dy);
+        made = {
+          components: structuredClone(res.components),
+          wires: structuredClone(res.wires),
+          buses: structuredClone(res.buses),
+          vertices: structuredClone(design.vertices.slice(snap.vertices.length)),
+        };
+        ids = {
+          nextWireId: design.nextWireId,
+          nextBusId: design.nextBusId,
+          nextVertexId: design.nextVertexId,
+        };
+        cmd.created = res.components.map((c) => c.refdes);
+      } else {
+        design.components.push(...structuredClone(made.components));
+        design.wires.push(...structuredClone(made.wires));
+        design.buses.push(...structuredClone(made.buses));
+        design.vertices.push(...structuredClone(made.vertices));
+        design.nextWireId = ids.nextWireId;
+        design.nextBusId = ids.nextBusId;
+        design.nextVertexId = ids.nextVertexId;
+      }
     },
     revert(design) {
       restoreConnectivity(design, snap);
@@ -558,10 +584,14 @@ export function addWireCmd(specA, specB, bends = []) {
 }
 
 // deleteWireCmd removes a wire and runs the connectivity cleanup (FR-033a).
-export function deleteWireCmd(wireId) {
-  return snapshotCommand(`Delete wire ${wireId}`, (design) =>
-    deleteWire(design, wireId),
-  );
+// With {ifPresent: true} it is a no-op when the wire no longer exists at apply
+// time — used only by the multi-delete composite (§6.9), whose queued targets
+// an earlier sub-command's cascade may already have removed (FR-016a).
+export function deleteWireCmd(wireId, { ifPresent = false } = {}) {
+  return snapshotCommand(`Delete wire ${wireId}`, (design) => {
+    if (ifPresent && !design.wires.some((w) => w.id === wireId)) return;
+    deleteWire(design, wireId);
+  });
 }
 
 // insertBendCmd inserts a bend by splitting a segment of a wire or bus (FR-031/
@@ -672,18 +702,28 @@ export function addBusCmd(specA, specB, width, snaps = [], bends = [], offset = 
 }
 
 // deleteBusCmd removes a bus and runs the connectivity cleanup (FR-033a).
-export function deleteBusCmd(busId) {
-  return snapshotCommand(`Delete bus ${busId}`, (design) =>
-    deleteBus(design, busId),
-  );
+// {ifPresent: true}: no-op on a missing bus, as deleteWireCmd (§6.9/FR-016a).
+export function deleteBusCmd(busId, { ifPresent = false } = {}) {
+  return snapshotCommand(`Delete bus ${busId}`, (design) => {
+    if (ifPresent && !design.buses.some((b) => b.id === busId)) return;
+    deleteBus(design, busId);
+  });
 }
 
 // deleteSegmentCmd removes a single segment of a wire or bus (FR-033d), splitting
 // the conductor and running the connectivity cleanup.
-export function deleteSegmentCmd(conductorId, segIndex) {
-  return snapshotCommand("Delete segment", (design) =>
-    deleteSegment(design, conductorId, segIndex),
-  );
+// {ifPresent: true}: no-op on a missing conductor, as deleteWireCmd (§6.9/FR-016a).
+export function deleteSegmentCmd(conductorId, segIndex, { ifPresent = false } = {}) {
+  return snapshotCommand("Delete segment", (design) => {
+    if (
+      ifPresent &&
+      !design.wires.some((w) => w.id === conductorId) &&
+      !design.buses.some((b) => b.id === conductorId)
+    ) {
+      return;
+    }
+    deleteSegment(design, conductorId, segIndex);
+  });
 }
 
 // setBusWidthCmd changes a bus's width (FR-038), capturing the old width and bit

@@ -176,3 +176,61 @@ test("deleteInstance prunes a wire whose both ends were on it (FR-030)", () => {
   assert.equal(d.wires.length, 0);
   assert.equal(d.vertices.length, 0);
 });
+
+// --- FR-018a group-connection removal: deleting a component drops every bus
+// group connection bound to it, so no stale record can later re-bind when the
+// refdes number is reused. ---
+
+function tyG() {
+  return {
+    name: "TA",
+    width: 6,
+    height: 12,
+    pins: [
+      { name: "A0", side: "left", position: 2, direction: "in" },
+      { name: "A1", side: "left", position: 3, direction: "in" },
+      { name: "A2", side: "left", position: 4, direction: "in" },
+      { name: "/Y0", side: "right", position: 2, direction: "out" },
+    ],
+    pinGroups: [{ name: "A", pins: ["A0", "A1", "A2"] }],
+  };
+}
+
+test("deleteInstance drops the deleted component's group connections; the bus and the other end's stay (FR-018a)", () => {
+  const d = createDesign("t");
+  addInstance(d, tyG(), 10, 20, 0); // U1
+  addInstance(d, tyG(), 40, 20, 0); // U2
+  const bus = addBus(d, { kind: "free", x: 0, y: 22 }, { kind: "free", x: 34, y: 22 }, 3);
+  snapBusGroup(d, bus.id, bus.path[0].v, "U1", "A");
+  snapBusGroup(d, bus.id, bus.path[1].v, "U2", "A");
+
+  deleteInstance(d, "U1");
+
+  assert.equal(d.buses.length, 1); // still snapped to U2 (FR-041a)
+  assert.deepEqual(
+    d.buses[0].groupConnections.map((gc) => gc.instance),
+    ["U2"],
+  );
+});
+
+test("deleteInstance prunes a bus snapped only to it, like a wire (FR-018a/FR-030)", () => {
+  const d = createDesign("t");
+  addInstance(d, tyG(), 10, 20, 0); // U1
+  const bus = addBus(d, { kind: "free", x: 0, y: 22 }, { kind: "free", x: 10, y: 22 }, 3);
+  snapBusGroup(d, bus.id, bus.path[1].v, "U1", "A");
+
+  deleteInstance(d, "U1");
+
+  assert.equal(d.buses.length, 0); // fully disconnected after the gc drop
+});
+
+// --- FR-011c: a deleted designator is never reused, even when it was the
+// highest number in its series. ---
+
+test("placing after deleting the highest-numbered component skips its number (FR-011c)", () => {
+  const d = setup(); // U1..U3, counter U:4
+  deleteInstance(d, "U3");
+  const inst = addInstance(d, ty(), 100, 20, 0);
+  assert.equal(inst.refdes, "U4"); // not U3
+  assert.equal(d.refCounters.U, 5);
+});

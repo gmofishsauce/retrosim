@@ -548,3 +548,25 @@ test("setLabelCmd edits the display label, leaving the refdes identity intact", 
   assert.equal(find(store.design, "U1").label, "DUP");
   assert.equal(find(store.design, "U2").label, "DUP");
 });
+
+test("pasteFragmentCmd redo replays the first-apply designators despite monotonic counters (FR-011c)", () => {
+  const store = newStore();
+  addInstance(store.design, tyPins(), 0, 0, 0); // U1
+  const frag = extractFragment(store.design, ["U1"]);
+
+  const cmd = pasteFragmentCmd(frag, 50, 50);
+  store.dispatch(cmd); // pastes U2; counter U advances to 3
+  assert.deepEqual(cmd.created, ["U2"]);
+  assert.equal(store.design.refCounters.U, 3);
+
+  store.undo(); // snapshot restore; counters deliberately stay at 3 (FR-011c)
+  assert.equal(store.design.refCounters.U, 3);
+
+  store.redo(); // replay, not re-allocation: still U2, not U3
+  const refs = store.design.components.map((c) => c.refdes).sort();
+  assert.deepEqual(refs, ["U1", "U2"]);
+
+  // A fresh placement after the redo continues past the high-water mark.
+  store.dispatch(placeComponent(tyPins(), 90, 0, 0));
+  assert.ok(store.design.components.some((c) => c.refdes === "U3"));
+});

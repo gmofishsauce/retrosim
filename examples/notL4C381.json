@@ -1,5 +1,5 @@
 {
-  "formatVersion": 2,
+  "formatVersion": 3,
   "name": "notL4C381",
   "components": [
     {
@@ -3687,8 +3687,8 @@
     {
       "refdes": "U23D",
       "type": "type-7400",
-      "x": 82,
-      "y": 164,
+      "x": 84,
+      "y": 162,
       "rotation": 0,
       "typeData": {
         "id": "type-7400",
@@ -4662,213 +4662,203 @@
       "overrides": {}
     },
     {
-      "refdes": "U28",
-      "type": "type-74244",
+      "refdes": "U29",
+      "type": "type-74245",
       "x": 156,
-      "y": 70,
+      "y": 71,
       "rotation": 0,
       "typeData": {
-        "id": "type-74244",
-        "name": "74244",
+        "id": "type-74245",
+        "name": "74245",
         "renderType": "unit",
         "width": 8,
         "height": 12,
         "pins": [
           {
-            "name": "1A0",
+            "name": "A0",
             "side": "left",
             "position": 2,
-            "direction": "in",
+            "direction": "bidir",
             "number": 2,
-            "desc": "group 1 data input bit 0"
+            "desc": "port A data bit 0"
           },
           {
-            "name": "1A1",
+            "name": "A1",
             "side": "left",
             "position": 3,
-            "direction": "in",
-            "number": 4,
-            "desc": "group 1 data input bit 1"
+            "direction": "bidir",
+            "number": 3,
+            "desc": "port A data bit 1"
           },
           {
-            "name": "1A2",
+            "name": "A2",
             "side": "left",
             "position": 4,
-            "direction": "in",
-            "number": 6,
-            "desc": "group 1 data input bit 2"
+            "direction": "bidir",
+            "number": 4,
+            "desc": "port A data bit 2"
           },
           {
-            "name": "1A3",
+            "name": "A3",
             "side": "left",
             "position": 5,
-            "direction": "in",
-            "number": 8,
-            "desc": "group 1 data input bit 3"
+            "direction": "bidir",
+            "number": 5,
+            "desc": "port A data bit 3"
           },
           {
-            "name": "2A0",
+            "name": "A4",
+            "side": "left",
+            "position": 6,
+            "direction": "bidir",
+            "number": 6,
+            "desc": "port A data bit 4"
+          },
+          {
+            "name": "A5",
             "side": "left",
             "position": 7,
-            "direction": "in",
-            "number": 17,
-            "desc": "group 2 data input bit 0"
+            "direction": "bidir",
+            "number": 7,
+            "desc": "port A data bit 5"
           },
           {
-            "name": "2A1",
+            "name": "A6",
             "side": "left",
             "position": 8,
-            "direction": "in",
-            "number": 15,
-            "desc": "group 2 data input bit 1"
+            "direction": "bidir",
+            "number": 8,
+            "desc": "port A data bit 6"
           },
           {
-            "name": "2A2",
+            "name": "A7",
             "side": "left",
             "position": 9,
-            "direction": "in",
-            "number": 13,
-            "desc": "group 2 data input bit 2"
+            "direction": "bidir",
+            "number": 9,
+            "desc": "port A data bit 7"
           },
           {
-            "name": "2A3",
-            "side": "left",
-            "position": 10,
-            "direction": "in",
-            "number": 11,
-            "desc": "group 2 data input bit 3"
-          },
-          {
-            "name": "1Y0",
+            "name": "B0",
             "side": "right",
             "position": 2,
-            "direction": "tristate",
+            "direction": "bidir",
             "number": 18,
-            "desc": "group 1 3-state output bit 0"
+            "desc": "port B data bit 0"
           },
           {
-            "name": "1Y1",
+            "name": "B1",
             "side": "right",
             "position": 3,
-            "direction": "tristate",
-            "number": 16,
-            "desc": "group 1 3-state output bit 1"
+            "direction": "bidir",
+            "number": 17,
+            "desc": "port B data bit 1"
           },
           {
-            "name": "1Y2",
+            "name": "B2",
             "side": "right",
             "position": 4,
-            "direction": "tristate",
-            "number": 14,
-            "desc": "group 1 3-state output bit 2"
+            "direction": "bidir",
+            "number": 16,
+            "desc": "port B data bit 2"
           },
           {
-            "name": "1Y3",
+            "name": "B3",
             "side": "right",
             "position": 5,
-            "direction": "tristate",
-            "number": 12,
-            "desc": "group 1 3-state output bit 3"
+            "direction": "bidir",
+            "number": 15,
+            "desc": "port B data bit 3"
           },
           {
-            "name": "2Y0",
+            "name": "B4",
+            "side": "right",
+            "position": 6,
+            "direction": "bidir",
+            "number": 14,
+            "desc": "port B data bit 4"
+          },
+          {
+            "name": "B5",
             "side": "right",
             "position": 7,
-            "direction": "tristate",
-            "number": 3,
-            "desc": "group 2 3-state output bit 0"
+            "direction": "bidir",
+            "number": 13,
+            "desc": "port B data bit 5"
           },
           {
-            "name": "2Y1",
+            "name": "B6",
             "side": "right",
             "position": 8,
-            "direction": "tristate",
-            "number": 5,
-            "desc": "group 2 3-state output bit 1"
+            "direction": "bidir",
+            "number": 12,
+            "desc": "port B data bit 6"
           },
           {
-            "name": "2Y2",
+            "name": "B7",
             "side": "right",
             "position": 9,
-            "direction": "tristate",
-            "number": 7,
-            "desc": "group 2 3-state output bit 2"
+            "direction": "bidir",
+            "number": 11,
+            "desc": "port B data bit 7"
           },
           {
-            "name": "2Y3",
-            "side": "right",
-            "position": 10,
-            "direction": "tristate",
-            "number": 9,
-            "desc": "group 2 3-state output bit 3"
-          },
-          {
-            "name": "/1OE",
+            "name": "DIR",
             "side": "top",
             "position": 2,
             "direction": "in",
             "number": 1,
-            "desc": "group 1 active-low output enable"
+            "desc": "direction: H = A to B, L = B to A"
           },
           {
-            "name": "/2OE",
+            "name": "/OE",
             "side": "top",
             "position": 6,
             "direction": "in",
             "number": 19,
-            "desc": "group 2 active-low output enable"
+            "desc": "active-low output enable"
           }
         ],
         "pinGroups": [
           {
-            "name": "1A",
+            "name": "A",
             "pins": [
-              "1A0",
-              "1A1",
-              "1A2",
-              "1A3"
+              "A0",
+              "A1",
+              "A2",
+              "A3",
+              "A4",
+              "A5",
+              "A6",
+              "A7"
             ]
           },
           {
-            "name": "1Y",
+            "name": "B",
             "pins": [
-              "1Y0",
-              "1Y1",
-              "1Y2",
-              "1Y3"
-            ]
-          },
-          {
-            "name": "2A",
-            "pins": [
-              "2A0",
-              "2A1",
-              "2A2",
-              "2A3"
-            ]
-          },
-          {
-            "name": "2Y",
-            "pins": [
-              "2Y0",
-              "2Y1",
-              "2Y2",
-              "2Y3"
+              "B0",
+              "B1",
+              "B2",
+              "B3",
+              "B4",
+              "B5",
+              "B6",
+              "B7"
             ]
           }
         ],
         "delays": {
-          "tdis": 14,
-          "ten": 13,
-          "tpd": 11
+          "tdis": 15,
+          "ten": 11,
+          "tpd": 9
         },
-        "behavior": "; 74244 — octal non-inverting 3-state buffer/line driver in two 4-bit\n; groups, each group gated by its own active-low output enable. Derived\n; from the function table (datasheet Table 3): with /nOE LOW each output\n; nYn follows data input nAn; with /nOE HIGH that group's outputs are in\n; the high-impedance OFF-state.\n;\n; 3-state outputs use GALasm's tristate construct (galasmManual.txt section\n; 3.4, established on the 74245): each output has a .T equation fed from its\n; data input plus a single-term .E enable. The pin drives only while its .E\n; term is true; when /nOE is HIGH the .E term is false and the output is\n; high-impedance.\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (pin /1OE is GAL signal 1OE, so '/1OE' below means \"pin /1OE is\n; LOW\").\n1Y0.T = 1A0\n1Y0.E = /1OE\n1Y1.T = 1A1\n1Y1.E = /1OE\n1Y2.T = 1A2\n1Y2.E = /1OE\n1Y3.T = 1A3\n1Y3.E = /1OE\n2Y0.T = 2A0\n2Y0.E = /2OE\n2Y1.T = 2A1\n2Y1.E = /2OE\n2Y2.T = 2A2\n2Y2.E = /2OE\n2Y3.T = 2A3\n2Y3.E = /2OE\n",
-        "description": "Octal buffer/line driver, 3-state, non-inverting",
+        "behavior": "; 74245 — octal bus transceiver, 3-state (datasheet Table 3):\n;   /OE=L, DIR=H : B port driven from A (A side is input)\n;   /OE=L, DIR=L : A port driven from B (B side is input)\n;   /OE=H        : both ports high-impedance\n;\n; Bidirectional pins use GALasm's tristate construct (galasmManual.txt\n; section 3.4): each data pin has a .T output equation fed from the\n; opposite port plus a .E enable term, and appears as a feedback input\n; in the opposite equation. The pin drives only while its .E term is\n; true, which makes each Bn.E/An.E pair mutually exclusive on DIR.\n;\n; Equations are physical-level GALasm: '/' is the complement operator\n; and signal names are this file's pin names with any active-low '/'\n; prefix dropped (pin /OE is GAL signal OE, so '/OE' below means\n; \"pin /OE is LOW\").\nB0.T = A0\nB0.E = /OE * DIR\nB1.T = A1\nB1.E = /OE * DIR\nB2.T = A2\nB2.E = /OE * DIR\nB3.T = A3\nB3.E = /OE * DIR\nB4.T = A4\nB4.E = /OE * DIR\nB5.T = A5\nB5.E = /OE * DIR\nB6.T = A6\nB6.E = /OE * DIR\nB7.T = A7\nB7.E = /OE * DIR\nA0.T = B0\nA0.E = /OE * /DIR\nA1.T = B1\nA1.E = /OE * /DIR\nA2.T = B2\nA2.E = /OE * /DIR\nA3.T = B3\nA3.E = /OE * /DIR\nA4.T = B4\nA4.E = /OE * /DIR\nA5.T = B5\nA5.E = /OE * /DIR\nA6.T = B6\nA6.E = /OE * /DIR\nA7.T = B7\nA7.E = /OE * /DIR\n",
+        "description": "Octal bus transceiver, 3-state",
         "datasheet": {
           "vendor": "Nexperia",
-          "title": "74HC244; 74HCT244 Octal buffer/line driver; 3-state",
-          "rev": "Rev. 8, 5 August 2024",
-          "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT244.pdf"
+          "title": "74HC245; 74HCT245 Octal bus transceiver; 3-state",
+          "rev": "Rev. 9, 9 May 2025",
+          "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT245.pdf"
         },
         "physical": {
           "package": "DIP-20",
@@ -7847,17 +7837,6 @@
             "2A2",
             "2A3"
           ]
-        },
-        {
-          "vertex": "v571",
-          "instance": "U28",
-          "group": "2Y",
-          "bitMap": [
-            "2Y0",
-            "2Y1",
-            "2Y2",
-            "2Y3"
-          ]
         }
       ],
       "bitNames": [
@@ -7912,19 +7891,7 @@
         }
       ],
       "width": 4,
-      "groupConnections": [
-        {
-          "vertex": "v566",
-          "instance": "U28",
-          "group": "2A",
-          "bitMap": [
-            "2A0",
-            "2A1",
-            "2A2",
-            "2A3"
-          ]
-        }
-      ],
+      "groupConnections": [],
       "bitNames": [
         "2A0",
         "2A1",
@@ -7950,19 +7917,7 @@
         }
       ],
       "width": 4,
-      "groupConnections": [
-        {
-          "vertex": "v567",
-          "instance": "U28",
-          "group": "1A",
-          "bitMap": [
-            "1A0",
-            "1A1",
-            "1A2",
-            "1A3"
-          ]
-        }
-      ],
+      "groupConnections": [],
       "bitNames": [
         "A0",
         "A1",
@@ -8034,19 +7989,7 @@
         }
       ],
       "width": 4,
-      "groupConnections": [
-        {
-          "vertex": "v572",
-          "instance": "U28",
-          "group": "1Y",
-          "bitMap": [
-            "1Y0",
-            "1Y1",
-            "1Y2",
-            "1Y3"
-          ]
-        }
-      ],
+      "groupConnections": [],
       "bitNames": [
         "1A0",
         "1A1",
@@ -8931,14 +8874,14 @@
     {
       "id": "v470",
       "kind": "free",
-      "x": 81,
-      "y": 165
+      "x": 83,
+      "y": 163
     },
     {
       "id": "v472",
       "kind": "free",
-      "x": 81,
-      "y": 167
+      "x": 83,
+      "y": 165
     },
     {
       "id": "v499",
@@ -9175,6 +9118,12 @@
       "y": 74
     }
   ],
+  "refCounters": {
+    "U": 30,
+    "A": 19,
+    "N": 4,
+    "X": 5
+  },
   "nets": [
     {
       "pins": [
@@ -10630,8 +10579,7 @@
         "U20.Q0",
         "X1.A0",
         "U24.Q0",
-        "U27.1A0",
-        "U28.1Y0"
+        "U27.1A0"
       ],
       "members": [
         "b125",
@@ -10675,8 +10623,7 @@
         "U20.Q1",
         "X1.A1",
         "U24.Q1",
-        "U27.1A1",
-        "U28.1Y1"
+        "U27.1A1"
       ],
       "members": [
         "b125",
@@ -10720,8 +10667,7 @@
         "U20.Q2",
         "X1.A2",
         "U24.Q2",
-        "U27.1A2",
-        "U28.1Y2"
+        "U27.1A2"
       ],
       "members": [
         "b125",
@@ -10765,8 +10711,7 @@
         "U20.Q3",
         "X1.A3",
         "U24.Q3",
-        "U27.1A3",
-        "U28.1Y3"
+        "U27.1A3"
       ],
       "members": [
         "b125",
@@ -11098,8 +11043,7 @@
         "U21.Q0",
         "X1.B0",
         "U24.Q4",
-        "U27.2A0",
-        "U28.2Y0"
+        "U27.2A0"
       ],
       "members": [
         "b127",
@@ -11142,8 +11086,7 @@
         "U21.Q1",
         "X1.B1",
         "U24.Q5",
-        "U27.2A1",
-        "U28.2Y1"
+        "U27.2A1"
       ],
       "members": [
         "b127",
@@ -11186,8 +11129,7 @@
         "U21.Q2",
         "X1.B2",
         "U24.Q6",
-        "U27.2A2",
-        "U28.2Y2"
+        "U27.2A2"
       ],
       "members": [
         "b127",
@@ -11230,8 +11172,7 @@
         "U21.Q3",
         "X1.B3",
         "U24.Q7",
-        "U27.2A3",
-        "U28.2Y3"
+        "U27.2A3"
       ],
       "members": [
         "b127",
@@ -11559,8 +11500,7 @@
     {
       "pins": [
         "X1.F0",
-        "U24.D0",
-        "U28.1A0"
+        "U24.D0"
       ],
       "members": [
         "b137",
@@ -11583,8 +11523,7 @@
     {
       "pins": [
         "X1.F1",
-        "U24.D1",
-        "U28.1A1"
+        "U24.D1"
       ],
       "members": [
         "b137",
@@ -11607,8 +11546,7 @@
     {
       "pins": [
         "X1.F2",
-        "U24.D2",
-        "U28.1A2"
+        "U24.D2"
       ],
       "members": [
         "b137",
@@ -11631,8 +11569,7 @@
     {
       "pins": [
         "X1.F3",
-        "U24.D3",
-        "U28.1A3"
+        "U24.D3"
       ],
       "members": [
         "b137",
@@ -11655,8 +11592,7 @@
     {
       "pins": [
         "X2.F0",
-        "U24.D4",
-        "U28.2A0"
+        "U24.D4"
       ],
       "members": [
         "b138",
@@ -11679,8 +11615,7 @@
     {
       "pins": [
         "X2.F1",
-        "U24.D5",
-        "U28.2A1"
+        "U24.D5"
       ],
       "members": [
         "b138",
@@ -11703,8 +11638,7 @@
     {
       "pins": [
         "X2.F2",
-        "U24.D6",
-        "U28.2A2"
+        "U24.D6"
       ],
       "members": [
         "b138",
@@ -11727,8 +11661,7 @@
     {
       "pins": [
         "X2.F3",
-        "U24.D7",
-        "U28.2A3"
+        "U24.D7"
       ],
       "members": [
         "b138",

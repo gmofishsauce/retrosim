@@ -1002,8 +1002,16 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   objects (§6.10), but the low-level operations live here so they are
   unit-testable in isolation:
   - `addInstance(design, type, x, y, rotation) → instance` — assigns the
-    `refdes` `U<n>` where `n = 1 + max(existing numeric suffixes)` (FR-011); the
+    `refdes` `U<n>` where `n = max(design.refCounters.U, 1 + max(existing numeric
+    suffixes))`, then advances the counter past `n` (FR-011/FR-011c); the
     numeric-suffix scan ignores any trailing unit letter so `U5A` counts as 5.
+    The same high-water rule governs every series — `A-<n>`/`N-<n>` here by
+    renderType, `X<n>` in `addSubDesignInstance` (§6.14), and the paste remap
+    (§6.15) — via one shared allocator (`allocRefNum(design, series)`), which
+    also self-heals a hand-edited file whose counter lags the components
+    (FR-011c load rule). `refCounters` lives on the design and is persisted
+    (§7.2, format v3); it is **never wound back** — not by undo/redo, not by
+    `snapshotConnectivity` reverts, not by the FR-024a failure restore (§6.10).
     The `refdes` is the instance's immutable internal identity — the foreign key
     used by vertices (`ref`, §7.1a), bus group-snaps, selection, and persistence
     — and is auto-allocated, never user-edited. The displayed designator is a
@@ -1055,11 +1063,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     promoting a cut `bend` to a `free`-vertex endpoint and keeping a cut `node` as
     is; drop a <2-point part; the two parts inherit width/bitNames and each
     `groupConnection` follows the part keeping its vertex; then `cleanup`),
-    `deleteInstance` (converts the instance's `pin` vertices to `free`, then runs
-    the FR-030 sweep; for a subunit instance it expands to **all** siblings
-    sharing the package U-number — FR-018b — as one operation, the confirmation
-    dialog being a chrome-layer concern §6.11), `setBusWidth`, `setBusBitNames`,
-    `snapBusGroup`, `setOverride`.
+    `deleteInstance` (converts the instance's `pin` vertices to `free` and drops
+    every bus `groupConnection` whose `instance` is the deleted refdes — the bus
+    remains, its endpoint dangling (FR-018a) — then runs the FR-030 sweep; for a
+    subunit instance it expands to **all** siblings sharing the package U-number
+    — FR-018b — as one operation, the confirmation dialog being a chrome-layer
+    concern §6.11), `setBusWidth`, `setBusBitNames`, `snapBusGroup`,
+    `setOverride`.
 - **Netlist (`netlist.js`) — `buildNets(design) → Net[]` (FR-034b/FR-059a/FR-037a):**
   Union-find runs over **bit-lanes**, not raw vertices, so a width-*w* bus
   contributes *w* independent nets (A7). A *lane* is one electrical conductor:
@@ -1315,7 +1325,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | SELECT | click component | select it, replacing the selection (FR-016) | SELECT |
   | SELECT | shift-click object | toggle it in the selection (component/wire/bus, FR-016a) | SELECT |
   | SELECT | drag selected component | `MoveComponent` for each selected component (snap, stretch connected segs FR-018) + `TranslateWiring` for the interior wiring of the moving set (FR-018c), as one `composite` | SELECT |
-  | SELECT | press Delete on selection | `DeleteComponent`/`DeleteWire`/`DeleteBus`/`DeleteSegment` per selected ref kind (FR-018a/FR-033a/FR-033d/FR-016a) | SELECT |
+  | SELECT | press Delete on selection | `DeleteComponent`/`DeleteWire`/`DeleteBus`/`DeleteSegment` per selected ref kind (FR-018a/FR-033a/FR-033d/FR-016a), as one `composite`; the conductor deletes are queued with `{ifPresent: true}` — an earlier delete's cascade (FR-029/FR-030) may already have removed a selected conductor by apply time, which must skip, not fail the whole composite (FR-024a) | SELECT |
   | SELECT | press `r` on selection | one `RotateSelection` turning every selected component **and** the interior bends/junctions rigidly about a single grid-snapped pivot (FR-019/FR-016a) | SELECT |
   | SELECT | click wire/bus segment | select that **segment** (`{kind:"segment", id, segIndex}`), replacing the selection (FR-031) | SELECT |
   | SELECT | drag from wire/bus segment | `InsertBend` at nearest grid pt, the new bend dragging until release (FR-031) | DRAGGING_BEND |
@@ -1627,6 +1637,22 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `simulating`, `dispatch`/`undo`/`redo` refuse with a message-tray report instead
   of mutating (FR-087). `sim` is retained after a run ends (FR-085) and cleared by
   the first design-modifying `dispatch` afterward.
+- **Atomic command failure (FR-024a):** before `cmd.apply`, `dispatch` captures
+  an in-store snapshot of the design's connectivity collections (`components`,
+  `wires`, `buses`, `vertices`) and id counters (`nextWireId`/`nextBusId`/
+  `nextVertexId`); on a throw it restores them **in place** (design object
+  identity preserved — no swap for other layers to notice), reports via
+  `onError` (app-wired to the error toast), and pushes nothing onto the undo
+  stack — design, history, and `dirty` stay exactly as before the failed
+  action. `undo`/`redo` are wrapped identically: a throwing revert/re-apply
+  restores the pre-call state and leaves both stacks unmoved. The helpers are
+  local to `store.js` (kept dependency-free; tolerant of the toy designs its
+  tests use) rather than reusing `commands.js`'s `snapshotConnectivity`.
+  The FR-011c `refCounters` are deliberately **outside** both this snapshot and
+  `snapshotConnectivity`: they are monotonic, so a failed or undone allocation
+  burns its number rather than making it reusable. Previously the failure was
+  caught and reported but the partial mutation stood: invisible to undo,
+  `dirty` unset.
 - **Live inputs during a run (FR-087b):** `applyLive(mutate)` is a second
   mutation path used only while simulating — the interactive-input change behind
   a switch click (FR-087a). Unlike `dispatch` it bypasses the sim lock and the
@@ -1670,6 +1696,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   the client's loaded library as **one** undoable command, capturing each
   refreshed instance's prior `{typeData, overrides}` for exact revert; skipped
   instances are reported once per type via the message tray (FR-074).
+  `DeleteWire`/`DeleteBus`/`DeleteSegment` accept an `{ifPresent: true}` option
+  making the command a **no-op when its target no longer exists at apply time**
+  — used only by the multi-delete composite (§6.9, FR-016a), whose queued
+  targets an earlier sub-command's cascade may have already removed; every
+  other caller keeps the default throwing lookup, so a stale id elsewhere still
+  surfaces as a bug (FR-024a rolls it back).
 - **Dirty/unsaved (FR-049a):** `dirty` set on every dispatch, cleared on
   successful save. New/Open guard on `dirty` (confirm dialog); a `beforeunload`
   handler warns on tab close. *(MVP-deferrable per requirements; implement the
@@ -2483,7 +2515,7 @@ no sequential part could ever leave U.)
 
 *Generated behavior (FR-114d), implemented in `engine/memory.js` + `sim.js` (§6.13).* Memory is the first built-in whose behavior **reads** its input nets and keeps per-instance state, which the source-only `BEHAVIORS` signature (§6.11) can't express — so it lives in a dedicated `createMemoryCore({kind,addressBits,dataWidth})` and a `kind:"memory"` simulator entity rather than the `BEHAVIORS` registry. ROM content loading from the chosen file is implemented (FR-114e), and cross-session metatype persistence is implemented (FR-114f, via a `mem:` YAML block) — both formerly open under OQ-013.
 
-**Sub-design instance (FR-098/098a/099).** An entry in `design.components` with `kind:"subdesign"`, `childPath`, `render`, `iface` (the last-resolved interface record, FR-099c), `x`, `y`, `rotation`, and an `X<n>` refdes — a third series beside U and A (`addInstance` scans X-suffixes, FR-098a); a child may be embedded repeatedly as independent X-instances. It stores **no** `typeData` (supersedes FR-057 for it); its in-memory `typeData` is the synthetic interface type, recomputed on load and whenever the child changes (FR-099b). Rendering (`canvas.js`, §6.8 dispatch on `kind`): `ic` — the existing rectangle over the synthetic type (inputs left, outputs right, pins labelled by port label, `X1` + child base name upright); `connector` — a tall narrow rectangle with all interface pins ranked along **one** long edge in label order (OQ-010). Both are purely cosmetic (same interface, same connectivity, FR-099); a multi-bit interface signal appears as a **pin group** of one-bit pins (bus snaps to the group, FR-041/FR-039a). A child that fails to load renders as a **broken-link placeholder** (a red box naming the missing relative path), reported once via the message tray (FR-099a), reusing §6.8's unknown-type placeholder.
+**Sub-design instance (FR-098/098a/099).** An entry in `design.components` with `kind:"subdesign"`, `childPath`, `render`, `iface` (the last-resolved interface record, FR-099c), `x`, `y`, `rotation`, and an `X<n>` refdes — a third series beside U and A, allocated by the shared FR-011c high-water rule (`allocRefNum`, §6.6; FR-098a); a child may be embedded repeatedly as independent X-instances. It stores **no** `typeData` (supersedes FR-057 for it); its in-memory `typeData` is the synthetic interface type, recomputed on load and whenever the child changes (FR-099b). Rendering (`canvas.js`, §6.8 dispatch on `kind`): `ic` — the existing rectangle over the synthetic type (inputs left, outputs right, pins labelled by port label, `X1` + child base name upright); `connector` — a tall narrow rectangle with all interface pins ranked along **one** long edge in label order (OQ-010). Both are purely cosmetic (same interface, same connectivity, FR-099); a multi-bit interface signal appears as a **pin group** of one-bit pins (bus snaps to the group, FR-041/FR-039a). A child that fails to load renders as a **broken-link placeholder** (a red box naming the missing relative path), reported once via the message tray (FR-099a), reusing §6.8's unknown-type placeholder.
 
 **Navigation & back-stack (FR-100/100a).** Descending into a sub-design instance (double-click, or context-menu "Open sub-design") navigates to the instance's **absolute** `childPath` directly (no longer resolved against the parent dir, since the in-memory path is already absolute); following an off-sheet connector — **double-clicking a port whose `target` is set, or its context-menu "Follow off-sheet connector"** (FR-101; a plain click just selects) — calls `fileops.followTarget(target)`, which resolves the target — a **bare sibling filename in the same folder** (FR-101) — to an absolute path against the current design's save dir (`resolveRel(dirOf(savePath), target.file)`, unchanged since a bare name simply resolves within that same directory), first prompting to save a never-saved design exactly as `descend` does (resolving the sibling name needs a directory, and back needs a file), and on success pushes the referring sheet onto the back-stack like a descent (FR-100a). (Gesture and `followTarget` implemented 2026-07-08 — FR-101b; previously specified but never wired.) Both perform a **navigation** = the existing Open flow with the FR-049a unsaved-changes guard (save or discard before the canvas is replaced). Because **back** re-opens the parent from its file, descending while the parent is unsaved first prompts to save it (FR-100a interim); declining cancels the descent. `app.js` keeps a transient `navStack` of absolute paths recording the descended chain; a breadcrumb in the chrome offers **back**, popping and re-opening the parent (itself save-or-lose). The stack is session state — not persisted, not on the undo stack.
 
@@ -2513,7 +2545,7 @@ no sequential part could ever leave U.)
   Bus `groupConnections` and `bitNames` (§7.2) ride along inside the cloned buses. Copy performs no design mutation, so it is **not** a command and creates no undo entry; it just stores the fragment in the session clipboard (below).
 
 **Pasting the fragment (FR-112).** `pasteFragment(design, fragment, dx, dy) → { components, wires, buses }` instantiates the fragment into `design`:
-  - **Refdes remap.** Group fragment components by physical package: a subunit package (shared `U<n>` stem) gets **one** new U-number (via `nextRefNum`, §6.6) with its sibling letters preserved (`U7A…`); a single IC gets a new `U<n>`; a built-in gets a new `A-<n>`; a text note a new `N-<n>`; a sub-design instance a new `X<n>`. Build an `oldRefdes → newRefdes` map and rewrite each component's `refdes` (and its derived per-pin vertex `ref`).
+  - **Refdes remap.** Group fragment components by physical package: a subunit package (shared `U<n>` stem) gets **one** new U-number (via the FR-011c high-water allocator `allocRefNum`, §6.6) with its sibling letters preserved (`U7A…`); a single IC gets a new `U<n>`; a built-in gets a new `A-<n>`; a text note a new `N-<n>`; a sub-design instance a new `X<n>`. Build an `oldRefdes → newRefdes` map and rewrite each component's `refdes` (and its derived per-pin vertex `ref`).
   - **Id remap.** Allocate fresh `v…/w…/b…` ids from the design counters; rewrite every path `node.v`, each bus `groupConnections[].vertex`/`.instance`, and junction/free vertex ids through `old→new` maps.
   - **Translate.** Add `(dx,dy)` (whole grid units) to every component `x/y`, every junction/free vertex `x/y`, and every bend. Pin/connector vertices need no shift — their position is derived from the (already-translated) instance (§7.1a).
   - **Port labels (FR-112).** A pasted port whose `label === oldRefdes` (the default, §6.14) is reset to its `newRefdes`; a custom label is kept verbatim.
@@ -3045,9 +3077,10 @@ branch wire that meet at it share one position and cannot drift apart (A1).
 
 ```jsonc
 {
-  "formatVersion": 2,                  // migration anchor (NFR-004-style); v2 re-keyed instance `type` to the type id (FR-066e)
+  "formatVersion": 3,                  // migration anchor (NFR-004-style); v2 re-keyed instance `type` to the type id (FR-066e); v3 added `refCounters` (FR-011c)
   "name": "unnamed schematic 2026-06-01 14:03",
   "defaultRender": "ic",               // FR-096: render style when THIS design is embedded (ic|connector)
+  "refCounters": { "U": 29, "A": 19, "N": 4, "X": 5 },  // FR-011c: per-series high-water refdes counters — the next number each series may allocate; monotonic, so a retired designator is never reused
   "components": [ ComponentInstance, … ],   // (a) FR-056 (includes built-in ports and sub-design instances)
   "wires":      [ Wire, … ],                // (b) FR-056
   "buses":      [ Bus,  … ],                // (c) FR-056
@@ -3146,8 +3179,9 @@ bus yields up to *w* nets:
 
 ### 7.4 Persistence & migration (FR-060c, FR-060d)
 Files are JSON written atomically (§6.5). `formatVersion` is the migration anchor;
-the client writes/reads version `2` (FR-066e re-keyed instance `type` to the type
-id). The **vertex/graph model (§7.1a) is the
+the client writes/reads version `3` (v2, FR-066e, re-keyed instance `type` to the
+type id; v3, FR-011c, added the `refCounters` high-water designator counters).
+The **vertex/graph model (§7.1a) is the
 version-`1` format from the outset** (nothing older shipped). For the record, the
 conceptual map from the earlier endpoint-union sketch is: old `pin` endpoint → a
 `pin` vertex; old `free` → a `free` vertex; old `junction{target,x,y}` → a
@@ -3167,6 +3201,13 @@ in place from version 1 so future format changes slot in without touching caller
   re-matches its type. `refdes` (the identity) and all `v.ref`/group-snap references
   are unchanged; the editable `label` (§7.2) needs no migration (absent ⇒ defaults
   to `refdes`). Sub-design instances (no `typeData`) keep their path-derived `type`.
+  The **2→3** step (FR-011c) is likewise pure and textual: it sets `refCounters`
+  to `{U, A, N, X}`, each `1 + the highest number present in components` for that
+  series (0 present ⇒ counter 1; a subunit letter suffix is ignored, so `U5A`
+  counts as 5) — exactly the value the pre-v3 allocation rule would compute. A
+  number freed by a deletion made before the migration, and higher than every
+  surviving number in its series, therefore remains reusable one last time; the
+  file carries no history to recover it from (FR-011c).
 - `migrate(obj, {target = FORMAT_VERSION, migrations = MIGRATIONS})` normalizes a
   parsed object to the target version: it reads `obj.formatVersion ?? 1` (absent =
   oldest understood) and, while below the target, applies each step in turn,
@@ -3210,7 +3251,11 @@ and a missing migration step (FR-060c).
 
 ### 7.5 In-memory client structures
 The live model mirrors §7.2 but additionally keeps `nextWireId` and
-`nextVertexId` counters and a transient `selection`/`viewport` (not persisted).
+`nextVertexId` counters and a transient `selection`/`viewport` — these are not
+persisted (the id counters are rebuilt from the loaded ids' maxima at
+deserialize), unlike the FR-011c `refCounters`, which are part of the saved
+design precisely because they must not be derivable-down from the surviving
+components.
 For O(1) ops it also keeps non-persisted indexes: a `vertices` map keyed by id and
 a per-vertex **ref-count** (how many wires reference it) used by the G2 demotion
 logic (§3.3). `nets` are recomputed by `buildNets` (§6.6) at save time and on

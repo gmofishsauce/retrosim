@@ -213,3 +213,61 @@ test("sim view is retained at stop and cleared on the next modification (FR-085)
   store.dispatch(addCmd(1)); // first design modification clears it
   assert.equal(store.state.sim, null);
 });
+
+// --- atomic command failure (FR-024a): a throwing apply/revert restores the
+// design's connectivity state; nothing moves on the undo/redo stacks. ---
+
+function wiredStore(onError) {
+  const design = {
+    components: [],
+    wires: [{ id: "w1" }],
+    buses: [],
+    vertices: [{ id: "v1" }],
+    nextWireId: 2,
+    nextBusId: 1,
+    nextVertexId: 2,
+  };
+  return createStore({ design, project: TEST_PROJECT, onError });
+}
+
+test("a failing dispatch restores the design and records nothing (FR-024a)", () => {
+  const errs = [];
+  const store = wiredStore((e) => errs.push(e.message));
+  store.dispatch({
+    label: "boom",
+    apply(d) {
+      d.wires.length = 0; // partial mutation...
+      d.vertices.push({ id: "v2" });
+      d.nextVertexId = 3;
+      throw new Error("boom"); // ...then failure
+    },
+    revert() {},
+  });
+  assert.deepEqual(errs, ["boom"]);
+  assert.deepEqual(store.design.wires, [{ id: "w1" }]); // restored
+  assert.deepEqual(store.design.vertices, [{ id: "v1" }]);
+  assert.equal(store.design.nextVertexId, 2);
+  assert.equal(store.canUndo(), false);
+  assert.equal(store.state.dirty, false);
+});
+
+test("a throwing undo restores the design and leaves the stacks unmoved (FR-024a)", () => {
+  const errs = [];
+  const store = wiredStore((e) => errs.push(e.message));
+  store.dispatch({
+    label: "ok then bad revert",
+    apply(d) {
+      d.wires.push({ id: "w2" });
+    },
+    revert(d) {
+      d.wires.length = 0; // partial mutation...
+      throw new Error("bad revert"); // ...then failure
+    },
+  });
+  assert.equal(store.canUndo(), true);
+  store.undo();
+  assert.deepEqual(errs, ["bad revert"]);
+  assert.deepEqual(store.design.wires, [{ id: "w1" }, { id: "w2" }]); // restored
+  assert.equal(store.canUndo(), true); // still undoable (stack unmoved)
+  assert.equal(store.canRedo(), false);
+});

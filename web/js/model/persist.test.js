@@ -36,7 +36,7 @@ function sampleDesign() {
 
 test("serializeDesign emits the documented shape with derived nets", () => {
   const out = serializeDesign(sampleDesign());
-  assert.equal(out.formatVersion, 2);
+  assert.equal(out.formatVersion, 3);
   assert.equal(out.name, "my schematic");
   assert.ok(Array.isArray(out.components));
   assert.ok(Array.isArray(out.wires));
@@ -116,8 +116,8 @@ test("migrate rejects a file when an upgrade step is missing", () => {
 });
 
 test("migrate leaves a current-or-newer file unchanged (forward-compat)", () => {
-  // Default target is FORMAT_VERSION (2): a current file is a no-op.
-  assert.equal(migrate({ formatVersion: 2, name: "x" }).formatVersion, 2);
+  // Default target is FORMAT_VERSION (3): a current file is a no-op.
+  assert.equal(migrate({ formatVersion: 3, name: "x" }).formatVersion, 3);
   // A newer-than-understood file passes through untouched (the load flow warns).
   assert.equal(migrate({ formatVersion: 99, name: "y" }).formatVersion, 99);
 });
@@ -136,7 +136,7 @@ test("migrate 1→2 re-keys instance type to the type id", () => {
       { refdes: "X1", type: "child", kind: "subdesign", childPath: "c.json" },
     ],
   });
-  assert.equal(out.formatVersion, 2);
+  assert.equal(out.formatVersion, 3); // the chain continues through 2→3
   const [ic, ind, gal, sub] = out.components;
   assert.equal(ic.type, "type-74138");
   assert.equal(ic.typeData.id, "type-74138");
@@ -331,4 +331,35 @@ test("repair: a group connection with a stale bitMap pin drops (the U28 case)", 
   assert.match(warns[0], /missing pin U1\.B4/);
   assert.equal(d.buses.length, 1); // the bus itself survives
   assert.deepEqual(d.buses[0].groupConnections, []);
+});
+
+// --- FR-011c: high-water refdes counters (save format v3, §7.4). ---
+
+test("migrate 2→3 initializes refCounters from the file's current maxima", () => {
+  const out = migrate({
+    formatVersion: 2,
+    name: "old",
+    components: [
+      { refdes: "U5A", type: "t" },
+      { refdes: "U3", type: "t" },
+      { refdes: "A-7", type: "t" },
+      { refdes: "X2", type: "t", kind: "subdesign" },
+    ],
+  });
+  assert.equal(out.formatVersion, 3);
+  assert.deepEqual(out.refCounters, { U: 6, A: 8, N: 1, X: 3 }); // U5A counts as 5
+});
+
+test("serialize→deserialize round-trips refCounters, clamping a lagging value up", () => {
+  const d = sampleDesign(); // U1, U2 placed → counter U:3
+  assert.equal(d.refCounters.U, 3);
+  d.refCounters.U = 40; // deletions may leave the counter far past the max
+  const json = JSON.parse(JSON.stringify(serializeDesign(d)));
+  assert.equal(json.refCounters.U, 40);
+  const d2 = deserializeDesign(json);
+  assert.equal(d2.refCounters.U, 40); // high-water survives the round trip
+
+  json.refCounters.U = 1; // hand-edited lagging counter
+  const d3 = deserializeDesign(json);
+  assert.equal(d3.refCounters.U, 3); // clamped to 1 + current max (FR-011c)
 });

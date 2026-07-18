@@ -22,6 +22,38 @@ function sameRefIn(list, ref) {
   return list.some((s) => sameRef(s, ref));
 }
 
+// snapshotDesign/restoreDesign back the atomic-failure guarantee (FR-024a):
+// dispatch/undo/redo capture the design's connectivity collections and id
+// counters before mutating and restore them in place if the command throws, so
+// a failed action leaves the design, the history, and the dirty flag exactly
+// as they were. Local to the store (which stays dependency-free) and tolerant
+// of the toy designs the store tests use — only fields actually present are
+// captured and restored; restore preserves design object identity (§6.10).
+const DESIGN_COLLECTIONS = ["components", "wires", "buses", "vertices"];
+const DESIGN_COUNTERS = ["nextWireId", "nextBusId", "nextVertexId"];
+
+function snapshotDesign(design) {
+  const snap = {};
+  for (const k of DESIGN_COLLECTIONS) {
+    if (Array.isArray(design?.[k])) snap[k] = structuredClone(design[k]);
+  }
+  for (const k of DESIGN_COUNTERS) {
+    if (design?.[k] !== undefined) snap[k] = design[k];
+  }
+  return snap;
+}
+
+function restoreDesign(design, snap) {
+  for (const k of DESIGN_COLLECTIONS) {
+    if (!snap[k]) continue;
+    design[k].length = 0;
+    design[k].push(...snap[k]);
+  }
+  for (const k of DESIGN_COUNTERS) {
+    if (snap[k] !== undefined) design[k] = snap[k];
+  }
+}
+
 export function createStore(initial = {}) {
   const state = {
     design: initial.design ?? null,
@@ -137,9 +169,11 @@ export function createStore(initial = {}) {
     dispatch(cmd) {
       if (blocked(cmd.label ?? "editing")) return;
       clearSimView();
+      const snap = snapshotDesign(state.design);
       try {
         cmd.apply(state.design);
       } catch (err) {
+        restoreDesign(state.design, snap); // atomic failure (FR-024a)
         onError(err, cmd);
         notify(); // re-render in case the failed apply mutated transient state
         return;
@@ -156,7 +190,16 @@ export function createStore(initial = {}) {
       const cmd = undoStack.pop();
       if (!cmd) return;
       clearSimView();
-      cmd.revert(state.design);
+      const snap = snapshotDesign(state.design);
+      try {
+        cmd.revert(state.design);
+      } catch (err) {
+        restoreDesign(state.design, snap); // atomic failure (FR-024a)
+        undoStack.push(cmd); // stacks unmoved
+        onError(err, cmd);
+        notify();
+        return;
+      }
       redoStack.push(cmd);
       state.dirty = true;
       notify();
@@ -167,7 +210,16 @@ export function createStore(initial = {}) {
       const cmd = redoStack.pop();
       if (!cmd) return;
       clearSimView();
-      cmd.apply(state.design);
+      const snap = snapshotDesign(state.design);
+      try {
+        cmd.apply(state.design);
+      } catch (err) {
+        restoreDesign(state.design, snap); // atomic failure (FR-024a)
+        redoStack.push(cmd); // stacks unmoved
+        onError(err, cmd);
+        notify();
+        return;
+      }
       undoStack.push(cmd);
       state.dirty = true;
       notify();

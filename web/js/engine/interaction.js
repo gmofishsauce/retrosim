@@ -463,14 +463,18 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       if (!segByCond.has(ref.id)) segByCond.set(ref.id, []);
       segByCond.get(ref.id).push(ref.segIndex);
     }
+    // Conductor deletes are queued tolerant ({ifPresent}): an earlier queued
+    // delete's cascade (FR-029/FR-030) may remove a later target before it
+    // applies, which must skip, not fail the whole composite (§6.9/FR-016a).
+    const tol = { ifPresent: true };
     for (const [id, idxs] of segByCond) {
-      if (idxs.length === 1) cmds.push(deleteSegmentCmd(id, idxs[0]));
-      else if (store.design.wires.some((w) => w.id === id)) cmds.push(deleteWireCmd(id));
-      else cmds.push(deleteBusCmd(id));
+      if (idxs.length === 1) cmds.push(deleteSegmentCmd(id, idxs[0], tol));
+      else if (store.design.wires.some((w) => w.id === id)) cmds.push(deleteWireCmd(id, tol));
+      else cmds.push(deleteBusCmd(id, tol));
     }
     for (const ref of store.state.selection) {
-      if (ref.kind === "wire") cmds.push(deleteWireCmd(ref.id));
-      else if (ref.kind === "bus") cmds.push(deleteBusCmd(ref.id));
+      if (ref.kind === "wire") cmds.push(deleteWireCmd(ref.id, tol));
+      else if (ref.kind === "bus") cmds.push(deleteBusCmd(ref.id, tol));
       else if (ref.kind === "component") {
         const inst = store.design.components.find((c) => c.refdes === ref.refdes);
         if (!inst) continue;

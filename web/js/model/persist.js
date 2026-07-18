@@ -3,7 +3,7 @@
 // derived `nets` array for downstream tools (FR-059a); ids are authoritative and
 // the counters are rebuilt on load.
 
-import { createDesign } from "./design.js";
+import { createDesign, nextRefNum, REF_SERIES } from "./design.js";
 import { buildNets } from "./netlist.js";
 import { placeholderTypeFromWiring } from "./subdesign.js";
 
@@ -93,7 +93,7 @@ export function absolutizeDataPaths(design, baseDir) {
 // newer version is loaded best-effort and the load flow warns (forward-compat,
 // fileops.js). Bump this whenever the save shape changes and add the matching
 // MIGRATIONS step.
-export const FORMAT_VERSION = 2;
+export const FORMAT_VERSION = 3;
 
 // MIGRATIONS upgrades a parsed save object across a single format version:
 // MIGRATIONS[n] takes a version-n object and returns a version-(n+1) object
@@ -115,6 +115,17 @@ const MIGRATIONS = {
       const id = "type-" + (c.typeData.partnumber || c.typeData.name);
       return { ...c, type: id, typeData: { ...c.typeData, id } };
     }),
+  }),
+  // 2→3 (FR-011c): add the per-series high-water refdes counters, initialized to
+  // 1 + the highest number present in each series — exactly the value the pre-v3
+  // allocation rule would compute. Pure textual transform; the file carries no
+  // deletion history, so a number freed before this migration (and above every
+  // survivor in its series) remains reusable one last time (§7.4).
+  2: (obj) => ({
+    ...obj,
+    refCounters: Object.fromEntries(
+      Object.entries(REF_SERIES).map(([s, re]) => [s, nextRefNum(obj.components ?? [], re)]),
+    ),
   }),
 };
 
@@ -152,6 +163,13 @@ export function serializeDesign(design) {
     wires: design.wires,
     buses: design.buses,
     vertices: design.vertices,
+    // A design predating the counters (test-constructed) serializes the same
+    // values the 2→3 migration would compute: 1 + each series' current maximum.
+    refCounters:
+      design.refCounters ??
+      Object.fromEntries(
+        Object.entries(REF_SERIES).map(([s, re]) => [s, nextRefNum(design.components, re)]),
+      ),
     nets: buildNets(design),
   };
 }
@@ -270,5 +288,14 @@ export function deserializeDesign(obj, { onWarn = () => {} } = {}) {
   d.nextWireId = maxIdNum(d.wires, "w") + 1;
   d.nextBusId = maxIdNum(d.buses, "b") + 1;
   d.nextVertexId = maxIdNum(d.vertices, "v") + 1;
+  // Adopt the saved high-water refdes counters (FR-011c; present after migrate),
+  // clamping each up to 1 + the series' current maximum — a lower value is
+  // possible only in a hand-edited file and must not allocate a duplicate.
+  d.refCounters = Object.fromEntries(
+    Object.entries(REF_SERIES).map(([s, re]) => [
+      s,
+      Math.max(obj.refCounters?.[s] ?? 1, nextRefNum(d.components, re)),
+    ]),
+  );
   return d;
 }

@@ -47,6 +47,7 @@ export function createDesign(name) {
     nextWireId: 1,
     nextBusId: 1,
     nextVertexId: 1,
+    refCounters: { U: 1, A: 1, N: 1, X: 1 },
   };
 }
 
@@ -60,6 +61,33 @@ export function nextRefNum(components, re) {
     if (m) max = Math.max(max, Number(m[1]));
   }
   return max + 1;
+}
+
+// REF_SERIES maps each designator series (FR-011c) to its scan pattern (number
+// in capture group 1); the U scan ignores a trailing subunit letter so "U5A"
+// counts as 5.
+export const REF_SERIES = {
+  U: /^U(\d+)[A-Z]*$/,
+  A: /^A-(\d+)$/,
+  N: /^N-(\d+)$/,
+  X: /^X(\d+)$/,
+};
+
+// allocRefNum allocates the next number in a designator series under the
+// never-reuse high-water rule (FR-011c): max(counter, 1 + highest number
+// present), advancing the counter past the result. The counter is monotonic —
+// never wound back by undo/redo, snapshot reverts, or the FR-024a failure
+// restore (§6.10) — and self-heals when a hand-edited file's counter lags the
+// components. Tolerates a design predating the counters (they are created on
+// first use at the scanned value).
+export function allocRefNum(design, series) {
+  if (!design.refCounters) design.refCounters = { U: 1, A: 1, N: 1, X: 1 };
+  const n = Math.max(
+    design.refCounters[series] ?? 1,
+    nextRefNum(design.components, REF_SERIES[series]),
+  );
+  design.refCounters[series] = n + 1;
+  return n;
 }
 
 // typeIdentity is a component type's immutable library identity (FR-066e, §7.2):
@@ -82,10 +110,10 @@ export function addInstance(design, type, x, y, rotation) {
   // selection/move/persist, drawn from a separate N-<n> series (FR-011a).
   const refdes =
     type.renderType === "note"
-      ? "N-" + nextRefNum(design.components, /^N-(\d+)$/)
+      ? "N-" + allocRefNum(design, "N")
       : type.builtin
-        ? "A-" + nextRefNum(design.components, /^A-(\d+)$/)
-        : "U" + nextRefNum(design.components, /^U(\d+)[A-Z]*$/);
+        ? "A-" + allocRefNum(design, "A")
+        : "U" + allocRefNum(design, "U");
   const inst = {
     refdes,
     type: typeIdentity(type),
@@ -128,7 +156,7 @@ export function addInstance(design, type, x, y, rotation) {
 // overlap on drop. Returns the created instances (caller groups them as one undo
 // step). Power/ground aside, all geometry comes from the symbol module.
 export function addSubunitPackage(design, type, x, y) {
-  const num = nextRefNum(design.components, /^U(\d+)[A-Z]*$/);
+  const num = allocRefNum(design, "U");
   const letters = [];
   for (const p of type.pins) if (!letters.includes(p.unit)) letters.push(p.unit);
 
@@ -1102,6 +1130,14 @@ export function deleteInstance(design, refdes) {
     }
   }
   design.components.splice(i, 1);
+  // Drop every bus group connection bound to the deleted instance (FR-018a):
+  // the bus remains with its endpoint dangling, but a lingering record would
+  // silently re-bind if the refdes number is later reused.
+  for (const b of design.buses) {
+    if (b.groupConnections?.some((gc) => gc.instance === refdes)) {
+      b.groupConnections = b.groupConnections.filter((gc) => gc.instance !== refdes);
+    }
+  }
   cleanup(design);
 }
 

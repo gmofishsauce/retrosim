@@ -8,7 +8,7 @@
 // flattening are new. This module owns the pure interface/synthesis helpers and
 // the simulator-facing flatten/wouldCycle (FR-102/FR-102a/FR-103, §6.14).
 
-import { nextRefNum } from "./design.js";
+import { allocRefNum } from "./design.js";
 import { buildNets } from "./netlist.js";
 // Circular with persist.js (it imports placeholderTypeFromWiring): safe — both
 // modules only call across the cycle at run time, never during evaluation.
@@ -583,7 +583,7 @@ export async function wouldCycle(childAbsPath, parentAbsPath, loadChild) {
 // typeData (recomputed on load, never saved — FR-098). `childName` is the child's
 // base name, shown as the body label; `iface` is designInterface(child).
 export function addSubDesignInstance(design, { childPath, render, iface, childName }, x, y) {
-  const refdes = "X" + nextRefNum(design.components, /^X(\d+)$/);
+  const refdes = "X" + allocRefNum(design, "X");
   const inst = {
     refdes,
     type: childName,

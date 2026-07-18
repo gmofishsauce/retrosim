@@ -19,6 +19,26 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-18 — Never-reuse reference designators: high-water counters, save format v3
+What: each designator series (U/A-/N-/X) gains a persistent per-design high-water counter; every allocation (placement, sub-design embed, paste) takes `max(counter, 1 + current max)` and advances it, so a deleted designator is never reused. Counters are saved with the design (`refCounters`, format v3; pure-textual 2→3 migration initializes them from the file's current maxima) and are monotonic — never wound back by undo/redo, delete, or the FR-024a rollback (an undone placement burns its number). Load clamps a hand-edited lagging counter up to `1 + current max`.
+Why: refdes is the immutable identity referenced outside the design — test-vector columns bind by refdes+pin (first-class objects in this app), exported netlists carry refdes — and `nextRefNum`'s max+1 rule reused the number of a deleted highest-numbered component, which re-bound stale references to an unrelated new part (the notL4C381/U28 corruption's second ingredient, alongside the FR-018a gc leak).
+Touches: FR-011c (new); FR-011, FR-011a, FR-112, FR-024a (in-place pointers/exemption). Design §7.2 (`refCounters` field, formatVersion 3), §7.4 (2→3 migration step), §6.6 (`allocRefNum`), §6.10 (counters exempt from snapshots), §6.14, §6.15, §7.5. Implementation to follow: `web/js/model/design.js`, `model/subdesign.js`, `model/clipboard.js`, `model/persist.js` (FORMAT_VERSION 3 + MIGRATIONS[2] + serialize/deserialize), + tests.
+
+## 2026-07-18 — Multi-delete tolerates its own cascades
+What: the Delete-selection composite queues its wire/bus/segment deletes with a new `{ifPresent: true}` option on `DeleteWire`/`DeleteBus`/`DeleteSegment`: a target already removed by an earlier sub-command's cascade (FR-029 demotion / FR-030 prune) is skipped instead of throwing. Other callers keep the throwing lookup.
+Why: selecting several conductors where deleting one prunes another produced "no such wire wNNN" — the red errors from the notL4C381 session; with FR-024a alone the whole delete would roll back and the user could never delete that selection.
+Touches: FR-016a (in-place, cascade-collision sentence). Design §6.9 (FSM delete row), §6.10 (command inventory). Implemented in `web/js/commands.js`, `web/js/engine/interaction.js` + tests.
+
+## 2026-07-18 — Atomic editing commands: a failed command restores pre-apply state
+What: `dispatch` snapshots the design's connectivity collections and id counters before applying a command and restores them in place if the command throws; the failure is still reported (error toast), and nothing enters the undo history. Undo/redo get the same protection. A composite (e.g. Delete selection) now succeeds or fails atomically.
+Why: a throw mid-composite — e.g. a queued conductor delete colliding with an earlier delete's FR-030 cascade prune ("no such wire wNNN", the red errors seen during the notL4C381 editing session) — left the design half-mutated, invisible to undo, with the dirty flag unset: the state-tracking wreckage that accumulates into corrupt saves.
+Touches: FR-024a (new). Design §6.10 (atomic-command-failure bullet). Implemented in `web/js/store.js` + tests.
+
+## 2026-07-18 — Deleting a component removes its bus group connections
+What: `deleteInstance` now drops every bus `groupConnection` whose `instance` is the deleted refdes (the bus remains, its endpoint left dangling as a free vertex, like a wire's). Previously such records lingered silently in memory and in saves.
+Why: root cause of the notL4C381 corruption — a stale group connection survived its component's deletion, then re-bound to an unrelated new component when the refdes number was reused (`nextRefNum` is max+1 over current components, so deleting the highest-numbered component frees its number), producing a save whose `bitMap` pins don't exist on the instance.
+Touches: FR-018a (in-place rework, group-connection removal). Design §6.6 (`deleteInstance`). Implemented in `web/js/model/design.js` + tests. (Refdes reuse itself is a separate open question, not changed here.)
+
 ## 2026-07-18 — Best-effort load: drop-and-warn on broken references
 What: on load, after migration, the deserializer verifies referential integrity — conductor paths, `pin`/`connector` vertices, and (new coverage) bus group connections (instance, endpoint vertex, every `bitMap` pin) — and **drops** each unresolvable element with a legible per-drop tray message, loading the rest, instead of rejecting the whole file. Applies to Open and backup recovery; repair precedes the store, so no dirty mark and no undo entry; a later save persists the repaired form. Rejection remains only for unparseable JSON and a missing migration step (FR-060c).
 Why: a save with a stale group-connection pin (`unknown pin B4 on U28`, written by an editor bug during a 74245→74244 swap) passed the old `validateStructure` — which never checked group connections — then threw every frame in the render loop, wedging the app with no message; and the old reject policy would have made the file unopenable except by hand-editing JSON. Bad saves are inevitable while the product evolves.

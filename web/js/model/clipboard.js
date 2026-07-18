@@ -3,7 +3,7 @@
 // and ids (§6.15, FR-111/FR-112). Pure data operations — the session clipboard
 // itself and the paste interaction live in the interaction layer (§6.9).
 
-import { packageSiblings, nextRefNum, getVertex } from "./design.js";
+import { packageSiblings, allocRefNum, getVertex } from "./design.js";
 
 // interiorConductors returns the whole wires and buses whose conductor network's
 // component connections are *all* to components in `refSet` (the FR-018c interior
@@ -101,12 +101,13 @@ function translatePathPoint(p, vMap, dx, dy) {
 }
 
 // REFDES_SERIES maps each designator series to its pattern (number in group 1,
-// optional subunit letters in group 2) and the formatter for a fresh number.
+// optional subunit letters in group 2), its FR-011c series key, and the
+// formatter for a fresh number.
 const REFDES_SERIES = [
-  { test: /^U(\d+)([A-Z]*)$/, scan: /^U(\d+)[A-Z]*$/, fmt: (n, suf) => `U${n}${suf}` },
-  { test: /^A-(\d+)$/, scan: /^A-(\d+)$/, fmt: (n) => `A-${n}` },
-  { test: /^N-(\d+)$/, scan: /^N-(\d+)$/, fmt: (n) => `N-${n}` },
-  { test: /^X(\d+)$/, scan: /^X(\d+)$/, fmt: (n) => `X${n}` },
+  { test: /^U(\d+)([A-Z]*)$/, series: "U", fmt: (n, suf) => `U${n}${suf}` },
+  { test: /^A-(\d+)$/, series: "A", fmt: (n) => `A-${n}` },
+  { test: /^N-(\d+)$/, series: "N", fmt: (n) => `N-${n}` },
+  { test: /^X(\d+)$/, series: "X", fmt: (n) => `X${n}` },
 ];
 
 // pasteFragment instantiates `fragment` into `design`, offset by (dx,dy) whole
@@ -121,8 +122,8 @@ const REFDES_SERIES = [
 export function pasteFragment(design, fragment, dx, dy) {
   const f = structuredClone(fragment);
 
-  // --- reference-designator remap ---
-  const counters = REFDES_SERIES.map((s) => nextRefNum(design.components, s.scan));
+  // --- reference-designator remap: fresh numbers come from the FR-011c
+  // high-water allocator, so a paste never reuses a retired designator ---
   const numByKey = new Map(); // `${seriesIndex}:${oldNum}` → new number
   const refMap = new Map(); // old refdes → new refdes
   for (const c of f.components) {
@@ -133,7 +134,7 @@ export function pasteFragment(design, fragment, dx, dy) {
       const key = si + ":" + m[1];
       let num = numByKey.get(key);
       if (num === undefined) {
-        num = counters[si]++;
+        num = allocRefNum(design, REFDES_SERIES[si].series);
         numByKey.set(key, num);
       }
       refMap.set(c.refdes, REFDES_SERIES[si].fmt(num, m[2] ?? ""));

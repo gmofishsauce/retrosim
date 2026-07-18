@@ -12,6 +12,7 @@ import {
   moveBendCmd,
   moveVertexCmd,
   deleteBendCmd,
+  composite,
 } from "./commands.js";
 
 function ty() {
@@ -181,4 +182,44 @@ test("deleteBendCmd removes a bend and undo restores it (FR-033)", () => {
   store.undo(); // undo delete -> bend back at index 1
   assert.equal(store.design.wires[0].path.length, 3);
   assert.deepEqual(store.design.wires[0].path[1], { t: "bend", x: 25, y: 26 });
+});
+
+// --- tolerant multi-delete ({ifPresent}, §6.9/FR-016a): a queued conductor
+// delete whose target an earlier sub-command's cascade already removed skips
+// instead of failing the composite. ---
+
+test("a composite of ifPresent deletes survives its own cascade prune (FR-016a/FR-024a)", () => {
+  const store = newStore();
+  // Two floating wires: deleting w1 runs the global cleanup, which prunes w2
+  // (both endpoints free, FR-030) before w2's own queued delete applies.
+  store.dispatch(addWireCmd({ kind: "free", x: 0, y: 0 }, { kind: "free", x: 5, y: 0 }));
+  store.dispatch(addWireCmd({ kind: "free", x: 0, y: 2 }, { kind: "free", x: 5, y: 2 }));
+  const [w1, w2] = store.design.wires.map((w) => w.id);
+  const errs = [];
+  const bare = createStore({
+    design: store.design,
+    project: { dir: "/proj", name: "proj" },
+    onError: (e) => errs.push(e.message),
+  });
+
+  bare.dispatch(
+    composite([deleteWireCmd(w1, { ifPresent: true }), deleteWireCmd(w2, { ifPresent: true })], "Delete selection"),
+  );
+  assert.deepEqual(errs, []); // no spurious "no such wire"
+  assert.equal(bare.design.wires.length, 0);
+
+  bare.undo(); // the whole composite reverts as one step
+  assert.deepEqual(bare.design.wires.map((w) => w.id).sort(), [w1, w2].sort());
+});
+
+test("deleteWireCmd without ifPresent still surfaces a stale id (FR-024a)", () => {
+  const store = newStore();
+  const errs = [];
+  const bare = createStore({
+    design: store.design,
+    project: { dir: "/proj", name: "proj" },
+    onError: (e) => errs.push(e.message),
+  });
+  bare.dispatch(deleteWireCmd("w99"));
+  assert.deepEqual(errs, ["no such wire w99"]);
 });
