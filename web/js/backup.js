@@ -106,7 +106,9 @@ export function offerRecovery(
     return false;
   }
   try {
-    const design = deserializeDesign(snap.design);
+    // Structural inconsistencies in the snapshot are repaired drop-and-warn
+    // (§7.4, FR-060d), each drop reported via the tray (FR-074).
+    const design = deserializeDesign(snap.design, { onWarn: post });
     store.replaceDesign(design, { savePath: snap.savePath ?? null, dirty: true });
     return true;
   } catch (e) {

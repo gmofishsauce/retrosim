@@ -3144,7 +3144,7 @@ bus yields up to *w* nets:
   bus endpoint named by a `groupConnections` entry is connected per
   FR-041a/FR-042 even though its vertex kind is `free`) runs after any deletion.
 
-### 7.4 Persistence & migration (FR-060c)
+### 7.4 Persistence & migration (FR-060c, FR-060d)
 Files are JSON written atomically (§6.5). `formatVersion` is the migration anchor;
 the client writes/reads version `2` (FR-066e re-keyed instance `type` to the type
 id). The **vertex/graph model (§7.1a) is the
@@ -3180,11 +3180,33 @@ in place from version 1 so future format changes slot in without touching caller
 Forward-compat (newer than understood) is **not** a migrate concern: `migrate`
 passes such a file through untouched and the load flow (`fileops.loadIntoStore`)
 warns via toast `(obj.formatVersion ?? 1) > FORMAT_VERSION`, then loads best-effort
-(NFR-004 spirit). On load the SPA also runs a cheap structural sanity pass (every
-conductor path has ≥ 2 points; every `node` path point and every `pin` vertex
-references something that exists) and rejects the file with a legible error
-instead of failing later deep in render/hit-test — the server validates only that
-the payload is JSON.
+(NFR-004 spirit).
+
+**Load-time repair (`repairStructure`, FR-060d).** The server validates only that
+the payload is JSON, so a truncated or hand-edited file — and any editor bug that
+saves stale references — must be caught at deserialize, not later: an unresolvable
+reference that reaches the canvas throws per frame (`pinWorldPos` via
+`drawBusBraces`/`vertexWorld`) and wedges the whole SPA. After `migrate`,
+`deserializeDesign(obj, {onWarn})` runs `repairStructure(d, onWarn)`, which
+**drops** every unresolvable element, reporting each drop through `onWarn` (one
+legible message naming the element and reason), in dependency order:
+(1) a `pin`/`connector` vertex whose instance or pin does not exist is dropped
+(sub-design instances skipped — their interface resolves later, §6.14);
+(2) a conductor whose path has < 2 points or references a missing or
+just-dropped vertex is dropped whole (never a partial path, which would silently
+change topology); (3) a bus group connection whose instance, endpoint vertex, or
+any `bitMap` pin does not resolve is dropped from its bus (the bus remains).
+Callers thread `onWarn` to their surface — `fileops.loadIntoStore` and backup
+recovery post to the message tray (FR-074); it defaults to a no-op. The repair
+runs before `replaceDesign`, so it neither dirties the design nor creates an
+undo entry (the FR-099c load-time-normalization precedent); a subsequent save
+persists the repaired form. This supersedes the former `validateStructure`,
+which rejected the whole file with a legible error on the first inconsistency —
+adopted when bad saves were assumed rare; in practice editor bugs write them,
+rejection leaves such a file unopenable except by hand-editing JSON, and its
+coverage gap (group connections were never checked) let a stale `bitMap` pin
+reach the render loop and wedge the app. Rejection remains for unparseable JSON
+and a missing migration step (FR-060c).
 
 ### 7.5 In-memory client structures
 The live model mirrors §7.2 but additionally keeps `nextWireId` and

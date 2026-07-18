@@ -231,3 +231,104 @@ test("relPath/resolveRel handle nested and sibling directories", () => {
   assert.equal(relPath("/proj/designs", "/proj/lib/c.json"), "../lib/c.json");
   assert.equal(resolveRel("/proj/designs", "../lib/c.json"), "/proj/lib/c.json");
 });
+
+// --- load-time referential-integrity repair (§7.4, FR-060d): unresolvable
+// elements are dropped with one onWarn message each, and the rest loads. ---
+
+// corruptible returns a serialized sampleDesign ready to mutate: components
+// U1/U2, one wire U1./Y0 - U2.A0 (two pin vertices), one 8-bit bus between
+// two free vertices.
+function corruptible() {
+  return JSON.parse(JSON.stringify(serializeDesign(sampleDesign())));
+}
+
+function loadCollecting(obj) {
+  const warns = [];
+  const d = deserializeDesign(obj, { onWarn: (m) => warns.push(m) });
+  return { d, warns };
+}
+
+test("repair: a clean design loads with no warnings", () => {
+  const { d, warns } = loadCollecting(corruptible());
+  assert.deepEqual(warns, []);
+  assert.equal(d.wires.length, 1);
+  assert.equal(d.buses.length, 1);
+});
+
+test("repair: a pin vertex on a missing component drops with its wire", () => {
+  const obj = corruptible();
+  obj.components = obj.components.filter((c) => c.refdes !== "U2");
+  const { d, warns } = loadCollecting(obj);
+  assert.equal(warns.length, 2); // the vertex, then the wire referencing it
+  assert.match(warns[0], /missing component U2/);
+  assert.match(warns[1], /^dropped wire /);
+  assert.equal(d.wires.length, 0);
+  assert.ok(!d.vertices.some((v) => v.ref === "U2"));
+  assert.equal(d.buses.length, 1); // untouched
+});
+
+test("repair: a pin vertex naming a nonexistent pin drops with its wire", () => {
+  const obj = corruptible();
+  const v = obj.vertices.find((x) => x.kind === "pin" && x.ref === "U2");
+  v.pin = "NOPE";
+  const { d, warns } = loadCollecting(obj);
+  assert.equal(warns.length, 2);
+  assert.match(warns[0], /missing pin U2\.NOPE/);
+  assert.equal(d.wires.length, 0);
+});
+
+test("repair: a conductor with a short path is dropped whole", () => {
+  const obj = corruptible();
+  obj.wires[0].path = obj.wires[0].path.slice(0, 1);
+  const { d, warns } = loadCollecting(obj);
+  assert.equal(warns.length, 1);
+  assert.match(warns[0], /at least 2 points/);
+  assert.equal(d.wires.length, 0);
+  assert.equal(d.vertices.length, obj.vertices.length); // vertices retained
+});
+
+test("repair: a conductor path node naming a missing vertex is dropped whole", () => {
+  const obj = corruptible();
+  obj.wires[0].path[1] = { t: "node", v: "v999" };
+  const { d, warns } = loadCollecting(obj);
+  assert.equal(warns.length, 1);
+  assert.match(warns[0], /missing vertex v999/);
+  assert.equal(d.wires.length, 0);
+});
+
+test("repair: a group connection naming a missing instance drops; the bus remains", () => {
+  const obj = corruptible();
+  const bus = obj.buses[0];
+  bus.groupConnections = [
+    { vertex: bus.path[0].v, instance: "U9", group: "G", bitMap: ["A0"] },
+  ];
+  const { d, warns } = loadCollecting(obj);
+  assert.equal(warns.length, 1);
+  assert.match(warns[0], /missing component U9/);
+  assert.equal(d.buses.length, 1);
+  assert.deepEqual(d.buses[0].groupConnections, []);
+});
+
+test("repair: a group connection naming a missing vertex drops", () => {
+  const obj = corruptible();
+  obj.buses[0].groupConnections = [
+    { vertex: "v999", instance: "U1", group: "G", bitMap: ["A0"] },
+  ];
+  const { d, warns } = loadCollecting(obj);
+  assert.equal(warns.length, 1);
+  assert.match(warns[0], /missing vertex v999/);
+  assert.deepEqual(d.buses[0].groupConnections, []);
+});
+
+test("repair: a group connection with a stale bitMap pin drops (the U28 case)", () => {
+  const obj = corruptible();
+  const bus = obj.buses[0];
+  bus.groupConnections = [
+    { vertex: bus.path[0].v, instance: "U1", group: "B", bitMap: ["A0", "B4"] },
+  ];
+  const { d, warns } = loadCollecting(obj);
+  assert.equal(warns.length, 1);
+  assert.match(warns[0], /missing pin U1\.B4/);
+  assert.equal(d.buses.length, 1); // the bus itself survives
+  assert.deepEqual(d.buses[0].groupConnections, []);
+});

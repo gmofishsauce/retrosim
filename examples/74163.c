@@ -42,8 +42,12 @@ rt_reset gen_resets[] = {
 };
 const int gen_reset_count = 1;
 
-const rt_mem gen_mems[] = { { 0, 0, 0, 0, 0, 0, -1, -1, -1, 0, 0 } }; /* none */
+const rt_mem gen_mems[] = { { 0, 0, 0, 0, 0, 0, -1, -1, -1, 0, 0, 0, 0 } }; /* none */
 const int gen_mem_count = 0;
+
+const rt_uart gen_uarts[] = { { 0, -1, -1, -1, 0 } }; /* none */
+const int gen_uart_count = 0;
+const int gen_latch_count = 0;
 
 /* --- vector columns (FR-117; column order is the row format) --- */
 const rt_incol gen_incols[] = {
@@ -66,6 +70,7 @@ const int gen_outcol_count = 7;
 static rt_val reg_U1[4];
 static rt_val prevClk_U1;
 
+/* --- transparent-latch state (FR-079d .L outputs) --- */
 /* --- power-up state (FR-116a; reapplied per combinational row) --- */
 void gen_init(void) {
   gen_clocks[0].level = RT_0;

@@ -177,39 +177,77 @@ function maxIdNum(items, prefix) {
   return max;
 }
 
-// validateStructure runs a cheap structural sanity pass over a loaded design
-// (§7.4): the server only checks that the payload is JSON, so a truncated or
-// hand-edited file must fail here with a legible error, not later as an
-// `undefined` lookup deep in render/hit-test.
-function validateStructure(d) {
-  const vertexIds = new Set(d.vertices.map((v) => v.id));
-  for (const c of [...d.wires, ...d.buses]) {
-    if (!Array.isArray(c.path) || c.path.length < 2) {
-      throw new Error(`conductor ${c.id}: path must have at least 2 points`);
-    }
-    for (const p of c.path) {
-      if (p.t === "node" && !vertexIds.has(p.v)) {
-        throw new Error(`conductor ${c.id}: references missing vertex ${p.v}`);
-      }
-    }
-  }
-  for (const v of d.vertices) {
-    if (v.kind !== "pin" && v.kind !== "connector") continue;
+// repairStructure runs the load-time referential-integrity repair (§7.4,
+// FR-060d): the server only checks that the payload is JSON, so a truncated or
+// hand-edited file — or one an editor bug saved with stale references — must be
+// caught here, not later as a per-frame throw deep in render/hit-test. Each
+// unresolvable element is dropped and reported through onWarn (one legible
+// message per drop), and the rest of the design loads; in dependency order:
+// bad pin/connector vertices, then conductors whose path is short or references
+// a missing (or just-dropped) vertex — dropped whole, never partially, which
+// would silently change topology — then bus group connections whose instance,
+// vertex, or any bitMap pin does not resolve (the bus itself remains).
+function repairStructure(d, onWarn) {
+  // Pin existence is checked against typeData, except for sub-design instances,
+  // whose interface is resolved after load (resolveSubDesigns, §6.14).
+  const hasPin = (inst, name) =>
+    inst.kind === "subdesign" || inst.typeData?.pins?.some((p) => p.name === name);
+  d.vertices = d.vertices.filter((v) => {
+    if (v.kind !== "pin" && v.kind !== "connector") return true;
     const inst = d.components.find((c) => c.refdes === v.ref);
-    if (!inst) throw new Error(`vertex ${v.id}: references missing component ${v.ref}`);
-    // A sub-design's interface pins are resolved after load (resolveSubDesigns,
-    // §6.14), so its typeData is absent here — skip the pin-existence check.
-    if (inst.kind === "subdesign") continue;
-    if (!inst.typeData?.pins?.some((p) => p.name === v.pin)) {
-      throw new Error(`vertex ${v.id}: references missing pin ${v.ref}.${v.pin}`);
-    }
+    const reason = !inst
+      ? `references missing component ${v.ref}`
+      : !hasPin(inst, v.pin)
+        ? `references missing pin ${v.ref}.${v.pin}`
+        : null;
+    if (!reason) return true;
+    onWarn(`dropped vertex ${v.id}: ${reason}`);
+    return false;
+  });
+  const vertexIds = new Set(d.vertices.map((v) => v.id));
+  for (const key of ["wires", "buses"]) {
+    const kind = key === "wires" ? "wire" : "bus";
+    d[key] = d[key].filter((c) => {
+      const bad =
+        Array.isArray(c.path) && c.path.length >= 2
+          ? c.path.find((p) => p.t === "node" && !vertexIds.has(p.v))
+          : null;
+      const reason =
+        !Array.isArray(c.path) || c.path.length < 2
+          ? "path must have at least 2 points"
+          : bad
+            ? `references missing vertex ${bad.v}`
+            : null;
+      if (!reason) return true;
+      onWarn(`dropped ${kind} ${c.id}: ${reason}`);
+      return false;
+    });
+  }
+  for (const b of d.buses) {
+    if (!b.groupConnections) continue;
+    b.groupConnections = b.groupConnections.filter((gc) => {
+      const inst = d.components.find((c) => c.refdes === gc.instance);
+      const badPin = inst ? (gc.bitMap ?? []).find((n) => !hasPin(inst, n)) : null;
+      const reason = !inst
+        ? `references missing component ${gc.instance}`
+        : !vertexIds.has(gc.vertex)
+          ? `references missing vertex ${gc.vertex}`
+          : badPin != null
+            ? `references missing pin ${gc.instance}.${badPin}`
+            : null;
+      if (!reason) return true;
+      onWarn(`dropped bus ${b.id} group connection: ${reason}`);
+      return false;
+    });
   }
 }
 
 // deserializeDesign rebuilds a live design from a parsed save object, restoring
 // the id counters past the loaded ids. The derived `nets` field is ignored.
-// Throws a legible Error if the file is structurally inconsistent (§7.4).
-export function deserializeDesign(obj) {
+// Structural inconsistencies are repaired best-effort — dropped and reported
+// through onWarn (§7.4, FR-060d); only a missing migration step still throws
+// (FR-060c).
+export function deserializeDesign(obj, { onWarn = () => {} } = {}) {
   // Bring an older save forward to the current format before building the model,
   // so every load path (Open, backup recovery) sees one normalized shape (§7.4).
   obj = migrate(obj);
@@ -219,7 +257,7 @@ export function deserializeDesign(obj) {
   d.wires = structuredClone(obj.wires ?? []);
   d.buses = structuredClone(obj.buses ?? []);
   d.vertices = structuredClone(obj.vertices ?? []);
-  validateStructure(d);
+  repairStructure(d, onWarn);
   // Sub-designs persist no typeData (live reference, FR-098). Give each a
   // wiring-derived placeholder so the design is always renderable; the load
   // flow's resolveSubDesigns (§6.14) then refines it from the child file (or

@@ -262,7 +262,14 @@ extern const int gen_reset_count;
  * working directory. Format by extension per FR-114e (`.bin` raw bytes,
  * `.hex` whitespace-separated hex byte tokens), packed little-endian
  * ceil(width/8) bytes per word. Any load failure reports to stderr and
- * exits 2. `refdes` names the instance for --rom matching and messages. */
+ * exits 2. `refdes` names the instance for --rom matching and messages.
+ *
+ * A persistent RAM (FR-114g/FR-117c) bakes `ram_file` (its save-file path)
+ * and `ram_load` (the load-on-start flag). When `ram_load` is set the runtime
+ * seeds the RAM from `ram_file` at startup like a ROM, but non-fatally: a
+ * missing/malformed file reports to stderr and the RAM powers up all-U. On
+ * normal termination of either batch mode the runtime writes the RAM's full
+ * contents back to `ram_file` (U written as 0). There is no --ram override. */
 typedef enum { RT_MEM_ROM = 0, RT_MEM_RAM = 1 } rt_mem_kind;
 typedef struct {
   int kind;   /* rt_mem_kind */
@@ -276,9 +283,35 @@ typedef struct {
   int we;                /* WE/ net index (active low, RAM), or -1 */
   const char *refdes;    /* instance refdes (--rom matching, messages) */
   const char *rom_file;  /* recorded content-file path (ROM), or NULL */
+  const char *ram_file;  /* persistent save-file path (RAM), or NULL (FR-117c) */
+  int ram_load;          /* seed RAM from ram_file at startup (FR-117c) */
 } rt_mem;
 extern const rt_mem gen_mems[];
 extern const int gen_mem_count;
+
+/* Magic UART output device (FR-122/FR-122d; behavior in runtime.c, uart.js
+ * core). An output-only character device: on CLK's 0→1 edge, and only while
+ * CS/ and CE/ both read exactly 0, it latches D0(LSB)..D7(MSB) and writes the
+ * byte (any non-1 data bit as 0) to standard output. It drives no nets and adds
+ * no driver. The runtime owns per-instance edge state (prev_clk); this table is
+ * the const wiring. `data` points at an 8-long net-index array baked in the
+ * generated file; a control net is -1 when unwired (reads U, never qualifies).
+ * `refdes` names the instance for messages. */
+typedef struct {
+  const int *data;    /* 8 net indices, D0(LSB)..D7(MSB) */
+  int cs;             /* CS/ net index (active low), or -1 */
+  int ce;             /* CE/ net index (active low), or -1 */
+  int clk;            /* CLK net index */
+  const char *refdes; /* instance refdes (messages) */
+} rt_uart;
+extern const rt_uart gen_uarts[];
+extern const int gen_uart_count;
+
+/* gen_latch_count > 0 marks a transparent latch present (FR-079d). A clock-less
+ * latch design is still STATEFUL: the vector runner runs its rows in order on
+ * persistent state (FR-115e), like a clocked design — the C analogue of
+ * vectors.js isStateful (§6.16). */
+extern const int gen_latch_count;
 
 /* --- Vector columns (FR-117) --- */
 

@@ -105,9 +105,14 @@ static void *xalloc(size_t n) {
  * these row by row; drive_builtins deposits them each step. */
 static rt_val *port_stim;
 
+/* Per-UART CLK edge state (FR-122b): the previous step's CLK level, for 0→1
+ * detection. Allocated in rt_init, RT_U at reset (uart_reset). */
+static rt_val *uart_prev_clk;
+
 static void mem_alloc(void); /* memory store allocation (FR-114d) */
 static void mem_load_all(void); /* startup ROM content read (FR-117b) */
 static void mem_reset(void); /* memory power-up: RAM U, ROM loaded bytes */
+static void uart_reset(void); /* magic UART power-up: prev_clk U (FR-122b) */
 static void vcd_sample(void); /* per-step VCD change dump (--vcd, FR-118) */
 
 /* reset_state returns every net to power-up Z and all generated state to
@@ -120,6 +125,7 @@ static void reset_state(void) {
   memset(conflicted, 0, (size_t)gen_net_count);
   gen_init();
   mem_reset();
+  uart_reset();
 }
 
 void rt_init(void) {
@@ -132,6 +138,7 @@ void rt_init(void) {
   memset(port_stim, RT_Z, (size_t)(gen_incol_count > 0 ? gen_incol_count : 1));
   mem_alloc();
   mem_load_all();
+  uart_prev_clk = xalloc((size_t)(gen_uart_count > 0 ? gen_uart_count : 1) * sizeof uart_prev_clk[0]);
   reset_state();
 }
 
@@ -334,14 +341,18 @@ static int rom_arg_count;
 /* rom_read_file reads one content file per FR-114e: format by extension
  * (".bin" raw bytes; ".hex" whitespace-separated hex byte tokens, each
  * one or two hex digits), returning a malloc'd byte buffer. Returns NULL
- * only when the file cannot be opened; a format problem is a hard error
- * (exit 2) naming `who` — the flag or ROM the request came from. */
-static unsigned char *rom_read_file(const char *path, long *out_len, const char *who) {
+ * when the file cannot be opened. A format problem (bad extension, malformed
+ * hex) is fatal for a ROM (`fatal` = 1: exit 2 naming `who`) but non-fatal
+ * for a persistent RAM (`fatal` = 0: report to stderr and return NULL, so the
+ * RAM powers up all-U, FR-114g/FR-117c). */
+static unsigned char *rom_read_file(const char *path, long *out_len, const char *who,
+                                    int fatal) {
   const char *ext = strrchr(path, '.');
   int hex = ext && strcmp(ext, ".hex") == 0;
   if (!hex && !(ext && strcmp(ext, ".bin") == 0)) {
     fprintf(stderr, "%s: \"%s\" must end in .bin or .hex (FR-114e)\n", who, path);
-    exit(2);
+    if (fatal) exit(2);
+    return NULL;
   }
   FILE *f = fopen(path, "rb");
   if (!f) return NULL;
@@ -382,7 +393,10 @@ static unsigned char *rom_read_file(const char *path, long *out_len, const char 
                                      : -1;
       if (d < 0 || digits >= 2) {
         fprintf(stderr, "%s: malformed hex byte token in \"%s\"\n", who, path);
-        exit(2);
+        free(raw);
+        free(bytes);
+        if (fatal) exit(2);
+        return NULL;
       }
       v = v * 16 + d;
       digits++;
@@ -432,7 +446,7 @@ static void mem_load_all(void) {
     unsigned char *bytes;
     if (override[i]) {
       snprintf(who, sizeof who, "--rom %s=%s", m->refdes, override[i]);
-      bytes = rom_read_file(override[i], &len, who);
+      bytes = rom_read_file(override[i], &len, who, 1);
       if (!bytes) {
         fprintf(stderr, "%s: cannot read \"%s\"\n", who, override[i]);
         exit(2);
@@ -441,10 +455,10 @@ static void mem_load_all(void) {
       /* The recorded path as-is, then its basename in the cwd (the file
        * placed beside where the program runs). */
       snprintf(who, sizeof who, "ROM %s", m->refdes);
-      bytes = rom_read_file(m->rom_file, &len, who);
+      bytes = rom_read_file(m->rom_file, &len, who, 1);
       const char *slash = strrchr(m->rom_file, '/');
       const char *base = slash ? slash + 1 : m->rom_file;
-      if (!bytes && slash) bytes = rom_read_file(base, &len, who);
+      if (!bytes && slash) bytes = rom_read_file(base, &len, who, 1);
       if (!bytes) {
         fprintf(stderr,
                 "ROM %s: cannot read \"%s\"%s%s%s; use --rom %s=FILE to supply the contents\n",
@@ -469,6 +483,34 @@ static void mem_load_all(void) {
     mem_states[i].nbytes = len;
   }
   free(override);
+
+  /* Persistent RAM load-on-start (FR-114g/FR-117c): seed a load-on-start RAM
+   * from its baked save file, non-fatally — a missing/malformed file leaves
+   * the RAM all-U (bytes stays NULL) with a stderr note, rather than aborting
+   * the run. Only the recorded path is tried (no --ram override, no cwd
+   * basename fallback); same little-endian packing / over-capacity report as
+   * a ROM. mem_reset then seeds the RAM from these bytes like a ROM. */
+  for (int i = 0; i < gen_mem_count; i++) {
+    const rt_mem *m = &gen_mems[i];
+    if (m->kind != RT_MEM_RAM || !m->ram_load || !m->ram_file) continue;
+    char who[256];
+    snprintf(who, sizeof who, "RAM %s", m->refdes);
+    long len = 0;
+    unsigned char *bytes = rom_read_file(m->ram_file, &len, who, 0);
+    if (!bytes) {
+      fprintf(stderr, "RAM %s: cannot load \"%s\"; powering up all-U\n",
+              m->refdes, m->ram_file);
+      continue;
+    }
+    int nb = (m->width + 7) / 8;
+    long capacity = 1L << m->abits;
+    if (len / nb > capacity) {
+      fprintf(stderr, "RAM %s: save file exceeds capacity (%ld of %ld words used)\n",
+              m->refdes, capacity, len / nb);
+    }
+    mem_states[i].bytes = bytes;
+    mem_states[i].nbytes = len;
+  }
 }
 
 /* mem_reset restores power-up: RAM all-U, ROM seeded from its loaded
@@ -514,6 +556,81 @@ static void mem_write_all(const rt_val *curr) {
       }
     }
     mem_states[i].prev_we = we;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ *  Magic UART output device (FR-122b/FR-122d; engine/uart.js core)
+ * ------------------------------------------------------------------ *
+ * An output-only character device. On CLK's 0→1 edge, and only while CS/ and
+ * CE/ both read exactly 0, it latches D0(LSB)..D7(MSB) and writes the byte to
+ * standard output (any data bit that is not a clean RT_1 contributes 0, since
+ * ASCII has no U encoding, FR-114g). It drives no nets. An uncertain/deasserted
+ * control emits nothing — a character is irreversible, so this is conservative,
+ * not pessimistic (FR-122b), a deliberate contrast with memory's bus pessimism. */
+
+/* uart_reset restores power-up: prev_clk U, so a run starting with CLK already
+ * high is not seen as a 0→1 edge. Called from reset_state via rt_reset. */
+static void uart_reset(void) {
+  for (int i = 0; i < gen_uart_count; i++) uart_prev_clk[i] = RT_U;
+}
+
+/* uart_step latches and emits for each UART on its CLK 0→1 edge (FR-122b),
+ * reusing mem_rd (Z→U, unwired -1→U). Called in the latch phase beside
+ * mem_write_all, in gen_uarts order (deterministic interleave). */
+static void uart_step(const rt_val *curr) {
+  for (int i = 0; i < gen_uart_count; i++) {
+    const rt_uart *u = &gen_uarts[i];
+    rt_val clk = mem_rd(curr, u->clk);
+    if (uart_prev_clk[i] == RT_0 && clk == RT_1 &&
+        mem_rd(curr, u->cs) == RT_0 && mem_rd(curr, u->ce) == RT_0) {
+      unsigned byte = 0;
+      for (int b = 0; b < 8; b++)
+        if (mem_rd(curr, u->data[b]) == RT_1) byte |= 1u << b;
+      putchar((int)byte);
+    }
+    uart_prev_clk[i] = clk;
+  }
+}
+
+/* mem_save_all writes each persistent RAM's full contents back to its baked
+ * save file (FR-114g/FR-117c) — the write complement of the startup load,
+ * called once by main() after a run completes, in either batch mode. Format
+ * mirrors memory.js dumpBytes + ramFileBody: the whole device, B=ceil(w/8)
+ * bytes per location, little-endian, an undefined (U) or never-written bit
+ * written as 0; ".hex" as space-separated two-digit hex byte tokens, else raw
+ * bytes. A write failure reports to stderr but does not change exit status. */
+static void mem_save_all(void) {
+  for (int i = 0; i < gen_mem_count; i++) {
+    const rt_mem *m = &gen_mems[i];
+    if (m->kind != RT_MEM_RAM || !m->ram_file) continue;
+    int nb = (m->width + 7) / 8; /* B = ceil(width/8) */
+    long capacity = 1L << m->abits;
+    const char *ext = strrchr(m->ram_file, '.');
+    int hex = ext && strcmp(ext, ".hex") == 0;
+    FILE *f = fopen(m->ram_file, hex ? "w" : "wb");
+    if (!f) {
+      fprintf(stderr, "RAM %s: cannot write \"%s\"\n", m->refdes, m->ram_file);
+      continue;
+    }
+    int err = 0;
+    for (long k = 0; k < capacity && !err; k++) {
+      const rt_val *word = &mem_states[i].store[(size_t)k * m->width];
+      for (int b = 0; b < nb && !err; b++) {
+        unsigned v = 0;
+        for (int bit = 0; bit < 8; bit++) {
+          int idx = b * 8 + bit;
+          if (idx < m->width && word[idx] == RT_1) v |= 1u << bit;
+        }
+        if (hex) {
+          if (fprintf(f, "%s%02x", (k || b) ? " " : "", v) < 0) err = 1;
+        } else if (fputc((int)v, f) == EOF) {
+          err = 1;
+        }
+      }
+    }
+    if (fclose(f) != 0) err = 1;
+    if (err) fprintf(stderr, "RAM %s: error writing \"%s\"\n", m->refdes, m->ram_file);
   }
 }
 
@@ -563,6 +680,7 @@ int rt_step(void) {
    * step's values, before any contribution is evaluated (FR-079/FR-114d). */
   gen_latch(curr_buf);
   mem_write_all(curr_buf);
+  uart_step(curr_buf); /* magic UART latch + emit on CLK 0→1 (FR-122b) */
 
   /* (2) Gather every driver's contribution, all computed from curr. */
   ncontrib = 0;
@@ -739,7 +857,12 @@ int rt_run_vectors(void) {
   char *in_syms = xalloc((size_t)(gen_incol_count > 0 ? gen_incol_count : 1));
   char *out_syms = xalloc((size_t)(gen_outcol_count > 0 ? gen_outcol_count : 1));
   unsigned char *pulse = xalloc((size_t)(gen_incol_count > 0 ? gen_incol_count : 1));
-  int sequential = gen_clock_count > 0;
+  /* A design is STATEFUL — run its rows in order on persistent state (FR-115e)
+   * — when it has a clock generator OR any transparent latch (FR-079d), matching
+   * vectors.js isStateful (§6.16). A clock-less latch design has no C pulses and
+   * no preamble (both keyed on gen_clock_count below), but its rows still share
+   * state so a latch's hold spans rows. */
+  int sequential = gen_clock_count > 0 || gen_latch_count > 0;
   int rowno = 0, failed = 0;
 
   /* Sequential (FR-115e): the rows run in order on this one persistent
@@ -807,6 +930,11 @@ void rt_run_free(long cycles) {
   freerun = 1;
   long total = cycles * (long)clock_period_eff();
   for (long i = 0; i < total; i++) rt_step();
+
+  /* Flush all buffered UART output (FR-122d) before the trailing observable
+   * dump, so the two are ordered deterministically: every UART byte precedes
+   * the dump on standard output regardless of libc buffering. */
+  fflush(stdout);
 
   /* Final observable dump (FR-117a): the FR-118 observable set — input
    * columns then output columns, in column order. An unwired probe reads
@@ -950,6 +1078,10 @@ static void rt_dump_columns(void) {
 }
 
 int main(int argc, char **argv) {
+  /* Heavily buffer stdout (FR-122d): the magic UART writes here, and full
+   * buffering keeps a high-volume byte stream cheap and non-blocking. Flushed
+   * explicitly before the end-of-run dump/transcript (below) and at exit. */
+  setvbuf(stdout, NULL, _IOFBF, 1 << 16);
   long cycles = -1;            /* -1 = vector mode (no --cycles flag) */
   const char *vcd_path = NULL; /* --vcd trace file, or NULL */
   rom_args = xalloc((size_t)argc * sizeof *rom_args);
@@ -984,6 +1116,7 @@ int main(int argc, char **argv) {
   } else {
     status = rt_run_vectors() ? 1 : 0;
   }
+  mem_save_all(); /* write persistent RAMs back on normal termination (FR-117c) */
   if (vcd_fp) fclose(vcd_fp);
   return status;
 }

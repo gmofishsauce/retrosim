@@ -225,7 +225,7 @@
       "refdes": "A-1",
       "type": "type-switch",
       "x": -6,
-      "y": 0,
+      "y": 1,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -251,7 +251,7 @@
       "refdes": "A-2",
       "type": "type-switch",
       "x": -6,
-      "y": 1,
+      "y": 2,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -277,7 +277,7 @@
       "refdes": "A-3",
       "type": "type-switch",
       "x": -6,
-      "y": 2,
+      "y": 3,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -303,7 +303,7 @@
       "refdes": "A-4",
       "type": "type-switch",
       "x": -6,
-      "y": 3,
+      "y": 4,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -329,7 +329,7 @@
       "refdes": "A-5",
       "type": "type-switch",
       "x": -6,
-      "y": 4,
+      "y": 5,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -355,7 +355,7 @@
       "refdes": "A-6",
       "type": "type-switch",
       "x": -6,
-      "y": 5,
+      "y": 6,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -381,32 +381,6 @@
       "refdes": "A-7",
       "type": "type-switch",
       "x": -6,
-      "y": 6,
-      "rotation": 0,
-      "typeData": {
-        "id": "type-switch",
-        "name": "switch",
-        "builtin": true,
-        "title": "input switch",
-        "renderType": "switch",
-        "width": 2,
-        "height": 2,
-        "pins": [
-          {
-            "name": "OUT",
-            "side": "right",
-            "position": 1,
-            "direction": "out"
-          }
-        ]
-      },
-      "overrides": {},
-      "switchState": "0"
-    },
-    {
-      "refdes": "A-8",
-      "type": "type-switch",
-      "x": -6,
       "y": 7,
       "rotation": 0,
       "typeData": {
@@ -427,10 +401,10 @@
         ]
       },
       "overrides": {},
-      "switchState": "0"
+      "switchState": "1"
     },
     {
-      "refdes": "A-9",
+      "refdes": "A-8",
       "type": "type-switch",
       "x": -6,
       "y": 8,
@@ -453,13 +427,39 @@
         ]
       },
       "overrides": {},
-      "switchState": "0"
+      "switchState": "1"
+    },
+    {
+      "refdes": "A-9",
+      "type": "type-switch",
+      "x": 5,
+      "y": -3,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "1"
     },
     {
       "refdes": "A-10",
       "type": "type-switch",
-      "x": -6,
-      "y": 9,
+      "x": 6,
+      "y": -6,
       "rotation": 0,
       "typeData": {
         "id": "type-switch",
@@ -484,8 +484,8 @@
     {
       "refdes": "A-11",
       "type": "type-indicator",
-      "x": 16,
-      "y": 0,
+      "x": 20,
+      "y": -5,
       "rotation": 0,
       "typeData": {
         "id": "type-indicator",
@@ -509,8 +509,8 @@
     {
       "refdes": "A-12",
       "type": "type-indicator",
-      "x": 16,
-      "y": 1,
+      "x": 20,
+      "y": -4,
       "rotation": 0,
       "typeData": {
         "id": "type-indicator",
@@ -534,8 +534,8 @@
     {
       "refdes": "A-13",
       "type": "type-indicator",
-      "x": 16,
-      "y": 2,
+      "x": 20,
+      "y": -3,
       "rotation": 0,
       "typeData": {
         "id": "type-indicator",
@@ -559,8 +559,8 @@
     {
       "refdes": "A-14",
       "type": "type-indicator",
-      "x": 16,
-      "y": 3,
+      "x": 20,
+      "y": -2,
       "rotation": 0,
       "typeData": {
         "id": "type-indicator",
@@ -584,8 +584,8 @@
     {
       "refdes": "A-15",
       "type": "type-indicator",
-      "x": 16,
-      "y": 4,
+      "x": 21,
+      "y": 3,
       "rotation": 0,
       "typeData": {
         "id": "type-indicator",
@@ -609,8 +609,8 @@
     {
       "refdes": "A-16",
       "type": "type-indicator",
-      "x": 16,
-      "y": 5,
+      "x": 23,
+      "y": 4,
       "rotation": 0,
       "typeData": {
         "id": "type-indicator",
@@ -634,8 +634,8 @@
     {
       "refdes": "A-17",
       "type": "type-indicator",
-      "x": 16,
-      "y": 6,
+      "x": 25,
+      "y": 5,
       "rotation": 0,
       "typeData": {
         "id": "type-indicator",
@@ -659,8 +659,8 @@
     {
       "refdes": "A-18",
       "type": "type-indicator",
-      "x": 16,
-      "y": 7,
+      "x": 27,
+      "y": 6,
       "rotation": 0,
       "typeData": {
         "id": "type-indicator",
@@ -795,6 +795,11 @@
           "v": "v17"
         },
         {
+          "t": "bend",
+          "x": 8,
+          "y": -2
+        },
+        {
           "t": "node",
           "v": "v18"
         }
@@ -806,6 +811,11 @@
         {
           "t": "node",
           "v": "v19"
+        },
+        {
+          "t": "bend",
+          "x": 12,
+          "y": -5
         },
         {
           "t": "node",
@@ -873,6 +883,11 @@
           "v": "v29"
         },
         {
+          "t": "bend",
+          "x": 22,
+          "y": 6
+        },
+        {
           "t": "node",
           "v": "v30"
         }
@@ -884,6 +899,11 @@
         {
           "t": "node",
           "v": "v31"
+        },
+        {
+          "t": "bend",
+          "x": 24,
+          "y": 7
         },
         {
           "t": "node",
@@ -899,6 +919,11 @@
           "v": "v33"
         },
         {
+          "t": "bend",
+          "x": 26,
+          "y": 8
+        },
+        {
           "t": "node",
           "v": "v34"
         }
@@ -910,6 +935,16 @@
         {
           "t": "node",
           "v": "v35"
+        },
+        {
+          "t": "bend",
+          "x": 22,
+          "y": 9
+        },
+        {
+          "t": "bend",
+          "x": 28,
+          "y": 9
         },
         {
           "t": "node",
@@ -1209,5 +1244,204 @@
       "y": 7
     }
   ],
-  "nets": []
+  "nets": [
+    {
+      "pins": [
+        "A-1.OUT",
+        "U1.D0"
+      ],
+      "members": [
+        "w1"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-2.OUT",
+        "U1.D1"
+      ],
+      "members": [
+        "w2"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-3.OUT",
+        "U1.D2"
+      ],
+      "members": [
+        "w3"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-4.OUT",
+        "U1.D3"
+      ],
+      "members": [
+        "w4"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-5.OUT",
+        "U1.D4"
+      ],
+      "members": [
+        "w5"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-6.OUT",
+        "U1.D5"
+      ],
+      "members": [
+        "w6"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-7.OUT",
+        "U1.D6"
+      ],
+      "members": [
+        "w7"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-8.OUT",
+        "U1.D7"
+      ],
+      "members": [
+        "w8"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-9.OUT",
+        "U1.LE"
+      ],
+      "members": [
+        "w9"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-10.OUT",
+        "U1./OE"
+      ],
+      "members": [
+        "w10"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U1.Q0",
+        "A-11.IN"
+      ],
+      "members": [
+        "w11"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.Q1",
+        "A-12.IN"
+      ],
+      "members": [
+        "w12"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.Q2",
+        "A-13.IN"
+      ],
+      "members": [
+        "w13"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.Q3",
+        "A-14.IN"
+      ],
+      "members": [
+        "w14"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.Q4",
+        "A-15.IN"
+      ],
+      "members": [
+        "w15"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.Q5",
+        "A-16.IN"
+      ],
+      "members": [
+        "w16"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.Q6",
+        "A-17.IN"
+      ],
+      "members": [
+        "w17"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.Q7",
+        "A-18.IN"
+      ],
+      "members": [
+        "w18"
+      ],
+      "provenance": [],
+      "name": "IN"
+    }
+  ]
 }

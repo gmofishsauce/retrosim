@@ -170,7 +170,9 @@ export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {
             `understands (v${FORMAT_VERSION}); loading anyway`,
         );
       }
-      const loaded = deserializeDesign(obj);
+      // Structural inconsistencies are repaired drop-and-warn (§7.4, FR-060d),
+      // each drop reported via the tray (FR-074).
+      const loaded = deserializeDesign(obj, { onWarn: postMessage });
       // Sub-design child paths are stored relative to this design's dir on disk
       // but held absolute in memory (FR-098): absolutize them before resolving
       // interfaces, so the live model carries absolute paths. Relative mem data
