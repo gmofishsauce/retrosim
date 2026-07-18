@@ -200,7 +200,7 @@ export function synthTypeForInterface(iface, render, name = "subdesign") {
 // ifaceSig canonicalizes an interface record for the FR-099c change comparison,
 // so stored-JSON key order can never produce a false difference.
 const ifaceSig = (iface) =>
-  (iface ?? []).map((s) => `${s.label} ${s.dir} ${s.width}`).join("\n");
+  (iface ?? []).map((s) => `${s.label}\x00${s.dir}\x00${s.width}`).join("\n");
 
 // resolveSubDesigns fills in (or refreshes) the in-memory synthetic typeData of
 // every sub-design instance from its child file (FR-098 loading). It is the async
