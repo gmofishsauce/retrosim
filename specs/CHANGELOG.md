@@ -19,6 +19,26 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-19 — Fan-out dot moves to the visual branch point
+What: the FR-034d pin fan-out dot is placed by walking each pair of ends outward from the pin while their geometry coincides and dotting the divergence point — the attachment point for ends arriving from different directions (as before), the visible T for ends overlapping along a collinear run.
+Why: the unconditional attachment-point dot landed mid-run — away from the T the eye sees — when a wire was completed on an already-wired pin through the existing wire (overlapping final legs, e.g. notL4C381's U33 2A2).
+Touches: FR-034d (in-place rework); design §6.8 (`drawVertices`/`branchPoint`). Implemented in `web/js/engine/canvas.js`.
+
+## 2026-07-19 — Connection dot at multi-wire pins
+What: a pin (or port connector) with two or more conductor ends attached draws the standard junction dot at its visual attachment point. Rendering only — fan-out through a shared pin vertex was already electrically connected.
+Why: a second wire terminating on an already-wired pin drew no dot, so the fan-out read as an unconnected T-crossing (mandatory-dot convention violated).
+Touches: FR-034d (new); design §6.8 (`drawVertices`). Implemented in `web/js/engine/canvas.js`.
+
+## 2026-07-19 — Select-mode pin hotspot shrinks with zoom
+What: in select mode, the pin wire-hotspot radius is capped in screen pixels — `min(PIN_HIT_TOL, PIN_PICK_PX/scale)`, PIN_PICK_PX = 12 — so it shrinks in world terms at high zoom; wire/bus-drawing pin snap keeps the fixed 0.7-grid-unit region.
+Why: the world-unit hotspot covered most of a 1-grid-unit wire stub at every zoom, making short stubs off IC pins nearly unselectable (KiCad comparison: its pixel-based region shrinks as you zoom in).
+Touches: FR-013d (in-place, select-mode cap), FR-027b (in-place pointer); design §6.9 (hit-testing). Implemented in `web/js/engine/interaction.js`.
+
+## 2026-07-19 — Deeper, gentler zoom
+What: ZOOM_MAX raised 4.0→16.0; wheel zoom step now delta-proportional (`exp(−deltaY×0.0008)`, clamped per event to [0.8, 1.25]) instead of a fixed 1.1× per event. Menu/keyboard zoom steps unchanged.
+Why: max zoom was too shallow to inspect a pin (KiCad comparison), and the fixed per-event factor stacked across macOS wheel-event bursts, jumping past the intended zoom target.
+Touches: FR-022 (in-place rework); design §8 A5. Implemented in `web/js/geometry.js`, `web/js/engine/interaction.js`.
+
 ## 2026-07-18 — Never-reuse reference designators: high-water counters, save format v3
 What: each designator series (U/A-/N-/X) gains a persistent per-design high-water counter; every allocation (placement, sub-design embed, paste) takes `max(counter, 1 + current max)` and advances it, so a deleted designator is never reused. Counters are saved with the design (`refCounters`, format v3; pure-textual 2→3 migration initializes them from the file's current maxima) and are monotonic — never wound back by undo/redo, delete, or the FR-024a rollback (an undone placement burns its number). Load clamps a hand-edited lagging counter up to `1 + current max`.
 Why: refdes is the immutable identity referenced outside the design — test-vector columns bind by refdes+pin (first-class objects in this app), exported netlists carry refdes — and `nextRefNum`'s max+1 rule reused the number of a deleted highest-numbered component, which re-bound stale references to an unrelated new part (the notL4C381/U28 corruption's second ingredient, alongside the FR-018a gc leak).

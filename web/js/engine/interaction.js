@@ -12,6 +12,7 @@ import {
   centerViewportOn,
   clampZoom,
   PX_PER_UNIT_DEFAULT,
+  WHEEL_ZOOM_SENSITIVITY,
   rotateOffset,
   isRedundantBend,
   pruneCollinearBends,
@@ -19,6 +20,7 @@ import {
 import {
   hitComponent,
   hitPin,
+  PIN_HIT_TOL,
   hitSegment,
   hitBend,
   hitJunction,
@@ -508,8 +510,14 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
   // segment they sit on.
   const SEG_PICK_PX = 6;
   const BEND_PICK_PX = 8;
+  const PIN_PICK_PX = 12; // select-mode pin hotspot cap (FR-013d)
   const segTol = () => SEG_PICK_PX / scaleFor(store.state.viewport);
   const bendTol = () => BEND_PICK_PX / scaleFor(store.state.viewport);
+  // pinTol is the select-mode pin hotspot radius (FR-027b): the world-unit
+  // FR-013d region capped in screen pixels, so at high zoom it shrinks in
+  // world terms and a short wire stub off a pin stays selectable. Wire/bus
+  // *drawing* keeps the full PIN_HIT_TOL magnetic catch (hitPin's default).
+  const pinTol = () => Math.min(PIN_HIT_TOL, PIN_PICK_PX / scaleFor(store.state.viewport));
 
   // setHover records the refdes under the cursor (transient UI state) so the
   // renderer can show subunit connection ticks (FR-013c); re-renders only on
@@ -1159,7 +1167,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     // A pin is a wire hotspot (FR-027b): clicking one arms WIRE from that pin
     // (pins take priority over the component body, so this doesn't select/drag
     // the component) and reuses the WIRE machinery for preview/completion.
-    const pinHit = hitPin(store.design, world);
+    const pinHit = hitPin(store.design, world, pinTol());
     if (pinHit) {
       setTool("wire"); // clears wireSource, sets wire cursor, highlights toolbar
       wireSource = { kind: "pin", refdes: pinHit.refdes, pin: pinHit.pin };
@@ -1401,7 +1409,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       // In select mode a pin is a wire hotspot (FR-027b): show the wire cursor
       // while hovering one, else the default pointer.
       if (store.state.tool === "select") {
-        const overPin = !!hitPin(store.design, world);
+        const overPin = !!hitPin(store.design, world, pinTol());
         canvas.style.cursor = overPin ? WIRE_CURSOR : "default";
       } else if (store.state.tool === "bus") {
         // Before the first click, still preview a group's brace when near it, so
@@ -1498,7 +1506,9 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     "wheel",
     (e) => {
       e.preventDefault();
-      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      // Delta-proportional step, clamped per event so a macOS wheel-event
+      // burst cannot stack into an overshoot (FR-022, §8 A5).
+      const factor = Math.min(1.25, Math.max(0.8, Math.exp(-e.deltaY * WHEEL_ZOOM_SENSITIVITY)));
       const anchor = pendingZoomAnchor ?? canvasPoint(e);
       renderer.setViewport(zoomAbout(store.state.viewport, anchor, factor));
     },

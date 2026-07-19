@@ -6,7 +6,8 @@
 export const GRID_MM = 2; // nominal grid spacing (~2 mm at default zoom)
 export const PX_PER_UNIT_DEFAULT = 8; // device pixels per grid unit at zoom 1
 export const ZOOM_MIN = 0.25;
-export const ZOOM_MAX = 4.0;
+export const ZOOM_MAX = 16.0;
+export const WHEEL_ZOOM_SENSITIVITY = 0.0008; // wheel zoom: factor = exp(-deltaY * this)
 
 // rotateOffset rotates an integer pin offset (dx,dy) by rotation degrees
 // (0/90/180/270) about the instance origin. 90-degree turns map integers to

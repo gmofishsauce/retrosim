@@ -484,8 +484,14 @@ this document adopts. **None block implementation** except where noted in §12.
 - **A5 — Grid spacing & default zoom (OQ-004).** **Resolution:** one grid unit =
   a "~2 mm" cell; `PX_PER_UNIT_DEFAULT` is **8 device pixels per grid unit** at
   zoom 1, and the initial viewport opens at **zoom 1.6** (≈12.8 px/grid-unit) so
-  pins are easy to click and labels stay legible; zoom range **0.25×–4.0×**.
-  These are constants (`GRID_MM`, `PX_PER_UNIT_DEFAULT`, `ZOOM_MIN`, `ZOOM_MAX`,
+  pins are easy to click and labels stay legible; zoom range **0.25×–16.0×**
+  (raised 2026-07-19 from 4.0× — 128 px/grid-unit at max, deep enough for
+  pin-level inspection per the reworked FR-022). The wheel-zoom step is
+  delta-proportional: `factor = exp(−deltaY × WHEEL_ZOOM_SENSITIVITY)` with
+  `WHEEL_ZOOM_SENSITIVITY = 0.0008`, clamped per event to
+  **[0.8, 1.25]** (supersedes the fixed 1.1× per event, which stacked into
+  overshoot across macOS wheel-event bursts). These are constants (`GRID_MM`,
+  `PX_PER_UNIT_DEFAULT`, `ZOOM_MIN`, `ZOOM_MAX`, `WHEEL_ZOOM_SENSITIVITY`,
   default viewport zoom) in one place so they are trivially tunable.
 
 - **A6 — Bus-tool one-shot (OQ-005).** Assumed **yes**: the Bus tool returns to
@@ -1194,6 +1200,17 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   2026-06-18; previously before) so a component body can never hide a
   connection/dangling indicator that sits on or under it.
 - **Vertex marks (`drawVertices`):** a `junction` vertex draws a filled black dot.
+  A `pin`/`connector` vertex with **two or more** conductor path-ends on it
+  (fan-out, FR-034a) draws the same dot at each pair of ends' **branch point**
+  (FR-034d): the two paths, oriented outward from the pin, are walked together
+  (`branchPoint`) while their segment directions coincide, advancing by the
+  shorter leg; the divergence point gets the dot. Ends arriving from different
+  directions diverge at the pin itself and dot at its visual attachment point
+  (`pinVisualPos`, FR-013d — where the wire ends are drawn to meet); ends
+  sharing a collinear run dot at the visible T instead. Pairwise for ≥ 3 ends,
+  coalescing duplicates. The ends are gathered from every wire's and bus's
+  first/last path point. (Added 2026-07-19; branch-point walk added same day —
+  the unconditional attachment-point dot landed mid-run when ends overlap.)
   A `free` vertex draws a red hollow "dangling" square (FR-029) **unless** it is a
   bus endpoint named by some bus's `groupConnections` (group-snapped, FR-042), in
   which case it draws nothing — its group-snap brace (below) is its indicator and
@@ -1363,8 +1380,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   converted to world units at the current zoom (`tol = px / scaleFor(viewport)`,
   in `interaction.js`), so the catch band stays a comfortable, zoom-independent
   size; a world-unit tolerance instead shrinks to a sub-pixel target when zoomed
-  out. (The pin hot region, FR-013d, stays a world-unit 0.7-radius circle: its
-  size is tied to the 1-grid-unit pin pitch, not the cursor.) `junction`/`free`
+  out. (The pin hot region, FR-013d, is a world-unit 0.7-radius circle — its
+  size is tied to the 1-grid-unit pin pitch, not the cursor — except for the
+  **select-mode** FR-027b hotspot, which caps it at
+  `min(PIN_HIT_TOL, PIN_PICK_PX / scaleFor(viewport))`, `PIN_PICK_PX ≈ 12 px`
+  in `interaction.js`, so at high zoom the hotspot shrinks in world terms and a
+  1-grid-unit wire stub off a pin stays selectable; wire/bus-drawing pin
+  snapping keeps the full 0.7. Added 2026-07-19.) `junction`/`free`
   vertices are points. When targets overlap, pins take priority over
   segments, and segments over component bodies.
   `marqueeHits(design, world0, world1, mode)` returns the selection refs for a

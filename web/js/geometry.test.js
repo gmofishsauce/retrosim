@@ -54,7 +54,7 @@ test("segmentIntersectsRect: inside, crossing, and outside", () => {
 test("constants (A5)", () => {
   assert.equal(PX_PER_UNIT_DEFAULT, 8);
   assert.equal(ZOOM_MIN, 0.25);
-  assert.equal(ZOOM_MAX, 4.0);
+  assert.equal(ZOOM_MAX, 16.0);
 });
 
 test("rotateOffset maps integer offsets to integers for all angles (§6.7)", () => {
@@ -94,7 +94,7 @@ test("snapToGrid rounds a screen point to the nearest grid intersection", () => 
 
 test("clampZoom bounds to [ZOOM_MIN, ZOOM_MAX]", () => {
   assert.equal(clampZoom(0.1), ZOOM_MIN);
-  assert.equal(clampZoom(10), ZOOM_MAX);
+  assert.equal(clampZoom(100), ZOOM_MAX);
   assert.equal(clampZoom(1.5), 1.5);
 });
 

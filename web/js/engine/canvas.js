@@ -395,6 +395,41 @@ function drawMarquee(ctx, m, vp) {
   ctx.restore();
 }
 
+// branchPoint walks two conductor polylines (grid coordinates, sharing their
+// first point — a pin) outward together while their geometry coincides and
+// returns the point where they diverge: the visual branch of a pin fan-out
+// (FR-034d). Ends arriving from different directions diverge immediately,
+// returning the shared start point; ends overlapping along a collinear run
+// return the T where one turns away or stops on the other.
+function branchPoint(a, b) {
+  const EPS = 1e-9;
+  let cur = { x: a[0].x, y: a[0].y };
+  let ai = 1;
+  let bi = 1;
+  while (ai < a.length && bi < b.length) {
+    const la = Math.hypot(a[ai].x - cur.x, a[ai].y - cur.y);
+    const lb = Math.hypot(b[bi].x - cur.x, b[bi].y - cur.y);
+    if (la < EPS) {
+      ai++;
+      continue;
+    }
+    if (lb < EPS) {
+      bi++;
+      continue;
+    }
+    const dax = (a[ai].x - cur.x) / la;
+    const day = (a[ai].y - cur.y) / la;
+    const dbx = (b[bi].x - cur.x) / lb;
+    const dby = (b[bi].y - cur.y) / lb;
+    if (Math.abs(dax - dbx) > 1e-6 || Math.abs(day - dby) > 1e-6) break;
+    const step = Math.min(la, lb);
+    cur = { x: cur.x + dax * step, y: cur.y + day * step };
+    if (step >= la - EPS) ai++;
+    if (step >= lb - EPS) bi++;
+  }
+  return cur;
+}
+
 // drawVertices marks junctions (filled dots) and dangling free ends (red hollow
 // squares, FR-029) so connectivity is visible (§6.8). A group-snapped bus endpoint
 // is also a `free` vertex but is connected (FR-042) — it draws no dangling mark;
@@ -407,6 +442,23 @@ function drawVertices(ctx, design, vp) {
   for (const b of design.buses) {
     for (const gc of b.groupConnections ?? []) snapped.add(gc.vertex);
   }
+  // Conductor path-ends per pin/connector vertex id: >= 2 is a fan-out
+  // (FR-034a) and draws the junction dot at each pair's visual branch point
+  // (FR-034d) so it cannot read as an unconnected T-crossing. Each entry is
+  // the conductor's path as a grid-coordinate polyline oriented outward from
+  // the pin, ready for the branchPoint walk.
+  const pinEnds = new Map();
+  for (const c of [...design.wires, ...design.buses]) {
+    for (const fromStart of [true, false]) {
+      const p = fromStart ? c.path[0] : c.path[c.path.length - 1];
+      if (p?.t !== "node") continue;
+      const v = getVertex(design, p.v);
+      if (!v || (v.kind !== "pin" && v.kind !== "connector")) continue;
+      const path = fromStart ? c.path : [...c.path].reverse();
+      if (!pinEnds.has(p.v)) pinEnds.set(p.v, []);
+      pinEnds.get(p.v).push(path.map((q) => pathPointWorld(design, q)));
+    }
+  }
   for (const v of design.vertices) {
     if (v.kind === "junction") {
       const s = worldToScreen(vertexWorld(design, v), vp);
@@ -414,6 +466,32 @@ function drawVertices(ctx, design, vp) {
       ctx.arc(s.x, s.y, 3, 0, Math.PI * 2);
       ctx.fillStyle = "#000";
       ctx.fill();
+    } else if ((v.kind === "pin" || v.kind === "connector") && (pinEnds.get(v.id)?.length ?? 0) >= 2) {
+      const inst = design.components.find((c) => c.refdes === v.ref);
+      if (inst) {
+        // Pairwise branch points (FR-034d): ends leaving the pin along a
+        // common collinear run dot at their divergence point (the visible T);
+        // ends arriving from different directions dot at the pin's visual
+        // attachment point. Duplicate dots coalesce.
+        const paths = pinEnds.get(v.id);
+        const pinPt = paths[0][0];
+        const dots = new Map();
+        for (let i = 0; i < paths.length; i++) {
+          for (let j = i + 1; j < paths.length; j++) {
+            const bp = branchPoint(paths[i], paths[j]);
+            const atPin = Math.abs(bp.x - pinPt.x) < 1e-9 && Math.abs(bp.y - pinPt.y) < 1e-9;
+            const w = atPin ? pinVisualPos(inst, v.pin) : bp;
+            dots.set(`${w.x},${w.y}`, w);
+          }
+        }
+        for (const w of dots.values()) {
+          const s = worldToScreen(w, vp);
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, 3, 0, Math.PI * 2);
+          ctx.fillStyle = "#000";
+          ctx.fill();
+        }
+      }
     } else if (v.kind === "free" && !snapped.has(v.id)) {
       // Dangling, unconnected end (FR-029): a red hollow square. (A group-snapped
       // free end draws nothing here — its brace is the indicator, FR-042a.)
