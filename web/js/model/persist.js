@@ -157,6 +157,7 @@ export function serializeDesign(design) {
     formatVersion: FORMAT_VERSION,
     name: design.name,
     ...(design.defaultRender ? { defaultRender: design.defaultRender } : {}),
+    ...(design.primaryClock ? { primaryClock: design.primaryClock } : {}), // FR-076b, additive-optional
     components: design.components.map((c) =>
       c.kind === "subdesign" ? stripSubDesign(c) : c,
     ),
@@ -276,6 +277,15 @@ export function deserializeDesign(obj, { onWarn = () => {} } = {}) {
   d.buses = structuredClone(obj.buses ?? []);
   d.vertices = structuredClone(obj.vertices ?? []);
   repairStructure(d, onWarn);
+  // FR-076b: adopt the primary-clock reference; a dangling one (hand-edited or
+  // corrupted file) is dropped with a warning, repair-style, rather than kept.
+  if (obj.primaryClock) {
+    const ok = d.components.some(
+      (c) => c.refdes === obj.primaryClock && c.typeData?.renderType === "clock",
+    );
+    if (ok) d.primaryClock = obj.primaryClock;
+    else onWarn(`dropped primary clock ${obj.primaryClock}: no such clock generator`);
+  }
   // Sub-designs persist no typeData (live reference, FR-098). Give each a
   // wiring-derived placeholder so the design is always renderable; the load
   // flow's resolveSubDesigns (§6.14) then refines it from the child file (or

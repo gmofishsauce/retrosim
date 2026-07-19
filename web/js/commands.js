@@ -31,6 +31,7 @@ import {
   typeIdentity,
   joinFreeEnd,
   promoteBusJoin,
+  reconcilePrimaryClock,
 } from "./model/design.js";
 import { addSubDesignInstance } from "./model/subdesign.js";
 import { pasteFragment } from "./model/clipboard.js";
@@ -102,6 +103,7 @@ function snapshotConnectivity(design) {
     nextWireId: design.nextWireId,
     nextBusId: design.nextBusId,
     nextVertexId: design.nextVertexId,
+    primaryClock: design.primaryClock, // design-level scalar (FR-076b); may be undefined
   };
   for (const k of CONNECTIVITY_KEYS) snap[k] = structuredClone(design[k]);
   return snap;
@@ -115,6 +117,8 @@ function restoreConnectivity(design, snap) {
   design.nextWireId = snap.nextWireId;
   design.nextBusId = snap.nextBusId;
   design.nextVertexId = snap.nextVertexId;
+  if (snap.primaryClock === undefined) delete design.primaryClock;
+  else design.primaryClock = snap.primaryClock;
 }
 
 function snapshotCommand(label, mutate) {
@@ -154,10 +158,12 @@ function resolveSpec(design, spec) {
 export function placeComponent(type, x, y, rotation = 0) {
   let created = null; // plain-data clones of the instances, captured on first apply
   let refdes = null; // their reference designators
+  let prevPrimary; // design.primaryClock before first apply (FR-076b)
   return {
     label: `Place ${type.name}`,
     apply(design) {
       if (created === null) {
+        prevPrimary = design.primaryClock;
         // A subunit package drops all of its units at once (FR-013a); a unit
         // component drops a single instance.
         const made =
@@ -169,12 +175,17 @@ export function placeComponent(type, x, y, rotation = 0) {
       } else {
         for (const inst of created) design.components.push(structuredClone(inst));
       }
+      // The first clock generator added to a design with no primary clock
+      // becomes the primary (FR-076b); a valid existing reference is untouched.
+      reconcilePrimaryClock(design);
     },
     revert(design) {
       for (const r of refdes) {
         const i = design.components.findIndex((c) => c.refdes === r);
         if (i >= 0) design.components.splice(i, 1);
       }
+      if (prevPrimary === undefined) delete design.primaryClock;
+      else design.primaryClock = prevPrimary;
     },
   };
 }
@@ -383,12 +394,18 @@ export function rotateSelectionCmd(refdeses, delta) {
 
 // deleteComponent removes an instance and frees its pins, leaving connected
 // wires dangling and pruning any left fully disconnected (FR-018a/029/030).
-// Snapshot-based so undo restores the full connectivity cascade.
-export function deleteComponent(refdes) {
+// Snapshot-based so undo restores the full connectivity cascade (including the
+// design-level primary clock, in the snapshot since FR-076b). Deleting the
+// primary clock reassigns it to the lowest-refdes remaining clock generator —
+// reported through `onReport` (the message tray, wired by the caller) — or
+// clears it when none remain.
+export function deleteComponent(refdes, { onReport = () => {} } = {}) {
   return snapshotCommand(`Delete ${refdes}`, (design) => {
     // Deleting a subunit deletes its whole package (FR-018b); a unit deletes only
     // itself. The user confirmation is a chrome-layer concern (interaction.js).
     for (const r of packageSiblings(design, refdes)) deleteInstance(design, r);
+    const change = reconcilePrimaryClock(design); // FR-076b
+    if (change?.to) onReport(`Primary clock reassigned to ${change.to}`);
   });
 }
 
@@ -433,6 +450,28 @@ export function setSwitchStateCmd(refdes, value) {
     },
     revert(design) {
       findInstance(design, refdes).switchState = old;
+    },
+  };
+}
+
+// setPrimaryClockCmd sets the design-level primary-clock reference (FR-076b),
+// dispatched by the Design Properties dialog (§6.11). The prior value is
+// captured once so undo restores it exactly (including "never set").
+export function setPrimaryClockCmd(refdes) {
+  let captured = false;
+  let old;
+  return {
+    label: "Set primary clock",
+    apply(design) {
+      if (!captured) {
+        old = design.primaryClock;
+        captured = true;
+      }
+      design.primaryClock = refdes;
+    },
+    revert(design) {
+      if (old === undefined) delete design.primaryClock;
+      else design.primaryClock = old;
     },
   };
 }

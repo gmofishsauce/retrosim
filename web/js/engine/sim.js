@@ -545,6 +545,14 @@ export function buildSimulation(
       clocks.length
         ? Math.max(...clocks.map((c) => c.props.period * c.props.speed))
         : 0,
+    // clockInfo lists every clock generator with its effective period — the
+    // same clamp the clock behavior applies (§6.11 builtins) — for the
+    // step-cycle edge computation (FR-076a).
+    clockInfo: () =>
+      clocks.map((c) => ({
+        refdes: c.refdes,
+        period: Math.max(2, Math.floor(c.props.period)),
+      })),
     // setStimulus replaces the external stimulus list between steps (FR-115e):
     // a long-lived sequential vector run re-drives its inputs row by row (and
     // phase by phase within a C pulse) without rebuilding the simulation.
@@ -645,6 +653,47 @@ async function fetchMemFile(refdes, path, label) {
   }
 }
 
+// --- Step-cycle helpers (FR-076a). Pure over a buildSimulation instance. ---
+
+// nextRisingEdge returns the earliest evaluation time ≥ t at which the FR-084
+// waveform of a clock with the given effective period applies its rising edge
+// (evaluation times t ≡ floor(period/2) mod period).
+export function nextRisingEdge(t, period) {
+  const half = Math.floor(period / 2);
+  return t + ((((half - t) % period) + period) % period);
+}
+
+// isClockEdgeTime reports whether evaluating a step at time t applies a
+// scheduled edge of any clock in `clocks` ([{refdes, period}], sim.clockInfo):
+// the FR-084 waveform transitions where t % period is 0 (falling) or
+// floor(period/2) (rising).
+export function isClockEdgeTime(clocks, t) {
+  return clocks.some((c) => {
+    const m = t % c.period;
+    return m === 0 || m === Math.floor(c.period / 2);
+  });
+}
+
+// advanceOneCycle advances `sim` just past the next rising edge of the primary
+// clock (effective period `primaryPeriod`) and settles (FR-076a): it steps
+// through the edge-evaluation time, then keeps stepping until quiescence —
+// stopping early one unit before the next scheduled edge of any clock, and
+// bounded by the FR-085 oscillation bound (reported once via onMessage).
+export function advanceOneCycle(sim, primaryPeriod, clocks, onMessage = () => {}) {
+  const tEdge = nextRisingEdge(sim.simTime(), primaryPeriod);
+  while (sim.simTime() <= tEdge) sim.step();
+  let steps = 0;
+  while (sim.lastStepChanged() && !isClockEdgeTime(clocks, sim.simTime())) {
+    if (steps++ >= SETTLE_BOUND) {
+      onMessage(
+        `design did not settle within ${SETTLE_BOUND} ns; pausing evaluation (possible oscillation)`,
+      );
+      break;
+    }
+    sim.step();
+  }
+}
+
 // MAX_STEPS_PER_FRAME caps a paced frame's work so a huge period × speed
 // cannot freeze the tab (§6.13).
 const MAX_STEPS_PER_FRAME = 10000;
@@ -667,6 +716,7 @@ export function createSim({ store, renderer, consolePanel = null }) {
   let unsubLive = null; // live-input channel subscription during a run (FR-087b)
   let settling = false; // a combinational settling episode is in flight
   let starting = false; // a run is awaiting its async ROM preload (FR-114e)
+  let paused = false; // sequential run paused (FR-076a); never set for combinational
 
   async function run() {
     if (sim || starting) return;
@@ -729,6 +779,7 @@ export function createSim({ store, renderer, consolePanel = null }) {
     if (timeoutId !== null) clearTimeout(timeoutId);
     rafId = timeoutId = null;
     settling = false;
+    paused = false;
     if (unsubLive) {
       unsubLive();
       unsubLive = null;
@@ -790,6 +841,15 @@ export function createSim({ store, renderer, consolePanel = null }) {
     let due = 0; // fractional steps carried between frames
     const frame = (now) => {
       if (!sim) return;
+      if (paused) {
+        // Frozen at a unit-step boundary (FR-076a). Re-anchoring `last` (and
+        // dropping any fractional debt) every frame means resume never tries
+        // to catch up the paused interval.
+        last = now;
+        due = 0;
+        rafId = requestAnimationFrame(frame);
+        return;
+      }
       due += ((now - last) / 1000) * rate;
       last = now;
       // Run the whole steps due, capped per frame; drop any backlog beyond
@@ -807,9 +867,65 @@ export function createSim({ store, renderer, consolePanel = null }) {
     rafId = requestAnimationFrame(frame);
   }
 
+  // --- Pause & single-step (FR-076a/FR-076b); sequential runs only ---
+
+  function pause() {
+    if (!sim || !sim.hasClocks() || paused) return;
+    paused = true;
+    setAppState("paused"); // FR-073
+  }
+
+  function resume() {
+    if (!sim || !paused) return;
+    paused = false;
+    setAppState("simulating");
+  }
+
+  // stepUnit advances exactly one unit step (FR-078) and stays paused.
+  function stepUnit() {
+    if (!sim || !paused) return;
+    sim.step();
+    renderer.requestRender();
+  }
+
+  // primaryClock resolves the design's primary clock (FR-076b) against the
+  // running sim's clock entities: the design-level reference when it names one,
+  // else the lowest-refdes clock — the reconcilePrimaryClock ordering, covering
+  // a pre-FR-076b design that has clocks but no stored reference.
+  function primaryClock(clocks) {
+    const hit = clocks.find((c) => c.refdes === store.design.primaryClock);
+    if (hit) return hit;
+    const aNum = (r) => {
+      const m = /^A-(\d+)$/.exec(r);
+      return m ? Number(m[1]) : Infinity;
+    };
+    return clocks
+      .slice()
+      .sort((a, b) => aNum(a.refdes) - aNum(b.refdes) || (a.refdes < b.refdes ? -1 : 1))[0];
+  }
+
+  // stepCycle advances just past the next rising edge of the primary clock and
+  // settles (FR-076a, semantics in advanceOneCycle above). Synchronous; stays
+  // paused throughout.
+  function stepCycle() {
+    if (!sim || !paused) return;
+    const clocks = sim.clockInfo();
+    if (clocks.length === 0) return;
+    advanceOneCycle(sim, primaryClock(clocks).period, clocks, postMessage);
+    renderer.requestRender();
+  }
+
   return {
     run,
     stop,
     isRunning: () => sim !== null,
+    // FR-076a: the toolbar's pause/step cluster is shown only for a sequential
+    // run and its step buttons only while paused.
+    isSequentialRun: () => sim !== null && sim.hasClocks(),
+    isPaused: () => paused,
+    pause,
+    resume,
+    stepUnit,
+    stepCycle,
   };
 }

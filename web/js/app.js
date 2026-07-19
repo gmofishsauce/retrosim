@@ -12,7 +12,9 @@ import {
   testVectorsPanel,
   openFileDialog,
   exportFormatDialog,
+  designPropertiesDialog,
 } from "./chrome/dialogs.js";
+import { setPrimaryClockCmd } from "./commands.js";
 import { generateC } from "./engine/cgen.js";
 import { generateNDL } from "./engine/ndl.js";
 import { BUILTINS, memDeviceType } from "./builtins.js";
@@ -469,6 +471,14 @@ async function main() {
         postMessage(`cannot export: ${e.message}`);
       }
     };
+    // Edit ▸ Design Properties… (FR-076b): the primary-clock selector. OK with
+    // a changed value dispatches SetPrimaryClock (undoable, FR-024).
+    const onDesignProperties = async () => {
+      const refdes = await designPropertiesDialog(store.design);
+      if (refdes && refdes !== store.design.primaryClock) {
+        store.dispatch(setPrimaryClockCmd(refdes));
+      }
+    };
     initToolbar({
       container: document.getElementById("tools"),
       store,
@@ -481,6 +491,7 @@ async function main() {
       onTestVectors, // FR-115: Simulate ▸ Test Vectors…
       onGenerateC, // FR-116: Simulate ▸ Generate C…
       onExport, // FR-119: File ▸ Export…
+      onDesignProperties, // FR-076b: Edit ▸ Design Properties…
     });
     initProperties({ container: document.getElementById("properties"), store });
     overlay.classList.add("hidden");

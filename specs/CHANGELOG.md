@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-19 — Pause/step debugger controls and the primary-clock design property
+What: sequential runs gain a Pause/Continue toggle plus Step-cycle and Step-unit icon buttons beside Run/Stop (FR-076a) — Step-cycle advances just past the next rising edge of the design's new primary clock and settles; a design-level primary-clock reference, auto-set on first clock add and user-editable via a new Edit → Design Properties… dialog, is persisted in the save file (FR-076b). State tray gains "paused"; interactive-input clicks while paused are queued. "Run N cycles then pause" and combinational pause/step deferred.
+Why: proposed-enhancements.md item 1 — debugging a CPU means asking "what happens on this clock edge?"; Run/Stop with wall-clock pacing cannot answer it.
+Touches: FR-076a, FR-076b (new); FR-004a, FR-060b, FR-073, FR-087b, entity table (in-place); design §6.10, §6.11 (toolbar, statusbar, dialogs), §6.13, §7.2, §10. Implemented same day (`sim.js`, `toolbar.js`, `dialogs.js`, `commands.js`, `design.js`, `persist.js`, `app.js`) and documented in `docs/user.md` after user verification.
+
 ## 2026-07-19 — Fan-out dot moves to the visual branch point
 What: the FR-034d pin fan-out dot is placed by walking each pair of ends outward from the pin while their geometry coincides and dotting the divergence point — the attachment point for ends arriving from different directions (as before), the visible T for ends overlapping along a collinear run.
 Why: the unconditional attachment-point dot landed mid-run — away from the T the eye sees — when a wire was completed on an already-wired pin through the existing wire (overlapping final legs, e.g. notL4C381's U33 2A2).

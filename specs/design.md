@@ -1705,7 +1705,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   offset — the interior wiring of a group move, FR-018c). Later features added
   commands on the same pattern: `RotateSelection` (FR-019), `setLabelCmd`
   (FR-011b), `setNoteText` (FR-071f), `deleteSegmentCmd` (FR-033d),
-  `SetPortProps`/`PlaceSubDesign`/`SetDefaultRender` (§6.14), and the
+  `SetPortProps`/`PlaceSubDesign`/`SetDefaultRender` (§6.14),
+  `SetPrimaryClock` (FR-076b, dispatched by the Design Properties dialog,
+  §6.11 — `PlaceComponent`/`DeleteComponent` additionally auto-set/reassign
+  the same design-level field as part of their apply, capturing the prior
+  value so revert restores it exactly), and the
   snapshot-based `pasteFragmentCmd` (§6.15, via `snapshotCommand`). A
   `composite` command bundles several of these into one undoable step — `apply`
   runs them in order, `revert` undoes them in reverse — so a group operation over
@@ -1738,10 +1742,15 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   buttons on the right (FR-004a). **Menus:** **File** — New Project…, Open
   Project…, Duplicate Project… (FR-121b, §6.19), New, Open, Save, Save As,
   Export… (FR-119, §6.18), Refresh Types; **Edit** — Undo, Redo, Copy, Paste
-  (FR-111/FR-112, §6.15); **View** — Zoom In, Zoom Out, Fit to Screen (FR-022a,
+  (FR-111/FR-112, §6.15), Design Properties… (FR-076b, dialog below); **View** — Zoom In, Zoom Out, Fit to Screen (FR-022a,
   `interaction.fitToScreen`); **Simulate** — Test Vectors… (FR-115b, §6.16) and
   Generate C… (FR-116, §6.17). **Buttons:**
-  Select, Wire, Bus (modal tools), then **Run/Stop**. (Pan has no control; it is
+  Select, Wire, Bus (modal tools), then **Run/Stop**, then — shown only while a
+  run of a sequential design is active — the **pause/step cluster** (FR-076a):
+  a Pause/Continue toggle and Step-cycle / Step-unit buttons, each an inline-SVG
+  debugger glyph with a tooltip/aria-label (the Wire-icon pattern), the step
+  buttons enabled only while paused; they call the engine's
+  `pause()`/`resume()`/`stepUnit()`/`stepCycle()` (§6.13). (Pan has no control; it is
   space-drag/middle-drag or right-click-to-recenter on bare canvas —
   FR-023a/FR-023b; left-drag on bare canvas is rubber-band select, FR-016b.)
   A menu opens on click, closes on item choice / outside click / Escape, and is
@@ -1753,7 +1762,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   tool sets `store.tool`. The Run button calls the sim engine's `run()` and
   relabels to "Stop" (FR-076); while `simulating`, the design-modifying commands
   (Wire, Bus buttons; Undo, Redo, Paste, New, Open, Refresh Types, Test Vectors…,
-  Generate C…, Export…, and the three project items, FR-121b) are disabled —
+  Generate C…, Export…, Design Properties…, and the three project items, FR-121b) are disabled —
   Save, Save As, the zoom items,
   Select, and Run/Stop stay enabled (FR-087; the same set is disabled under the
   test-vector panel lock via `isReadonly()`, §6.16/FR-115h). The **Refresh
@@ -1955,6 +1964,14 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     `name` in the serialized payload (so the file matches) and
     `store.markSaved(path, name)` updates `design.name` and the displayed
     `designName` after the write succeeds.
+  - *Design Properties (FR-076b)* — a small modal opened from Edit → Design
+    Properties… presenting design-level properties; for now exactly one
+    control: a **primary clock** `<select>` listing the design's clock
+    generator instances by refdes (label shown when set, FR-011b), current
+    value preselected, disabled with an explanatory note when the design has
+    no clock generator. OK with a changed value dispatches `SetPrimaryClock`
+    (§6.10, undoable); Cancel discards. The menu item is disabled while
+    simulating and under the read-only lock (FR-087/FR-115h).
   - *Project-aware `openFileDialog` generalizations (§6.19, FR-121)*:
     (a) `allowDir: true` (open mode) — the OK button works with no file
     selected and resolves to the **currently listed directory**
@@ -2054,7 +2071,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   docked at the bottom of the window (below the canvas, full width) holding
   trays styled with the palette tiles' raised drop-shadow look: a state tray at
   the lower-left corner showing the program's operating state (text: `editing`,
-  or `simulating` during a run — FR-073/FR-076), a message tray filling the remaining
+  `simulating` during a run, or `paused` while a sequential run is paused —
+  FR-073/FR-076/FR-076a), a message tray filling the remaining
   width showing the most recent posted message (empty when none; long messages
   truncate with an ellipsis), and a connection tray at the right end showing
   the server connection state — `connected` or `disconnected` (FR-089), driven
@@ -2496,13 +2514,37 @@ no sequential part could ever leave U.)
   `period × speed` units per wall second; a `requestAnimationFrame` loop advances
   `round(rate × dt)` steps per frame (capped to keep frames responsive), requests
   a render when any net changed, and runs until `stop()` (FR-086).
+- **Pause & single-step (FR-076a/FR-076b):** the sequential engine additionally
+  exposes `pause()`, `resume()`, `stepUnit()`, and `stepCycle()`, driven by the
+  toolbar's pause/step cluster (§6.11); a combinational run exposes none of
+  this (the cluster is not shown, FR-076a). `pause()` sets a paused flag read
+  by the rAF loop, which then advances 0 steps (simulated time freezes at a
+  unit-step boundary; the loop may equally cancel the rAF and re-request on
+  resume) and sets the state tray to `paused` (§6.11 `setAppState`). While
+  paused: `stepUnit()` advances exactly one unit step and renders;
+  `stepCycle()` computes the primary clock's next rising-edge time
+  `tEdge = min{ period/2 + k·period > simTime }` (the refdes from the
+  design-level `primaryClock` field, §7.2; effective period per FR-071a),
+  advances unit steps to `simTime = tEdge`, then keeps stepping until
+  quiescence (`next` equals `curr`), stopping early at one unit before the
+  next scheduled edge of **any** clock generator (min over all clocks of the
+  next `k·period/2` boundary) and bounded by the FR-085 10,000-unit episode
+  bound (tray message once, remain paused); `resume()` clears the flag,
+  re-anchors the pacing baseline to the paused simTime (so the wall-clock rate
+  math doesn't try to catch up the paused interval), and restores the
+  `simulating` tray text. Steps run synchronously (a step-cycle settle is at
+  most 10,000 units — well inside a frame). `stop()` while paused is the
+  ordinary Stop path (FR-076, including the RAM write-back hook, FR-114g).
 - **Interactive inputs (FR-087b):** the engine subscribes to the store's
   live-input channel (§6.10) for the duration of a run. `applyLive` (the
   non-undoable sim-time mutation behind a switch click, FR-087a) fires that
   channel; the engine's listener calls `wake()`. For a combinational run `wake()`
   re-runs a settling episode if idle (no-op if an episode is already in flight);
   for a paced run it is a no-op (the rAF loop already re-reads instance state
-  each step). This is the general re-evaluation path — not switch-specific — so a
+  each step) — including while **paused** (FR-076a): the click's mutation sits
+  in the instance state until the next unit step (a Step or Continue) reads
+  it, which is exactly the queued semantics FR-087b specifies, with no
+  scheduler change. This is the general re-evaluation path — not switch-specific — so a
   new interactive built-in (an `INTERACTIONS` handler, §6.11) needs no scheduler
   change.
 - **Display view:** the engine publishes `state.sim = { valueOfPin(refdes,
@@ -3102,6 +3144,7 @@ branch wire that meet at it share one position and cannot drift apart (A1).
   "formatVersion": 3,                  // migration anchor (NFR-004-style); v2 re-keyed instance `type` to the type id (FR-066e); v3 added `refCounters` (FR-011c)
   "name": "unnamed schematic 2026-06-01 14:03",
   "defaultRender": "ic",               // FR-096: render style when THIS design is embedded (ic|connector)
+  "primaryClock": "A-7",               // FR-076b: refdes of the primary clock generator (Step-cycle target, FR-076a); additive-optional — absent when the design has never had a clock, no formatVersion bump
   "refCounters": { "U": 29, "A": 19, "N": 4, "X": 5 },  // FR-011c: per-series high-water refdes counters — the next number each series may allocate; monotonic, so a retired designator is never reused
   "components": [ ComponentInstance, … ],   // (a) FR-056 (includes built-in ports and sub-design instances)
   "wires":      [ Wire, … ],                // (b) FR-056
@@ -3745,6 +3788,7 @@ the original greenfield plan, whose `sim/` root and never-created
 | FR-076, FR-087 | §6.9, §6.10, §6.11, §6.13 | `toolbar.js`, `store.js`, `interaction.js`, `sim.js`, `statusbar.js` |
 | FR-077, FR-081, FR-082, FR-083 | §6.8, §6.13 | `sim.js`, `galasm.js`, `canvas.js` |
 | FR-084, FR-085, FR-086 | §6.13 | `sim.js`, `builtins.js` |
+| FR-076a, FR-076b | §6.10, §6.11, §6.13, §7.2 | `toolbar.js`, `dialogs.js`, `statusbar.js`, `sim.js`, `store.js`, `model/design.js` |
 | FR-071g, FR-071h, FR-083a | §6.11, §6.13, §6.17 (refusal), §6.18 (comment lines), §8 | `builtins.js`, `canvas.js`, `sim.js`, `cgen.js`, `ndl.js` |
 | FR-087b | §6.9, §6.10, §6.11, §6.13 | `interaction.js`, `store.js`, `builtins.js`, `sim.js` |
 | FR-088 | §6.6, §6.10, §6.11 | `model/design.js`, `commands.js`, `toolbar.js` |

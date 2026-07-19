@@ -363,3 +363,33 @@ test("serialize→deserialize round-trips refCounters, clamping a lagging value 
   const d3 = deserializeDesign(json);
   assert.equal(d3.refCounters.U, 3); // clamped to 1 + current max (FR-011c)
 });
+
+// --- Primary clock persistence (FR-076b) ---
+
+function tyClock() {
+  return { id: "type-clock", name: "clock", builtin: true, renderType: "clock", width: 4, height: 4, pins: [] };
+}
+
+test("primaryClock round-trips through serialize/deserialize (FR-076b)", () => {
+  const d = createDesign("t");
+  addInstance(d, tyClock(), 0, 0, 0); // A-1
+  d.primaryClock = "A-1";
+  const obj = serializeDesign(d);
+  assert.equal(obj.primaryClock, "A-1");
+  const back = deserializeDesign(structuredClone(obj));
+  assert.equal(back.primaryClock, "A-1");
+});
+
+test("absent primaryClock stays absent; a dangling one is dropped with a warning (FR-076b)", () => {
+  const d = createDesign("t");
+  const obj = serializeDesign(d);
+  assert.ok(!("primaryClock" in obj));
+  assert.equal(deserializeDesign(structuredClone(obj)).primaryClock, undefined);
+
+  const bad = { ...serializeDesign(d), primaryClock: "A-9" };
+  const warns = [];
+  const back = deserializeDesign(structuredClone(bad), { onWarn: (m) => warns.push(m) });
+  assert.equal(back.primaryClock, undefined);
+  assert.equal(warns.length, 1);
+  assert.match(warns[0], /primary clock A-9/);
+});

@@ -18,6 +18,7 @@ import {
   composite,
   translateWiring,
   pasteFragmentCmd,
+  setPrimaryClockCmd,
 } from "./commands.js";
 import { extractFragment } from "./model/clipboard.js";
 
@@ -569,4 +570,83 @@ test("pasteFragmentCmd redo replays the first-apply designators despite monotoni
   // A fresh placement after the redo continues past the high-water mark.
   store.dispatch(placeComponent(tyPins(), 90, 0, 0));
   assert.ok(store.design.components.some((c) => c.refdes === "U3"));
+});
+
+// --- Primary clock maintenance (FR-076b) ---
+
+function tyClock() {
+  return {
+    id: "type-clock",
+    name: "clock",
+    builtin: true,
+    renderType: "clock",
+    width: 4,
+    height: 4,
+    pins: [],
+  };
+}
+
+test("first clock placed becomes the primary clock; undo clears it (FR-076b)", () => {
+  const store = newStore();
+  store.dispatch(placeComponent(ty(), 0, 0, 0)); // non-clock: no primary
+  assert.equal(store.design.primaryClock, undefined);
+
+  store.dispatch(placeComponent(tyClock(), 4, 4, 0)); // A-1
+  assert.equal(store.design.primaryClock, "A-1");
+
+  store.dispatch(placeComponent(tyClock(), 8, 8, 0)); // A-2: primary unchanged
+  assert.equal(store.design.primaryClock, "A-1");
+
+  store.undo(); // remove A-2
+  assert.equal(store.design.primaryClock, "A-1");
+  store.undo(); // remove A-1
+  assert.equal(store.design.primaryClock, undefined);
+  store.redo();
+  assert.equal(store.design.primaryClock, "A-1");
+});
+
+test("deleting the primary clock reassigns to lowest refdes and reports; undo restores (FR-076b)", () => {
+  const store = newStore();
+  store.dispatch(placeComponent(tyClock(), 0, 0, 0)); // A-1
+  store.dispatch(placeComponent(tyClock(), 4, 4, 0)); // A-2
+  store.dispatch(placeComponent(tyClock(), 8, 8, 0)); // A-3
+
+  const reports = [];
+  store.dispatch(deleteComponent("A-1", { onReport: (m) => reports.push(m) }));
+  assert.equal(store.design.primaryClock, "A-2");
+  assert.deepEqual(reports, ["Primary clock reassigned to A-2"]);
+
+  store.undo();
+  assert.equal(store.design.primaryClock, "A-1");
+
+  // Deleting a non-primary clock changes nothing and reports nothing.
+  reports.length = 0;
+  store.dispatch(deleteComponent("A-3", { onReport: (m) => reports.push(m) }));
+  assert.equal(store.design.primaryClock, "A-1");
+  assert.deepEqual(reports, []);
+});
+
+test("deleting the last clock clears the primary clock silently (FR-076b)", () => {
+  const store = newStore();
+  store.dispatch(placeComponent(tyClock(), 0, 0, 0)); // A-1
+  const reports = [];
+  store.dispatch(deleteComponent("A-1", { onReport: (m) => reports.push(m) }));
+  assert.equal(store.design.primaryClock, undefined);
+  assert.deepEqual(reports, []);
+
+  store.undo();
+  assert.equal(store.design.primaryClock, "A-1");
+});
+
+test("setPrimaryClockCmd changes the primary clock; undo restores, including unset (FR-076b)", () => {
+  const store = newStore();
+  store.dispatch(placeComponent(tyClock(), 0, 0, 0)); // A-1: auto-set
+  store.dispatch(placeComponent(tyClock(), 4, 4, 0)); // A-2
+  store.dispatch(setPrimaryClockCmd("A-2"));
+  assert.equal(store.design.primaryClock, "A-2");
+
+  store.undo();
+  assert.equal(store.design.primaryClock, "A-1");
+  store.redo();
+  assert.equal(store.design.primaryClock, "A-2");
 });

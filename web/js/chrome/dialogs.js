@@ -371,6 +371,67 @@ export function chooseRenderDialog(iface, defaultRender = "ic") {
   });
 }
 
+// designPropertiesDialog presents the design-level properties (FR-076b) — for
+// now exactly one control: the primary-clock selector over the design's clock
+// generator instances (by refdes, with the display label when set, FR-011b).
+// Resolves to the chosen clock's refdes, or null on cancel or when the design
+// has no clock generator (the selector is disabled with an explanatory note).
+export function designPropertiesDialog(design) {
+  return new Promise((resolve) => {
+    const overlay = el("div", "dialog-overlay");
+    const box = el("div", "dialog");
+    overlay.appendChild(box);
+
+    box.appendChild(el("div", "dialog-title", "Design properties"));
+
+    const clocks = (design.components ?? []).filter(
+      (c) => c.typeData?.renderType === "clock",
+    );
+    const row = el("div", "dialog-row");
+    row.appendChild(el("label", "dialog-label", "Primary clock:"));
+    const sel = el("select");
+    for (const c of clocks) {
+      const o = el("option");
+      o.value = c.refdes;
+      o.textContent = c.label ? `${c.refdes} (${c.label})` : c.refdes;
+      if (c.refdes === design.primaryClock) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.disabled = clocks.length === 0;
+    row.appendChild(sel);
+    box.appendChild(row);
+    if (clocks.length === 0) {
+      box.appendChild(
+        el("div", "dialog-path", "This design has no clock generator."),
+      );
+    }
+
+    const buttons = el("div", "dialog-buttons");
+    buttons.append(
+      button("Cancel", () => done(null)),
+      button("OK", () => done(clocks.length ? sel.value : null)),
+    );
+    box.appendChild(buttons);
+
+    function done(result) {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(null);
+      } else if (e.key === "Enter") {
+        e.stopPropagation();
+        done(clocks.length ? sel.value : null);
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+  });
+}
+
 // GAL22V10 is the fixed physical skeleton of a 24-pin GAL22V10 (FR-066c): pin 1
 // is the dedicated clock/input, pins 2–11 and 13 are inputs, pins 14–23 are the
 // ten OLMC I/O pins; pins 12/24 are GND/VCC and (like every other part's power

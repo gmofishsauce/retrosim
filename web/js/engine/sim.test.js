@@ -1,7 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { buildSimulation, ramFileBody } from "./sim.js";
+import {
+  buildSimulation,
+  ramFileBody,
+  nextRisingEdge,
+  isClockEdgeTime,
+  advanceOneCycle,
+} from "./sim.js";
 import { V0, V1, VU, VZ } from "./galasm.js";
 import { BUILTINS, memDeviceType } from "../builtins.js";
 
@@ -1034,4 +1040,81 @@ test("two UARTs on one clock emit in entity (component) order (FR-122b, §6.20)"
   step2(); // let the data / control switches settle
   setSw(d, "CLKsw", true); step2(); setSw(d, "CLKsw", false); step2();
   assert.deepEqual(out, [0x01, 0x02]);
+});
+
+// --- Pause/step support: edge math, clockInfo, advanceOneCycle (FR-076a) ---
+
+test("nextRisingEdge / isClockEdgeTime follow the FR-084 waveform", () => {
+  // Period 100: rising edges evaluated at t = 50, 150, 250, …
+  assert.equal(nextRisingEdge(0, 100), 50);
+  assert.equal(nextRisingEdge(50, 100), 50); // an unapplied edge at t counts
+  assert.equal(nextRisingEdge(51, 100), 150);
+  assert.equal(nextRisingEdge(150, 100), 150);
+  // Odd period 7: half = 3.
+  assert.equal(nextRisingEdge(0, 7), 3);
+  assert.equal(nextRisingEdge(4, 7), 10);
+
+  const clocks = [{ refdes: "A-1", period: 10 }];
+  assert.equal(isClockEdgeTime(clocks, 5), true); // rising
+  assert.equal(isClockEdgeTime(clocks, 10), true); // falling
+  assert.equal(isClockEdgeTime(clocks, 6), false);
+  // Any clock's edge counts.
+  const two = [...clocks, { refdes: "A-2", period: 4 }];
+  assert.equal(isClockEdgeTime(two, 2), true); // A-2 rising
+});
+
+test("clockInfo lists clocks with the behavior's clamped effective period", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("clock")); // default period 100
+  place(d, "A-2", builtin("clock"), { props: { period: 1 } }); // clamped to 2
+  const sim = buildSimulation(d);
+  assert.deepEqual(sim.clockInfo(), [
+    { refdes: "A-1", period: 100 },
+    { refdes: "A-2", period: 2 },
+  ]);
+});
+
+test("advanceOneCycle steps just past the primary rising edge and settles (FR-076a)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("clock"), { props: { period: 10 } });
+  place(d, "A-2", builtin("pullup"));
+  place(d, "U1", DFF);
+  place(d, "A-3", builtin("indicator"));
+  connect(d, ["A-1", "OUT"], ["U1", "CP"]);
+  connect(d, ["A-2", "OUT"], ["U1", "D"]);
+  connect(d, ["U1", "Q"], ["A-3", "IN"]);
+
+  const sim = buildSimulation(d);
+  const clocks = sim.clockInfo();
+  assert.equal(sim.valueOfPin("U1", "Q"), VZ); // not yet stepped
+
+  // Cycle 1: rising edge evaluated at t=5; the DFF sees it at t=6 and latches
+  // D=1; one more step confirms quiescence.
+  advanceOneCycle(sim, 10, clocks);
+  assert.equal(sim.valueOfPin("U1", "Q"), V1);
+  assert.equal(sim.valueOfPin("A-1", "OUT"), V1); // just past the rising edge
+  assert.equal(sim.simTime(), 8);
+  assert.equal(sim.lastStepChanged(), false);
+
+  // Cycle 2: next rising edge at t=15 (passing through the falling edge at
+  // t=10 mid-advance); Q holds 1, quiescent one step after the edge.
+  advanceOneCycle(sim, 10, clocks);
+  assert.equal(sim.valueOfPin("U1", "Q"), V1);
+  assert.equal(sim.simTime(), 17);
+});
+
+test("advanceOneCycle settle stops one unit before another clock's edge (FR-076a)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("clock"), { props: { period: 100 } });
+  place(d, "A-2", builtin("clock"), { props: { period: 4 } }); // fast secondary
+  place(d, "A-3", builtin("indicator"));
+  connect(d, ["A-1", "OUT"], ["A-3", "IN"]);
+
+  const sim = buildSimulation(d);
+  // Primary rising edge evaluated at t=50; the secondary's next edge is
+  // evaluated at t=52 (4·13), so settling stops with simTime at 52 — one unit
+  // after the t=51 step, never applying the secondary's edge.
+  advanceOneCycle(sim, 100, sim.clockInfo());
+  assert.equal(sim.simTime(), 52);
+  assert.equal(sim.valueOfPin("A-1", "OUT"), V1);
 });

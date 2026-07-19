@@ -1,5 +1,6 @@
 // Menu/tool bar (§6.11, FR-004a): File/Edit/View pull-down menus on the left,
-// then the modal tool buttons (Select/Wire/Bus) and Run/Stop on the right. Tool
+// then the modal tool buttons (Select/Wire/Bus) and Run/Stop on the right —
+// plus the pause/step cluster while a sequential run is active (FR-076a). Tool
 // buttons set the active tool via the interaction FSM; the active tool is
 // highlighted by subscribing to the store. One menu is open at a time; an
 // outside click or Escape closes it.
@@ -16,6 +17,31 @@ const WIRE_ICON =
   '<line x1="12.6" y1="12.6" x2="17" y2="17"/>' +
   '<circle cx="10" cy="10" r="2.2" stroke-width="1.5"/></g></svg>';
 
+// Pause/step cluster glyphs (FR-076a): the conventional debugger set — pause
+// is two vertical bars, continue a right-pointing triangle, step-cycle an
+// arrow arcing over a dot (the "step over" idiom), step-unit an arrow dropping
+// onto a dot (the "step into" idiom, for the smallest possible step).
+const PAUSE_ICON =
+  '<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" fill="currentColor">' +
+  '<rect x="4.5" y="4" width="4" height="12" rx="1"/>' +
+  '<rect x="11.5" y="4" width="4" height="12" rx="1"/></svg>';
+
+const CONTINUE_ICON =
+  '<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" fill="currentColor">' +
+  '<path d="M6 4 L16 10 L6 16 Z"/></svg>';
+
+const STEP_CYCLE_ICON =
+  '<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true">' +
+  '<path d="M4 12 A 6 6 0 0 1 16 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
+  '<path d="M13.6 10.2 L18.8 10.2 L16.2 15 Z" fill="currentColor"/>' +
+  '<circle cx="9" cy="16" r="2" fill="currentColor"/></svg>';
+
+const STEP_UNIT_ICON =
+  '<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true">' +
+  '<line x1="10" y1="3" x2="10" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
+  '<path d="M6.8 9 L13.2 9 L10 13.5 Z" fill="currentColor"/>' +
+  '<circle cx="10" cy="16.5" r="2" fill="currentColor"/></svg>';
+
 // Keyboard-accelerator hint formatting (FR-004b). The modifier is always
 // Cmd (mac) / Ctrl (elsewhere); accelLabel renders the platform-appropriate text
 // for a descriptor {key, shift?}.
@@ -26,7 +52,7 @@ function accelLabel({ key, shift }) {
     : `Ctrl+${shift ? "Shift+" : ""}${key}`;
 }
 
-export function initToolbar({ container, store, interaction, fileops, projectops, sim, library, reloadLibrary = async () => {}, onTestVectors, onGenerateC, onExport }) {
+export function initToolbar({ container, store, interaction, fileops, projectops, sim, library, reloadLibrary = async () => {}, onTestVectors, onGenerateC, onExport, onDesignProperties }) {
   const tools = [
     { tool: "select", label: "Select" },
     { tool: "wire", icon: WIRE_ICON },
@@ -89,6 +115,14 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     interaction.copySelection(), { key: "C" });
   const pasteItem = addItem(editMenu.panel, "Paste", "Paste (Ctrl/Cmd+V)", () =>
     interaction.startPaste(), { key: "V" });
+  // Design Properties… edits design-level properties — the primary clock
+  // (FR-076b). Design-modifying, so disabled under either lock, like New.
+  const designPropsItem = addItem(
+    editMenu.panel,
+    "Design Properties…",
+    "Edit design-level properties (primary clock)",
+    () => onDesignProperties?.(),
+  );
   container.appendChild(editMenu.menu);
 
   // Zoom stays enabled while simulating (FR-087).
@@ -155,6 +189,22 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     else sim.run();
   });
   container.appendChild(runBtn);
+
+  // Pause/step cluster (FR-076a): shown only while a run of a sequential
+  // design is active; the step buttons work only while paused. Pause state is
+  // engine-local (not store state), so the toggle handler refreshes the bar
+  // itself — every other transition (start, stop) already flows through the
+  // store subscription.
+  const pauseBtn = iconButton(PAUSE_ICON, "Pause the simulation", () => {
+    if (sim.isPaused()) sim.resume();
+    else sim.pause();
+    refresh();
+  });
+  const stepCycleBtn = iconButton(STEP_CYCLE_ICON, "Step one clock cycle", () =>
+    sim.stepCycle());
+  const stepUnitBtn = iconButton(STEP_UNIT_ICON, "Step one unit (1 ns)", () =>
+    sim.stepUnit());
+  container.append(pauseBtn, stepCycleBtn, stepUnitBtn);
 
   // Menu widget (FR-004a). createMenu builds a .menu (trigger + drop panel);
   // addItem appends a clickable item. Only one menu is open at a time; an
@@ -229,6 +279,18 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     return b;
   }
 
+  // iconButton is button() with an inline-SVG glyph and a matching aria-label
+  // (the WIRE_ICON pattern, FR-025/FR-076a).
+  function iconButton(icon, title, onClick) {
+    const b = document.createElement("button");
+    b.className = "tool-btn";
+    b.innerHTML = icon;
+    b.title = title;
+    b.setAttribute("aria-label", title);
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
   function refresh() {
     const simming = store.state.simulating;
     const panelOpen = store.state.vectorPanelOpen;
@@ -249,6 +311,7 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     copyItem.disabled =
       noProject || !store.state.selection.some((r) => r.kind === "component");
     pasteItem.disabled = locked || noProject || !interaction.hasClipboard();
+    designPropsItem.disabled = locked || noProject; // FR-076b
     newItem.disabled = locked || noProject;
     openItem.disabled = locked; // live with no project: it establishes one (FR-121b)
     refreshItem.disabled = locked || noProject;
@@ -276,6 +339,16 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     runBtn.disabled = panelOpen || noProject;
     runBtn.textContent = simming ? "Stop" : "Run";
     runBtn.title = simming ? "Stop the simulation" : "Run the simulation";
+    // Pause/step cluster (FR-076a): visible only during a sequential run; the
+    // step buttons are enabled only while paused; the toggle swaps glyphs.
+    const seqRun = simming && sim.isSequentialRun();
+    const pausedNow = seqRun && sim.isPaused();
+    pauseBtn.hidden = stepCycleBtn.hidden = stepUnitBtn.hidden = !seqRun;
+    pauseBtn.innerHTML = pausedNow ? CONTINUE_ICON : PAUSE_ICON;
+    const pauseTitle = pausedNow ? "Continue the simulation" : "Pause the simulation";
+    pauseBtn.title = pauseTitle;
+    pauseBtn.setAttribute("aria-label", pauseTitle);
+    stepCycleBtn.disabled = stepUnitBtn.disabled = !pausedNow;
   }
 
   store.subscribe(refresh);

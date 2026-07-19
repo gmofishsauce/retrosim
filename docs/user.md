@@ -25,7 +25,7 @@ KiCad-like.
 10. [Projects and files](#10-projects-and-files)
 11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
-13. [Simulation](#13-simulation) — including [Console output](#console-output), [Test vectors](#test-vectors) and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
+13. [Simulation](#13-simulation) — including [Pausing and single-stepping](#pausing-and-single-stepping), [Console output](#console-output), [Test vectors](#test-vectors) and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
 14. [If the server disconnects](#14-if-the-server-disconnects)
 15. [Keyboard and mouse reference](#15-keyboard-and-mouse-reference)
 
@@ -872,6 +872,8 @@ directly on the editing canvas.
   Stop to end. Final indicator values stay on screen until you next edit the design.
 - **Sequential designs** (at least one clock) run continuously, paced at
   `period × speed` simulated nanoseconds per real second, until you press Stop.
+  They can also be paused and stepped by the clock cycle or the unit — see
+  [Pausing and single-stepping](#pausing-and-single-stepping).
 - **Conflicts:** when enabled drivers of a net disagree 0-vs-1, the net goes to U,
   every segment of that net turns **red** while the conflict lasts, and the message
   tray names the conflicting drivers. The simulation keeps running.
@@ -899,6 +901,45 @@ select an item instead shows "Editor is locked while the simulator is running" i
 the status bar and changes nothing (a click on empty canvas does nothing). The one
 exception is clicking an **interactive input** (the input switch), which changes
 its value live and re-evaluates the simulation.
+
+### Pausing and single-stepping
+
+While a **sequential** design (one with a clock generator) is running, three
+extra icon buttons appear beside Run/Stop — the conventional debugger controls:
+
+- **Pause / Continue** (two bars / a triangle) — Pause freezes simulated time
+  at a unit-step boundary; the state tray reads **"paused"** and the indicators
+  keep showing the frozen state. The run stays active: **Continue** resumes
+  wall-clock pacing from exactly where you paused (the paused interval is never
+  "caught up"), and **Stop** works normally, including writing back any
+  [persistent RAM](#persistent-ram).
+- **Step one clock cycle** (an arrow arcing over a dot) — enabled while paused.
+  Advances just past the **next rising edge of the primary clock** (see below)
+  and then keeps stepping until the circuit settles, so each click shows the
+  stable state produced by one more clock. Settling stops early one unit before
+  the next scheduled edge of any clock — a step never swallows an edge — and a
+  circuit that won't settle gets the usual 10,000-unit oscillation report and
+  stays paused.
+- **Step one unit** (an arrow dropping onto a dot) — enabled while paused.
+  Advances exactly one simulated nanosecond, for watching a value ripple
+  through logic one gate level at a time.
+
+Clicking an **input switch** while paused still flips it immediately (the
+switch redraws), but the new value reaches the circuit on the *next* step —
+nothing advances until you Step or Continue.
+
+Combinational designs (no clock) show no pause/step controls; they already
+settle and idle on their own.
+
+**The primary clock.** Step-cycle needs to know which clock defines "a cycle".
+The first clock generator placed in a design becomes its **primary clock**,
+which is saved with the design. If you delete the primary, the role passes to
+the lowest-numbered remaining clock (reported in the message tray). To pick a
+different one, open **Edit ▸ Design Properties…** — a small dialog with a
+selector over the design's clock generators; changing it is undoable. A design
+saved before this feature exists simply uses its lowest-numbered clock until
+you set one. With a single clock — the usual case — you never need to think
+about any of this.
 
 ### Console output
 

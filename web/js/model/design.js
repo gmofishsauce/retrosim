@@ -90,6 +90,31 @@ export function allocRefNum(design, series) {
   return n;
 }
 
+// reconcilePrimaryClock maintains the design-level primary-clock reference
+// (FR-076b): when `design.primaryClock` is unset, or no longer names a clock
+// generator instance, it is reassigned to the lowest-refdes clock generator,
+// or cleared when the design has none. A valid reference is never touched.
+// Returns null when nothing changed, else { from, to } (`to` null on clear).
+export function reconcilePrimaryClock(design) {
+  const clocks = design.components.filter((c) => c.typeData?.renderType === "clock");
+  const prev = design.primaryClock;
+  if (prev !== undefined && clocks.some((c) => c.refdes === prev)) return null;
+  if (clocks.length === 0) {
+    if (prev === undefined) return null;
+    delete design.primaryClock;
+    return { from: prev, to: null };
+  }
+  const aNum = (r) => {
+    const m = REF_SERIES.A.exec(r);
+    return m ? Number(m[1]) : Infinity;
+  };
+  const next = clocks
+    .map((c) => c.refdes)
+    .sort((a, b) => aNum(a) - aNum(b) || (a < b ? -1 : 1))[0];
+  design.primaryClock = next;
+  return { from: prev ?? null, to: next };
+}
+
 // typeIdentity is a component type's immutable library identity (FR-066e, §7.2):
 // its `id`, divorced from the free-form display name (`partnumber`/`name`). This
 // is what an instance records as its `type` and what keys the palette, placement
