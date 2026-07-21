@@ -218,6 +218,41 @@ test("rotateSelectionCmd: a lone component carries its interior junction (FR-019
   assert.deepEqual({ x: j.x, y: j.y }, { x: 8, y: 23 });
 });
 
+test("rotateSelectionCmd carries a selected boundary segment's junction (FR-018d)", () => {
+  const build = () => {
+    const store = newStore();
+    store.dispatch(placeComponent(tyPins(), 10, 20, 0)); // U1
+    store.dispatch(placeComponent(tyPins(), 40, 20, 0)); // U2 (not selected)
+    const w = addWire(
+      store.design,
+      { kind: "pin", refdes: "U1", pin: "/Y0" }, // (16,22)
+      { kind: "pin", refdes: "U2", pin: "A0" }, // (40,22)
+    );
+    const j = branchWire(store.design, w, 0, 25, 22); // junction on a boundary net
+    return { store, w, j };
+  };
+
+  // Control: rotating U1 alone leaves the junction put — the net also connects to
+  // the unselected U2, so it is a boundary network and FR-018c does not move it.
+  const a = build();
+  a.store.dispatch(rotateSelectionCmd(["U1"], 90));
+  assert.deepEqual({ x: a.j.x, y: a.j.y }, { x: 25, y: 22 });
+
+  // With the junction's segment explicitly selected, it rotates with the group
+  // about U1's origin (10,20) — FR-018d: R90(15,2) -> (-2,15) -> (8,35).
+  const b = build();
+  const sel = [
+    { kind: "component", refdes: "U1" },
+    { kind: "segment", id: b.w.id, segIndex: 0 },
+  ];
+  b.store.dispatch(rotateSelectionCmd(["U1"], 90, sel));
+  assert.deepEqual({ x: b.j.x, y: b.j.y }, turn({ x: 25, y: 22 }, { x: 10, y: 20 }, 90));
+  assert.deepEqual({ x: b.j.x, y: b.j.y }, { x: 8, y: 35 });
+
+  b.store.undo(); // one action restores the junction
+  assert.deepEqual({ x: b.j.x, y: b.j.y }, { x: 25, y: 22 });
+});
+
 test("rotateSelectionCmd: multi-select rotates rigidly about the group center; undo/redo restore (FR-019)", () => {
   const store = newStore();
   store.dispatch(placeComponent(tyPins(), 10, 20, 0)); // U1

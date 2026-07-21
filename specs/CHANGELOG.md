@@ -19,6 +19,27 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-21 — Selected conductor segments travel with a group transform (drag + rotate)
+What: when a group drag (FR-017) or rotation (FR-019) acts on a selection containing at least one component, the non-pin vertices (junction/free/bend) of any explicitly selected wire/bus segments now translate/rotate with the group, on top of the always-moving interior wiring (FR-018c). A moved shared vertex drags the selected side rigidly while an attached but unselected conductor stretches to follow (FR-018). Fixes the "connection-point dot does not move" report: selecting the fan-out junction and input stubs feeding a moved gate now carries them along instead of leaving the dot behind and skewing the stubs. Applies to both drag and rotate (user's choice).
+Why: users select a gate plus the fragments wiring its inputs and expect the whole thing to move; previously selected conductors were inert during a group transform (old FR-016a: "not moved as standalone objects").
+Touches: FR-018d (new); FR-016a, FR-018, FR-019 (reworked in place). Design §FR-019, §6.13 state table (drag/rotate rows). Code + tests to follow.
+
+---
+
+## 2026-07-21 — Fix: junction demoted to a collinear bend left as a 0° bend
+What: deleting a wire/bus segment (or wire) that demotes a shared junction to an interior bend (§3.3 G2) now re-prunes the affected conductor, so a bend that is collinear after demotion is dropped instead of persisting as a redundant 0° bend. Bug fix bringing `cleanup` into compliance with FR-033c (no requirement change). Repro saved as examples/connection-point-bug.json.
+Why: user deleted a stub near a tied-input gate and the vertical tie wire kept a 0° bend where the branch junction had been — a visible FR-033c violation.
+Touches: no FR change (FR-033c already mandates the prune); design §3.3 G2 (documents the interior-bend demotion + prune). Fix in `model/design.js` (`cleanup`), regression test in `model/delete.test.js`.
+
+---
+
+## 2026-07-21 — Bus name propagates across the same-width join group (set-time)
+What: committing a bus name now writes it, as one undoable action, onto every bus object in the edited bus's same-width group — the buses reachable through full-width, zero-offset bus↔bus joins (FR-039/FR-039b), stopping at any width change or nonzero offset; committing blank clears the whole group. Previously the name lived only on the one bus object that carried it, so selecting an abutting equal-width segment showed its pin-group name instead. Set-time (not display-time) propagation was chosen so the saved file stays self-describing — no downstream tool needs the traversal rule; display precedence stays per-object.
+Why: a user-perceived bus is often several joined bus objects; renaming one segment should name the whole uniform-width network, which is what the user expects.
+Touches: FR-040a (reworked). Design §FR-020d panel note (`setBusNameCmd` propagation). FR-020d and `busLabel` unchanged (each bus now stores the name).
+
+---
+
 ## 2026-07-19 — Pause/step debugger controls and the primary-clock design property
 What: sequential runs gain a Pause/Continue toggle plus Step-cycle and Step-unit icon buttons beside Run/Stop (FR-076a) — Step-cycle advances just past the next rising edge of the design's new primary clock and settles; a design-level primary-clock reference, auto-set on first clock add and user-editable via a new Edit → Design Properties… dialog, is persisted in the save file (FR-076b). State tray gains "paused"; interactive-input clicks while paused are queued. "Run N cycles then pause" and combinational pause/step deferred.
 Why: proposed-enhancements.md item 1 — debugging a CPU means asking "what happens on this clock edge?"; Run/Stop with wall-clock pacing cannot answer it.

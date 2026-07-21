@@ -64,6 +64,8 @@ import {
   sideOutward,
   packageSiblings,
   rigidWiring,
+  selectedConductorWiring,
+  mergeWiringRefs,
   getVertex,
   danglingEndAt,
   busGroupBrace,
@@ -420,12 +422,17 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       });
   }
 
-  // rigidWiringSnapshot captures the interior wiring of a group move (FR-018c) —
-  // the bend points and junction/free vertices that should travel with the moving
-  // components — together with their pre-drag coordinates for live preview and
-  // exact-revert commit. `movingRefdes` is a Set of the moving components' refdes.
+  // rigidWiringSnapshot captures the wiring that should travel with a group move —
+  // the interior wiring of the moving components (FR-018c) unioned with the non-pin
+  // vertices/bends of any explicitly selected conductor segments (FR-018d) — the
+  // bend points and junction/free vertices, together with their pre-drag
+  // coordinates for live preview and exact-revert commit. `movingRefdes` is a Set
+  // of the moving components' refdes.
   function rigidWiringSnapshot(movingRefdes) {
-    const refs = rigidWiring(store.design, movingRefdes);
+    const refs = mergeWiringRefs(
+      rigidWiring(store.design, movingRefdes),
+      selectedConductorWiring(store.design, store.state.selection),
+    );
     const bends = refs.bends.map((b) => {
       const p = findWire(b.wireId).path[b.index];
       return { ...b, origX: p.x, origY: p.y };
@@ -1739,10 +1746,11 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       e.preventDefault();
       const delta = e.shiftKey ? -90 : 90;
       // Rotate the selection as one rigid group about a single pivot, carrying
-      // interior bends/junctions (FR-019/FR-018c).
+      // interior bends/junctions (FR-018c) and the non-pin vertices of any
+      // explicitly selected conductor segments (FR-018d).
       const refdeses = sel.filter((r) => r.kind === "component").map((r) => r.refdes);
       if (refdeses.length > 0) {
-        store.dispatch(rotateSelectionCmd(refdeses, delta));
+        store.dispatch(rotateSelectionCmd(refdeses, delta, sel));
       }
     } else if (
       (e.key === "+" || e.key === "=" || e.key === "-") &&

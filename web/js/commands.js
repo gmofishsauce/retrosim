@@ -23,11 +23,14 @@ import {
   breakoutBit,
   setBusBitNames,
   setBusName,
+  sameWidthBusGroup,
   setOverride,
   noteSize,
   refreshInstance,
   shiftWiring,
   rigidWiring,
+  selectedConductorWiring,
+  mergeWiringRefs,
   typeIdentity,
   joinFreeEnd,
   promoteBusJoin,
@@ -306,14 +309,15 @@ export function rotateComponent(refdes, delta) {
 
 // rotateSelectionCmd rotates a whole selection 90° as one rigid body (FR-019).
 // Every selected component and every bend/junction interior to the selection
-// (FR-018c) maps q → P + R(q − P) about a single grid-snapped pivot P, and each
-// component's rotation is bumped by `delta` — so pins, bends, and junctions all
-// turn together and the sub-circuit keeps its shape. Pivot: a lone component's
-// own origin (so it still rotates exactly in place); otherwise the grid-snapped
-// center of the selected components' combined bounding box. The pre-rotation
-// state is snapshotted on first apply, so apply re-derives the rotated state and
-// revert restores the original (undo/redo safe).
-export function rotateSelectionCmd(refdeses, delta) {
+// (FR-018c) — plus the non-pin vertices of any explicitly selected conductor
+// segments in `selection` (FR-018d) — maps q → P + R(q − P) about a single
+// grid-snapped pivot P, and each component's rotation is bumped by `delta` — so
+// pins, bends, and junctions all turn together and the sub-circuit keeps its
+// shape. Pivot: a lone component's own origin (so it still rotates exactly in
+// place); otherwise the grid-snapped center of the selected components' combined
+// bounding box. The pre-rotation state is snapshotted on first apply, so apply
+// re-derives the rotated state and revert restores the original (undo/redo safe).
+export function rotateSelectionCmd(refdeses, delta, selection = []) {
   let snapshot = null;
   let pivot = null;
   const turn = (p) => {
@@ -338,7 +342,10 @@ export function rotateSelectionCmd(refdeses, delta) {
           }
           pivot = { x: Math.round((minX + maxX) / 2), y: Math.round((minY + maxY) / 2) };
         }
-        const wiring = rigidWiring(design, new Set(refdeses));
+        const wiring = mergeWiringRefs(
+          rigidWiring(design, new Set(refdeses)),
+          selectedConductorWiring(design, selection),
+        );
         snapshot = {
           comps: insts.map((i) => ({ refdes: i.refdes, x: i.x, y: i.y, rotation: i.rotation })),
           bends: wiring.bends.map(({ wireId, index }) => {
@@ -836,20 +843,27 @@ export function setBusBitNamesCmd(busId, names) {
   };
 }
 
-// setBusNameCmd sets a bus's user-editable display name (FR-040a), capturing the
-// old name so undo restores it. Cosmetic only — no connectivity change.
+// setBusNameCmd sets a bus's user-editable display name (FR-040a). The name
+// propagates at set time across the bus's same-width group (equal-width bus↔bus
+// joins, sameWidthBusGroup): every bus in the group gets the name, and a blank
+// value clears it from all of them. Each affected bus's prior name is captured so
+// undo restores the whole group. Cosmetic only — no connectivity change.
 export function setBusNameCmd(busId, name) {
-  let old = null;
+  let old = null; // [{ id, name }] captured from the first apply
   return {
     label: "Set bus name",
     apply(design) {
-      const bus = design.buses.find((b) => b.id === busId);
-      if (old === null) old = { name: bus.name ?? null };
-      setBusName(design, busId, name);
+      const ids = sameWidthBusGroup(design, busId);
+      if (old === null) {
+        old = ids.map((id) => ({ id, name: design.buses.find((b) => b.id === id).name ?? null }));
+      }
+      for (const id of ids) setBusName(design, id, name);
     },
     revert(design) {
-      const bus = design.buses.find((b) => b.id === busId);
-      bus.name = old.name;
+      for (const { id, name: prev } of old) {
+        const bus = design.buses.find((b) => b.id === id);
+        if (bus) bus.name = prev;
+      }
     },
   };
 }

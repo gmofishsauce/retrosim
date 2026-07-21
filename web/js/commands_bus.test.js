@@ -196,6 +196,33 @@ test("setBusNameCmd sets, clears, and undoes a bus name (FR-040a)", () => {
   assert.equal(store.design.buses[0].name, "addr");
 });
 
+test("setBusNameCmd propagates a name across the same-width join group (FR-040a)", () => {
+  const store = newStore();
+  store.dispatch(addBusCmd(free(0, 0), free(20, 0), 4)); // b1, width 4
+  const b1 = store.design.buses[0].id;
+  // An equal-width bus T-branched onto b1: a distinct object sharing a junction.
+  store.dispatch(
+    addBusCmd({ kind: "branch", wireId: b1, segIndex: 0, x: 8, y: 0 }, free(8, 10), 4),
+  );
+  assert.equal(store.design.buses.length, 2);
+  const b2 = store.design.buses[1].id;
+  const nameOf = (id) => store.design.buses.find((b) => b.id === id).name;
+
+  // Naming either bus names the whole group.
+  store.dispatch(setBusNameCmd(b2, "B-low"));
+  assert.equal(nameOf(b1), "B-low");
+  assert.equal(nameOf(b2), "B-low");
+
+  // A blank value clears the whole group in one undoable action.
+  store.dispatch(setBusNameCmd(b1, ""));
+  assert.equal(nameOf(b1), null);
+  assert.equal(nameOf(b2), null);
+
+  store.undo(); // restores "B-low" on both
+  assert.equal(nameOf(b1), "B-low");
+  assert.equal(nameOf(b2), "B-low");
+});
+
 test("breakoutBitCmd taps a bus bit onto a wire; undo restores connectivity", () => {
   const store = newStore();
   store.dispatch(placeComponent(type74138Grp(), 40, 20, 0)); // U1

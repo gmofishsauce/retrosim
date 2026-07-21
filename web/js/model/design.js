@@ -643,6 +643,45 @@ export function setBusName(design, busId, name) {
   bus.name = trimmed === "" ? null : trimmed;
 }
 
+// sameWidthBusGroup returns the ids of the buses in busId's "same-width group"
+// (FR-040a), inclusive: the connected set reachable through equal-width bus↔bus
+// joins. Two buses are joined when their paths share a bus↔bus junction — a
+// vertex of kind "junction" with bit == null (a breakout tap, FR-043a, carries a
+// bit and is a wire↔bus join, not a bus↔bus one) — and traversal crosses that
+// join only when the two buses have equal width, because an unequal-width join
+// (FR-039b) maps the narrower bus onto a sub-range of the wider and so is a
+// different signal. A bus name propagates for display across exactly this set.
+// Returns [busId] when the bus is unknown or has no equal-width joins.
+export function sameWidthBusGroup(design, busId) {
+  const start = design.buses.find((b) => b.id === busId);
+  if (!start) return [busId];
+  const joins = new Set(
+    design.vertices.filter((v) => v.kind === "junction" && v.bit == null).map((v) => v.id),
+  );
+  const busesAtJoin = new Map(); // vertex id -> buses referencing it
+  for (const b of design.buses) {
+    for (const p of b.path) {
+      if (p.t !== "node" || !joins.has(p.v)) continue;
+      if (!busesAtJoin.has(p.v)) busesAtJoin.set(p.v, []);
+      busesAtJoin.get(p.v).push(b);
+    }
+  }
+  const group = new Set([busId]);
+  const stack = [start];
+  while (stack.length) {
+    const b = stack.pop();
+    for (const p of b.path) {
+      if (p.t !== "node") continue;
+      for (const other of busesAtJoin.get(p.v) ?? []) {
+        if (other.width !== b.width || group.has(other.id)) continue;
+        group.add(other.id);
+        stack.push(other);
+      }
+    }
+  }
+  return [...group];
+}
+
 // breakoutBit taps a single bit of a bus and routes it on as an ordinary
 // single-bit wire (FR-043a/FR-043b). It inserts a junction vertex at (x,y) on
 // segment segIndex of the bus with `bit` set to the tapped lane, then starts a
@@ -1031,6 +1070,66 @@ export function shiftWiring(design, refs, dx, dy) {
   }
 }
 
+// selectedConductorWiring returns the non-pin path vertices and bends of the
+// explicitly selected wire/bus conductors and segments (FR-018d), in the same
+// { bends: [{wireId, index}], vertices: [ids] } shape as rigidWiring. A whole
+// conductor selection (kind "wire"/"bus") contributes all its bends and all its
+// non-pin (junction/free) vertices; a segment selection (kind "segment", FR-031)
+// contributes only the two path points bounding that segment. Pin/connector
+// endpoints are excluded — they follow their own component (FR-018/FR-019).
+// Unknown ids or out-of-range segment indices are skipped.
+export function selectedConductorWiring(design, selection) {
+  const seen = new Set(); // bend keys "id#index"
+  const bends = [];
+  const vertices = new Set();
+  const addPoint = (cond, idx) => {
+    const p = cond.path[idx];
+    if (!p) return;
+    if (p.t === "bend") {
+      const key = cond.id + "#" + idx;
+      if (!seen.has(key)) {
+        seen.add(key);
+        bends.push({ wireId: cond.id, index: idx });
+      }
+    } else {
+      const v = getVertex(design, p.v);
+      if (v && v.kind !== "pin" && v.kind !== "connector") vertices.add(p.v);
+    }
+  };
+  for (const ref of selection ?? []) {
+    const cond =
+      ref.kind === "wire" || ref.kind === "bus" || ref.kind === "segment"
+        ? conductorById(design, ref.id)
+        : null;
+    if (!cond) continue;
+    if (ref.kind === "segment") {
+      addPoint(cond, ref.segIndex);
+      addPoint(cond, ref.segIndex + 1);
+    } else {
+      cond.path.forEach((_, idx) => addPoint(cond, idx));
+    }
+  }
+  return { bends, vertices: [...vertices] };
+}
+
+// mergeWiringRefs unions two { bends, vertices } ref sets (FR-018c interior wiring
+// plus FR-018d selected-conductor wiring), de-duplicating bends by wireId+index
+// and vertices by id, so a vertex shared by both sets is transformed only once.
+export function mergeWiringRefs(a, b) {
+  const seen = new Set(a.bends.map((x) => x.wireId + "#" + x.index));
+  const bends = [...a.bends];
+  for (const x of b.bends) {
+    const key = x.wireId + "#" + x.index;
+    if (!seen.has(key)) {
+      seen.add(key);
+      bends.push(x);
+    }
+  }
+  const vertices = new Set(a.vertices);
+  for (const id of b.vertices) vertices.add(id);
+  return { bends, vertices: [...vertices] };
+}
+
 // cleanup restores connectivity invariants after a structural deletion (§3.3):
 //   - a junction referenced by exactly one conductor is demoted: to a free
 //     (dangling) vertex if it is that conductor's endpoint, or back to a plain
@@ -1066,6 +1165,7 @@ export function cleanup(design) {
         } else {
           ref.conductor.path[ref.index] = { t: "bend", x: v.x, y: v.y };
           removeVertexById(design, v.id);
+          prunePath(design, ref.conductor); // FR-033c: a demoted junction may be a 0° bend
         }
         changed = true;
       }

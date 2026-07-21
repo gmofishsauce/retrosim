@@ -1,0 +1,585 @@
+{
+  "formatVersion": 3,
+  "name": "connection-point-bug",
+  "components": [
+    {
+      "refdes": "U1A",
+      "type": "type-7400",
+      "x": 30,
+      "y": 75,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-7400",
+        "name": "7400",
+        "renderType": "subunit",
+        "numUnits": 4,
+        "renderAs": "nand",
+        "width": 5,
+        "height": 4,
+        "pins": [
+          {
+            "name": "1A",
+            "side": "left",
+            "position": 0,
+            "unit": "A",
+            "direction": "in",
+            "number": 1
+          },
+          {
+            "name": "1B",
+            "side": "left",
+            "position": 0,
+            "unit": "A",
+            "direction": "in",
+            "number": 2
+          },
+          {
+            "name": "1Y",
+            "side": "right",
+            "position": 0,
+            "unit": "A",
+            "direction": "out",
+            "number": 3
+          }
+        ],
+        "delays": {
+          "tpd": 9
+        },
+        "behavior": "; 7400 — quad 2-input NAND gate. Derived from the function table\n; (datasheet Table 3): each output nY is LOW only when both of that gate's\n; inputs are HIGH, and HIGH otherwise.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: nand fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). Outputs are active-high, so NAND\n; is written at the output's declared polarity using De Morgan:\n; nY = /nA + /nB (\"nY is HIGH when nA is LOW or nB is LOW\").\n1Y = /1A + /1B\n2Y = /2A + /2B\n3Y = /3A + /3B\n4Y = /4A + /4B\n",
+        "description": "Quad 2-input NAND gate",
+        "datasheet": {
+          "vendor": "Nexperia",
+          "title": "74HC00; 74HCT00 Quad 2-input NAND gate",
+          "rev": "Rev. 11, 29 April 2025",
+          "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT00.pdf"
+        },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
+        "unit": "A"
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "U1B",
+      "type": "type-7400",
+      "x": 30,
+      "y": 84,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-7400",
+        "name": "7400",
+        "renderType": "subunit",
+        "numUnits": 4,
+        "renderAs": "nand",
+        "width": 5,
+        "height": 4,
+        "pins": [
+          {
+            "name": "2A",
+            "side": "left",
+            "position": 0,
+            "unit": "B",
+            "direction": "in",
+            "number": 4
+          },
+          {
+            "name": "2B",
+            "side": "left",
+            "position": 0,
+            "unit": "B",
+            "direction": "in",
+            "number": 5
+          },
+          {
+            "name": "2Y",
+            "side": "right",
+            "position": 0,
+            "unit": "B",
+            "direction": "out",
+            "number": 6
+          }
+        ],
+        "delays": {
+          "tpd": 9
+        },
+        "behavior": "; 7400 — quad 2-input NAND gate. Derived from the function table\n; (datasheet Table 3): each output nY is LOW only when both of that gate's\n; inputs are HIGH, and HIGH otherwise.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: nand fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). Outputs are active-high, so NAND\n; is written at the output's declared polarity using De Morgan:\n; nY = /nA + /nB (\"nY is HIGH when nA is LOW or nB is LOW\").\n1Y = /1A + /1B\n2Y = /2A + /2B\n3Y = /3A + /3B\n4Y = /4A + /4B\n",
+        "description": "Quad 2-input NAND gate",
+        "datasheet": {
+          "vendor": "Nexperia",
+          "title": "74HC00; 74HCT00 Quad 2-input NAND gate",
+          "rev": "Rev. 11, 29 April 2025",
+          "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT00.pdf"
+        },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
+        "unit": "B"
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "U1C",
+      "type": "type-7400",
+      "x": 28,
+      "y": 98,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-7400",
+        "name": "7400",
+        "renderType": "subunit",
+        "numUnits": 4,
+        "renderAs": "nand",
+        "width": 5,
+        "height": 4,
+        "pins": [
+          {
+            "name": "3A",
+            "side": "left",
+            "position": 0,
+            "unit": "C",
+            "direction": "in",
+            "number": 9
+          },
+          {
+            "name": "3B",
+            "side": "left",
+            "position": 0,
+            "unit": "C",
+            "direction": "in",
+            "number": 10
+          },
+          {
+            "name": "3Y",
+            "side": "right",
+            "position": 0,
+            "unit": "C",
+            "direction": "out",
+            "number": 8
+          }
+        ],
+        "delays": {
+          "tpd": 9
+        },
+        "behavior": "; 7400 — quad 2-input NAND gate. Derived from the function table\n; (datasheet Table 3): each output nY is LOW only when both of that gate's\n; inputs are HIGH, and HIGH otherwise.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: nand fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). Outputs are active-high, so NAND\n; is written at the output's declared polarity using De Morgan:\n; nY = /nA + /nB (\"nY is HIGH when nA is LOW or nB is LOW\").\n1Y = /1A + /1B\n2Y = /2A + /2B\n3Y = /3A + /3B\n4Y = /4A + /4B\n",
+        "description": "Quad 2-input NAND gate",
+        "datasheet": {
+          "vendor": "Nexperia",
+          "title": "74HC00; 74HCT00 Quad 2-input NAND gate",
+          "rev": "Rev. 11, 29 April 2025",
+          "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT00.pdf"
+        },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
+        "unit": "C"
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "U1D",
+      "type": "type-7400",
+      "x": 31,
+      "y": 112,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-7400",
+        "name": "7400",
+        "renderType": "subunit",
+        "numUnits": 4,
+        "renderAs": "nand",
+        "width": 5,
+        "height": 4,
+        "pins": [
+          {
+            "name": "4A",
+            "side": "left",
+            "position": 0,
+            "unit": "D",
+            "direction": "in",
+            "number": 12
+          },
+          {
+            "name": "4B",
+            "side": "left",
+            "position": 0,
+            "unit": "D",
+            "direction": "in",
+            "number": 13
+          },
+          {
+            "name": "4Y",
+            "side": "right",
+            "position": 0,
+            "unit": "D",
+            "direction": "out",
+            "number": 11
+          }
+        ],
+        "delays": {
+          "tpd": 9
+        },
+        "behavior": "; 7400 — quad 2-input NAND gate. Derived from the function table\n; (datasheet Table 3): each output nY is LOW only when both of that gate's\n; inputs are HIGH, and HIGH otherwise.\n;\n; This is a subunit (multi-gate) package: the four gates are independent,\n; so the behavior is one sum-of-products equation per unit, each using that\n; unit's own pin names. (renderas: nand fixes the drawn symbol; these\n; equations are the authoritative logic.)\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (no input here is active-low). Outputs are active-high, so NAND\n; is written at the output's declared polarity using De Morgan:\n; nY = /nA + /nB (\"nY is HIGH when nA is LOW or nB is LOW\").\n1Y = /1A + /1B\n2Y = /2A + /2B\n3Y = /3A + /3B\n4Y = /4A + /4B\n",
+        "description": "Quad 2-input NAND gate",
+        "datasheet": {
+          "vendor": "Nexperia",
+          "title": "74HC00; 74HCT00 Quad 2-input NAND gate",
+          "rev": "Rev. 11, 29 April 2025",
+          "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT00.pdf"
+        },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        },
+        "unit": "D"
+      },
+      "overrides": {}
+    }
+  ],
+  "wires": [
+    {
+      "id": "w4",
+      "path": [
+        {
+          "t": "node",
+          "v": "v6"
+        },
+        {
+          "t": "bend",
+          "x": 27,
+          "y": 99
+        },
+        {
+          "t": "node",
+          "v": "v8"
+        },
+        {
+          "t": "bend",
+          "x": 27,
+          "y": 101
+        },
+        {
+          "t": "node",
+          "v": "v7"
+        }
+      ]
+    },
+    {
+      "id": "w6",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1"
+        },
+        {
+          "t": "bend",
+          "x": 39,
+          "y": 77
+        },
+        {
+          "t": "bend",
+          "x": 39,
+          "y": 81
+        },
+        {
+          "t": "bend",
+          "x": 26,
+          "y": 81
+        },
+        {
+          "t": "bend",
+          "x": 26,
+          "y": 86
+        },
+        {
+          "t": "node",
+          "v": "v15"
+        }
+      ]
+    },
+    {
+      "id": "w9",
+      "path": [
+        {
+          "t": "node",
+          "v": "v12"
+        },
+        {
+          "t": "bend",
+          "x": 29,
+          "y": 85
+        },
+        {
+          "t": "node",
+          "v": "v15"
+        },
+        {
+          "t": "bend",
+          "x": 29,
+          "y": 87
+        },
+        {
+          "t": "node",
+          "v": "v13"
+        }
+      ]
+    },
+    {
+      "id": "w10",
+      "path": [
+        {
+          "t": "node",
+          "v": "v14"
+        },
+        {
+          "t": "node",
+          "v": "v8"
+        }
+      ]
+    },
+    {
+      "id": "w13",
+      "path": [
+        {
+          "t": "node",
+          "v": "v17"
+        },
+        {
+          "t": "bend",
+          "x": 27,
+          "y": 109
+        },
+        {
+          "t": "bend",
+          "x": 27,
+          "y": 110
+        },
+        {
+          "t": "bend",
+          "x": 27,
+          "y": 111
+        },
+        {
+          "t": "node",
+          "v": "v18"
+        }
+      ]
+    },
+    {
+      "id": "w15",
+      "path": [
+        {
+          "t": "node",
+          "v": "v3"
+        },
+        {
+          "t": "bend",
+          "x": 37,
+          "y": 100
+        },
+        {
+          "t": "bend",
+          "x": 37,
+          "y": 105
+        },
+        {
+          "t": "bend",
+          "x": 24,
+          "y": 105
+        },
+        {
+          "t": "node",
+          "v": "v20"
+        }
+      ]
+    }
+  ],
+  "buses": [],
+  "vertices": [
+    {
+      "id": "v1",
+      "kind": "pin",
+      "ref": "U1A",
+      "pin": "1Y",
+      "x": 35,
+      "y": 77
+    },
+    {
+      "id": "v3",
+      "kind": "pin",
+      "ref": "U1C",
+      "pin": "3Y",
+      "x": 33,
+      "y": 100
+    },
+    {
+      "id": "v6",
+      "kind": "pin",
+      "ref": "U1C",
+      "pin": "3A",
+      "x": 28,
+      "y": 99
+    },
+    {
+      "id": "v7",
+      "kind": "pin",
+      "ref": "U1C",
+      "pin": "3B",
+      "x": 28,
+      "y": 101
+    },
+    {
+      "id": "v8",
+      "kind": "junction",
+      "x": 27,
+      "y": 100
+    },
+    {
+      "id": "v12",
+      "kind": "pin",
+      "ref": "U1B",
+      "pin": "2A",
+      "x": 30,
+      "y": 85
+    },
+    {
+      "id": "v13",
+      "kind": "pin",
+      "ref": "U1B",
+      "pin": "2B",
+      "x": 30,
+      "y": 87
+    },
+    {
+      "id": "v14",
+      "kind": "free",
+      "x": 26,
+      "y": 100
+    },
+    {
+      "id": "v15",
+      "kind": "junction",
+      "x": 29,
+      "y": 86
+    },
+    {
+      "id": "v17",
+      "kind": "pin",
+      "ref": "U1D",
+      "pin": "4A",
+      "x": 28,
+      "y": 109
+    },
+    {
+      "id": "v18",
+      "kind": "pin",
+      "ref": "U1D",
+      "pin": "4B",
+      "x": 28,
+      "y": 111
+    },
+    {
+      "id": "v20",
+      "kind": "free",
+      "x": 24,
+      "y": 110
+    }
+  ],
+  "refCounters": {
+    "U": 2,
+    "A": 1,
+    "N": 1,
+    "X": 1
+  },
+  "nets": [
+    {
+      "pins": [
+        "U1C.3A",
+        "U1C.3B"
+      ],
+      "members": [
+        "w4",
+        "w10"
+      ],
+      "provenance": [],
+      "name": "3A"
+    },
+    {
+      "pins": [
+        "U1A.1Y",
+        "U1B.2A",
+        "U1B.2B"
+      ],
+      "members": [
+        "w6",
+        "w9"
+      ],
+      "provenance": [],
+      "name": "1Y"
+    },
+    {
+      "pins": [
+        "U1D.4A",
+        "U1D.4B"
+      ],
+      "members": [
+        "w13"
+      ],
+      "provenance": [],
+      "name": "4A"
+    },
+    {
+      "pins": [
+        "U1C.3Y"
+      ],
+      "members": [
+        "w15"
+      ],
+      "provenance": [],
+      "name": "3Y"
+    }
+  ]
+}

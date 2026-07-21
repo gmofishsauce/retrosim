@@ -366,13 +366,18 @@ This is the heart of the editor and follows KiCad's conventions.
   snapping to grid. Wiring that is *interior* to the selection — bend points and
   junctions of wires/buses whose every endpoint is on a moving component — travels
   rigidly with it. Wires running to a component you did **not** select stay
-  anchored at that end and stretch (re-route them yourself).
+  anchored at that end and stretch (re-route them yourself). You can also
+  **Shift-click wire/bus segments into the selection** to carry them along: their
+  junctions, free ends, and bends then move with the group too — handy for dragging
+  a gate together with the fan-out dot and short stubs feeding its inputs. Any
+  *unselected* wire still attached to a junction you moved this way stretches to
+  follow, staying connected.
 - **Rotate:** press **`r`** to rotate the selection 90° clockwise, **`Shift+r`**
   for counter-clockwise. The whole selection turns together as one rigid group
-  about a single pivot — components **and** the bend points and junctions interior
-  to the selection — so the sub-circuit keeps its shape. A lone component rotates
-  in place about its own origin; a multi-component selection turns about the
-  centre of its bounding box.
+  about a single pivot — components, the bend points and junctions interior to the
+  selection, **and any wire/bus segments you explicitly selected** — so the
+  sub-circuit keeps its shape. A lone component rotates in place about its own
+  origin; a multi-component selection turns about the centre of its bounding box.
 - **Delete:** press **Delete** or **Backspace** to remove every selected object. If
   the selection is a single wire/bus **segment**, only that leg is deleted: cutting
   an interior leg leaves two wires each with a dangling end, and cutting an end leg
@@ -392,7 +397,10 @@ This is the heart of the editor and follows KiCad's conventions.
 
 Move, rotate, delete, and paste each apply as a single undo step.
 
-The **properties panel** is shown only when exactly one component is selected.
+The **properties panel** appears when exactly one object is selected. For a
+component it shows the editable type/override sheet; for a single wire or bus (or
+one of its segments) it shows a sheet describing the conductor's endpoints, plus —
+for a bus — the editable **name** field (see *Buses* below).
 
 ---
 
@@ -504,6 +512,14 @@ with a `/N` width annotation.
   - A **connected** bus end is always drawn with its curly brace; a **red square**
     marks an end that is still **dangling** (unconnected). The brace tracks the part
     if you move or rotate it.
+- **Name:** select a single bus — or one of its segments — and type into the
+  **name** field in the properties panel. The name is a cosmetic label (it does not
+  affect connectivity, width, bit alignment, or simulation) shown wherever the bus
+  is named to you. Naming applies to the **whole bus**: when what looks like one bus
+  is really several equal-width segments joined end-to-end at junction dots, naming
+  any one segment names them all at once, and clearing the name (blank field) clears
+  the whole group. Propagation stops where the width changes — a narrower bus joined
+  to a wider one is a different signal and keeps its own name.
 - **Bit names:** a bus may carry a name per bit; snap-connecting to a named pin
   group adopts those names (bit position, not name, determines connectivity).
 - **Breakout:** you can tap a single bit out of a bus and route it as an ordinary

@@ -193,14 +193,15 @@ reworked.
 
 **Component Rotation**
 - **FR-019** — Rotate the selection 90° CW or CCW as a **rigid body** about a
-  single grid-snapped pivot: each selected component's origin and each interior
-  bend/junction vertex (FR-018c) maps `q → P + R(q − P)`, and each component's
-  `rotation` is bumped by the delta — so pins, bends, and junctions all turn
-  together and the sub-circuit keeps its shape. Pivot `P`: a single component's
-  own origin (unchanged in-place rotation); otherwise the grid-snapped center of
-  the selected components' combined bounding box. One reversible
-  `rotateSelectionCmd` captures the prior origins/rotations and interior
-  positions for undo. Supersedes per-component "about its own center", which
+  single grid-snapped pivot: each selected component's origin, each interior
+  bend/junction vertex (FR-018c), and each non-pin vertex of an explicitly
+  selected conductor segment (FR-018d) maps `q → P + R(q − P)`, and each
+  component's `rotation` is bumped by the delta — so pins, bends, and junctions
+  all turn together and the sub-circuit keeps its shape. Pivot `P`: a single
+  component's own origin (unchanged in-place rotation); otherwise the grid-snapped
+  center of the selected components' combined bounding box. One reversible
+  `rotateSelectionCmd` captures the prior origins/rotations and the moved vertex
+  positions (interior + selected-segment, FR-018d) for undo. Supersedes per-component "about its own center", which
   tore multi-component sub-circuits apart.
 - **FR-020** — Rotation repositions pin leads; all text labels stay upright.
 
@@ -580,9 +581,13 @@ this document adopts. **None block implementation** except where noted in §12.
   FR-033a deletes a wire; FR-034b says wires can branch through a shared junction
   vertex. **Resolution (under the vertex model, §7.1a):** when a wire/bus is
   deleted, each `junction` vertex it referenced has its reference count decremented.
-  A junction vertex referenced by **exactly one** remaining wire is **demoted to a
-  `free` vertex** (becoming dangling, per FR-029); one referenced by **zero**
-  remaining wires is **deleted**. The FR-030 sweep (a wire/bus all of whose
+  A junction vertex referenced by **exactly one** remaining wire is **demoted**: if
+  it sits at that wire's path endpoint it becomes a **`free` vertex** (dangling, per
+  FR-029); if it sits **interior** to the path it becomes an ordinary **bend** in
+  place, after which the wire is re-pruned (`prunePath`) so a demoted bend that is
+  now collinear with its neighbors is dropped rather than left as a 0° bend
+  (FR-033c). One referenced by **zero** remaining wires is **deleted**. The FR-030
+  sweep (a wire/bus all of whose
   endpoints are `free` and not group-snap-connected — see §7.3 Delete — is
   removed) then runs. There is no coordinate copying or
   target-id retargeting — demotion follows naturally from the shared vertex losing
@@ -1341,9 +1346,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | SELECT | click pin | begin wire at pin, auto-arming WIRE from select (FR-027b) | WIRE_AWAIT_DEST |
   | SELECT | click component | select it, replacing the selection (FR-016) | SELECT |
   | SELECT | shift-click object | toggle it in the selection (component/wire/bus, FR-016a) | SELECT |
-  | SELECT | drag selected component | `MoveComponent` for each selected component (snap, stretch connected segs FR-018) + `TranslateWiring` for the interior wiring of the moving set (FR-018c), as one `composite` | SELECT |
+  | SELECT | drag selected component | `MoveComponent` for each selected component (snap, stretch connected segs FR-018) + `TranslateWiring` for the interior wiring of the moving set (FR-018c) **and the non-pin vertices of any explicitly selected conductor segments** (FR-018d), as one `composite` | SELECT |
   | SELECT | press Delete on selection | `DeleteComponent`/`DeleteWire`/`DeleteBus`/`DeleteSegment` per selected ref kind (FR-018a/FR-033a/FR-033d/FR-016a), as one `composite`; the conductor deletes are queued with `{ifPresent: true}` — an earlier delete's cascade (FR-029/FR-030) may already have removed a selected conductor by apply time, which must skip, not fail the whole composite (FR-024a) | SELECT |
-  | SELECT | press `r` on selection | one `RotateSelection` turning every selected component **and** the interior bends/junctions rigidly about a single grid-snapped pivot (FR-019/FR-016a) | SELECT |
+  | SELECT | press `r` on selection | one `RotateSelection` turning every selected component, the interior bends/junctions (FR-018c), **and the non-pin vertices of any explicitly selected conductor segments** (FR-018d) rigidly about a single grid-snapped pivot (FR-019/FR-016a) | SELECT |
   | SELECT | click wire/bus segment | select that **segment** (`{kind:"segment", id, segIndex}`), replacing the selection (FR-031) | SELECT |
   | SELECT | drag from wire/bus segment | `InsertBend` at nearest grid pt, the new bend dragging until release (FR-031) | DRAGGING_BEND |
   | SELECT | drag bend point | `MoveBend` (rubber-band FR-032) | DRAGGING_BEND |
@@ -2031,7 +2036,14 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     **bus** the sheet additionally leads with one **editable** field, a free-form
     **name** (FR-040a) committed via `setBusNameCmd` (blank clears it back to the
     default), disabled while `store.isReadonly()` (FR-087/FR-115h); wires have no
-    name field, so their sheet is fully read-only. A shared `busLabel(bus)` gives a
+    name field, so their sheet is fully read-only. `setBusNameCmd` propagates at
+    set time (FR-040a): it walks the edited bus's **same-width group** — bus
+    objects reachable through full-width, zero-offset bus↔bus joins (FR-039/FR-039b),
+    stopping at any width change or nonzero offset — and writes (or, on blank,
+    clears) the name on every bus in the group, capturing each one's prior name so
+    revert restores them all as the single undoable action. Because every bus in the
+    group then stores the name, `busLabel` stays a per-object lookup with no
+    traversal. A shared `busLabel(bus)` gives a
     bus's display name with precedence (FR-040a): `bus.name ??` its first
     `groupConnections` group `?? bus.id`. A shared `describeEndpoint(design,
     vertexId, self)` resolves each endpoint vertex to text, recomputed on every

@@ -10,6 +10,7 @@ import {
   branchWire,
   cleanup,
   deleteWire,
+  deleteSegment,
   deleteInstance,
   snapBusGroup,
   getVertex,
@@ -23,6 +24,19 @@ function ty() {
     pins: [
       { name: "A0", side: "left", position: 2, direction: "in" },
       { name: "/Y0", side: "right", position: 2, direction: "out" },
+    ],
+  };
+}
+
+// Two vertically-aligned left-side input pins, so a wire tying them is straight.
+function tyTie() {
+  return {
+    name: "TIE",
+    width: 6,
+    height: 12,
+    pins: [
+      { name: "A0", side: "left", position: 2, direction: "in" },
+      { name: "A1", side: "left", position: 4, direction: "in" },
     ],
   };
 }
@@ -65,6 +79,36 @@ test("deleting a branch reverts an interior junction to a bend (G2)", () => {
   assert.equal(getVertex(d, j.id), null); // junction removed
   assert.equal(w.path.length, 3);
   assert.deepEqual(w.path[1], { t: "bend", x: 25, y: 26 }); // reverted to bend
+});
+
+test("a junction demoted to a collinear bend is pruned, not left as a 0° bend (FR-033c/FR-033d)", () => {
+  const d = createDesign("t");
+  addInstance(d, tyTie(), 10, 20, 0); // U1, two vertically-aligned left pins
+  addInstance(d, ty(), 40, 20, 0); // U2, far end of the branch
+  const u1 = d.components.find((c) => c.refdes === "U1");
+  const p0 = pinWorldPos(u1, "A0");
+  const p1 = pinWorldPos(u1, "A1");
+  assert.equal(p0.x, p1.x); // straight vertical tie between the two inputs
+
+  // The input-tie wire, with a junction midway that a branch taps.
+  const w = addWire(
+    d,
+    { kind: "pin", refdes: "U1", pin: "A0" },
+    { kind: "pin", refdes: "U1", pin: "A1" },
+  );
+  const mid = { x: p0.x, y: (p0.y + p1.y) / 2 };
+  const j = branchWire(d, w, 0, mid.x, mid.y); // collinear with both pins
+  const w2 = addWire(
+    d,
+    { kind: "vertex", id: j.id },
+    { kind: "pin", refdes: "U2", pin: "A0" },
+  );
+
+  deleteSegment(d, w2.id, 0); // delete the branch stub, as in the bug report
+  assert.equal(getVertex(d, j.id), null); // junction demoted away
+  assert.equal(d.wires.length, 1); // the tie wire survives (pin-anchored)
+  assert.equal(w.path.length, 2); // the 0° bend was pruned (FR-033c)
+  assert.equal(w.path.every((p) => p.t === "node"), true);
 });
 
 test("deleting the host demotes a junction to a free (dangling) endpoint", () => {

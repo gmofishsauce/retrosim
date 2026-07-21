@@ -12,6 +12,10 @@ import {
   groupsAcceptingBus,
   snapBusGroup,
   setBusBitNames,
+  sameWidthBusGroup,
+  selectedConductorWiring,
+  mergeWiringRefs,
+  branchWire,
   breakoutBit,
   getVertex,
   refreshInstance,
@@ -477,6 +481,64 @@ test("setBusBitNames sets and clears names with a length check (FR-037b)", () =>
   setBusBitNames(d, bus.id, null);
   assert.equal(bus.bitNames, null);
   assert.throws(() => setBusBitNames(d, bus.id, ["only-one"]));
+});
+
+test("sameWidthBusGroup walks equal-width bus↔bus joins, stopping at width changes (FR-040a)", () => {
+  const d = createDesign("t");
+  const sorted = (a) => [...a].sort();
+  // b1 —(junction j1)— b2, both width 4: one same-width group.
+  const b1 = addBus(d, { kind: "free", x: 0, y: 0 }, { kind: "free", x: 8, y: 0 }, 4);
+  const j1 = branchWire(d, b1, 0, 4, 0);
+  const b2 = addBus(d, { kind: "vertex", id: j1.id }, { kind: "free", x: 4, y: 8 }, 4);
+  // b2 —(junction j2, unequal width)— b3 (width 2): a boundary, not in the group.
+  const j2 = branchWire(d, b2, 0, 4, 4);
+  j2.offset = 0;
+  const b3 = addBus(d, { kind: "vertex", id: j2.id }, { kind: "free", x: 4, y: 12 }, 2);
+  // b4: an unconnected width-4 bus — its own group.
+  const b4 = addBus(d, { kind: "free", x: 0, y: 20 }, { kind: "free", x: 8, y: 20 }, 4);
+
+  assert.deepEqual(sorted(sameWidthBusGroup(d, b1.id)), sorted([b1.id, b2.id]));
+  assert.deepEqual(sorted(sameWidthBusGroup(d, b2.id)), sorted([b1.id, b2.id]));
+  assert.deepEqual(sameWidthBusGroup(d, b3.id), [b3.id]);
+  assert.deepEqual(sameWidthBusGroup(d, b4.id), [b4.id]);
+  assert.deepEqual(sameWidthBusGroup(d, "nope"), ["nope"]);
+});
+
+// --- selectedConductorWiring / mergeWiringRefs (FR-018d) ---
+
+test("selectedConductorWiring gathers non-pin vertices and bends, excluding pins (FR-018d)", () => {
+  const d = createDesign("t");
+  addInstance(d, { name: "T", width: 6, height: 12, pins: [{ name: "A0", side: "left", position: 2, direction: "in" }] }, 10, 20, 0); // U1
+  const w = addWire(d, { kind: "pin", refdes: "U1", pin: "A0" }, { kind: "free", x: 0, y: 0 }, [{ x: 5, y: 10 }]);
+  const j = branchWire(d, w, 1, 3, 8); // junction on the bend→free segment
+  const freeId = w.path[w.path.length - 1].v;
+  // path: 0 pin, 1 bend(5,10), 2 junction(j), 3 free
+  const sortIds = (a) => [...a].sort();
+
+  const whole = selectedConductorWiring(d, [{ kind: "wire", id: w.id }]);
+  assert.deepEqual(whole.bends, [{ wireId: w.id, index: 1 }]);
+  assert.deepEqual(sortIds(whole.vertices), sortIds([j.id, freeId]));
+
+  // A segment contributes only its two bounding points; the pin end is excluded.
+  const seg0 = selectedConductorWiring(d, [{ kind: "segment", id: w.id, segIndex: 0 }]);
+  assert.deepEqual(seg0.bends, [{ wireId: w.id, index: 1 }]);
+  assert.deepEqual(seg0.vertices, []);
+
+  const seg1 = selectedConductorWiring(d, [{ kind: "segment", id: w.id, segIndex: 1 }]);
+  assert.deepEqual(seg1.bends, [{ wireId: w.id, index: 1 }]);
+  assert.deepEqual(seg1.vertices, [j.id]);
+
+  // Unknown ids and non-conductor refs are skipped.
+  const none = selectedConductorWiring(d, [{ kind: "wire", id: "nope" }, { kind: "component", refdes: "U1" }]);
+  assert.deepEqual(none, { bends: [], vertices: [] });
+});
+
+test("mergeWiringRefs unions and de-duplicates bends and vertices (FR-018d)", () => {
+  const a = { bends: [{ wireId: "w1", index: 1 }], vertices: ["v1", "v2"] };
+  const b = { bends: [{ wireId: "w1", index: 1 }, { wireId: "w1", index: 2 }], vertices: ["v2", "v3"] };
+  const m = mergeWiringRefs(a, b);
+  assert.deepEqual(m.bends, [{ wireId: "w1", index: 1 }, { wireId: "w1", index: 2 }]);
+  assert.deepEqual([...m.vertices].sort(), ["v1", "v2", "v3"]);
 });
 
 // --- breakoutBit (FR-043a) ---
