@@ -1168,6 +1168,23 @@ export function cleanup(design) {
           prunePath(design, ref.conductor); // FR-033c: a demoted junction may be a 0° bend
         }
         changed = true;
+      } else if (v.kind === "junction" && rc === 2 && v.bit == null && v.offset == null) {
+        // Degree-2 junction (§3.3 G2): two conductor ends meet but nothing branches,
+        // so it is no longer a tie. If the two references are the endpoints of two
+        // distinct, mergeable conductors, merge them into one continuous conductor
+        // (FR-034c) and drop the vertex, so no dot lingers where there is no branch.
+        // Bus offset joins (v.offset) and breakout taps (v.bit) are excluded above.
+        const eps = endpointRefs(design, v.id);
+        const mergeable =
+          eps.length === 2 &&
+          eps[0].conductor !== eps[1].conductor &&
+          eps[0].isBus === eps[1].isBus &&
+          (!eps[0].isBus || eps[0].conductor.width === eps[1].conductor.width);
+        if (mergeable) {
+          v.kind = "free"; // joinFreeEnd merges a free-vertex meeting of two conductors
+          joinFreeEnd(design, v.id);
+          changed = true;
+        }
       }
     }
 

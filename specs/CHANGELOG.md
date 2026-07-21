@@ -26,6 +26,13 @@ Touches: FR-018d (new); FR-016a, FR-018, FR-019 (reworked in place). Design §FR
 
 ---
 
+## 2026-07-21 — Fix: degree-2 junction left with a lingering dot after a delete
+What: cleanup now demotes a junction that drops to degree 2 (referenced as the endpoint of exactly two distinct conductors, nothing branching) by merging the two conductors into one continuous conductor (reusing joinFreeEnd, FR-034c) and removing the vertex — so no junction dot lingers where there is no branch. Previously cleanup only demoted junctions at reference-count 1, leaving a degree-2 junction as a "junction" vertex, which drawVertices (§6.8) unconditionally dots. Bus↔bus offset joins (FR-039b) and breakout taps (FR-043a) are preserved. Restores the invariant that a junction always has degree ≥ 3 (or is a bus-offset join).
+Why: user deleted the stub from a T to a dangling end; the two remaining collinear wire-ends kept a junction dot even though nothing branched there.
+Touches: no FR change (FR-034b/FR-034c/FR-020d already describe junctions/merges); design §3.3 G2 (degree-2 merge added). Fix in model/design.js (cleanup), regression test in model/delete.test.js.
+
+---
+
 ## 2026-07-21 — Fix: junction demoted to a collinear bend left as a 0° bend
 What: deleting a wire/bus segment (or wire) that demotes a shared junction to an interior bend (§3.3 G2) now re-prunes the affected conductor, so a bend that is collinear after demotion is dropped instead of persisting as a redundant 0° bend. Bug fix bringing `cleanup` into compliance with FR-033c (no requirement change). Repro saved as examples/connection-point-bug.json.
 Why: user deleted a stub near a tied-input gate and the vertical tie wire kept a 0° bend where the branch junction had been — a visible FR-033c violation.

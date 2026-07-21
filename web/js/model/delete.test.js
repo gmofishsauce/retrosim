@@ -111,6 +111,33 @@ test("a junction demoted to a collinear bend is pruned, not left as a 0° bend (
   assert.equal(w.path.every((p) => p.t === "node"), true);
 });
 
+test("a junction dropping to degree 2 merges its two conductors, dropping the dot (§3.3 G2/FR-034c)", () => {
+  const d = createDesign("t");
+  addInstance(d, tyTie(), 10, 20, 0); // U1, pins A0/A1
+  // A through-connection drawn as one wire from A0 out to a free point, plus a
+  // second wire from A1 ending on a junction tapped into it — a real T (degree 3).
+  const wA = addWire(d, { kind: "pin", refdes: "U1", pin: "A0" }, { kind: "free", x: 30, y: 30 });
+  const j = branchWire(d, wA, 0, 20, 22); // junction interior to wA
+  const wB = addWire(d, { kind: "vertex", id: j.id }, { kind: "pin", refdes: "U1", pin: "A1" });
+  assert.equal(getVertex(d, j.id).kind, "junction"); // degree 3 so far
+
+  // Delete the stub segment (junction → the free/dangling end), as in the bug.
+  // wA is now [A0, j, free]; segment 1 is j→free. That drops wA to [A0, j],
+  // leaving j the endpoint of two conductors (wA, wB): degree 2, no branch.
+  deleteSegment(d, wA.id, 1);
+
+  assert.equal(getVertex(d, j.id), null); // junction merged away — no lingering dot
+  assert.equal(d.vertices.some((v) => v.kind === "junction"), false);
+  assert.equal(d.wires.length, 1); // wA + wB merged into one continuous wire
+  const w = d.wires[0];
+  const ends = [w.path[0], w.path[w.path.length - 1]].map((p) => getVertex(d, p.v));
+  assert.deepEqual(
+    ends.map((v) => v.kind).sort(),
+    ["pin", "pin"],
+  );
+  assert.deepEqual(ends.map((v) => v.pin).sort(), ["A0", "A1"]);
+});
+
 test("deleting the host demotes a junction to a free (dangling) endpoint", () => {
   const d = setup();
   const w = addWire(

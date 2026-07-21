@@ -586,12 +586,22 @@ this document adopts. **None block implementation** except where noted in §12.
   FR-029); if it sits **interior** to the path it becomes an ordinary **bend** in
   place, after which the wire is re-pruned (`prunePath`) so a demoted bend that is
   now collinear with its neighbors is dropped rather than left as a 0° bend
-  (FR-033c). One referenced by **zero** remaining wires is **deleted**. The FR-030
-  sweep (a wire/bus all of whose
-  endpoints are `free` and not group-snap-connected — see §7.3 Delete — is
-  removed) then runs. There is no coordinate copying or
-  target-id retargeting — demotion follows naturally from the shared vertex losing
-  degree. Implied by FR-018a/FR-029/FR-030; made explicit here.
+  (FR-033c). One referenced by **zero** remaining wires is **deleted**. A junction
+  that drops to **degree 2** — referenced as the **endpoint of exactly two distinct
+  conductors** and nothing else (so nothing branches there anymore) — is no longer a
+  tie: the two conductors are **merged into one continuous conductor** and the vertex
+  removed, reusing the `joinFreeEnd` merge (FR-034c) — a collinear meeting prunes to
+  a straight run (FR-033c), an L-corner keeps a bend — so no junction dot lingers
+  where there is no branch. This merge is skipped (the junction is kept) for a
+  bus↔bus **offset** join (`offset != null`, FR-039b — a legitimate degree-2 tie
+  that must survive) and for a **breakout tap** (`bit != null`, FR-043a), and for a
+  type/width mismatch (`joinFreeEnd`'s own guards, FR-034c/FR-039a). This preserves
+  the invariant the renderer assumes (§6.8 drawVertices): **every `junction` vertex
+  has degree ≥ 3, or is a bus-offset join.** The FR-030 sweep (a wire/bus all of
+  whose endpoints are `free` and not group-snap-connected — see §7.3 Delete — is
+  removed) then runs. There is no coordinate copying or target-id retargeting —
+  demotion follows naturally from the shared vertex losing degree. Implied by
+  FR-018a/FR-029/FR-030; made explicit here.
 
 ### 3.4 Untestable / Vague
 
