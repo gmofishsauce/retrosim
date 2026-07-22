@@ -230,6 +230,13 @@ reworked.
 - **FR-028** — After placing a wire, return to select mode.
 - **FR-029** — A wire/bus with exactly one connected endpoint is permitted.
 - **FR-030** — A wire/bus with no connected endpoints is auto-removed.
+- **FR-030a** — `cleanup` collapses a degenerate **zero-length end segment**: a
+  conductor endpoint that is a non-group-snapped `free` vertex coincident with its
+  neighbouring path point is dropped (and the now-orphaned vertex removed). So a
+  segment-delete (FR-033d) that promotes a cut bend onto an **existing junction**
+  leaves the conductor terminating cleanly on that junction, not a spurious
+  dangling marker (FR-029) stacked on the junction dot. Fills a gap in FR-033d's
+  cleanup.
 
 **Wire Routing (Bend Points)**
 - **FR-031** — In select mode, a plain click on a wire/bus segment selects **that
@@ -597,7 +604,11 @@ this document adopts. **None block implementation** except where noted in §12.
   that must survive) and for a **breakout tap** (`bit != null`, FR-043a), and for a
   type/width mismatch (`joinFreeEnd`'s own guards, FR-034c/FR-039a). This preserves
   the invariant the renderer assumes (§6.8 drawVertices): **every `junction` vertex
-  has degree ≥ 3, or is a bus-offset join.** The FR-030 sweep (a wire/bus all of
+  has degree ≥ 3, or is a bus-offset join.** `cleanup` also collapses a **zero-length
+  end segment** (FR-030a): a non-group-snapped `free` endpoint coincident with its
+  neighbouring path point is dropped and its now-orphaned vertex removed, so a cut
+  bend promoted onto an existing junction leaves the conductor ending on that
+  junction rather than a dangling marker stacked on the junction dot. The FR-030 sweep (a wire/bus all of
   whose endpoints are `free` and not group-snap-connected — see §7.3 Delete — is
   removed) then runs. There is no coordinate copying or target-id retargeting —
   demotion follows naturally from the shared vertex losing degree. Implied by

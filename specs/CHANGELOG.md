@@ -19,6 +19,13 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-22 — Fix: segment-delete left a dangling red marker stacked on a junction
+What: deleting a bus/wire segment whose cut promoted a bend onto an existing junction (e.g. notL4C381 b308: a `free` endpoint coincident with junction v892) left a spurious dangling-end red square (FR-029) even though continuity was preserved. `cleanup` now collapses a zero-length end segment — a non-group-snapped `free` endpoint coincident with its neighbouring path point is dropped and the orphaned vertex removed.
+Why: the promoted free endpoint landed exactly on a junction, so the conductor ended cleanly on the tie point but the stacked free vertex still rendered a red marker.
+Touches: FR-030a (new); FR-033d, §3.3 G2 (cleanup invariants) clarified. Code in `cleanup` (design.js) + tests.
+
+---
+
 ## 2026-07-21 — Selected conductor segments travel with a group transform (drag + rotate)
 What: when a group drag (FR-017) or rotation (FR-019) acts on a selection containing at least one component, the non-pin vertices (junction/free/bend) of any explicitly selected wire/bus segments now translate/rotate with the group, on top of the always-moving interior wiring (FR-018c). A moved shared vertex drags the selected side rigidly while an attached but unselected conductor stretches to follow (FR-018). Fixes the "connection-point dot does not move" report: selecting the fan-out junction and input stubs feeding a moved gate now carries them along instead of leaving the dot behind and skewing the stubs. Applies to both drag and rotate (user's choice).
 Why: users select a gate plus the fragments wiring its inputs and expect the whole thing to move; previously selected conductors were inert during a group transform (old FR-016a: "not moved as standalone objects").

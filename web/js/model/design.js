@@ -1150,6 +1150,33 @@ export function cleanup(design) {
       for (const gc of b.groupConnections ?? []) snapped.add(gc.vertex);
     }
 
+    // Collapse a degenerate zero-length end segment (FR-030a): a non-group-snapped
+    // `free` endpoint sitting exactly on its neighbouring path point — e.g. a
+    // segment-delete (FR-033d) that promoted a cut bend onto an existing junction.
+    // Drop the free endpoint so no dangling marker (FR-029) is left stacked on the
+    // junction; the orphaned vertex is removed by the ref-count pass below.
+    for (const c of [...design.wires, ...design.buses]) {
+      for (const atStart of [true, false]) {
+        const path = c.path;
+        if (path.length < 2) break;
+        const endP = atStart ? path[0] : path[path.length - 1];
+        const nbrP = atStart ? path[1] : path[path.length - 2];
+        if (endP.t !== "node") continue;
+        const ev = getVertex(design, endP.v);
+        if (!ev || ev.kind !== "free" || snapped.has(ev.id)) continue;
+        const e = pathPointCoord(design, endP);
+        const n = pathPointCoord(design, nbrP);
+        if (Math.abs(e.x - n.x) > 1e-9 || Math.abs(e.y - n.y) > 1e-9) continue;
+        if (atStart) path.shift();
+        else path.pop();
+        changed = true;
+      }
+      if (c.path.length < 2) {
+        removeConductor(design, c);
+        changed = true;
+      }
+    }
+
     for (const v of [...design.vertices]) {
       const rc = vertexRefCount(design, v.id);
       if (rc === 0) {

@@ -138,6 +138,31 @@ test("a junction dropping to degree 2 merges its two conductors, dropping the do
   assert.deepEqual(ends.map((v) => v.pin).sort(), ["A0", "A1"]);
 });
 
+test("cleanup drops a free endpoint stacked on a junction (zero-length end segment, FR-030a)", () => {
+  const d = setup(); // U1, U2, U3
+  // A real degree-3 junction j: a wire A0→A0 with j interior, plus a branch to U3.
+  const wA = addWire(
+    d,
+    { kind: "pin", refdes: "U1", pin: "/Y0" },
+    { kind: "pin", refdes: "U2", pin: "A0" },
+  );
+  const j = branchWire(d, wA, 0, 25, 26);
+  addWire(d, { kind: "vertex", id: j.id }, { kind: "pin", refdes: "U3", pin: "A0" });
+  assert.equal(getVertex(d, j.id).kind, "junction");
+
+  // A stub whose free endpoint lands exactly on j — the degenerate a
+  // segment-delete produces when it promotes a cut bend onto an existing junction.
+  const wStub = addWire(d, { kind: "vertex", id: j.id }, { kind: "free", x: 25, y: 26 });
+  const freeId = wStub.path[wStub.path.length - 1].v;
+  assert.equal(getVertex(d, freeId).kind, "free");
+
+  cleanup(d);
+
+  assert.equal(getVertex(d, freeId), null); // free endpoint dropped: no dangling marker
+  assert.equal(d.wires.some((w) => w.id === wStub.id), false); // 1-point stub removed
+  assert.equal(getVertex(d, j.id).kind, "junction"); // j still a real tie (wA + branch)
+});
+
 test("deleting the host demotes a junction to a free (dangling) endpoint", () => {
   const d = setup();
   const w = addWire(
