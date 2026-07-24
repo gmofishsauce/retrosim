@@ -1,0 +1,29 @@
+id: "type-GAL-DCD"
+type: "22V10"
+gal: GAL22V10
+partnumber: "GAL-DCD"
+description: "Decodrr for bus enables"
+outline: [8, 14]
+pins:
+  - { name: "X1", side: left, pos: 1, dir: in, number: 1 }
+  - { name: "OSA", side: left, pos: 2, dir: in, number: 2 }
+  - { name: "OSB", side: left, pos: 3, dir: in, number: 3 }
+  - { name: "FTF", side: left, pos: 4, dir: in, number: 4 }
+  - { name: "FTAB", side: left, pos: 5, dir: in, number: 5 }
+  - { name: "OE", side: left, pos: 6, dir: in, number: 6 }
+  - { name: "X7", side: left, pos: 7, dir: in, number: 7 }
+  - { name: "X8", side: left, pos: 8, dir: in, number: 8 }
+  - { name: "X9", side: left, pos: 9, dir: in, number: 9 }
+  - { name: "X10", side: left, pos: 10, dir: in, number: 10 }
+  - { name: "X11", side: left, pos: 11, dir: in, number: 11 }
+  - { name: "X12", side: left, pos: 12, dir: in, number: 13 }
+  - { name: "enF2B", side: right, pos: 1, dir: out, number: 14 }
+  - { name: "OUTCMB", side: right, pos: 2, dir: out, number: 15 }
+  - { name: "OUTREG", side: right, pos: 3, dir: out, number: 16 }
+  - { name: "INCMB", side: right, pos: 4, dir: out, number: 17 }
+  - { name: "INREG", side: right, pos: 5, dir: out, number: 18 }
+  - { name: "NC19", side: right, pos: 6, dir: out, number: 19 }
+  - { name: "NC20", side: right, pos: 7, dir: out, number: 20 }
+  - { name: "NC21", side: right, pos: 8, dir: out, number: 21 }
+  - { name: "NC22", side: right, pos: 9, dir: out, number: 22 }
+  - { name: "NC23", side: right, pos: 10, dir: out, number: 23 }
