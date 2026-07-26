@@ -52,7 +52,7 @@ function accelLabel({ key, shift }) {
     : `Ctrl+${shift ? "Shift+" : ""}${key}`;
 }
 
-export function initToolbar({ container, store, interaction, fileops, projectops, sim, library, reloadLibrary = async () => {}, onTestVectors, onGenerateC, onExport, onDesignProperties }) {
+export function initToolbar({ container, store, interaction, fileops, projectops, sim, library, reloadLibrary = async () => {}, onTestVectors, onGenerateC, onExport, onDesignProperties, onReleaseHold = () => {} }) {
   const tools = [
     { tool: "select", label: "Select" },
     { tool: "wire", icon: WIRE_ICON },
@@ -183,9 +183,12 @@ export function initToolbar({ container, store, interaction, fileops, projectops
   container.appendChild(el("span", "tool-sep"));
 
   // Run/Stop toggles the slow simulator (FR-076); the label tracks
-  // store.state.simulating via refresh().
+  // store.state.simulating via refresh(). While a test-vector run is HELD
+  // (FR-115l) the same button is the Stop that releases the hold — there is no
+  // interactive simulation to stop in that state, so it never reaches sim.
   const runBtn = button("Run", "Run the simulation", () => {
-    if (sim.isRunning()) sim.stop();
+    if (store.state.vectorHold) onReleaseHold();
+    else if (sim.isRunning()) sim.stop();
     else sim.run();
   });
   container.appendChild(runBtn);
@@ -333,12 +336,19 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     generateItem.disabled = locked || noProject;
     exportItem.disabled = locked || noProject;
     // Run and the panel are mutually exclusive (FR-115h): Run is disabled while
-    // the panel is open. Stop stays usable while simulating.
+    // the panel is open. Stop stays usable while simulating. The one exception
+    // is a held vector run (FR-115l): the button is live as the Stop that
+    // releases it, and reverts to the disabled Run form once released.
     // Console is modeless output (FR-122c): always enabled, checked when open.
     consoleItem.classList.toggle("checked", store.state.consolePanelOpen);
-    runBtn.disabled = panelOpen || noProject;
-    runBtn.textContent = simming ? "Stop" : "Run";
-    runBtn.title = simming ? "Stop the simulation" : "Run the simulation";
+    const holding = store.state.vectorHold;
+    runBtn.disabled = (panelOpen && !holding) || noProject;
+    runBtn.textContent = simming || holding ? "Stop" : "Run";
+    runBtn.title = holding
+      ? "Release the held test-vector state"
+      : simming
+        ? "Stop the simulation"
+        : "Run the simulation";
     // Pause/step cluster (FR-076a): visible only during a sequential run; the
     // step buttons are enabled only while paused; the toggle swaps glyphs.
     const seqRun = simming && sim.isSequentialRun();

@@ -546,7 +546,13 @@ body {
 }
 .vec-group-out { background: #eef3f8; }
 .vec-collabel { font-size: 0.75rem; color: #555; white-space: nowrap; }
-.vec-rownum { font-size: 0.75rem; color: #999; }
+/* The row number doubles as the Run to Row selection handle (FR-115l). */
+.vec-rownum { font-size: 0.75rem; color: #999; cursor: pointer; user-select: none; }
+.vec-rownum:hover { color: #4a90d9; }
+/* Selected row (FR-115l): a left accent bar plus a bolder number, so the
+   highlight never competes with the pass/fail cell tints. */
+.vec-rowsel .vec-rownum { color: #4a90d9; font-weight: 600; }
+.vec-rowsel td:first-child { box-shadow: inset 3px 0 0 #4a90d9; }
 .vec-corner { background: #f3f3f3; }
 .vec-cell.vec-out { background: #fafcff; }
 .vec-table th.vec-out { background: #eef3f8; }

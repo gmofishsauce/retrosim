@@ -214,6 +214,32 @@ test("sim view is retained at stop and cleared on the next modification (FR-085)
   assert.equal(store.state.sim, null);
 });
 
+test("vectorHold marks a held vector run and notifies (FR-115l)", () => {
+  const store = newStore();
+  let notes = 0;
+  store.subscribe(() => notes++);
+  assert.equal(store.state.vectorHold, false);
+
+  store.setVectorHold(true);
+  assert.equal(store.state.vectorHold, true);
+  assert.equal(notes, 1); // the toolbar's release-Stop and the tray depend on this
+
+  store.setVectorHold(false);
+  assert.equal(store.state.vectorHold, false);
+});
+
+test("vectorHold is independent of the panel lock and of simulating (FR-115l)", () => {
+  const store = newStore();
+  // A hold happens with the panel open and the interactive simulator stopped:
+  // the two flags answer different questions, so neither implies the other.
+  store.setVectorPanelOpen(true);
+  store.setVectorHold(true);
+  assert.equal(store.state.simulating, false);
+  assert.equal(store.isReadonly(), true); // the FR-115h lock still applies
+  store.setVectorHold(false);
+  assert.equal(store.isReadonly(), true); // releasing the hold does not unlock
+});
+
 // --- atomic command failure (FR-024a): a throwing apply/revert restores the
 // design's connectivity state; nothing moves on the undo/redo stacks. ---
 

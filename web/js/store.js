@@ -74,6 +74,11 @@ export function createStore(initial = {}) {
     // While `vectorPanelOpen` the design is read-only too (FR-115h), sharing the
     // simulation lock's condition via isReadonly(); never persisted.
     vectorPanelOpen: false,
+    // `vectorHold` says the current `sim` view is a HELD vector run (FR-115l),
+    // not values lingering after an interactive Stop (FR-085) — a distinction
+    // `sim` alone cannot carry. It drives the "held" state tray (FR-073) and the
+    // toolbar's release-Stop. Transient, never persisted.
+    vectorHold: false,
     // `consolePanelOpen` toggles the docked Console panel (FR-122c). Unlike the
     // test-vector panel it is MODELESS: it deliberately does NOT feed
     // isReadonly()/blocked(), so it coexists with a running simulation and
@@ -311,6 +316,14 @@ export function createStore(initial = {}) {
     // the panel owns the transitions (§6.16). Notifies so chrome can react.
     setVectorPanelOpen(flag) {
       state.vectorPanelOpen = flag;
+      notify();
+    },
+
+    // setVectorHold flips the held-vector-run state (FR-115l); the panel owns
+    // the transitions (§6.16) and pairs every call with a setSim(). Notifies so
+    // the toolbar's release-Stop and the state tray can react.
+    setVectorHold(flag) {
+      state.vectorHold = flag;
       notify();
     },
 

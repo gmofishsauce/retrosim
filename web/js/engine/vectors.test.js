@@ -22,6 +22,7 @@ import {
   hasClockGenerators,
   FORMAT_VERSION,
 } from "./vectors.js";
+import { V0, V1 } from "./galasm.js";
 import { BUILTINS, portNFields } from "../builtins.js";
 import { createDesign, addInstance, addWire } from "../model/design.js";
 import { flatten, addSubDesignInstance, designInterface } from "../model/subdesign.js";
@@ -762,6 +763,70 @@ test("sequential run: rows persist register state; C pulses, 0 holds (FR-115e)",
   const res = runVectors(d, { ...cols, rows });
   assert.equal(res.passed, 3);
   assert.equal(res.total, 3);
+});
+
+test("run through a selected row: only rows up to it run, and its sim is held (FR-115l)", () => {
+  const d = dffDesign();
+  const cols = deriveColumns(d); // inputs: [D switch, clock]
+  const rows = [
+    { in: ["1", "C"], out: ["H"] }, // pulse latches D=1
+    { in: ["0", "C"], out: ["L"] }, // pulse latches D=0
+    { in: ["1", "C"], out: ["H"] }, // pulse latches D=1 again
+  ];
+  const res = runVectors(d, { ...cols, rows }, { through: 1 });
+  assert.equal(res.through, 1);
+  assert.equal(res.total, 2); // rows 3.. were not run
+  assert.equal(res.rows.length, 2);
+  assert.equal(res.passed, 2);
+  // The held sim carries row 2's state — Q latched low — not row 3's.
+  assert.equal(res.sim.valueOfPin("U1", "Q"), V0);
+});
+
+test("run through: state is reached by replaying from row 1, not resumed (FR-115l)", () => {
+  const d = dffDesign();
+  const cols = deriveColumns(d);
+  const rows = [
+    { in: ["1", "C"], out: ["H"] },
+    { in: ["0", "0"], out: ["H"] }, // clock low: Q holds the 1 from row 1
+  ];
+  // Running through row 2 twice yields the same state both times: each run
+  // starts over at row 1 (preamble included), so no earlier hold leaks in.
+  const a = runVectors(d, { ...cols, rows }, { through: 1 });
+  const b = runVectors(d, { ...cols, rows }, { through: 1 });
+  assert.equal(a.sim.valueOfPin("U1", "Q"), V1);
+  assert.equal(b.sim.valueOfPin("U1", "Q"), V1);
+});
+
+test("run through: combinational rows stop at the hold point and hold that row (FR-115l)", () => {
+  const d = bufferDesign();
+  const cols = deriveColumns(d);
+  const rows = [{ in: ["1"], out: ["H"] }, { in: ["0"], out: ["L"] }, { in: ["1"], out: ["H"] }];
+  const res = runVectors(d, { ...cols, rows }, { through: 1 });
+  assert.equal(res.total, 2);
+  assert.equal(res.passed, 2);
+  assert.equal(res.sim.valueOfPin("A-1", "OUT"), V0); // row 2's input switch state
+});
+
+test("run through: omitted/out-of-range `through` runs the whole table (FR-115l)", () => {
+  const d = bufferDesign();
+  const cols = deriveColumns(d);
+  const rows = [{ in: ["1"], out: ["H"] }, { in: ["0"], out: ["L"] }];
+  assert.equal(runVectors(d, { ...cols, rows }).through, 1); // omitted → last row
+  assert.equal(runVectors(d, { ...cols, rows }, { through: 99 }).total, 2); // clamped up
+  assert.equal(runVectors(d, { ...cols, rows }, { through: -5 }).total, 1); // clamped down
+});
+
+test("run through: a held sim does not mutate the live design (FR-115c/FR-115l)", () => {
+  const d = dffDesign();
+  const before = JSON.stringify(d);
+  const cols = deriveColumns(d);
+  const res = runVectors(
+    d,
+    { ...cols, rows: [{ in: ["1", "C"], out: ["H"] }, { in: ["0", "C"], out: ["L"] }] },
+    { through: 0 },
+  );
+  assert.ok(res.sim); // retained for the held display
+  assert.equal(JSON.stringify(d), before); // …and still no write-back
 });
 
 test("sequential run: a 0→1 clock level change between rows is a rising edge (FR-115e)", () => {

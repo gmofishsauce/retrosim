@@ -269,7 +269,10 @@ function effectiveProp(inst, name) {
 // the design: power-on preamble, then each row in order — apply inputs, settle,
 // pulse the row's C clocks, settle — calling onRow(sim, rowIndex) at each row's
 // sample point. State persists across rows; the live design is never mutated.
-function runSequentialPass(design, inputs, io, rows, romContent, onRow) {
+// `limit` (FR-115l) is the last row index to run — the pass stops after it,
+// leaving the sim at that row's post-sample state — and defaults to all rows.
+// Returns the simulation so the caller can retain it for the held display.
+function runSequentialPass(design, inputs, io, rows, romContent, onRow, limit = Infinity) {
   const clone = structuredClone(design);
   const byRefdes = new Map(clone.components.map((c) => [c.refdes, c]));
   const clocks = clone.components.filter((c) => c.typeData?.renderType === "clock");
@@ -311,7 +314,8 @@ function runSequentialPass(design, inputs, io, rows, romContent, onRow) {
     }
   }
 
-  rows.forEach((row, ri) => {
+  for (let ri = 0; ri < rows.length && ri <= limit; ri++) {
+    const row = rows[ri];
     // Build the row's stimulus: resets released; each clock at its cell's level
     // (a C cell rests low and is pulsed below); ports per their cell; io drive
     // cells force their nets (FR-115i); switches set on the clone's instances
@@ -347,7 +351,8 @@ function runSequentialPass(design, inputs, io, rows, romContent, onRow) {
       settleSim(sim);
     }
     onRow(sim, ri);
-  });
+  }
+  return sim;
 }
 
 // scoreOutputs compares each output column's settled net value against the
@@ -392,25 +397,51 @@ function scoreRow(sim, outputs, io, row) {
 // runVectors scores a vector set (FR-115d): combinational designs evaluate each
 // row independently (FR-115c); a design with a clock generator runs its rows in
 // order with scripted clocks and the power-on preamble (FR-115e). Returns
-// { rows: [{ cells: [{ expected, actual, pass }], pass }], passed, total }.
-// `romContent` (FR-114e) is the Map from loadRomContents; null/omitted for designs
-// with no ROM. The live design is never mutated, dirtied, or undone (FR-115c).
-export function runVectors(design, { inputs, outputs, io = [], rows }, { romContent = null } = {}) {
+// { rows: [{ cells: [{ expected, actual, pass }], pass }], passed, total, sim,
+// through }. `romContent` (FR-114e) is the Map from loadRomContents; null/omitted
+// for designs with no ROM. The live design is never mutated, dirtied, or undone
+// (FR-115c).
+//
+// `through` (FR-115l) is the 0-based index of the last row to run — the run stops
+// there and only rows 0..through are scored — clamped to the table and defaulting
+// to the last row, so a plain Run is this same path with `through` omitted. A run
+// always starts at row 1 (preamble included for a stateful design): there is no
+// resume, so the state a hold reaches is the one a full run passes through.
+// `sim` is the simulation the run ended on, retained for the held display; its
+// net values are the last-run row's post-sample state. Retaining it does not
+// weaken FR-115c's isolation — the clone it runs on is never written back.
+export function runVectors(
+  design,
+  { inputs, outputs, io = [], rows },
+  { romContent = null, through = null } = {},
+) {
   refuseHiddenClocks(design);
+  const last = through === null ? rows.length - 1 : Math.min(Math.max(through, 0), rows.length - 1);
   let results;
+  let sim = null;
   if (isStateful(design)) {
-    results = new Array(rows.length);
-    runSequentialPass(design, inputs, io, rows, romContent, (sim, ri) => {
-      results[ri] = scoreRow(sim, outputs, io, rows[ri]);
-    });
+    results = new Array(last + 1);
+    sim = runSequentialPass(
+      design,
+      inputs,
+      io,
+      rows,
+      romContent,
+      (s, ri) => {
+        results[ri] = scoreRow(s, outputs, io, rows[ri]);
+      },
+      last,
+    );
   } else {
-    results = rows.map((row) => {
-      const sim = simulateRow(design, inputs, io, row, romContent);
+    results = rows.slice(0, last + 1).map((row) => {
+      sim = simulateRow(design, inputs, io, row, romContent);
       return scoreRow(sim, outputs, io, row);
     });
   }
   return {
     rows: results,
+    sim,
+    through: last,
     passed: results.filter((r) => r.pass).length,
     total: results.length,
   };

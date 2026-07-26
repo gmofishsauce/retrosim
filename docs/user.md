@@ -25,7 +25,7 @@ KiCad-like.
 10. [Projects and files](#10-projects-and-files)
 11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
-13. [Simulation](#13-simulation) — including [Pausing and single-stepping](#pausing-and-single-stepping), [Console output](#console-output), [Test vectors](#test-vectors) and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
+13. [Simulation](#13-simulation) — including [Pausing and single-stepping](#pausing-and-single-stepping), [Console output](#console-output), [Test vectors](#test-vectors) — including [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
 14. [If the server disconnects](#14-if-the-server-disconnects)
 15. [Keyboard and mouse reference](#15-keyboard-and-mouse-reference)
 
@@ -120,9 +120,9 @@ The window has four regions plus a status bar:
   intersections.
 - **Properties panel** (right): shows the type data and per-instance overrides of
   a single selected component (see [Per-instance overrides](#8-per-instance-overrides)).
-- **Status bar** (bottom): a **state tray** ("editing" / "simulating") on the
-  left, a **message tray** for occasional messages, and a **connection tray**
-  showing "connected" / "disconnected".
+- **Status bar** (bottom): a **state tray** ("editing" / "simulating" / "paused" /
+  "held") on the left, a **message tray** for occasional messages, and a
+  **connection tray** showing "connected" / "disconnected".
 
 The app opens with **no project** — the bar reads `(no project)` and the canvas
 is empty and inert: everything except **New Project…**, **Open Project…**, and
@@ -995,7 +995,9 @@ While the panel is open the design is **read-only**: you can pan, zoom, Save,
 and Save As, but the editing commands (placing, wiring, moving, deleting, undo/redo,
 paste, property edits) are disabled — as they are while a simulation runs. The
 **Run/Stop** button is disabled too, since the panel and a live simulation are
-mutually exclusive. Close the panel to edit or run the design again.
+mutually exclusive (its one other use is releasing a held run — see
+*[Holding a run to inspect it](#holding-a-run-to-inspect-it)* below). Close the
+panel to edit or run the design again.
 
 The table's columns come from your design automatically:
 
@@ -1052,7 +1054,13 @@ Build the table and use the buttons:
   the circuit settle, and compares the outputs to your expected values. Passing
   output cells turn **green**; a mismatch turns **red** and shows what the
   circuit actually produced (e.g. `got 1`). A summary line reads "N of M rows
-  passed". A `U` or `Z` output never matches `H` or `L`.
+  passed". A `U` or `Z` output never matches `H` or `L`. When the run finishes,
+  the last row's state stays displayed on the schematic — see *Holding a run to
+  inspect it* below.
+- **Run to Row** runs the table **through the row you have selected** and stops
+  there, leaving that row's state on the schematic.
+- **Stop** releases a held run and clears the display. It is enabled only while
+  a run is held.
 - **Capture** fills in the expected-output cells of every row by running the
   table through the simulator (in order, for a clocked design) — a quick way to
   author a "golden" table from a circuit you believe is correct, which you can
@@ -1063,6 +1071,41 @@ Build the table and use the buttons:
   your switches, clocks, ports, and indicators by their internal designators, so
   renaming a label never breaks a saved file; if the design's columns have changed
   since the file was written, the mismatch is reported as a warning when you load.
+
+#### Holding a run to inspect it
+
+The pass/fail table tells you *that* a row failed, but only about the outputs you
+asserted. To see what the circuit was actually doing, stop the run at the row of
+interest and look at the schematic.
+
+Click a row's **number** (the leftmost cell) to select it — the row gets a blue
+accent bar — then click **Run to Row**. The table runs from the beginning
+**through** that row and stops, and the state it reached stays on the schematic:
+indicators light up with their values and any net with a bus conflict is drawn
+red, exactly as during a live simulation. The state tray at the bottom left reads
+**"held"**. The summary line names where it stopped, e.g. "3 of 3 rows passed —
+held at row 3 of 10". Rows past the hold point are not run and stay unmarked.
+
+Two details worth knowing:
+
+- A run always starts at **row 1** (including the power-on preamble, for a clocked
+  design) and replays forward to the row you selected. There is no "run just this
+  one row" — for a sequential design a single row in isolation wouldn't mean
+  anything, since the state that row acts on comes from the rows before it.
+- Plain **Run** is the same thing through the *last* row, so it holds too. Every
+  run ends with its final state visible.
+
+To release the hold, click **Stop** — either the one in the panel, or the main
+toolbar's **Run/Stop** button, which becomes an enabled **Stop** while a run is
+held and returns to its usual disabled state once you release. The pass/fail
+results stay; only the schematic display is cleared. A hold is also released
+automatically when you **edit any cell**, add or delete a row, **Capture**,
+**Load** a file, or close the panel — once the table changes, the state on screen
+no longer matches it.
+
+Holding is display-only. The design stays read-only, nothing is written back to
+it, and a held run is not a live simulation — you cannot step it or toggle
+switches. It runs on a throwaway copy, exactly like any other vector run.
 
 #### Bidirectional bus columns
 
@@ -1263,6 +1306,7 @@ clear message until then, without losing your work.
 | Double-click a text note | Edit its text |
 | Left-click input switch (while simulating) | Toggle its state `0 ↔ 1` |
 | Left-click any other item (while simulating) | Selection is locked — status bar shows "Editor is locked while the simulator is running" |
+| Left-click a row number (test-vector panel) | Select that row for **Run to Row**; click again to deselect |
 
 **Keyboard**
 

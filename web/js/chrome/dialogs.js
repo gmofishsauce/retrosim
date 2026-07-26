@@ -2,6 +2,7 @@
 // server's /files endpoint to browse directories (no native file picker).
 
 import { listDir, loadDesign, loadVectorFile, saveVectorFile } from "../api.js";
+import { setAppState } from "./statusbar.js";
 import { compileBehavior } from "../engine/galasm.js";
 import { loadRomContents } from "../engine/sim.js";
 import { flatten } from "../model/subdesign.js";
@@ -1448,6 +1449,8 @@ export function openFileDialog({ mode, startPath, defaultName = "", title, exts 
 export function testVectorsPanel({ store, dataDir }) {
   const host = document.getElementById("vec-panel");
   let openFlag = false;
+  let held = false; // this panel is publishing a held sim view (FR-115l)
+  let holdListener = null; // build()'s hook to refresh its Stop button
   const isOpen = () => openFlag;
 
   function open() {
@@ -1461,9 +1464,42 @@ export function testVectorsPanel({ store, dataDir }) {
   function close() {
     if (!openFlag) return;
     openFlag = false;
+    clearHeld(); // the held display does not outlive the panel (FR-115l)
+    holdListener = null; // the Stop button goes away with the panel's DOM
     host.replaceChildren();
     host.hidden = true;
     store.setVectorPanelOpen(false);
+  }
+
+  // hold publishes a finished run's retained simulation as the canvas display
+  // view (FR-115l) — the same shape createSim.run() publishes (§6.13), so the
+  // canvas draws indicator values and conflict-red with no change of its own.
+  // A hold is an application state: the tray reads "held" (FR-073) and the
+  // toolbar's Run/Stop becomes a live Stop that releases it (FR-115h).
+  function hold(sim) {
+    if (!sim) return clearHeld();
+    held = true;
+    store.setSim({
+      valueOfPin: sim.valueOfPin,
+      conflictedConductors: sim.conflictedConductors,
+    });
+    store.setVectorHold(true);
+    setAppState("held"); // FR-073
+    holdListener?.();
+  }
+
+  // clearHeld drops the retained simulation view this panel published to the
+  // canvas (FR-115l). It clears only its own: a view left behind by a stopped
+  // interactive run (FR-085) belongs to the simulator and is not ours to wipe.
+  // The interactive simulator cannot be running here (FR-115h), so restoring
+  // the tray to "editing" can never stomp a "simulating"/"paused" state.
+  function clearHeld() {
+    if (!held) return;
+    held = false;
+    store.setSim(null);
+    store.setVectorHold(false);
+    setAppState("editing"); // FR-073
+    holdListener?.();
   }
 
   // build (re)populates the panel from the current design. Called on open; the
@@ -1480,6 +1516,8 @@ export function testVectorsPanel({ store, dataDir }) {
     const stateful = isStateful(design);
     const rows = [emptyRow(columns)]; // start with one blank row to fill
     let runResults = null; // [{ cells, pass }] aligned to rows, or null when stale
+    let selRow = null; // selected row index for Run to Row (FR-115l), or null
+    let runToBtn = null; // the Run to Row button, enabled only with a selection
 
     host.replaceChildren();
     // Header: title + ✕ close. No Escape-to-close — Escape stays a canvas gesture
@@ -1789,9 +1827,21 @@ export function testVectorsPanel({ store, dataDir }) {
 
     function renderBody() {
       tbody.replaceChildren();
+      // A removed row must never leave the selection dangling past the end
+      // (FR-115l); clamping keeps a selection alive as the table shrinks.
+      if (selRow !== null && selRow >= rows.length) selRow = rows.length ? rows.length - 1 : null;
       rows.forEach((row, ri) => {
         const tr = el("tr");
-        tr.appendChild(el("td", "vec-rownum", String(ri + 1)));
+        if (ri === selRow) tr.classList.add("vec-rowsel");
+        // The row number is the selection handle (FR-115l): clicking it selects
+        // the row Run to Row runs through, clicking it again deselects.
+        const numTd = el("td", "vec-rownum", String(ri + 1));
+        numTd.title = "Select this row (Run to Row)";
+        numTd.addEventListener("click", () => {
+          selRow = selRow === ri ? null : ri;
+          renderBody();
+        });
+        tr.appendChild(numTd);
         for (const kind of ["in", "out", "io"]) {
           for (const it of planFor(kind)) {
             if (!it.group) tr.appendChild(bitCell(kind, it.ci, row, ri));
@@ -1815,6 +1865,7 @@ export function testVectorsPanel({ store, dataDir }) {
         tr.appendChild(delTd);
         tbody.appendChild(tr);
       });
+      if (runToBtn) runToBtn.disabled = selRow === null;
     }
 
     // render redraws header and body together — a radix toggle changes both.
@@ -1841,8 +1892,11 @@ export function testVectorsPanel({ store, dataDir }) {
       return dropped;
     }
 
-    // clearResults drops stale pass/fail painting after any edit and repaints.
+    // clearResults drops stale pass/fail painting after any edit and repaints,
+    // and with it the held schematic display (FR-115l) — a held state that no
+    // longer corresponds to the table would mislead.
     function clearResults() {
+      clearHeld();
       if (!runResults) return;
       runResults = null;
       summary.textContent = "";
@@ -1850,7 +1904,11 @@ export function testVectorsPanel({ store, dataDir }) {
     }
 
     // --- actions ---
-    async function onRun() {
+    // runThrough runs the table from the start through row `through` (null = the
+    // last row, i.e. plain Run) and holds the resulting state on the schematic
+    // (FR-115l). Both run buttons funnel through here — they differ only in
+    // where the run stops.
+    async function runThrough(through) {
       errEl.hidden = true;
       const doc = { inputs: columns.inputs, outputs: columns.outputs, io: columns.io, rows };
       const check = validateVectors(doc);
@@ -1861,15 +1919,24 @@ export function testVectorsPanel({ store, dataDir }) {
         // shares, and child ROMs are preloaded from the flat design.
         const flat = await flatten(design, loadDesign, { rootPath: store.state.savePath });
         const romContent = await loadRomContents(flat);
-        const res = runVectors(flat, doc, { romContent });
+        const res = runVectors(flat, doc, { romContent, through });
         runResults = res.rows;
-        summary.textContent = `${res.passed} of ${res.total} rows passed`;
+        const at =
+          res.through < rows.length - 1
+            ? ` — held at row ${res.through + 1} of ${rows.length}`
+            : "";
+        summary.textContent = `${res.passed} of ${res.total} rows passed${at}`;
         summary.className = "vec-summary " + (res.passed === res.total ? "ok" : "err");
+        hold(res.sim); // publish the state the run ended in (FR-115l)
         renderBody();
       } catch (e) {
+        clearHeld(); // a failed run must not leave an older state on display
         showError(`cannot run vectors: ${e.message}`);
       }
     }
+
+    const onRun = () => runThrough(null);
+    const onRunTo = () => (selRow === null ? undefined : runThrough(selRow));
 
     async function onCapture() {
       errEl.hidden = true;
@@ -1967,11 +2034,26 @@ export function testVectorsPanel({ store, dataDir }) {
       renderBody();
     });
     dupBtn.title = "Duplicate the last row";
+    // Run to Row (FR-115l): runs from the start through the selected row and
+    // leaves that row's state on the schematic for inspection.
+    runToBtn = button("Run to Row", onRunTo);
+    runToBtn.title = "Run through the selected row and hold its state";
+    runToBtn.disabled = selRow === null;
+    // Stop (FR-115l) releases a hold. The toolbar's Run/Stop does the same
+    // thing (§6.16); this is the copy beside the buttons that create a hold.
+    const stopBtn = button("Stop", clearHeld);
+    stopBtn.title = "Release the held state and clear the display";
+    stopBtn.disabled = !held;
+    holdListener = () => {
+      stopBtn.disabled = !held;
+    };
     buttons.append(
       addBtn,
       dupBtn,
       button("Capture", onCapture),
       button("Run", onRun),
+      runToBtn,
+      stopBtn,
       button("Load", onLoad),
       button("Save", onSave),
     );
@@ -2011,5 +2093,7 @@ export function testVectorsPanel({ store, dataDir }) {
     }
   }
 
-  return { open, close, isOpen };
+  // releaseHold is the toolbar's entry point to the same release the panel's
+  // Stop button performs (FR-115l); harmless when nothing is held.
+  return { open, close, isOpen, releaseHold: clearHeld };
 }
