@@ -138,7 +138,10 @@ export function deriveColumns(design) {
       outputs.push({ refdes: c.refdes, pin: "IN", label });
     } else if (rt === "indicator8") {
       for (let i = 0; i < 8; i++) {
-        outputs.push({ refdes: c.refdes, pin: `D${i}`, label: `${label}.D${i}` });
+        // base/bit mark this column as one bit of a multi-bit instance, so the
+        // panel can offer the group as a hex cell (FR-115k). Both are live-only
+        // (serializeVectors keeps refdes/pin/label), like kind above.
+        outputs.push({ refdes: c.refdes, pin: `D${i}`, label: `${label}.D${i}`, base: label, bit: i });
       }
     } else if (rt === "port" || rt === "portN") {
       const dir = effectivePortDir(design, c.refdes);
@@ -148,7 +151,14 @@ export function deriveColumns(design) {
       if (rt === "portN") {
         const n = (c.typeData.pins ?? []).length;
         for (let i = 0; i < n; i++) {
-          bucket.push({ refdes: c.refdes, pin: `P${i}`, label: `${label}${i}`, ...(isIo && { io: true }) });
+          bucket.push({
+            refdes: c.refdes,
+            pin: `P${i}`,
+            label: `${label}${i}`,
+            base: label, // group label for hex cells (FR-115k), live-only
+            bit: i,
+            ...(isIo && { io: true }),
+          });
         }
       } else {
         bucket.push({ refdes: c.refdes, pin: "P", label, ...(isIo && { io: true }) });
@@ -576,4 +586,170 @@ export function emptyRow(columns) {
     io: (columns.io ?? []).map(() => "X"),
     out: columns.outputs.map(() => "X"),
   };
+}
+
+// cloneRow returns an independent copy of a row — the pure half of the panel's
+// +Dup button (FR-115j), which appends a copy of the highest-numbered row so a
+// working vector can be extended by editing a duplicate. The cell arrays are
+// copied, so editing the copy never touches the original.
+export function cloneRow(row) {
+  return {
+    in: [...(row?.in ?? [])],
+    io: [...(row?.io ?? [])],
+    out: [...(row?.out ?? [])],
+  };
+}
+
+// --- bit groups and hexadecimal cell text (FR-115k) ---------------------------
+//
+// A multi-bit instance — a portN (FR-071e) or an 8-wide indicator (FR-071d) —
+// contributes N one-bit columns that deriveColumns marks with `base` (the
+// instance's display label) and `bit` (the index). The panel collapses such a run
+// into one hex cell per row; the cells themselves stay one symbol per bit, so the
+// runner, the `.tv` file, and the C generator never see hex.
+
+// groupDigits is the number of hex digits a w-bit group shows: ⌈w/4⌉, MSB-first.
+export function groupDigits(width) {
+  return Math.ceil(width / 4);
+}
+
+// nibbleBits lists the bit indices of digit d (0 = least significant) of a w-bit
+// group, low to high. The most significant digit of a width that is not a
+// multiple of four is partial (a 6-bit group's top digit holds bits 4..5).
+function nibbleBits(d, width) {
+  const bits = [];
+  for (let k = 0; k < 4 && d * 4 + k < width; k++) bits.push(d * 4 + k);
+  return bits;
+}
+
+// bitGroups finds the multi-bit column runs in one sorted column bucket
+// (FR-115k). Members are contiguous because refdesCompare orders by refdes then
+// numerically by pin, so a run is a maximal span sharing a refdes whose bits are
+// 0..w-1 in order. Returns [{ refdes, base, start, width }] in column order;
+// a 1-bit column (a switch, a clock, a 1-wide port/indicator, or a width-1
+// portN) is never a group.
+export function bitGroups(cols = []) {
+  const groups = [];
+  for (let i = 0; i < cols.length; ) {
+    if (cols[i].bit !== 0) {
+      i++;
+      continue;
+    }
+    let j = i + 1;
+    while (j < cols.length && cols[j].refdes === cols[i].refdes && cols[j].bit === j - i) j++;
+    const width = j - i;
+    if (width >= 2) {
+      groups.push({ refdes: cols[i].refdes, base: cols[i].base ?? cols[i].refdes, start: i, width });
+    }
+    i = j;
+  }
+  return groups;
+}
+
+// groupRole classifies a bidirectional group's cells for one row (FR-115k): all
+// 0/1 is a *drive* row, all X an *ignore* row, H/L/X an *expect* row. A row that
+// mixes drive and release cells within one group has no single role — and so no
+// hex form — and yields null.
+export function groupRole(cells) {
+  if (cells.every((s) => s === "0" || s === "1")) return "drive";
+  if (cells.every((s) => s === "X")) return "ignore";
+  if (cells.every((s) => s === "H" || s === "L" || s === "X")) return "expect";
+  return null;
+}
+
+// roleAccepts reports whether cells can be read in the given io role — the test
+// behind groupToHex's optional role override.
+function roleAccepts(role, cells) {
+  if (role === "drive") return cells.every((s) => s === "0" || s === "1");
+  if (role === "ignore") return cells.every((s) => s === "X");
+  return cells.every((s) => s === "H" || s === "L" || s === "X");
+}
+
+// groupToHex renders one group's per-bit cells as MSB-first hex text (FR-115k),
+// or null when they have no hex form. `kind` is "in" (cells 0/1), "out" (H/L/X)
+// or "io" (0/1/H/L/X, whose role is returned alongside and drives the alphabet).
+// A digit whose bits are all X renders as "X"; a digit mixing X with H/L does
+// not render at all — the caller falls back to per-bit display rather than
+// rewriting the author's cells.
+//
+// `forceRole` reads an io group in a role the caller already holds, where the
+// cells alone are ambiguous: an all-X group classifies as *ignore*, but a panel
+// sitting in the *expect* role means "expect nothing of any bit" and wants to
+// see XX rather than an empty field. It applies only when the cells accept it.
+export function groupToHex(cells, kind, forceRole = null) {
+  const width = cells.length;
+  const auto = kind === "io" ? groupRole(cells) : null;
+  if (kind === "io" && auto === null) return null;
+  const role = kind === "io" && forceRole && roleAccepts(forceRole, cells) ? forceRole : auto;
+  if (role === "ignore") return { role, text: "" };
+  const one = kind === "in" || role === "drive" ? "1" : "H";
+  const zero = kind === "in" || role === "drive" ? "0" : "L";
+  let text = "";
+  for (let d = groupDigits(width) - 1; d >= 0; d--) {
+    const bits = nibbleBits(d, width);
+    if (bits.every((b) => cells[b] === "X")) {
+      text += "X";
+      continue;
+    }
+    let v = 0;
+    for (const b of bits) {
+      if (cells[b] === one) v |= 1 << (b - d * 4);
+      else if (cells[b] !== zero) return null; // X mixed into a digit, or a stray symbol
+    }
+    text += v.toString(16).toUpperCase();
+  }
+  return { role, text };
+}
+
+// groupFromHex parses MSB-first hex text back into one group's per-bit cells
+// (FR-115k), returning { cells } or { error } carrying a message for the panel.
+// Short text is zero-extended ("5" → "05"); an "X" digit sets its bits to X and
+// is legal for an "out" group or an "io" group in the expect role; a value too
+// wide for the group (including a partial top digit) is an error, never a
+// truncation.
+export function groupFromHex(text, { kind, width, role = null }) {
+  if (kind === "io" && role === "ignore") return { cells: new Array(width).fill("X") };
+  const digits = groupDigits(width);
+  const t = String(text ?? "").trim().toUpperCase();
+  if (t === "") return { error: "enter a value" };
+  if (t.length > digits) return { error: `too many digits — ${width} bits is ${digits}` };
+  const allowX = kind === "out" || (kind === "io" && role === "expect");
+  if (!(allowX ? /^[0-9A-FX]+$/ : /^[0-9A-F]+$/).test(t)) {
+    return { error: allowX ? "use hex digits 0-9 A-F, or X" : "use hex digits 0-9 A-F" };
+  }
+  const one = kind === "in" || role === "drive" ? "1" : "H";
+  const zero = kind === "in" || role === "drive" ? "0" : "L";
+  const padded = t.padStart(digits, "0");
+  const cells = new Array(width).fill(zero);
+  for (let d = 0; d < digits; d++) {
+    const ch = padded[digits - 1 - d];
+    const bits = nibbleBits(d, width);
+    if (ch === "X") {
+      for (const b of bits) cells[b] = "X";
+      continue;
+    }
+    const v = parseInt(ch, 16);
+    if (v >= 1 << bits.length) return { error: `value exceeds ${width} bits` };
+    for (const b of bits) cells[b] = (v >> (b - d * 4)) & 1 ? one : zero;
+  }
+  return { cells };
+}
+
+// groupActualHex renders a failing group's settled values (FR-115d/FR-115k) —
+// the per-bit `actual` symbols "0"/"1"/"U"/"Z" — in the same MSB-first form. A
+// digit holding any U or Z bit is not a number, so it shows as "?".
+export function groupActualHex(actuals) {
+  const width = actuals.length;
+  let text = "";
+  for (let d = groupDigits(width) - 1; d >= 0; d--) {
+    const bits = nibbleBits(d, width);
+    if (!bits.every((b) => actuals[b] === "0" || actuals[b] === "1")) {
+      text += "?";
+      continue;
+    }
+    let v = 0;
+    for (const b of bits) if (actuals[b] === "1") v |= 1 << (b - d * 4);
+    text += v.toString(16).toUpperCase();
+  }
+  return text;
 }

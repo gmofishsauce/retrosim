@@ -12,6 +12,13 @@ import {
   reconcileVectors,
   migrate,
   emptyRow,
+  cloneRow,
+  bitGroups,
+  groupRole,
+  groupDigits,
+  groupToHex,
+  groupFromHex,
+  groupActualHex,
   hasClockGenerators,
   FORMAT_VERSION,
 } from "./vectors.js";
@@ -342,6 +349,156 @@ test("emptyRow: an io column defaults its cell to X (FR-115i)", () => {
     io: [{ refdes: "A-5", pin: "P", label: "BUS" }],
   };
   assert.deepEqual(emptyRow(cols), { in: ["0"], io: ["X"], out: [] });
+});
+
+test("cloneRow copies every cell of a row, io included (FR-115j)", () => {
+  const row = { in: ["0", "1", "C"], io: ["0", "H"], out: ["H", "L", "X"] };
+  assert.deepEqual(cloneRow(row), row);
+});
+
+test("cloneRow is an independent copy — editing the copy leaves the original (FR-115j)", () => {
+  const row = { in: ["0"], io: ["X"], out: ["H"] };
+  const copy = cloneRow(row);
+  copy.in[0] = "1";
+  copy.io[0] = "L";
+  copy.out[0] = "L";
+  assert.deepEqual(row, { in: ["0"], io: ["X"], out: ["H"] });
+});
+
+test("cloneRow: a row missing its io array clones to an empty one (FR-115j)", () => {
+  assert.deepEqual(cloneRow({ in: ["1"], out: ["X"] }), { in: ["1"], io: [], out: ["X"] });
+});
+
+// --- bit groups and hexadecimal cells (FR-115k) ---
+
+// bits builds the column run a width-w multi-bit instance contributes.
+const bits = (refdes, base, w, pin = "P") =>
+  Array.from({ length: w }, (_, i) => ({ refdes, pin: `${pin}${i}`, label: `${base}${i}`, base, bit: i }));
+
+test("bitGroups collects a multi-bit run and skips single-bit columns (FR-115k)", () => {
+  const cols = [
+    { refdes: "A-6", pin: "OUT", label: "S" }, // a switch: no bit marker
+    ...bits("A-24", "Ain-low", 8),
+    { refdes: "A-7", pin: "P", label: "ENA" }, // a 1-wide port
+  ];
+  assert.deepEqual(bitGroups(cols), [{ refdes: "A-24", base: "Ain-low", start: 1, width: 8 }]);
+});
+
+test("bitGroups keeps adjacent groups apart and ignores a width-1 instance (FR-115k)", () => {
+  const cols = [...bits("A-1", "Out0-7", 8), ...bits("A-2", "Out8-15", 8), ...bits("A-3", "solo", 1)];
+  assert.deepEqual(bitGroups(cols), [
+    { refdes: "A-1", base: "Out0-7", start: 0, width: 8 },
+    { refdes: "A-2", base: "Out8-15", start: 8, width: 8 },
+  ]);
+});
+
+test("deriveColumns marks portN and indicator8 bits with base and bit (FR-115k)", () => {
+  const d = createDesign("t");
+  const p = addInstance(d, portNType(8), 0, 0, 0);
+  p.label = "S0-2"; // a label ending in a digit: base must come from the instance
+  const cols = deriveColumns(d);
+  const all = [...cols.inputs, ...cols.io, ...cols.outputs].filter((c) => c.refdes === p.refdes);
+  assert.equal(all.length, 8);
+  assert.deepEqual(all.map((c) => c.base), new Array(8).fill("S0-2"));
+  assert.deepEqual(all.map((c) => c.bit), [0, 1, 2, 3, 4, 5, 6, 7]);
+  assert.equal(all[0].label, "S0-20"); // per-bit label; no suffix rule could recover the base
+  assert.deepEqual(bitGroups(all), [{ refdes: p.refdes, base: "S0-2", start: 0, width: 8 }]);
+});
+
+test("groupDigits is ceil(width/4) (FR-115k)", () => {
+  assert.deepEqual([1, 4, 5, 6, 8, 16].map(groupDigits), [1, 1, 2, 2, 2, 4]);
+});
+
+test("hex round-trips an input group MSB-first (FR-115k)", () => {
+  // 0xA5 = 1010_0101, bit 7 (the last cell) most significant.
+  const cells = ["1", "0", "1", "0", "0", "1", "0", "1"];
+  assert.deepEqual(groupToHex(cells, "in"), { role: null, text: "A5" });
+  assert.deepEqual(groupFromHex("A5", { kind: "in", width: 8 }).cells, cells);
+});
+
+test("hex input accepts lower case and zero-extends short text (FR-115k)", () => {
+  const { cells } = groupFromHex("5", { kind: "in", width: 8 });
+  assert.deepEqual(groupToHex(cells, "in").text, "05");
+  assert.deepEqual(groupFromHex("a5", { kind: "in", width: 8 }).cells, groupFromHex("A5", { kind: "in", width: 8 }).cells);
+});
+
+test("hex rejects a value too wide for the group instead of truncating (FR-115k)", () => {
+  assert.match(groupFromHex("4F", { kind: "in", width: 6 }).error ?? "", /exceeds 6 bits/); // 0x4F > 63
+  assert.deepEqual(groupFromHex("3F", { kind: "in", width: 6 }).cells, new Array(6).fill("1")); // 0x3F is exactly 6 bits
+  assert.match(groupFromHex("A5F", { kind: "in", width: 8 }).error ?? "", /too many digits/);
+  assert.match(groupFromHex("G0", { kind: "in", width: 8 }).error ?? "", /hex digits/);
+  assert.match(groupFromHex("X0", { kind: "in", width: 8 }).error ?? "", /hex digits/); // X is not an input symbol
+});
+
+test("a partial top digit takes only its own bits (FR-115k)", () => {
+  // width 6: digit 1 covers bits 4..5 only, so 0x2F = 10_1111.
+  const { cells } = groupFromHex("2F", { kind: "in", width: 6 });
+  assert.deepEqual(cells, ["1", "1", "1", "1", "0", "1"]);
+  assert.equal(groupToHex(cells, "in").text, "2F");
+});
+
+test("an output group renders H/L as digits and an all-X digit as X (FR-115k)", () => {
+  const cells = ["H", "L", "H", "L", "X", "X", "X", "X"];
+  assert.deepEqual(groupToHex(cells, "out"), { role: null, text: "X5" });
+  assert.deepEqual(groupFromHex("X5", { kind: "out", width: 8 }).cells, cells);
+});
+
+test("an output digit mixing X with H/L has no hex form (FR-115k)", () => {
+  assert.equal(groupToHex(["H", "X", "L", "L", "L", "L", "L", "L"], "out"), null);
+});
+
+test("groupRole classifies a bidirectional group's row (FR-115k)", () => {
+  assert.equal(groupRole(["0", "1", "1", "0"]), "drive");
+  assert.equal(groupRole(["X", "X", "X", "X"]), "ignore");
+  assert.equal(groupRole(["H", "L", "X", "H"]), "expect");
+  assert.equal(groupRole(["0", "H", "X", "X"]), null); // mixed drive and release
+});
+
+test("an io group round-trips per role (FR-115k)", () => {
+  const drive = groupFromHex("A5", { kind: "io", width: 8, role: "drive" }).cells;
+  assert.deepEqual(drive, ["1", "0", "1", "0", "0", "1", "0", "1"]);
+  assert.deepEqual(groupToHex(drive, "io"), { role: "drive", text: "A5" });
+
+  const expect = groupFromHex("A5", { kind: "io", width: 8, role: "expect" }).cells;
+  assert.deepEqual(expect, ["H", "L", "H", "L", "L", "H", "L", "H"]);
+  assert.deepEqual(groupToHex(expect, "io"), { role: "expect", text: "A5" });
+
+  const ignore = groupFromHex("", { kind: "io", width: 8, role: "ignore" }).cells;
+  assert.deepEqual(ignore, new Array(8).fill("X"));
+  assert.deepEqual(groupToHex(ignore, "io"), { role: "ignore", text: "" });
+});
+
+test("an all-X io group reads as ignore, or as expect when that role is held (FR-115k)", () => {
+  const allX = new Array(8).fill("X");
+  assert.deepEqual(groupToHex(allX, "io"), { role: "ignore", text: "" });
+  assert.deepEqual(groupToHex(allX, "io", "expect"), { role: "expect", text: "XX" });
+  // An override the cells cannot accept is ignored, not obeyed.
+  assert.deepEqual(groupToHex(allX, "io", "drive"), { role: "ignore", text: "" });
+  assert.deepEqual(groupToHex(["1", "0", "1", "0"], "io", "expect"), { role: "drive", text: "5" });
+});
+
+test("an io drive cell rejects X, an expect cell allows it (FR-115k)", () => {
+  assert.match(groupFromHex("X5", { kind: "io", width: 8, role: "drive" }).error ?? "", /hex digits/);
+  assert.deepEqual(groupFromHex("X5", { kind: "io", width: 8, role: "expect" }).cells.slice(4), ["X", "X", "X", "X"]);
+});
+
+test("an io row mixing drive and release cells has no hex form (FR-115k)", () => {
+  assert.equal(groupToHex(["0", "1", "H", "X"], "io"), null);
+});
+
+test("groupActualHex shows an undetermined digit as ? (FR-115d/FR-115k)", () => {
+  assert.equal(groupActualHex(["1", "0", "1", "0", "0", "1", "0", "1"]), "A5");
+  assert.equal(groupActualHex(["1", "0", "1", "0", "0", "U", "0", "1"]), "?5");
+  assert.equal(groupActualHex(["Z", "Z", "Z", "Z", "Z", "Z", "Z", "Z"]), "??");
+});
+
+test("group markers stay out of the saved file (FR-115k)", () => {
+  const cols = bits("A-24", "Ain-low", 2);
+  const saved = serializeVectors({ inputs: cols, outputs: [], io: [], rows: [{ in: ["0", "1"], io: [], out: [] }] });
+  assert.deepEqual(saved.inputs, [
+    { refdes: "A-24", pin: "P0", label: "Ain-low0" },
+    { refdes: "A-24", pin: "P1", label: "Ain-low1" },
+  ]);
 });
 
 // BIDIR: a unit with one bidirectional pin, so a port on its net derives bidir.

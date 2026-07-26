@@ -1,0 +1,41 @@
+id: "type-22V738"
+type: "22V10"
+gal: GAL22V10
+partnumber: "22V738"
+description: "Bus enable decoder"
+outline: [8, 14]
+pins:
+  - { name: "NC1", side: left, pos: 1, dir: in, number: 1 }
+  - { name: "OE", side: left, pos: 2, dir: in, number: 2 }
+  - { name: "FTAB", side: left, pos: 3, dir: in, number: 3 }
+  - { name: "FTF", side: left, pos: 4, dir: in, number: 4 }
+  - { name: "OSA", side: left, pos: 5, dir: in, number: 5 }
+  - { name: "OSB", side: left, pos: 6, dir: in, number: 6 }
+  - { name: "I7", side: left, pos: 7, dir: in, number: 7 }
+  - { name: "I8", side: left, pos: 8, dir: in, number: 8 }
+  - { name: "I9", side: left, pos: 9, dir: in, number: 9 }
+  - { name: "I10", side: left, pos: 10, dir: in, number: 10 }
+  - { name: "I11", side: left, pos: 11, dir: in, number: 11 }
+  - { name: "I13", side: left, pos: 12, dir: in, number: 13 }
+  - { name: "OUTCMB", side: right, pos: 1, dir: out, number: 14 }
+  - { name: "OUTREG", side: right, pos: 2, dir: out, number: 15 }
+  - { name: "BISF", side: right, pos: 3, dir: out, number: 16 }
+  - { name: "INREGA", side: right, pos: 4, dir: out, number: 17 }
+  - { name: "INBUSA", side: right, pos: 5, dir: out, number: 18 }
+  - { name: "INA0", side: right, pos: 6, dir: out, number: 19 }
+  - { name: "INB0", side: right, pos: 7, dir: out, number: 20 }
+  - { name: "INREGB", side: right, pos: 8, dir: out, number: 21 }
+  - { name: "INBUSB", side: right, pos: 9, dir: out, number: 22 }
+  - { name: "IO23", side: right, pos: 10, dir: out, number: 23 }
+behavior: |
+  !OUTCMB = !OE * FTF
+  !OUTREG = !OE * !FTF
+  !BISF = !OSA * !OSB
+  !INREGA = OSA * !FTAB +
+   !OSA * !OSB * !FTAB
+  !INBUSA = OSA * FTAB +
+   !OSA * !OSB * FTAB
+  !INBUSB = OSB * FTAB
+  !INREGB = OSB * !FTAB
+  !INA0 = !OSA * OSB
+  !INB0 = OSA * !OSB

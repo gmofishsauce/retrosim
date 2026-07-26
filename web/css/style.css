@@ -559,6 +559,24 @@ body {
 .vec-cell.io-expect { background: #fbf3df; }
 .vec-cell.io-inert { color: #999; }
 .vec-select { font-size: 0.85rem; padding: 0 0.1rem; }
+/* Grouped hexadecimal cells (FR-115k): a multi-bit port/indicator collapsed to
+   one MSB-first field, with a tiny header toggle back to individual bits. */
+.vec-hexinput {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  text-align: right;
+  padding: 0 0.15rem;
+}
+.vec-hexinput:disabled { background: #f3f3f3; color: #999; }
+.vec-hexrole { margin-right: 0.2rem; }
+.vec-radix {
+  font-size: 0.6rem;
+  line-height: 1;
+  padding: 0.05rem 0.2rem;
+  margin-left: 0.3rem;
+  vertical-align: middle;
+}
 .vec-status { font-size: 0.7rem; margin-left: 0.2rem; color: #b00; }
 .vec-cell.pass { background: #e7f6ec; }
 .vec-cell.fail { background: #fde7e9; }

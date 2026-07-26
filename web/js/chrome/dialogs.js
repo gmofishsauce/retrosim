@@ -14,6 +14,12 @@ import {
   deserializeVectors,
   reconcileVectors,
   emptyRow,
+  cloneRow,
+  bitGroups,
+  groupDigits,
+  groupToHex,
+  groupFromHex,
+  groupActualHex,
   hasClockGenerators,
   isStateful,
 } from "../engine/vectors.js";
@@ -1522,42 +1528,49 @@ export function testVectorsPanel({ store, dataDir }) {
     const errEl = el("div", "galdlg-error");
     errEl.hidden = true;
 
+    // --- bit groups (FR-115k) ---
+    // A multi-bit port or 8-wide indicator contributes a run of one-bit columns;
+    // each such group renders as a single MSB-first hex cell (the default) or as
+    // its individual bits, toggled from the column header. The choice is live
+    // only — cells stay one symbol per bit, so nothing downstream changes.
+    const BUCKETS = { in: columns.inputs, out: columns.outputs, io: columns.io };
+    const groupsOf = {
+      in: bitGroups(columns.inputs),
+      out: bitGroups(columns.outputs),
+      io: bitGroups(columns.io),
+    };
+    const hexMode = new Map(); // "kind:refdes" → boolean
+    for (const kind of ["in", "out", "io"]) {
+      for (const g of groupsOf[kind]) hexMode.set(`${kind}:${g.refdes}`, true);
+    }
+    const isHex = (kind, g) => hexMode.get(`${kind}:${g.refdes}`) === true;
+    const cellsOf = (row, kind) => (kind === "in" ? row.in : kind === "out" ? row.out : (row.io ??= []));
+    const sliceOf = (row, kind, g) => cellsOf(row, kind).slice(g.start, g.start + g.width);
+
+    // planFor lays one bucket out as a sequence of render items — a single
+    // column, or a group shown as one hex cell or as `width` bit cells. Header
+    // and body both walk it, so they can never disagree on the column count.
+    function planFor(kind) {
+      const byStart = new Map(groupsOf[kind].map((g) => [g.start, g]));
+      const items = [];
+      for (let i = 0; i < BUCKETS[kind].length; ) {
+        const g = byStart.get(i);
+        if (g) {
+          items.push({ kind, group: g, hex: isHex(kind, g) });
+          i += g.width;
+        } else {
+          items.push({ kind, ci: i });
+          i++;
+        }
+      }
+      return items;
+    }
+    const itemSpan = (it) => (it.group ? (it.hex ? 1 : it.group.width) : 1);
+    const bucketSpan = (kind) => planFor(kind).reduce((n, it) => n + itemSpan(it), 0);
+
     // --- table ---
     const table = el("table", "vec-table");
     const thead = el("thead");
-    // Group header: IN spanning inputs, OUT spanning outputs.
-    const grpRow = el("tr");
-    grpRow.appendChild(el("th", "vec-corner"));
-    if (columns.inputs.length) {
-      const th = el("th", "vec-group", "IN");
-      th.colSpan = columns.inputs.length;
-      grpRow.appendChild(th);
-    }
-    if (columns.outputs.length) {
-      const th = el("th", "vec-group vec-group-out", "OUT");
-      th.colSpan = columns.outputs.length;
-      grpRow.appendChild(th);
-    }
-    // IO group: bidirectional three-state bus columns (FR-115i).
-    if (columns.io.length) {
-      const th = el("th", "vec-group vec-group-io", "IO");
-      th.colSpan = columns.io.length;
-      grpRow.appendChild(th);
-    }
-    grpRow.appendChild(el("th", "vec-corner"));
-    thead.appendChild(grpRow);
-    // Column labels.
-    const labRow = el("tr");
-    labRow.appendChild(el("th", "vec-rownum", "#"));
-    for (const c of columns.inputs) labRow.appendChild(el("th", "vec-collabel", c.label));
-    for (const c of columns.outputs) {
-      labRow.appendChild(el("th", "vec-collabel vec-out", c.label));
-    }
-    for (const c of columns.io) {
-      labRow.appendChild(el("th", "vec-collabel vec-io", c.label));
-    }
-    labRow.appendChild(el("th", "vec-corner"));
-    thead.appendChild(labRow);
     table.appendChild(thead);
     const tbody = el("tbody");
     table.appendChild(tbody);
@@ -1577,65 +1590,219 @@ export function testVectorsPanel({ store, dataDir }) {
       return s;
     }
 
+    // radixButton toggles one group between hex and per-bit cells (FR-115k).
+    // Turning hex on is refused when some row has no hex form — the cells are
+    // the author's, and are never rewritten to fit the display.
+    function radixButton(kind, g) {
+      const hex = isHex(kind, g);
+      const b = button(hex ? "bits" : "hex", () => {
+        if (!hex) {
+          const bad = rows.findIndex((r) => groupToHex(sliceOf(r, kind, g), kind) === null);
+          if (bad >= 0) {
+            return showError(
+              `${g.base} row ${bad + 1} has no hexadecimal form ` +
+                `(a digit mixing X with H/L, or a row mixing drive and expect cells)`,
+            );
+          }
+          errEl.hidden = true;
+        }
+        hexMode.set(`${kind}:${g.refdes}`, !hex);
+        render();
+      });
+      b.classList.add("vec-radix");
+      b.title = hex ? `Show ${g.base} as individual bits` : `Show ${g.base} as hexadecimal`;
+      return b;
+    }
+
+    // renderHead draws both header rows from the plans, so a radix toggle keeps
+    // the group spans, the labels, and the body in step.
+    function renderHead() {
+      thead.replaceChildren();
+      // Group header: IN spanning inputs, OUT outputs, IO the bidirectional
+      // three-state bus columns (FR-115i).
+      const grpRow = el("tr");
+      grpRow.appendChild(el("th", "vec-corner"));
+      const grpTh = (kind, cls, text) => {
+        if (!BUCKETS[kind].length) return;
+        const th = el("th", cls, text);
+        th.colSpan = bucketSpan(kind);
+        grpRow.appendChild(th);
+      };
+      grpTh("in", "vec-group", "IN");
+      grpTh("out", "vec-group vec-group-out", "OUT");
+      grpTh("io", "vec-group vec-group-io", "IO");
+      grpRow.appendChild(el("th", "vec-corner"));
+      thead.appendChild(grpRow);
+
+      // Column labels: a collapsed group reads base[msb:0]; an expanded one keeps
+      // its per-bit labels and carries the toggle on its first bit.
+      const labRow = el("tr");
+      labRow.appendChild(el("th", "vec-rownum", "#"));
+      const cls = { in: "vec-collabel", out: "vec-collabel vec-out", io: "vec-collabel vec-io" };
+      for (const kind of ["in", "out", "io"]) {
+        for (const it of planFor(kind)) {
+          if (!it.group) {
+            labRow.appendChild(el("th", cls[kind], BUCKETS[kind][it.ci].label));
+            continue;
+          }
+          const g = it.group;
+          if (it.hex) {
+            const th = el("th", cls[kind], `${g.base}[${g.width - 1}:0]`);
+            th.title = `${g.width}-bit group, hexadecimal (bit ${g.width - 1} is the most significant)`;
+            th.appendChild(radixButton(kind, g));
+            labRow.appendChild(th);
+          } else {
+            for (let k = 0; k < g.width; k++) {
+              const th = el("th", cls[kind], BUCKETS[kind][g.start + k].label);
+              if (k === 0) th.appendChild(radixButton(kind, g));
+              labRow.appendChild(th);
+            }
+          }
+        }
+      }
+      labRow.appendChild(el("th", "vec-corner"));
+      thead.appendChild(labRow);
+    }
+
+    // ioRoleClass tints an io cell by the role its symbol selects (FR-115i).
+    const ioRoleClass = (v) =>
+      v === "0" || v === "1" ? "io-drive" : v === "X" ? "io-inert" : "io-expect";
+
+    // bitCell renders one single-bit cell — the per-column control, unchanged by
+    // grouping: it is what a plain column and an expanded group both use.
+    function bitCell(kind, ci, row, ri) {
+      const col = BUCKETS[kind][ci];
+      const cells = cellsOf(row, kind);
+      const td = el("td", kind === "in" ? "vec-cell" : `vec-cell vec-${kind}`);
+      let opts;
+      if (kind === "in") opts = col.kind === "clock" ? ["0", "1", "C"] : ["0", "1"]; // C = one pulse (FR-115e)
+      else if (kind === "out") opts = ["H", "L", "X"];
+      else opts = ["0", "1", "H", "L", "X"];
+      if (kind === "io") td.classList.add(ioRoleClass(cells[ci]));
+      const sel = mkSelect(opts, cells[ci]);
+      sel.addEventListener("change", () => {
+        cells[ci] = sel.value;
+        if (kind === "io") {
+          td.classList.remove("io-drive", "io-expect", "io-inert");
+          td.classList.add(ioRoleClass(sel.value));
+        }
+        clearResults();
+      });
+      td.appendChild(sel);
+      if (kind === "in") return td;
+      const status = el("span", "vec-status");
+      td.appendChild(status);
+      const res = runResults?.[ri];
+      const cell = kind === "out" ? res?.cells[ci] : res?.io[ci];
+      if (cell && cell.drive === undefined) {
+        td.classList.add(cell.pass ? "pass" : "fail");
+        if (!cell.pass) status.textContent = `got ${cell.actual}`;
+      }
+      return td;
+    }
+
+    // hexCell renders one collapsed group as a single MSB-first hex field
+    // (FR-115k) — plus, for a bidirectional group, the row's role. Committing
+    // writes the group's per-bit cells; a rejected value leaves them untouched.
+    function hexCell(kind, g, row, ri) {
+      const td = el("td", kind === "in" ? "vec-cell vec-hex" : `vec-cell vec-${kind} vec-hex`);
+      const cur = groupToHex(sliceOf(row, kind, g), kind); // never null: enforceHexModes ran
+      const role = cur?.role ?? null;
+      const inp = el("input", "vec-hexinput");
+      inp.type = "text";
+      inp.size = groupDigits(g.width);
+      inp.maxLength = groupDigits(g.width);
+      inp.value = cur?.text ?? "";
+
+      // write parses the field under `asRole` and, on success, replaces the
+      // group's cells; on failure it reports and restores the shown value.
+      function write(asRole) {
+        const parsed = groupFromHex(inp.value, { kind, width: g.width, role: asRole });
+        if (parsed.error) {
+          showError(`${g.base}: ${parsed.error}`);
+          inp.value = groupToHex(sliceOf(row, kind, g), kind, asRole)?.text ?? "";
+          return false;
+        }
+        errEl.hidden = true;
+        const cells = cellsOf(row, kind);
+        parsed.cells.forEach((s, k) => {
+          cells[g.start + k] = s;
+        });
+        // Normalize (a5 → A5, 5 → 05), reading the group back in the role the
+        // field is being edited under — an all-X expect group shows XX, not the
+        // empty field its *ignore* classification would give.
+        inp.value = groupToHex(sliceOf(row, kind, g), kind, asRole)?.text ?? "";
+        clearResults();
+        return true;
+      }
+
+      if (kind === "io") {
+        // Drive / Expect / Ignore for the whole group this row (FR-115k).
+        const roleSel = el("select", "vec-select vec-hexrole");
+        for (const [v, t] of [["drive", "Drive"], ["expect", "Expect"], ["ignore", "Ignore"]]) {
+          const op = el("option", null, t);
+          op.value = v;
+          roleSel.appendChild(op);
+        }
+        roleSel.value = role ?? "ignore";
+        const applyRole = (r) => {
+          inp.disabled = r === "ignore";
+          td.classList.remove("io-drive", "io-expect", "io-inert");
+          td.classList.add(r === "drive" ? "io-drive" : r === "ignore" ? "io-inert" : "io-expect");
+        };
+        applyRole(roleSel.value);
+        roleSel.addEventListener("change", () => {
+          // Re-read the current text under the new role; an empty field takes the
+          // role's neutral value rather than erroring.
+          if (roleSel.value !== "ignore" && inp.value.trim() === "") {
+            inp.value = roleSel.value === "expect" ? "X".repeat(groupDigits(g.width)) : "0";
+          }
+          if (!write(roleSel.value)) {
+            roleSel.value = role ?? "ignore";
+            return;
+          }
+          applyRole(roleSel.value);
+        });
+        td.appendChild(roleSel);
+        inp.addEventListener("change", () => write(roleSel.value));
+      } else {
+        inp.addEventListener("change", () => write(null));
+      }
+      td.appendChild(inp);
+
+      if (kind === "in") return td;
+      // Results per group (FR-115d/FR-115k): green only when every bit passes;
+      // a driven io group is stimulus and is not scored.
+      const status = el("span", "vec-status");
+      td.appendChild(status);
+      const res = runResults?.[ri];
+      if (res) {
+        const scored = (kind === "out" ? res.cells : res.io).slice(g.start, g.start + g.width);
+        if (scored.every((c) => c.drive === undefined)) {
+          const pass = scored.every((c) => c.pass);
+          td.classList.add(pass ? "pass" : "fail");
+          if (!pass) status.textContent = `got ${groupActualHex(scored.map((c) => c.actual))}`;
+        }
+      }
+      return td;
+    }
+
     function renderBody() {
       tbody.replaceChildren();
       rows.forEach((row, ri) => {
         const tr = el("tr");
         tr.appendChild(el("td", "vec-rownum", String(ri + 1)));
-        columns.inputs.forEach((col, ci) => {
-          const td = el("td", "vec-cell");
-          // A clock column additionally offers C = one clock pulse (FR-115e).
-          const sel = mkSelect(col.kind === "clock" ? ["0", "1", "C"] : ["0", "1"], row.in[ci]);
-          sel.addEventListener("change", () => {
-            row.in[ci] = sel.value;
-            clearResults();
-          });
-          td.appendChild(sel);
-          tr.appendChild(td);
-        });
-        columns.outputs.forEach((col, ci) => {
-          const td = el("td", "vec-cell vec-out");
-          const sel = mkSelect(["H", "L", "X"], row.out[ci]);
-          sel.addEventListener("change", () => {
-            row.out[ci] = sel.value;
-            clearResults();
-          });
-          td.appendChild(sel);
-          const status = el("span", "vec-status");
-          td.appendChild(status);
-          if (runResults && runResults[ri]) {
-            const cell = runResults[ri].cells[ci];
-            td.classList.add(cell.pass ? "pass" : "fail");
-            if (!cell.pass) status.textContent = `got ${cell.actual}`;
-          }
-          tr.appendChild(td);
-        });
-        // Bidirectional (io) cells (FR-115i): 0/1 drive the bus, H/L/X release it
-        // (H/L assert). Cells are tinted by role and only release cells are scored.
-        const ioRole = (v) => (v === "0" || v === "1" ? "io-drive" : v === "X" ? "io-inert" : "io-expect");
-        columns.io.forEach((col, ci) => {
-          const td = el("td", "vec-cell vec-io");
-          td.classList.add(ioRole(row.io[ci]));
-          const sel = mkSelect(["0", "1", "H", "L", "X"], row.io[ci]);
-          sel.addEventListener("change", () => {
-            row.io[ci] = sel.value;
-            td.classList.remove("io-drive", "io-expect", "io-inert");
-            td.classList.add(ioRole(sel.value));
-            clearResults();
-          });
-          td.appendChild(sel);
-          const status = el("span", "vec-status");
-          td.appendChild(status);
-          if (runResults && runResults[ri]) {
-            const cell = runResults[ri].io[ci];
-            if (cell.drive === undefined) {
-              // release cell — scored like an output
-              td.classList.add(cell.pass ? "pass" : "fail");
-              if (!cell.pass) status.textContent = `got ${cell.actual}`;
+        for (const kind of ["in", "out", "io"]) {
+          for (const it of planFor(kind)) {
+            if (!it.group) tr.appendChild(bitCell(kind, it.ci, row, ri));
+            else if (it.hex) tr.appendChild(hexCell(kind, it.group, row, ri));
+            else {
+              for (let k = 0; k < it.group.width; k++) {
+                tr.appendChild(bitCell(kind, it.group.start + k, row, ri));
+              }
             }
           }
-          tr.appendChild(td);
-        });
+        }
         const delTd = el("td", "vec-cell");
         const del = button("✕", () => {
           rows.splice(ri, 1);
@@ -1648,6 +1815,30 @@ export function testVectorsPanel({ store, dataDir }) {
         tr.appendChild(delTd);
         tbody.appendChild(tr);
       });
+    }
+
+    // render redraws header and body together — a radix toggle changes both.
+    function render() {
+      renderHead();
+      renderBody();
+    }
+
+    // enforceHexModes drops any group to per-bit display whose cells have no
+    // hexadecimal form (FR-115k) — a digit mixing X with H/L, or an io row
+    // mixing drive and release cells. Capture and Load are the paths that can
+    // produce such cells; they are never rewritten to fit the display. Returns
+    // the base labels of the groups it dropped.
+    function enforceHexModes() {
+      const dropped = [];
+      for (const kind of ["in", "out", "io"]) {
+        for (const g of groupsOf[kind]) {
+          if (!isHex(kind, g)) continue;
+          if (rows.every((r) => groupToHex(sliceOf(r, kind, g), kind) !== null)) continue;
+          hexMode.set(`${kind}:${g.refdes}`, false);
+          dropped.push(g.base);
+        }
+      }
+      return dropped;
     }
 
     // clearResults drops stale pass/fail painting after any edit and repaints.
@@ -1697,7 +1888,11 @@ export function testVectorsPanel({ store, dataDir }) {
           row.io = cap.io[i];
         });
         clearResults();
-        renderBody();
+        // A captured U/Z bit lands as X and can leave a group with no hex form
+        // (FR-115k); such a group falls back to per-bit rather than being edited.
+        const dropped = enforceHexModes();
+        render();
+        if (dropped.length) showNote(`Captured; showing ${dropped.join(", ")} as bits (no hexadecimal form)`);
       } catch (e) {
         showError(`cannot capture: ${e.message}`);
       }
@@ -1741,11 +1936,15 @@ export function testVectorsPanel({ store, dataDir }) {
         clearResults();
         runResults = null;
         summary.textContent = "";
-        renderBody();
+        // A loaded file may hold cells with no hex form (FR-115k) — those groups
+        // show as bits.
+        const dropped = enforceHexModes();
+        render();
+        const asBits = dropped.length ? `; showing ${dropped.join(", ")} as bits` : "";
         if (warnings.length) {
-          showNote(`Loaded with ${warnings.length} warning(s): ${warnings.join("; ")}`);
+          showNote(`Loaded with ${warnings.length} warning(s): ${warnings.join("; ")}${asBits}`);
         } else {
-          showNote(`Loaded ${baseName(res.path)}`);
+          showNote(`Loaded ${baseName(res.path)}${asBits}`);
         }
       } catch (e) {
         showError(`cannot load: ${e.message}`);
@@ -1759,8 +1958,18 @@ export function testVectorsPanel({ store, dataDir }) {
       clearResults();
       renderBody();
     });
+    // +Dup (FR-115j): append a copy of the highest-numbered row, so a working
+    // row can be extended by editing the duplicate rather than retyping it.
+    const dupBtn = button("+Dup", () => {
+      const last = rows[rows.length - 1];
+      rows.push(last ? cloneRow(last) : emptyRow(columns));
+      clearResults();
+      renderBody();
+    });
+    dupBtn.title = "Duplicate the last row";
     buttons.append(
       addBtn,
+      dupBtn,
       button("Capture", onCapture),
       button("Run", onRun),
       button("Load", onLoad),
@@ -1794,7 +2003,7 @@ export function testVectorsPanel({ store, dataDir }) {
       noteEl.hidden = false;
     }
 
-    renderBody();
+    render();
     // Surface any port-binding warnings from column derivation (FR-115f), e.g. a
     // bidir port skipped for want of a direction override.
     if (columns.warnings.length) {

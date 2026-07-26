@@ -19,6 +19,20 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-25 — Test-vector panel: hexadecimal entry for multi-bit column groups
+What: the panel now collapses each multi-bit column run — one `portN` instance's bits (input or bidirectional) or an 8-wide indicator's `D0…D7` — into a single MSB-first hex cell per row, toggleable per group back to per-bit cells. Output digits may be `X`; a bidirectional group's cell adds a Drive/Expect/Ignore role. Cells whose pattern has no hex form (a digit mixing X with H/L, or a row mixing drive and release in one group) fall back to per-bit display with a notice instead of being rewritten. Hex is display and entry only — the `.tv` file, the runner, and the C generator stay per-bit.
+Why: authoring bus-width stimulus bit by bit is unusable at real widths — notL4C381 derives 66 columns, of which seven 8-bit portN groups collapse to seven fields, taking the table to 17. Phase 1 of the discussed plan: it uses the grouping that already exists in the column data (shared refdes + bit index), with no schematic inference and no user-authored groups.
+Touches: FR-115k (new); FR-115b (columns/actions). Design §6.16 (`bitGroups`/`groupToHex`/`groupFromHex`/`groupActualHex`/`groupDigits` in `engine/vectors.js`; panel render-plan), §6.16 traceability row. Code in `web/js/engine/vectors.js` + `web/js/chrome/dialogs.js` + `web/css/style.css`, tests in `vectors.test.js`.
+
+---
+
+## 2026-07-25 — Test-vector panel: +Dup button (duplicate the last row)
+What: the test-vector panel gains a **+Dup** button beside **+ Row**; it appends a new row that copies the highest-numbered (last) existing row cell for cell (in/out/io), as an independent copy, clearing stale run results like any edit. On an empty table it appends a blank row.
+Why: vectors are built incrementally — get one row working, duplicate it, and edit the copy, instead of re-entering every cell of a long row.
+Touches: FR-115j (new); FR-115b (add/duplicate/remove rows). Design §6.16 (`cloneRow` in `engine/vectors.js`, panel button list — which also corrected a stale "− Row" description; row removal has been a per-row ✕ button). Code in `web/js/engine/vectors.js` + `web/js/chrome/dialogs.js`, tests in `vectors.test.js`.
+
+---
+
 ## 2026-07-22 — Fix: segment-delete left a dangling red marker stacked on a junction
 What: deleting a bus/wire segment whose cut promoted a bend onto an existing junction (e.g. notL4C381 b308: a `free` endpoint coincident with junction v892) left a spurious dangling-end red square (FR-029) even though continuity was preserved. `cleanup` now collapses a zero-length end segment — a non-group-snapped `free` endpoint coincident with its neighbouring path point is dropped and the orphaned vertex removed.
 Why: the promoted free endpoint landed exactly on a junction, so the conductor ended cleanly on the tie point but the stacked free vertex still rendered a red marker.
