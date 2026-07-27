@@ -59,6 +59,7 @@ export function initCanvas(canvasEl, store) {
   let lastW = 0; // last applied CSS size / DPR, so resize() is idempotent and a
   let lastH = 0; // ResizeObserver tick that didn't change the box is a no-op.
   let lastDpr = 0;
+  const afterRender = new Set(); // post-draw subscribers (FR-087c)
 
   function requestRender() {
     dirty = true;
@@ -117,6 +118,10 @@ export function initCanvas(canvasEl, store) {
     if (ghost) drawGhost(ctx, ghost.fragment, ghost.dx, ghost.dy, vp);
     if (marquee) drawMarquee(ctx, marquee, vp);
     ctx.restore();
+    // After-render subscribers (FR-087c): the probe sheet refreshes its values
+    // on exactly the frames the canvas repaints, so it tracks a running
+    // simulation without polling and an idle design stays idle (FR-085).
+    for (const fn of afterRender) fn();
   }
 
   const unsubscribe = store.subscribe(requestRender);
@@ -131,6 +136,12 @@ export function initCanvas(canvasEl, store) {
 
   return {
     requestRender,
+    // onAfterRender registers a callback run at the end of every actual draw,
+    // returning its unsubscribe (FR-087c, §6.8).
+    onAfterRender(fn) {
+      afterRender.add(fn);
+      return () => afterRender.delete(fn);
+    },
     setPreview(p) {
       preview = p;
       requestRender();

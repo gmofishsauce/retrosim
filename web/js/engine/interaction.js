@@ -118,6 +118,58 @@ const WIRE_CURSOR =
   ) +
   "') 10 10, crosshair";
 
+// PROBE_CURSOR is the probe-mode cursor (FR-087c): an arrow with a question
+// mark. Its hotspot is the image CENTRE, with the arrow's tip drawn exactly
+// there — the FR-025 rule, because cursor scaling preserves an image's centre,
+// so a centre hotspot keeps the visible aim point and the true active point
+// coincident at every cursor size. The arrow therefore trails down-right from
+// the centre and the question mark sits in the freed upper-right quadrant; the
+// upper-left half is deliberately empty, which is the price of centring the
+// glyph on its hot point. White outlines keep it legible on any background.
+const PROBE_CURSOR =
+  "url('data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28">' +
+      '<path d="M14 14 L14 25.2 L16.8 22.75 L18.9 27.3 L21 26.25 L18.9 21.7 L22.4 21.7 Z" ' +
+      'fill="black" stroke="white" stroke-width="1.2" stroke-linejoin="round"/>' +
+      '<text x="19.5" y="12" font-family="system-ui, sans-serif" font-size="14" ' +
+      'font-weight="700" text-anchor="middle" fill="black" stroke="white" ' +
+      'stroke-width="2.5" paint-order="stroke">?</text>' +
+      "</svg>",
+  ) +
+  "') 14 14, crosshair";
+
+// probeTarget resolves a probe click to a target descriptor (FR-087c) using the
+// editor's ordinary hit precedence — pin, junction, conductor, body — returning
+// null on a miss (which clears the probe). Each descriptor carries the lane or
+// (refdes,pin) the properties panel needs to read it, so the panel never
+// re-hit-tests; resolving once at click time is safe because the design cannot
+// change under the locks probe mode lives inside (FR-087/FR-115h). Pure and
+// tolerance-injected, so it is exported for testing.
+export function probeTarget(design, world, { pin: pinT, seg: segT }) {
+  const ph = hitPin(design, world, pinT);
+  if (ph) return { kind: "pin", refdes: ph.refdes, pin: ph.pin };
+  // A junction reads as the conductor it ties: a bus junction shows the whole
+  // bus (per-bit), a wire junction the one net.
+  const jh = hitJunction(design, world, segT);
+  if (jh) return conductorTarget(design, jh.wire);
+  const sh = hitSegment(design, world, segT);
+  if (sh) return conductorTarget(design, sh.wire);
+  const bh = hitBusSegment(design, world, segT);
+  if (bh) return conductorTarget(design, bh.bus);
+  const ch = hitComponent(design, world);
+  if (ch) return { kind: "component", refdes: ch.refdes };
+  return null;
+}
+
+// conductorTarget describes a wire or bus for the probe. A bus carries its width
+// so the panel can read every bit's lane (FR-087c).
+function conductorTarget(design, cond) {
+  return design.buses.some((b) => b.id === cond.id)
+    ? { kind: "bus", id: cond.id, width: cond.width }
+    : { kind: "wire", id: cond.id };
+}
+
 // planBusEndpoint converts a bus endpoint target into an addBus endpoint spec, an
 // optional snap directive, and the list of accepting pin groups (FR-041/FR-041c).
 // A component target with exactly one accepting group auto-snaps (FR-041a); with
@@ -197,7 +249,13 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     const label = document.getElementById("tool-mode");
     if (label) label.textContent = tool === "place" ? `place ${typeIdentity(type)}` : tool;
     canvas.style.cursor =
-      tool === "select" ? "default" : tool === "wire" ? WIRE_CURSOR : "crosshair";
+      tool === "select"
+        ? "default"
+        : tool === "wire"
+          ? WIRE_CURSOR
+          : tool === "probe"
+            ? PROBE_CURSOR // FR-087c
+            : "crosshair";
     renderer.setPreview(null); // clear any in-progress rubber-band
     store.setTool(tool, type ? typeIdentity(type) : null); // notifies subscribers (toolbar highlight, armed tile)
   }
@@ -387,6 +445,12 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
   // so the FSM stays generic with no per-type special case.
   function interactDuringSim(inst, interact) {
     store.applyLive(() => interact(inst));
+  }
+
+  // probeTargetAt resolves a probe click at the current zoom's tolerances
+  // (FR-087c); the resolution itself is the pure `probeTarget` below.
+  function probeTargetAt(world) {
+    return probeTarget(store.design, world, { pin: pinTol(), seg: segTol() });
   }
 
   // beginMarquee starts a rubber-band selection on a bare-canvas press (FR-016b):
@@ -1035,6 +1099,14 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
         const inst = store.design.components.find((c) => c.refdes === comp.refdes);
         const interact = inst && INTERACTIONS[inst.type];
         if (interact) return interactDuringSim(inst, interact);
+      }
+      // Probe mode (FR-087c): the lock's second exception. It is checked after
+      // the interactive-input one above, so a switch click still toggles — a
+      // switch draws its own state and is never a probe target. A click on
+      // nothing clears the probe. The selection is not touched either way.
+      if (store.state.tool === "probe") {
+        store.setProbe(probeTargetAt(world));
+        return;
       }
       // A click on a selectable item is locked: report it and change nothing. A
       // bare-canvas click is ignored silently (it was not selecting an item).

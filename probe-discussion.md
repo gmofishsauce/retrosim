@@ -1,13 +1,13 @@
 # Probe feature — design discussion (2026-07-26, decisions 2026-07-27)
 
-Status: **unblocked; one question still open.** No specs or code changed yet.
+Status: **all questions decided (2026-07-27); implementation follows.**
 
 The prerequisite — *run test vectors to a point and hold* (issue 1 below) — was
 built and committed on 2026-07-26 as **FR-115l**, so a live simulation now
 survives a vector run for the probe to read. The decisions of 2026-07-27 are
-recorded inline below, each marked **DECIDED**. **Item 4 (what the panel shows
-per target type) was not covered and remains open** — it is the last thing
-needed before writing the FRs.
+recorded inline below, each marked **DECIDED**, and summarized under *Settled
+shape of the feature*. This file is now history: the specs (FR-087c and the
+amendments it names) are the current record.
 
 ---
 
@@ -109,10 +109,10 @@ existing `hitPin` → `hitJunction` → `hitSegment`/`hitBusSegment` →
 - **empty canvas** → clears the probe (or is a no-op — pick one; clearing
   recommended)
 
-**STILL OPEN** — not covered by the 2026-07-27 answers, and the last thing
-needed before the FRs can be written. The list above stands as the proposal; the
-**component body** case is the one worth a deliberate yes/no, since a whole-pin
-table is a much bigger panel than a single value.
+**DECIDED (2026-07-27): the taxonomy above is adopted as proposed**, including
+the component body showing a **table of every pin and its current value**, and
+that table is rendered **in the properties panel** like every other probe
+reading — the panel is the one place a probe result appears.
 
 **5. Live or frozen?**
 

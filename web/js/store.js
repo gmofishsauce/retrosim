@@ -74,6 +74,12 @@ export function createStore(initial = {}) {
     // While `vectorPanelOpen` the design is read-only too (FR-115h), sharing the
     // simulation lock's condition via isReadonly(); never persisted.
     vectorPanelOpen: false,
+    // `probe` is the probe target descriptor (FR-087c) or null: what the user
+    // clicked while probe mode was active, resolved once at click time to the
+    // lane or (refdes,pin) needed to read it. Transient UI state — never
+    // persisted, never undoable, never dirtying — and NOT the selection, which
+    // stays locked and empty during a run (FR-087).
+    probe: null,
     // `vectorHold` says the current `sim` view is a HELD vector run (FR-115l),
     // not values lingering after an interactive Stop (FR-085) — a distinction
     // `sim` alone cannot carry. It drives the "held" state tray (FR-073) and the
@@ -142,9 +148,11 @@ export function createStore(initial = {}) {
   }
 
   // clearSimView drops a retained simulation display view on the first design
-  // modification after a run (FR-085, §6.13).
+  // modification after a run (FR-085, §6.13), and with it any probe target
+  // (FR-087c) — the values it was reading are gone.
   function clearSimView() {
     state.sim = null;
+    state.probe = null;
   }
 
   return {
@@ -266,6 +274,18 @@ export function createStore(initial = {}) {
     // in sync (FR-016a).
     setSelection(sel) {
       state.selection = sel;
+      // A selection change hands the properties panel back from the probe sheet
+      // (FR-087c): after a Stop the first click that selects something should
+      // show that thing, not the frozen probe reading.
+      state.probe = null;
+      notify();
+    },
+
+    // setProbe records (or clears, with null) the probe target the user clicked
+    // in probe mode (FR-087c). Transient like the selection: outside the
+    // command/undo path, never persisted, never dirtying.
+    setProbe(target) {
+      state.probe = target;
       notify();
     },
 

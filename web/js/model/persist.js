@@ -171,7 +171,10 @@ export function serializeDesign(design) {
       Object.fromEntries(
         Object.entries(REF_SERIES).map(([s, re]) => [s, nextRefNum(design.components, re)]),
       ),
-    nets: buildNets(design),
+    // `lanes` is a simulation-time index (sim.js valueOfLane, FR-087c) that is
+    // derivable from the design and ignored on load, so it is stripped here
+    // rather than bloating every save file with it (§7.2 Net shape).
+    nets: buildNets(design).map(({ lanes, ...net }) => net),
   };
 }
 

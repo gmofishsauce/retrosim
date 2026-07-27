@@ -5996,7 +5996,7 @@
             "number": 23
           }
         ],
-        "behavior": "OUTCMB = !OE * FTF\nOUTREG = !OE * !FTF\nBISF = !OSA * !OSB\nINREGA = OSA * !FTAB +\n !OSA * !OSB * !FTAB\nINBUSA = OSA * FTAB +\n !OSA * !OSB * FTAB\nINA0 = !OSA * OSB\nINB0 = OSA * !OSB\n",
+        "behavior": "!OUTCMB = !OE * FTF\n!OUTREG = !OE * !FTF\n!BISF = !OSA * !OSB\n!INREGA = OSA * !FTAB +\n !OSA * !OSB * !FTAB\n!INBUSA = OSA * FTAB +\n !OSA * !OSB * FTAB\n!INBUSB = OSB * FTAB\n!INREGB = OSB * !FTAB\n!INA0 = !OSA * OSB\n!INB0 = OSA * !OSB\n",
         "gal": "GAL22V10",
         "partnumber": "22V738",
         "description": "Bus enable decoder"
@@ -14036,7 +14036,7 @@
   ],
   "refCounters": {
     "U": 68,
-    "A": 40,
+    "A": 45,
     "N": 9,
     "X": 5
   },

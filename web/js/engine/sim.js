@@ -75,6 +75,16 @@ export function buildSimulation(
     for (const pin of net.pins) netOfPin.set(pin, i);
   });
 
+  // Conductor lane ("wire:<id>" / "bus:<id>:<bit>", §6.6) → net index, the
+  // conductor analogue of netOfPin. It is what lets the probe (FR-087c) read a
+  // wire or one bit of a bus, which pin-keyed lookup alone cannot reach — and it
+  // must key on lanes, not net.members: a bus id in `members` can span several
+  // nets (one per bit), while each lane belongs to exactly one.
+  const netOfLane = new Map();
+  nets.forEach((net, i) => {
+    for (const lane of net.lanes) netOfLane.set(lane, i);
+  });
+
   // --- Build evaluation entities ---
   const entities = [];
   const errors = [];
@@ -138,7 +148,7 @@ export function buildSimulation(
     for (const node of td0.internal ?? []) {
       const key = `${insts[0].refdes}.#${node}`;
       netOfPin.set(key, nets.length);
-      nets.push({ pins: [], members: [] });
+      nets.push({ pins: [], members: [], lanes: [] });
       pinOwner.set(node, key);
     }
 
@@ -533,6 +543,12 @@ export function buildSimulation(
       const n = netOfPin.get(`${refdes}.${pin}`);
       return n === undefined ? VZ : curr[n];
     },
+    // valueOfLane reads a conductor's net by lane (FR-087c); a lane on no net
+    // (an isolated conductor) reads Z, like an unconnected pin.
+    valueOfLane(lane) {
+      const n = netOfLane.get(lane);
+      return n === undefined ? VZ : curr[n];
+    },
     conflictedConductors() {
       const ids = new Set();
       for (const i of conflictedNets) {
@@ -756,6 +772,7 @@ export function createSim({ store, renderer, consolePanel = null }) {
     setAppState("simulating"); // FR-073/FR-076
     store.setSim({
       valueOfPin: sim.valueOfPin,
+      valueOfLane: sim.valueOfLane, // conductor reads for the probe (FR-087c)
       conflictedConductors: sim.conflictedConductors,
     });
     store.setSimulating(true); // design read-only (FR-087); notifies chrome

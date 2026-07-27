@@ -214,6 +214,43 @@ test("sim view is retained at stop and cleared on the next modification (FR-085)
   assert.equal(store.state.sim, null);
 });
 
+test("setProbe records a probe target and notifies (FR-087c)", () => {
+  const store = newStore();
+  let notes = 0;
+  store.subscribe(() => notes++);
+  assert.equal(store.state.probe, null);
+
+  store.setProbe({ kind: "wire", id: "w1" });
+  assert.deepEqual(store.state.probe, { kind: "wire", id: "w1" });
+  assert.equal(notes, 1); // the properties panel repaints off this
+
+  store.setProbe(null); // a click on empty canvas
+  assert.equal(store.state.probe, null);
+});
+
+test("a selection change clears the probe target (FR-087c)", () => {
+  const store = newStore();
+  store.setProbe({ kind: "wire", id: "w1" });
+  // After a Stop, the first click that selects something must hand the
+  // properties panel back from the frozen probe reading to that selection.
+  store.setSelection([{ kind: "component", refdes: "U1" }]);
+  assert.equal(store.state.probe, null);
+});
+
+test("the first design modification clears the probe with the sim view (FR-087c/FR-085)", () => {
+  const store = newStore();
+  store.setSimulating(true);
+  store.setSim({ valueOfPin: () => 0 });
+  store.setProbe({ kind: "pin", refdes: "U1", pin: "Y" });
+  store.setSimulating(false); // stop: both deliberately retained
+  assert.notEqual(store.state.probe, null);
+  assert.notEqual(store.state.sim, null);
+
+  store.dispatch(addCmd(1));
+  assert.equal(store.state.sim, null);
+  assert.equal(store.state.probe, null); // the values it was reading are gone
+});
+
 test("vectorHold marks a held vector run and notifies (FR-115l)", () => {
   const store = newStore();
   let notes = 0;

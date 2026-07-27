@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { planBusEndpoint } from "./interaction.js";
+import { planBusEndpoint, probeTarget } from "./interaction.js";
 
 // A type with a single 3-bit group "A".
 const typeA = {
@@ -83,4 +83,86 @@ test("planBusEndpoint snaps a proximity group target at the apex (FR-042a)", () 
   assert.deepEqual(plan.snap, { refdes: "A-1", group: "P" });
   assert.deepEqual(plan.spec, { kind: "free", x: -2, y: 4.5 });
   assert.deepEqual(plan.groups, []);
+});
+
+// --- probe target resolution (FR-087c) ---
+
+// A design with a component whose pin sits at a known point, a wire, a bus, and
+// a junction, so the hit precedence can be exercised point by point. Geometry
+// mirrors what hittest.js expects: pin positions come from the instance's own
+// pin layout, conductors from vertex-referencing paths.
+function probeDesign() {
+  const type = {
+    width: 4,
+    height: 4,
+    pins: [
+      { name: "A", side: "left", position: 1, direction: "in" },
+      { name: "Y", side: "right", position: 1, direction: "out" },
+    ],
+  };
+  const vertices = [
+    { id: "vw1", kind: "free", x: 20, y: 0 },
+    { id: "vw2", kind: "free", x: 26, y: 0 },
+    { id: "vj", kind: "junction", x: 23, y: 0 },
+    { id: "vb1", kind: "free", x: 20, y: 10 },
+    { id: "vb2", kind: "free", x: 26, y: 10 },
+  ];
+  return {
+    components: [
+      { refdes: "U1", type: "T", typeData: type, x: 0, y: 0, rotation: 0 },
+    ],
+    wires: [
+      {
+        id: "w1",
+        path: [
+          { t: "node", v: "vw1" },
+          { t: "node", v: "vj" },
+          { t: "node", v: "vw2" },
+        ],
+      },
+    ],
+    buses: [
+      {
+        id: "b1",
+        width: 4,
+        path: [{ t: "node", v: "vb1" }, { t: "node", v: "vb2" }],
+      },
+    ],
+    vertices,
+  };
+}
+
+const TOLS = { pin: 0.7, seg: 0.5 };
+
+test("probeTarget: a wire resolves to its lane-bearing wire descriptor (FR-087c)", () => {
+  const t = probeTarget(probeDesign(), { x: 21, y: 0 }, TOLS);
+  assert.deepEqual(t, { kind: "wire", id: "w1" });
+});
+
+test("probeTarget: a bus carries its width so every bit can be read (FR-087c)", () => {
+  const t = probeTarget(probeDesign(), { x: 22, y: 10 }, TOLS);
+  assert.deepEqual(t, { kind: "bus", id: "b1", width: 4 });
+});
+
+test("probeTarget: a junction reads as the conductor it ties (FR-087c)", () => {
+  // The junction sits mid-wire; it must resolve to that wire, not to nothing.
+  const t = probeTarget(probeDesign(), { x: 23, y: 0 }, TOLS);
+  assert.deepEqual(t, { kind: "wire", id: "w1" });
+});
+
+test("probeTarget: a component body resolves to the instance (FR-087c)", () => {
+  const t = probeTarget(probeDesign(), { x: 2, y: 2 }, TOLS);
+  assert.deepEqual(t, { kind: "component", refdes: "U1" });
+});
+
+test("probeTarget: a pin outranks the body it sits on (FR-087c precedence)", () => {
+  const d = probeDesign();
+  // Probe exactly at pin A's own position: the pin, not the component, wins.
+  const t = probeTarget(d, { x: 0, y: 1 }, TOLS);
+  assert.equal(t.kind, "pin");
+  assert.equal(t.refdes, "U1");
+});
+
+test("probeTarget: empty canvas resolves to null, which clears the probe (FR-087c)", () => {
+  assert.equal(probeTarget(probeDesign(), { x: 100, y: 100 }, TOLS), null);
 });

@@ -1153,9 +1153,15 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   for each group with ≥1 attached pin:
       pins       = [attached pins in group]
       members    = [wire/bus ids whose lanes are in group]
+      lanes      = [the lanes themselves in group]             # FR-087c
       provenance = [{bus, bit, name?} for bus-lanes in group]   # FR-060a
-      nets.push({pins, members, provenance, name: pickName(provenance)})
+      nets.push({pins, members, lanes, provenance, name: pickName(provenance)})
   ```
+  `members` and `lanes` differ where it matters: a **bus id** appears in the
+  `members` of every net one of its bits lands on (that is what lets a conflict
+  redden the whole conductor, FR-082), whereas each **lane** belongs to exactly
+  one net. Only lanes can answer "what is the value of this conductor bit",
+  which is why the probe's `valueOfLane` (§6.13, FR-087c) keys on them.
   `pickName` prefers an explicit bus `bitNames[bit]` (FR-037b), else a connected
   pin name, else null. This uses **ids and bit indices only** — never pixel
   coordinates — satisfying FR-059a/FR-060a. (Connector ports are unioned by label
@@ -1204,8 +1210,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   FR-068 (simulated indicator states), FR-082 (red conflict nets), NFR-005.
 - **Interface:** `init(canvasEl, store)`, `setViewport({pan, zoom})`,
   `setMarquee(rect | null)` (the live rubber-band rectangle + window/crossing
-  mode, FR-016b), `requestRender()`. Renders on a `requestAnimationFrame` loop
+  mode, FR-016b), `requestRender()`, `onAfterRender(fn) → unsubscribe`. Renders on
+  a `requestAnimationFrame` loop
   **only when dirty** (a render is requested), to meet NFR-005 without busy-spinning.
+  `onAfterRender` fires its callbacks at the end of each actual `draw()`; the
+  probe sheet (§6.11, FR-087c) uses it to refresh its values on exactly the frames
+  the canvas repaints, which is what keeps a live probe from polling and lets an
+  idle design stay idle (FR-085).
 - **Backing-store sizing:** the device-pixel backing store
   (`canvas.width/height = round(clientSize × devicePixelRatio)`) is kept in sync
   with the element's CSS box by a **`ResizeObserver` on the canvas** (plus the
@@ -1567,6 +1578,27 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   that marks the design modified and wakes the simulator (§6.10) — instead of
   reporting the lock. The switch's handler toggles `switchState` 0↔1 (FR-087a).
   (Reworked 2026-06-17; supersedes selection remaining available during a run.)
+- **Probe mode (FR-087c):** a second exception to the lock, and the only other
+  way a click under it does anything. Probe is realized as a **tool value**,
+  `store.state.tool === "probe"`, so it rides the existing tool FSM and
+  `setTool("probe")` automatically un-highlights Select (FR-087c's "supplants
+  Select"); `PROBE_CURSOR` is an inline SVG data-URI beside `WIRE_CURSOR`, its
+  hotspot at the **image centre** with the arrow tip drawn there (the FR-025
+  scaling rationale, which FR-087c adopts). The lock branch of `onPointerDown`
+  checks the interactive-built-in exception **first** — a switch click still
+  toggles (FR-087c: switches are never probe targets) — and only then, when the
+  tool is `probe`, resolves a target with `probeTargetAt(world)` over the ordinary
+  hit-test precedence (`hitPin` → `hitJunction` → `hitSegment`/`hitBusSegment` →
+  `hitComponent`) and calls `store.setProbe(target)`; a miss clears it. Nothing is
+  dispatched and the selection is never touched. `setTool("probe")` is reachable
+  only while `simulating || vectorHold`; `Esc`, the toolbar toggle, and the end of
+  the run or hold all call `setTool("select")`, which restores the default cursor.
+  The resolved target is a small descriptor — `{kind:"pin",refdes,pin}`,
+  `{kind:"junction",lane,x,y}`, `{kind:"wire",id}`, `{kind:"bus",id,width}`, or
+  `{kind:"component",refdes}` — carrying the **lane** (`wire:<id>` /
+  `bus:<id>:<bit>`, §6.6) or `(refdes,pin)` needed to read it, so the panel never
+  re-hit-tests. Resolving once at click time is safe because the design cannot
+  change under either lock (FR-087/FR-115h).
 - **Note text-entry mode (FR-071f):** editing a note overlays a real DOM
   `<textarea>` on the page, positioned over the note, and lets the browser handle
   the caret, text selection, and clipboard natively (DQ-001, §12). A SELECT-mode
@@ -1660,7 +1692,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   dirty tracking; pub/sub.
 - **Satisfies:** FR-024, FR-049a, FR-121c (the no-project lock), NFR-006.
 - **State:** `{ design, tool, selection, hover, viewport, dirty, savePath, designName,
-  simulating, sim, vectorPanelOpen, vectorHold, project }`.
+  simulating, sim, vectorPanelOpen, vectorHold, probe, project }`.
   `project` (FR-121, §6.19) is the client-held **current project**: `null` or
   `{ dir, name, manifestFile, mainDesign }`, set via a notifying
   `setProject(p)`. Transient session state, never persisted (the server holds
@@ -1693,6 +1725,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   **held** vector run (FR-115l) rather than values lingering after an interactive
   Stop — the distinction `sim` alone cannot carry — and drives the "held" state
   tray (FR-073) and the toolbar's release-Stop (§6.16).
+  `probe` (the probe target descriptor or `null`, `setProbe`, FR-087c, §6.9) is
+  transient in the same way — never persisted, never on the undo stack, never
+  dirtying. It is cleared by `setSelection` (so the first selection after a Stop
+  hands the properties panel back to the selection sheet) and by `clearSimView`
+  (the next design modification), the two moments FR-087c names.
 - **Atomic command failure (FR-024a):** before `cmd.apply`, `dispatch` captures
   an in-store snapshot of the design's connectivity collections (`components`,
   `wires`, `buses`, `vertices`) and id counters (`nextWireId`/`nextBusId`/
@@ -1779,12 +1816,19 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   (FR-111/FR-112, §6.15), Design Properties… (FR-076b, dialog below); **View** — Zoom In, Zoom Out, Fit to Screen (FR-022a,
   `interaction.fitToScreen`); **Simulate** — Test Vectors… (FR-115b, §6.16) and
   Generate C… (FR-116, §6.17). **Buttons:**
-  Select, Wire, Bus (modal tools), then **Run/Stop**, then — shown only while a
-  run of a sequential design is active — the **pause/step cluster** (FR-076a):
+  Select, Wire, Bus (modal tools), then **Run/Stop**, then — shown
+  only while a run of a sequential design is active — the **pause/step cluster**
+  (FR-076a):
   a Pause/Continue toggle and Step-cycle / Step-unit buttons, each an inline-SVG
   debugger glyph with a tooltip/aria-label (the Wire-icon pattern), the step
   buttons enabled only while paused; they call the engine's
-  `pause()`/`resume()`/`stepUnit()`/`stepCycle()` (§6.13). (Pan has no control; it is
+  `pause()`/`resume()`/`stepUnit()`/`stepCycle()` (§6.13); and last, shown only
+  while the schematic carries live values (`simulating || vectorHold`), the
+  **Probe** toggle (FR-087c), whose click calls
+  `interaction.setTool(probing ? "select" : "probe")`, whose `active` class
+  tracks `state.tool === "probe"`, and which — since `refresh()` is where the
+  toolbar learns the run ended — also drops probe mode back to Select when
+  neither live-value state holds any longer. (Pan has no control; it is
   space-drag/middle-drag or right-click-to-recenter on bare canvas —
   FR-023a/FR-023b; left-drag on bare canvas is rubber-band select, FR-016b.)
   A menu opens on click, closes on item choice / outside click / Escape, and is
@@ -2059,6 +2103,25 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `inst.overrides.delays` / `inst.overrides.props` (§7.2) and persist via the
   full-instance save (FR-058). The panel re-renders on every store notification,
   which is why selection now flows through `store.setSelection` (notifying).
+  - *Probe sheet (FR-087c)*: `render()` checks `store.state.probe` **before** any
+    selection branch and, when set, renders the probe reading instead — a title
+    naming the target, then its value(s) read through `store.state.sim`: a single
+    value row for a pin/junction/wire, a per-bit table plus a hex line for a bus,
+    and a **pin/value table** for a component body; a conductor target also
+    carries a live conflict note driven by `sim.conflictedConductors()`
+    (FR-082 — a U on a conflicted net means something different from an ordinary
+    U). The sheet is wholly read-only:
+    it reuses `infoRow`, offering no editable field, so the FR-087/FR-115h locks
+    have nothing to disable. **Live refresh without polling:** rebuilding the DOM
+    per simulation step would be wasteful and would fight text selection, so the
+    sheet builds its value cells once, keeps them in a small array, and registers
+    an `onAfterRender` callback with the canvas renderer (§6.8) that rewrites just
+    those cells' `textContent`. That ties the probe's refresh rate to the canvas's
+    own — the simulator already calls `renderer.requestRender()` after each step
+    and settle (§6.13) — so a settled or idle design triggers no probe work and
+    FR-085's "consumes no CPU" survives. The callback is unregistered whenever the
+    panel re-renders into a non-probe state. Values format through one shared
+    helper (`0`/`1`/`U`/`Z`); an unreadable target (no `sim` view yet) shows `—`.
   - *Wire/bus synthetic sheet (FR-020d)*: when the single selection is a wire or a
     bus (`only.kind === "wire" | "bus"`) the panel renders a sheet describing the
     conductor's two endpoints — its `path`'s first and last `node` entries. For a
@@ -2343,7 +2406,7 @@ no sequential part could ever leave U.)
   above) as a **virtual net**: a net cell that carries a four-state value and
   double-buffers exactly like a real net, but is bound to no conductor. In
   `makeGalasmEntity`, after compiling, for each declared `typeData.internal` name
-  the build **appends a placeholder net** `{ pins:[], members:[] }` to the `nets`
+  the build **appends a placeholder net** `{ pins:[], members:[], lanes:[] }` to the `nets`
   array (so `curr`/`next`, `contribs`, the resolve loop, and `changed` detection —
   all sized/indexed off `nets.length` — cover it for free), records its index under
   a synthetic key `"<entityRefdes>.#<node>"` in `netOfPin`, and maps the node
@@ -2360,7 +2423,9 @@ no sequential part could ever leave U.)
   reads the previous stage's *pre-edge* value; the chain advances exactly one stage
   per clock with **no special evaluation ordering** (FR-078). The placeholder nets
   never enter `conflictedConductors` (empty `members`) and are unreachable by
-  `valueOfPin` (their key carries `#`, matching no `refdes.pin`), so buried state
+  `valueOfPin` (their key carries `#`, matching no `refdes.pin`) and by
+  `valueOfLane` (empty `lanes`, so no lane resolves to them — which is also why
+  the **probe cannot reach buried state**, FR-087c/FR-079c), so buried state
   stays invisible, as required.
 - **The 74HC165 model (the driving case, FR-079c).** Nexperia 74HC165 (Rev. 8,
   9 May 2025) Table 3, verified against the PDF: `PL`/ (pin 1) is an **asynchronous**
@@ -2589,10 +2654,22 @@ no sequential part could ever leave U.)
   new interactive built-in (an `INTERACTIONS` handler, §6.11) needs no scheduler
   change.
 - **Display view:** the engine publishes `state.sim = { valueOfPin(refdes,
-  pinName), conflictedConductors }` (transient, §6.10) consumed by the renderer
-  (§6.8) for indicator glyphs and red conflict strokes. `stop()` retains the
+  pinName), valueOfLane(lane), conflictedConductors }` (transient, §6.10) consumed
+  by the renderer (§6.8) for indicator glyphs and red conflict strokes, and by the
+  properties panel's probe sheet (§6.11, FR-087c). `stop()` retains the
   view so final values stay visible (FR-085); the store clears it on the next
-  design-modifying dispatch.
+  design-modifying dispatch. **`valueOfLane(lane)`** (FR-087c) is the conductor
+  analogue of `valueOfPin`: `buildSimulation` already receives lane-keyed nets
+  from `buildNets` (§6.6 — `wire:<id>`, `bus:<id>:<bit>`), so it builds a
+  `netOfLane` map from each net's **`lanes`** exactly as it builds `netOfPin` from
+  its `pins`, and returns `curr[net]`, or `VZ` for a lane on no net. It must key
+  on `lanes`, not `members`: a bus id in `members` spans one net per bit, so it
+  cannot identify a single value (the `lanes` field was added to the Net shape,
+  §6.6, for exactly this). It is the
+  only simulator change the probe needs: probing a wire or a bus bit was
+  previously impossible because only pin-keyed lookup was exposed. The
+  **test-vector panel publishes the same three-field view** when it holds a run
+  (§6.16, FR-115l), so the probe reads a held run and a live one identically.
 - **Error handling:** a behavior evaluation throw (a compiler bug, not author
   error — author errors are caught at preflight) stops the simulation with a
   message rather than killing the rAF loop.
@@ -2682,7 +2759,7 @@ no sequential part could ever leave U.)
   - File model: `FORMAT_VERSION` (**3** — v2 marked the `C` input symbol, FR-115e; **v3** adds the `io` column array and per-row `io` cell array, FR-115i; the v1→v2 migration is the identity, and v2→v3 adds empty `io:[]` to the column set and to each row), `serializeVectors(doc)`, `deserializeVectors(obj)` with a `migrate()` chain mirroring `model/persist.js` (§7.4); shape per §7.7. ROM content is loaded once before a run via `loadRomContents(design)` reused from `sim.js` (FR-114e), so ROM-backed combinational logic resolves.
   - `isStateful(design) → boolean` (was `hasClockGenerators`, generalized for FR-079d). True when the design carries any persistent state that must survive from one vector row to the next: any component whose `typeData.renderType` is `"clock"` **or** any component whose behavior declares a transparent latch (a `.L` output, FR-079d). It selects the **ordered/persistent** run path (FR-115e) in `runVectors`/`captureVectors` — so a latch's hold spans rows even in a clock-less design — and the dialog's sequential-mode notice. A separate `hasClockGenerators(design)` (the original `renderType==="clock"` scan) still gates the **clock-specific** machinery that only applies when a clock is present: the `C`-pulse columns in `deriveColumns` and the scripted-clock preamble. Both are pure, DOM-free design scans — deliberately not `buildSimulation(...).hasClocks()`, which would compile every behavior to answer a yes/no question; the latch test reads each in-use `typeData.behavior` for a `.L`-suffixed output (cheap string/compiled-shape check). (The clock scan was originally introduced for the FR-115g guard, now superseded.)
 
-**Panel (`chrome/dialogs.js` `testVectorsPanel({ store, dataDir })`).** A **docked, modeless panel** (FR-115b, reworked 2026-07-02 from the former `.dialog-overlay` modal so the schematic stays visible while authoring). It mounts into `#vec-panel`, the bottom-third host inside a now flex-column `#canvas-area` (canvas host on top, panel host below); opening reveals the host and shrinks the canvas box, which the `canvas.js` `ResizeObserver` refits automatically at the unchanged viewport — content keeps its scale/aspect, only the visible extent shrinks (§6.13) — and closing hides it so the canvas grows back. It exposes `open()`/`close()`/`isOpen()`/`releaseHold()` (FR-115l) and a header **✕/Close** control, and binds **no** Escape-to-close (Escape remains a canvas gesture). While open it sets `store.state.vectorPanelOpen`, imposing the FR-115h read-only lock (see toolbar/store wiring below). It renders an HTML `<table>` whose header comes from `deriveColumns(store.design)` — which includes the design's port columns (FR-115f) and bidirectional (io) columns (FR-115i) directly, so the panel and runner operate on `store.design` itself (no wrapper); any `warnings` it returns (FR-115a reconciliation mismatches — the former bidir-port skip warning is gone now that bidir ports bind as io columns, FR-115i) show in the notice line — and whose body is rows of `<select>`/`<input>` cells held in a 2-D ref array read back in `gather()` (the map-to-`{el}`-then-read pattern of the GAL pin rows). Buttons: **+ Row** (append a blank `emptyRow`) and **+Dup** (append `cloneRow(rows[rows.length-1])` — a copy of the highest-numbered row, falling back to `emptyRow` on an empty table, FR-115j), both clearing stale results like any cell edit; row removal is a per-row **✕** button in the table's trailing column (not a global "− Row"); **Run** → `runVectors` then paint each output cell — and each io **release** cell (FR-115i) — green/red (a failing cell shows its `actual`) and write an "N of M rows passed" summary line (FR-115d); **Run to Row** → the same with `through` set to the selected row, holding its state on the schematic (FR-115l, below); **Stop** → release the hold, enabled only while holding (FR-115l); **Capture** → `captureVectors` filling every row's expected cells (ordered pass for a sequential design, FR-115e); **sequential mode** (FR-115e): when `hasClockGenerators(store.design)`, a clock column's cell `<select>` offers `0`/`1`/`C` (per its `kind:"clock"` marker) and defaults to `C`, and a persistent notice line (`vec-mode`) states that rows run in order, state persists, and `C` pulses the clock — replacing the removed FR-115g guard; an **io** column's cell `<select>` (FR-115i) offers `0`/`1`/`H`/`L`/`X`, defaults to `X`, and styles by role (driving `0`/`1`, expected `H`/`L`, inert `X`); **Load**/**Save** → `openFileDialog` (§6.11) seeded at the **project root** (`store.state.project.dir`, FR-121h — identical to the former `dirOf(store.state.savePath)` under the flat project layout, and defined even for a not-yet-saved design) with default `<base>.tv`, then the design load/save API wrappers (`api.js`) — the `.tv` payload is JSON and rides the existing `/api/v1/design/{load,save}` endpoints (§6.4), which neither interpret nor extension-check the body. New `vec-*` CSS classes in `style.css` reuse the dialog primitives, the raised tray shadow, accent `#4a90d9`, error `#b00`, success `#1a7f37`.
+**Panel (`chrome/dialogs.js` `testVectorsPanel({ store, dataDir })`).** A **docked, modeless panel** (FR-115b, reworked 2026-07-02 from the former `.dialog-overlay` modal so the schematic stays visible while authoring). It mounts into `#vec-panel`, the bottom-third host inside a now flex-column `#canvas-area` (canvas host on top, panel host below); opening reveals the host and shrinks the canvas box, which the `canvas.js` `ResizeObserver` refits automatically at the unchanged viewport — content keeps its scale/aspect, only the visible extent shrinks (§6.13) — and closing hides it so the canvas grows back. It exposes `open()`/`close()`/`isOpen()`/`releaseHold()` (FR-115l) and a header **✕/Close** control, and binds **no** Escape-to-close (Escape remains a canvas gesture). While open it sets `store.state.vectorPanelOpen`, imposing the FR-115h read-only lock (see toolbar/store wiring below). It renders an HTML `<table>` whose header comes from `deriveColumns(store.design)` — which includes the design's port columns (FR-115f) and bidirectional (io) columns (FR-115i) directly, so the panel and runner operate on `store.design` itself (no wrapper); any `warnings` it returns (FR-115a reconciliation mismatches — the former bidir-port skip warning is gone now that bidir ports bind as io columns, FR-115i) show in the notice line — and whose body is rows of `<select>`/`<input>` cells held in a 2-D ref array read back in `gather()` (the map-to-`{el}`-then-read pattern of the GAL pin rows). Buttons: **+ Row** (append a blank `emptyRow`) and **+Dup** (append `cloneRow(rows[rows.length-1])` — a copy of the highest-numbered row, falling back to `emptyRow` on an empty table, FR-115j), both clearing stale results like any cell edit; row removal is a per-row **✕** button in the table's trailing column (not a global "− Row"); **Run** → `runVectors` then paint each output cell — and each io **release** cell (FR-115i) — green/red (a failing cell shows its `actual`) and write an "N of M rows passed" summary line (FR-115d); **Run to Row** → the same with `through` set to the selected row, holding its state on the schematic (FR-115l, below); **Stop** → release the hold, enabled only while holding (FR-115l); **Capture** → `captureVectors` filling every row's expected cells (ordered pass for a sequential design, FR-115e); **sequential mode** (FR-115e): when `hasClockGenerators(store.design)`, a clock column's cell `<select>` offers `0`/`1`/`C` (per its `kind:"clock"` marker) and defaults to `C`, and a persistent notice line (`vec-mode`) states that rows run in order, state persists, and `C` pulses the clock — replacing the removed FR-115g guard; an **io** column's cell `<select>` (FR-115i) offers `0`/`1`/`H`/`L`/`X`, defaults to `X`, and styles by role (driving `0`/`1`, expected `H`/`L`, inert `X`); **Load**/**Save** → `openFileDialog` (§6.11) seeded at the **project root** (`store.state.project.dir`, FR-121h — identical to the former `dirOf(store.state.savePath)` under the flat project layout, and defined even for a not-yet-saved design) with default `<base>.tv`, then the design load/save API wrappers (`api.js`) — the `.tv` payload is JSON and rides the existing `/api/v1/design/{load,save}` endpoints (§6.4), which neither interpret nor extension-check the body. New `vec-*` CSS classes in `style.css` reuse the dialog primitives, the raised tray shadow, accent `#4a90d9`, error `#b00`, success `#1a7f37`. **Colour rule:** pass/fail tints (`.vec-cell.pass` / `.vec-cell.fail`) are applied **only to body cells**, rebuilt by `renderBody` on every run — no `<th>` ever takes a result colour, and the rules are scoped `.vec-cell.*` so one cannot land there by accident. Consequently the **static group tints must stay clear of the result palette**: a header that resembles pass-green or fail-pink reads as a stuck result that no re-run clears. The io group tint was moved from warm beige to a cool lavender (`#ece9f7`) for exactly this reason (2026-07-27), the OUT group being pale blue; any future tint must pick a hue neither green nor pink.
 
 **Grouped hex cells in the panel (FR-115k).** The table is rendered from a **plan** per bucket rather than one cell per column: `planFor(kind)` walks the sorted columns and emits either a single-column item or a `bitGroups` item, the latter rendered as **one hex cell** (span 1) or as its `width` per-bit cells depending on a live `hexMode` map keyed `kind:refdes` (every group defaults to hex). The plan drives all three rows in step — the IN/OUT/IO span is the sum of the items' spans, the label row shows `base[w-1:0]` for a collapsed group, and the body renders one control per item — so header and body can never disagree; a radix toggle therefore re-renders `thead` as well as `tbody` (`render()` = `renderHead()` + `renderBody()`), a small change from the build-header-once shape. A hex cell is a text `<input>` (monospace, sized to `groupDigits`) committing on `change`: `groupFromHex` either writes the group's per-bit cells and normalizes the field text (`a5` → `A5`, `5` → `05`), or leaves the cells untouched and reports its `error` in the panel's error line with the field reverted — an invalid edit never half-writes a bus. An **io** group's cell pairs the field with a role `<select>` (Drive/Expect/Ignore, FR-115k); changing the role re-parses the current text under the new role (ignore → all `X`; an empty field defaults to `0` for drive, all-`X` for expect) and disables the field for ignore. `enforceHexModes()` runs after **Capture** and **Load** — the two paths that can produce cells with no hex form — and flips any affected group back to per-bit with a notice naming it; the manual toggle uses the same check and refuses with an error rather than rewriting cells. Run results paint per group: a grouped cell is green only when every bit passes, red otherwise with `got <hex>` from `groupActualHex`; an io group whose cells are drive is stimulus and stays unpainted, exactly as a per-bit drive cell is.
 
@@ -3273,6 +3350,10 @@ bus yields up to *w* nets:
   "name":       "N"                          // resolved signal name, or null
 }
 ```
+`buildNets` additionally returns a **`lanes`** array per net (§6.6, the per-bit
+keys `valueOfLane` needs, FR-087c), which `serializeDesign` **strips**: it is a
+simulation-time index, derivable from the design and ignored on load, so it stays
+out of the save file rather than enlarging every design on disk.
 
 ### 7.3 Data lifecycle (CRUD)
 - **Create:** instances by placement (FR-008/009/011) — each pin a wire later
@@ -3840,6 +3921,7 @@ the original greenfield plan, whose `sim/` root and never-created
 | FR-076a, FR-076b | §6.10, §6.11, §6.13, §7.2 | `toolbar.js`, `dialogs.js`, `statusbar.js`, `sim.js`, `store.js`, `model/design.js` |
 | FR-071g, FR-071h, FR-083a | §6.11, §6.13, §6.17 (refusal), §6.18 (comment lines), §8 | `builtins.js`, `canvas.js`, `sim.js`, `cgen.js`, `ndl.js` |
 | FR-087b | §6.9, §6.10, §6.11, §6.13 | `interaction.js`, `store.js`, `builtins.js`, `sim.js` |
+| FR-087c | §6.8, §6.9, §6.10, §6.11, §6.13 | `interaction.js`, `properties.js`, `toolbar.js`, `canvas.js`, `sim.js`, `store.js`, `dialogs.js`, `style.css` |
 | FR-088 | §6.6, §6.10, §6.11 | `model/design.js`, `commands.js`, `toolbar.js` |
 | FR-094, FR-094a, FR-095 | §6.14, §7.1a, §7.2 | `subdesign.js`, `builtins.js`, `model/design.js`, `model/netlist.js` |
 | FR-096 | §6.14, §7.2 | `model/design.js`, `dialogs.js` |

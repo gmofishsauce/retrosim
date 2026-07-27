@@ -7,6 +7,7 @@
 import { setOverrideCmd, setSwitchStateCmd, setPortPropsCmd, setLabelCmd, setBusNameCmd } from "../commands.js";
 import { getVertex } from "../model/design.js";
 import { portDirection } from "../model/subdesign.js";
+import { V0, V1, VU } from "../engine/galasm.js";
 
 function el(tag, className, text) {
   const e = document.createElement(tag);
@@ -19,6 +20,94 @@ function infoRow(label, value) {
   const row = el("div", "prop-row");
   row.append(el("span", "prop-label", label), el("span", "prop-value", value));
   return row;
+}
+
+// valueText renders a four-state net value for the probe (FR-087c/FR-077). An
+// absent reader (no simulation view yet) shows an em dash rather than a value.
+function valueText(v) {
+  if (v === V1) return "1";
+  if (v === V0) return "0";
+  if (v === VU) return "U";
+  return v === undefined ? "—" : "Z";
+}
+
+// probeReaders builds the probe sheet's rows for a target (FR-087c). Each row is
+// { label, read } — `read` is called on every canvas repaint to refresh the
+// value in place, so the DOM is built once and only text changes. Returns
+// { title, rows, hex } where `hex` (buses only) is a reader for the whole word.
+function probeReaders(design, target) {
+  const pinsOf = (refdes) =>
+    design.components.find((c) => c.refdes === refdes)?.typeData?.pins ?? [];
+
+  if (target.kind === "pin") {
+    const pin = pinsOf(target.refdes).find((p) => p.name === target.pin);
+    const role = pin?.role ? ` (${pin.role})` : "";
+    return {
+      title: `${labelOf(design, target.refdes)} ${target.pin}${role}`,
+      rows: [
+        { label: "value", read: (sim) => sim?.valueOfPin(target.refdes, target.pin) },
+      ],
+    };
+  }
+
+  if (target.kind === "wire") {
+    const lane = `wire:${target.id}`;
+    return {
+      title: "Wire",
+      rows: [{ label: "value", read: (sim) => sim?.valueOfLane(lane) }],
+      conflict: (sim) => !!sim?.conflictedConductors().has(target.id),
+    };
+  }
+
+  if (target.kind === "bus") {
+    const bus = design.buses.find((b) => b.id === target.id);
+    const width = bus?.width ?? target.width ?? 0;
+    // MSB-first, matching the hex convention of the test-vector panel (FR-115k).
+    const rows = [];
+    for (let i = width - 1; i >= 0; i--) {
+      const lane = `bus:${target.id}:${i}`;
+      rows.push({ label: `bit ${i}`, read: (sim) => sim?.valueOfLane(lane) });
+    }
+    return {
+      title: busLabel(bus ?? { id: target.id }),
+      rows,
+      conflict: (sim) => !!sim?.conflictedConductors().has(target.id),
+      // A digit with any U/Z bit is not determined, so it shows as '?'.
+      hex: (sim) => {
+        if (!sim) return "—";
+        let out = "";
+        for (let d = Math.ceil(width / 4) - 1; d >= 0; d--) {
+          let nib = 0;
+          let known = true;
+          for (let b = 3; b >= 0; b--) {
+            const i = d * 4 + b;
+            if (i >= width) continue;
+            const v = sim.valueOfLane(`bus:${target.id}:${i}`);
+            if (v !== V0 && v !== V1) known = false;
+            nib |= (v === V1 ? 1 : 0) << b;
+          }
+          out += known ? nib.toString(16).toUpperCase() : "?";
+        }
+        return out;
+      },
+    };
+  }
+
+  // Component body: every pin of the instance and its current value.
+  const pins = pinsOf(target.refdes);
+  return {
+    title: labelOf(design, target.refdes),
+    rows: pins.map((p) => ({
+      label: p.name,
+      read: (sim) => sim?.valueOfPin(target.refdes, p.name),
+    })),
+  };
+}
+
+// labelOf names an instance the way the rest of the UI does (FR-011b).
+function labelOf(design, refdes) {
+  const inst = design.components.find((c) => c.refdes === refdes);
+  return inst?.label ?? refdes;
 }
 
 // fmt renders a grid coordinate compactly (whole numbers bare, else two places).
@@ -141,9 +230,63 @@ function docSection(td) {
 
 // initProperties wires the panel to the store. Returns nothing; lives for the
 // app's lifetime.
-export function initProperties({ container, store }) {
+export function initProperties({ container, store, renderer = null }) {
+  let unsubProbe = null; // after-render subscription while a probe sheet is up
+
+  // renderProbe draws the probe sheet (FR-087c) and returns true when it did.
+  // It takes precedence over every selection sheet while a target is set. The
+  // value cells are built once and refreshed in place on each canvas repaint —
+  // the same frames the simulator already triggers — so the reading is live
+  // without polling and an idle design stays idle (FR-085).
+  function renderProbe(target) {
+    const design = store.design;
+    const { title, rows, hex, conflict } = probeReaders(design, target);
+    container.appendChild(el("div", "prop-title", title));
+    container.appendChild(el("div", "prop-probe-tag", "probe"));
+
+    const cells = rows.map(({ label, read }) => {
+      const row = el("div", "prop-row");
+      const value = el("span", "prop-value prop-probe-value");
+      row.append(el("span", "prop-label", label), value);
+      container.appendChild(row);
+      return { value, read };
+    });
+    let hexCell = null;
+    if (hex) {
+      const row = el("div", "prop-row");
+      hexCell = el("span", "prop-value prop-probe-value");
+      row.append(el("span", "prop-label", "hex"), hexCell);
+      container.appendChild(row);
+    }
+
+    // Conflict note (FR-082): a conductor whose net has disagreeing drivers
+    // renders red on the canvas; say so here too, since a probe reading of U on
+    // a conflicted net means something quite different from an ordinary U.
+    let conflictEl = null;
+    if (conflict) {
+      conflictEl = el("div", "prop-probe-conflict", "bus conflict on this net");
+      conflictEl.hidden = true;
+      container.appendChild(conflictEl);
+    }
+
+    const refresh = () => {
+      const sim = store.state.sim;
+      for (const c of cells) c.value.textContent = valueText(c.read(sim));
+      if (hexCell) hexCell.textContent = hex(sim);
+      if (conflictEl) conflictEl.hidden = !conflict(sim);
+    };
+    refresh();
+    unsubProbe = renderer?.onAfterRender(refresh) ?? null;
+    return true;
+  }
+
   function render() {
     container.replaceChildren();
+    // Drop any live-refresh subscription from a previous probe sheet before
+    // deciding what this render shows (FR-087c).
+    unsubProbe?.();
+    unsubProbe = null;
+    if (store.state.probe) return void renderProbe(store.state.probe);
     // The panel shows a single selected component; it is blank when the
     // selection is empty or holds more than one object (FR-020a/FR-016a).
     const sel = store.state.selection;

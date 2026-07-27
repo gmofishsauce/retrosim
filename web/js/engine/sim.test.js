@@ -125,6 +125,63 @@ test("unit delay: an N-inverter chain ripples one level per step (FR-078)", () =
   assert.equal(sim.hasClocks(), false);
 });
 
+test("valueOfLane reads a wire's net, the probe's conductor query (FR-087c)", () => {
+  const d = mkDesign();
+  place(d, "U1", CONST1);
+  place(d, "A-1", builtin("indicator"));
+  const wid = connect(d, ["U1", "Y"], ["A-1", "IN"]);
+
+  const sim = buildSimulation(d);
+  sim.step();
+  // The lane and the pin name the same net, so they must agree.
+  assert.equal(sim.valueOfLane(`wire:${wid}`), V1);
+  assert.equal(sim.valueOfLane(`wire:${wid}`), sim.valueOfPin("U1", "Y"));
+});
+
+test("valueOfLane reads Z for a lane on no net (FR-087c)", () => {
+  const d = mkDesign();
+  place(d, "U1", CONST1);
+  const sim = buildSimulation(d);
+  sim.step();
+  // An isolated conductor, and a lane that names nothing at all, both read Z —
+  // the same answer valueOfPin gives an unconnected pin.
+  assert.equal(sim.valueOfLane("wire:nosuchwire"), VZ);
+  assert.equal(sim.valueOfLane("bus:nosuchbus:0"), VZ);
+});
+
+test("valueOfLane reads one bit of a bus, and buried nodes stay invisible (FR-087c/FR-079c)", () => {
+  // A width-2 bus group-snapped to a two-pin output group: bit 0 driven 1,
+  // bit 1 driven 0, so the per-bit reads must differ.
+  const TWO = {
+    name: "TWOOUT",
+    renderType: "unit",
+    pins: [
+      { name: "Q0", side: "right", position: 1, direction: "out", group: "Q" },
+      { name: "Q1", side: "right", position: 2, direction: "out", group: "Q" },
+    ],
+    behavior: "Q0 = VCC\nQ1 = GND\n",
+  };
+  const d = mkDesign();
+  place(d, "U1", TWO);
+  const v0 = { id: "vb0", kind: "free", x: 0, y: 0 };
+  const v1 = { id: "vb1", kind: "free", x: 4, y: 0 };
+  d.vertices.push(v0, v1);
+  d.buses.push({
+    id: "b1",
+    width: 2,
+    path: [{ t: "node", v: v0.id }, { t: "node", v: v1.id }],
+    groupConnections: [{ vertex: v1.id, instance: "U1", group: "Q", bitMap: ["Q0", "Q1"] }],
+  });
+
+  const sim = buildSimulation(d);
+  sim.step();
+  assert.equal(sim.valueOfLane("bus:b1:0"), V1);
+  assert.equal(sim.valueOfLane("bus:b1:1"), V0);
+  // A buried node's synthetic key carries '#' and has no lane, so the probe
+  // cannot reach it (FR-079c stands unchanged).
+  assert.equal(sim.valueOfLane("wire:U1.#hidden"), VZ);
+});
+
 test("bus conflict: 0-vs-1 strong drivers → U, flagged conductors, one report (FR-082)", () => {
   const d = mkDesign();
   place(d, "U1", CONST1);

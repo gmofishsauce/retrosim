@@ -494,7 +494,8 @@ async function main() {
       onExport, // FR-119: File ▸ Export…
       onDesignProperties, // FR-076b: Edit ▸ Design Properties…
     });
-    initProperties({ container: document.getElementById("properties"), store });
+    // renderer: the probe sheet refreshes its values on canvas repaints (FR-087c).
+    initProperties({ container: document.getElementById("properties"), store, renderer });
     overlay.classList.add("hidden");
   } catch (err) {
     overlay.classList.add("error");

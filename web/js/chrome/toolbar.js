@@ -193,6 +193,13 @@ export function initToolbar({ container, store, interaction, fileops, projectops
   });
   container.appendChild(runBtn);
 
+  // Probe (FR-087c): shown only while the schematic carries live values — a
+  // running simulation or a held vector run. It supplants Select rather than
+  // being a fourth persistent tool, so it just sets the tool and back again.
+  const probeBtn = button("Probe", "Probe: click a point to read its logic state", () => {
+    interaction.setTool(store.state.tool === "probe" ? "select" : "probe");
+  });
+
   // Pause/step cluster (FR-076a): shown only while a run of a sequential
   // design is active; the step buttons work only while paused. Pause state is
   // engine-local (not store state), so the toggle handler refreshes the bar
@@ -207,7 +214,7 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     sim.stepCycle());
   const stepUnitBtn = iconButton(STEP_UNIT_ICON, "Step one unit (1 ns)", () =>
     sim.stepUnit());
-  container.append(pauseBtn, stepCycleBtn, stepUnitBtn);
+  container.append(pauseBtn, stepCycleBtn, stepUnitBtn, probeBtn);
 
   // Menu widget (FR-004a). createMenu builds a .menu (trigger + drop panel);
   // addItem appends a clickable item. Only one menu is open at a time; an
@@ -359,6 +366,14 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     pauseBtn.title = pauseTitle;
     pauseBtn.setAttribute("aria-label", pauseTitle);
     stepCycleBtn.disabled = stepUnitBtn.disabled = !pausedNow;
+    // Probe (FR-087c): present exactly while the schematic carries live values.
+    // This is also where the toolbar learns a run ended, so it drops probe mode
+    // back to Select there — the FR's "reverts when the run stops or the hold is
+    // released". The setTool re-enters refresh() once, with tool now "select".
+    const liveValues = simming || holding;
+    probeBtn.hidden = !liveValues;
+    probeBtn.classList.toggle("active", store.state.tool === "probe");
+    if (!liveValues && store.state.tool === "probe") interaction.setTool("select");
   }
 
   store.subscribe(refresh);

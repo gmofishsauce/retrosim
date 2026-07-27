@@ -41,7 +41,13 @@ function pickName(provenance, pins) {
 
 // buildNets returns one Net per electrical signal that has at least one connected
 // pin: { pins:[ "U3.Y0", … ], members:[ wireId|busId, … ],
+//        lanes:[ "wire:w3" | "bus:b1:2", … ],
 //        provenance:[ { bus, bit, name? }, … ], name }.
+// `members` are conductor ids, for highlighting whole conductors (FR-082);
+// `lanes` are the finer per-bit keys the union-find works in, so a single bus id
+// in `members` may appear on several nets while each of its lanes appears on
+// exactly one. Lanes are what let a caller ask "what is the value of THIS
+// conductor bit" (sim.js `valueOfLane`, FR-087c).
 // onWarn surfaces inconsistencies a loaded file may carry (e.g. an unequal-width
 // bus join, which FR-039a prevents at edit time but nothing re-checks on load);
 // the warning is never silently swallowed (§6.6).
@@ -173,16 +179,25 @@ export function buildNets(design, onWarn = (msg) => console.warn(msg)) {
   }
 
   const membersByRoot = new Map();
+  const lanesByRoot = new Map();
   const provByRoot = new Map();
   const addMember = (root, id) => {
     if (!membersByRoot.has(root)) membersByRoot.set(root, new Set());
     membersByRoot.get(root).add(id);
   };
-  for (const w of design.wires) addMember(uf.find(wireLane(w.id)), w.id);
+  const addLane = (root, lane) => {
+    if (!lanesByRoot.has(root)) lanesByRoot.set(root, []);
+    lanesByRoot.get(root).push(lane);
+  };
+  for (const w of design.wires) {
+    addMember(uf.find(wireLane(w.id)), w.id);
+    addLane(uf.find(wireLane(w.id)), wireLane(w.id));
+  }
   for (const b of design.buses) {
     for (let i = 0; i < b.width; i++) {
       const root = uf.find(busLane(b.id, i));
       addMember(root, b.id);
+      addLane(root, busLane(b.id, i));
       const name = b.bitNames && b.bitNames[i] != null ? b.bitNames[i] : undefined;
       if (!provByRoot.has(root)) provByRoot.set(root, []);
       provByRoot.get(root).push({ bus: b.id, bit: i, ...(name !== undefined ? { name } : {}) });
@@ -198,9 +213,10 @@ export function buildNets(design, onWarn = (msg) => console.warn(msg)) {
   for (const [root, pinSet] of pinsByRoot) {
     const pins = [...pinSet];
     const members = [...(membersByRoot.get(root) ?? [])];
+    const lanes = lanesByRoot.get(root) ?? [];
     const provenance = provByRoot.get(root) ?? [];
     const name = labelByRoot.get(root) ?? pickName(provenance, pins);
-    nets.push({ pins, members, provenance, name });
+    nets.push({ pins, members, lanes, provenance, name });
   }
   return nets;
 }

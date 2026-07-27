@@ -1481,6 +1481,7 @@ export function testVectorsPanel({ store, dataDir }) {
     held = true;
     store.setSim({
       valueOfPin: sim.valueOfPin,
+      valueOfLane: sim.valueOfLane, // so the probe reads a held run (FR-087c)
       conflictedConductors: sim.conflictedConductors,
     });
     store.setVectorHold(true);

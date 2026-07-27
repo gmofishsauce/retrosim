@@ -317,6 +317,21 @@ body {
 .prop-value { color: #111; }
 .prop-input { flex: 1 1 auto; width: 4rem; padding: 0.2rem; }
 .prop-row.overridden .prop-label { font-weight: 600; color: #1565c0; }
+/* Probe sheet (FR-087c): a tag marking the panel as a live reading rather than
+   a selection, and monospace values so a column of bits lines up. */
+.prop-probe-tag {
+  display: inline-block;
+  margin-bottom: 0.4rem;
+  padding: 0 0.35rem;
+  border-radius: 3px;
+  background: #4a90d9;
+  color: #fff;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.prop-probe-value { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 600; }
+.prop-probe-conflict { margin-top: 0.4rem; color: #b00; font-size: 0.8rem; font-weight: 600; }
 .prop-reset {
   flex: 0 0 auto;
   border: 1px solid #bbb;
@@ -556,10 +571,13 @@ body {
 .vec-corner { background: #f3f3f3; }
 .vec-cell.vec-out { background: #fafcff; }
 .vec-table th.vec-out { background: #eef3f8; }
-/* Bidirectional (io) three-state bus group (FR-115i). */
-.vec-group-io { background: #f5efe6; }
-.vec-cell.vec-io { background: #fffdf8; }
-.vec-table th.vec-io { background: #f5efe6; }
+/* Bidirectional (io) three-state bus group (FR-115i). Deliberately a COOL tint:
+   headers never carry result colors, so a header must not resemble one. The
+   former warm beige (#f5efe6) sat close enough to the fail pink (#fde7e9) that
+   an io header read as a stuck failure beside a passing green cell. */
+.vec-group-io { background: #ece9f7; }
+.vec-cell.vec-io { background: #fdfcff; }
+.vec-table th.vec-io { background: #ece9f7; }
 /* io cell role tints: driving (0/1), expected (H/L), inert (X). pass/fail below win. */
 .vec-cell.io-drive { background: #eaf4ea; }
 .vec-cell.io-expect { background: #fbf3df; }
