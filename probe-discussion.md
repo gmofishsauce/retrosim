@@ -1,9 +1,13 @@
-# Probe feature — parked discussion (2026-07-26)
+# Probe feature — design discussion (2026-07-26, decisions 2026-07-27)
 
-Status: **parked, no specs or code changed.** The decision was to build the
-prerequisite feature first — *run test vectors to a point and hold, for
-debugging* (issue 1 below) — and return to the probe afterward. The questions
-in "Decisions still open" are unanswered.
+Status: **unblocked; one question still open.** No specs or code changed yet.
+
+The prerequisite — *run test vectors to a point and hold* (issue 1 below) — was
+built and committed on 2026-07-26 as **FR-115l**, so a live simulation now
+survives a vector run for the probe to read. The decisions of 2026-07-27 are
+recorded inline below, each marked **DECIDED**. **Item 4 (what the panel shows
+per target type) was not covered and remains open** — it is the last thing
+needed before writing the FRs.
 
 ---
 
@@ -54,11 +58,11 @@ row. That's arguably a great debugging feature (it would light up indicators
 too), but it's a bigger change than the probe itself, and it interacts with
 FR-115c's "throwaway copy, never mutates the live design" guarantee.
 
-Recommendation at the time: spec the probe against the interactive run (FR-076)
-first, and treat "hold at row N" as a separate companion FR.
-
-**Decision taken: build the "run to row and hold" feature first.** The probe
-work resumes after it.
+**RESOLVED (2026-07-26).** The companion feature was built first and shipped as
+**FR-115l** — row selection, **Run to Row**, holding, an explicit **Stop** in
+both the panel and the toolbar, and a **"held"** application state (FR-073).
+A held vector run is exactly the state the probe is meant to be used in, so the
+probe's availability rule is simply **simulating (FR-076) or held (FR-115l)**.
 
 **2. The properties panel is defined as a pure function of the selection, and
 selection is locked and cleared during a run.**
@@ -105,7 +109,10 @@ existing `hitPin` → `hitJunction` → `hitSegment`/`hitBusSegment` →
 - **empty canvas** → clears the probe (or is a no-op — pick one; clearing
   recommended)
 
-**UNANSWERED.**
+**STILL OPEN** — not covered by the 2026-07-27 answers, and the last thing
+needed before the FRs can be written. The list above stands as the proposal; the
+**component body** case is the one worth a deliberate yes/no, since a whole-pin
+table is a much bigger panel than a single value.
 
 **5. Live or frozen?**
 
@@ -121,7 +128,12 @@ FR, so decide before writing it.
 On Stop, freeze the last values displayed, matching FR-085's existing "last
 values remain displayed until the design is next modified".
 
-**UNANSWERED.**
+**DECIDED (2026-07-27): live, and a blur during a paced run is acceptable.** The
+probe tracks the running circuit, updating each step/settle at render-frame
+rate. No history strip and no "last changed at" readout — the value being
+unreadable while a fast run streams past is understood and accepted; the probe
+earns its keep when paused, single-stepping (FR-076a), settled (FR-085), or
+held (FR-115l). Freeze-on-Stop as proposed.
 
 **6. One probe or several?**
 
@@ -129,7 +141,8 @@ One target at a time (clicking elsewhere retargets) fits the single properties
 panel and is the smaller feature. A multi-point watch list is a different UI.
 Proposal: spec one, with the list as a possible additive extension later.
 
-**UNANSWERED.**
+**DECIDED (2026-07-27): one probe for now.** Clicking elsewhere retargets. A
+multi-point watch list stays a possible later addition.
 
 **7. Probe vs. clicking an input switch.**
 
@@ -139,7 +152,15 @@ promise "inspect, don't touch", and reading a switch's driven value is useful �
 with toggling available by leaving probe mode. Needs confirmation, because it is
 a deliberate carve-out of FR-087a/FR-087b.
 
-**UNANSWERED.**
+**DECIDED (2026-07-27): the switch wins — the proposal was rejected.** A click
+on an input switch while probe mode is active still **toggles** it (FR-087a),
+exactly as it does without probe mode. Reason: a switch **already displays its
+own state** on the canvas, so probing one tells the user nothing they cannot
+already see, while losing the ability to change an input mid-inspection would be
+a real cost. So the rule is a carve-out from the carve-out: probe mode overrides
+the FR-087 selection lock for every other click target, but the interactive-input
+exception (FR-087a/FR-087b) survives it untouched. Interactive built-ins are
+therefore *never* probe targets; everything else is.
 
 ### Smaller notes
 
@@ -149,7 +170,10 @@ a deliberate carve-out of FR-087a/FR-087b.
   running. Open question: is Probe a *fourth modal tool* (mutually exclusive
   with Select, the only tool enabled during a run) or an independent toggle?
   Proposal: a mode that supplants Select and reverts to Select when turned off
-  or when the run stops, plus `Esc` to exit it (FR-004c). **UNANSWERED.**
+  or when the run stops, plus `Esc` to exit it (FR-004c).
+  **DECIDED (2026-07-27): as proposed** — Probe is a mode that supplants Select,
+  reverts to Select when turned off or when the run stops/hold is released, and
+  `Esc` exits it.
 - **Cursor.** Not a problem — `WIRE_CURSOR` in `interaction.js:109` already
   ships an inline SVG data-URI cursor with an explicit hotspot, so the
   arrow-plus-question-mark uses the same mechanism. One caveat worth recording:
@@ -158,6 +182,16 @@ a deliberate carve-out of FR-087a/FR-087b.
   pointer is scaled. For an arrow whose tip is at upper-left that is the same
   tradeoff the system arrow makes, so it is probably fine — but it runs against
   FR-025's stated rationale.
+  **DECIDED (2026-07-27): put the hotspot where it scales correctly — this
+  supersedes the original request's "hotspot at the arrow tip, at upper left".**
+  The hotspot is therefore the **image centre**, as FR-025 requires, and the
+  glyph is drawn *around* that point rather than hanging off a corner: the arrow
+  tip sits at the centre of the image with the arrow body trailing away from it,
+  and the question mark is placed clear of the body so the two read as one mark.
+  The visible aim point and the true active point then stay coincident under
+  macOS pointer scaling, which preserves the centre. (The precise glyph layout is
+  an implementation detail to settle at build time; the binding constraint is
+  centre hotspot = arrow tip.)
 - **Hierarchy.** A run simulates a *flattened* design. Probing an embedded
   sub-design IC can only show its interface pin values; its internals aren't on
   the sheet. State this rather than leave it implied.
@@ -165,19 +199,56 @@ a deliberate carve-out of FR-087a/FR-087b.
   74HC165's seven hidden stages) "are not probeable by an indicator". Probing
   them would be genuinely valuable for debugging, but it contradicts the spirit
   of that FR and would need an edit to it. Proposal: leave them out of v1.
-  **UNANSWERED.**
+  **DECIDED (2026-07-27): no access.** Buried nodes stay unprobeable, FR-079c is
+  not edited, and the probe reads only what is on a net.
 - **Non-goals to write in explicitly:** not in the fast engine (so FR-107 parity
   is untouched — the probe reads nothing the C engine must reproduce), not
   persisted, not undoable, doesn't mark the design modified, no effect on
-  netlist or NDL export.
+  netlist or NDL export. **DECIDED (2026-07-27): agreed, all of them.**
 - **Docs.** `docs/user.md` gets updated only after manual verification, per
   CLAUDE.md.
 
 ---
 
+## Settled shape of the feature (2026-07-27)
+
+Everything below is decided; only item 4 above is missing.
+
+- **Availability.** The Probe button appears in the top bar while the simulator
+  is **running** (FR-076) *or* a vector run is **held** (FR-115l) — one rule,
+  both states, since both are states in which the schematic shows live values.
+- **Mode.** Probe is a mode that **supplants Select** (the only tool enabled
+  under the locks) and reverts to Select when turned off, when the run stops, or
+  when the hold is released; `Esc` exits it.
+- **Cursor.** Inline SVG data-URI like `WIRE_CURSOR`, hotspot at the **image
+  centre** where pointer scaling preserves it, with the arrow tip drawn at that
+  centre point.
+- **Target.** **One** probe target at a time; clicking elsewhere retargets;
+  clicking empty canvas clears it.
+- **Reading.** **Live** — tracks the running circuit at render-frame rate,
+  blur during a fast paced run accepted — and **frozen** at the last values when
+  the run stops.
+- **Input switches are not probe targets.** A click on one still toggles it
+  (FR-087a/FR-087b); a switch already shows its own state. Probe mode overrides
+  the FR-087 selection lock for every *other* target.
+- **Scope limits.** Buried registered nodes (FR-079c) stay unreadable; an
+  embedded sub-design IC shows only its interface pin values; slow simulator
+  only (no fast-engine counterpart, FR-107 untouched); not persisted, not
+  undoable, never marks the design modified, no effect on netlist/NDL export.
+
 ## To resume
 
-Answer items 4, 5, 6, 7 and the button-placement question, then write the FRs
-(new FR under §3.19 near FR-087a/b, plus amendments to FR-004a, FR-020a, FR-087)
-and the design sections (§6.9 interaction/cursor, §6.11 chrome, §6.13
-`valueOfLane`), append the CHANGELOG line, then implement.
+1. Settle item 4 — the per-target-type display, in particular whether clicking a
+   component body shows a table of all its pins.
+2. Write the FRs: a new FR under §3.19 near FR-087a/b, plus amendments to
+   FR-004a (button inventory), FR-020a (the properties panel is no longer purely
+   selection-driven), FR-087 (probe clicks are a second exception to the
+   selection lock), and a cross-reference from FR-115l (probe available while
+   held).
+3. Design sections: §6.9 (interaction FSM, probe mode, cursor), §6.10 (the probe
+   target as transient store state), §6.11 (toolbar button, properties panel),
+   §6.13 (`valueOfLane` — the simulator exposes only `valueOfPin` today, so
+   probing a wire or bus bit needs this new query; nets are already lane-keyed
+   `wire:<id>` / `bus:<id>:<bit>` in `netlist.js`).
+4. CHANGELOG line, then implement, then `docs/user.md` after manual
+   verification.
