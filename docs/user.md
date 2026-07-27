@@ -25,7 +25,7 @@ KiCad-like.
 10. [Projects and files](#10-projects-and-files)
 11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
-13. [Simulation](#13-simulation) — including [Pausing and single-stepping](#pausing-and-single-stepping), [Console output](#console-output), [Test vectors](#test-vectors) — including [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
+13. [Simulation](#13-simulation) — including [Pausing and single-stepping](#pausing-and-single-stepping), [Probing a point](#probing-a-point), [Console output](#console-output), [Test vectors](#test-vectors) — including [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
 14. [If the server disconnects](#14-if-the-server-disconnects)
 15. [Keyboard and mouse reference](#15-keyboard-and-mouse-reference)
 
@@ -105,7 +105,10 @@ The window has four regions plus a status bar:
   `Export…`, `Refresh Types`), the **Edit** menu (`Undo`, `Redo`, `Copy`, `Paste`),
   the **View** menu (`Zoom In`, `Zoom Out`, `Fit to Screen`, `Console`), and the **Simulate**
   menu (`Test Vectors…`, `Generate C…`), followed by the tool buttons `Select`,
-  `Wire`, `Bus` and the `Run` button. Menu items with a standard keyboard shortcut
+  `Wire`, `Bus` and the `Run` button. Two more buttons appear when they apply:
+  the pause/step controls while a clocked run is active
+  ([Pausing and single-stepping](#pausing-and-single-stepping)), and `Probe`
+  whenever the schematic is showing live values ([Probing a point](#probing-a-point)). Menu items with a standard keyboard shortcut
   show it in the menu (see [§15](#15-keyboard-and-mouse-reference)). Click a menu to open it; click an item to run it, or
   press `Esc` / click elsewhere to dismiss it. The current **project** name, the
   current design name, and the tool mode are shown next to the buttons; an
@@ -119,7 +122,9 @@ The window has four regions plus a status bar:
 - **Canvas** (center): the grid drawing surface. Everything snaps to grid
   intersections.
 - **Properties panel** (right): shows the type data and per-instance overrides of
-  a single selected component (see [Per-instance overrides](#8-per-instance-overrides)).
+  a single selected component (see [Per-instance overrides](#8-per-instance-overrides)),
+  or, while a point is probed, that point's live logic state
+  ([Probing a point](#probing-a-point)).
 - **Status bar** (bottom): a **state tray** ("editing" / "simulating" / "paused" /
   "held") on the left, a **message tray** for occasional messages, and a
   **connection tray** showing "connected" / "disconnected".
@@ -914,9 +919,11 @@ Open, and changing the selection are all disabled. Pan, zoom, right-click
 recenter, Save, and Save As remain available. Starting a run clears the current selection and the message
 tray; stopping a run clears the message tray again. A click that would normally
 select an item instead shows "Editor is locked while the simulator is running" in
-the status bar and changes nothing (a click on empty canvas does nothing). The one
-exception is clicking an **interactive input** (the input switch), which changes
-its value live and re-evaluates the simulation.
+the status bar and changes nothing (a click on empty canvas does nothing). There are
+two exceptions: clicking an **interactive input** (the input switch), which
+changes its value live and re-evaluates the simulation; and clicking while
+[probe mode](#probing-a-point) is active, which reads the clicked point's state
+instead of reporting the lock. Neither changes the selection.
 
 ### Pausing and single-stepping
 
@@ -956,6 +963,52 @@ selector over the design's clock generators; changing it is undoable. A design
 saved before this feature exists simply uses its lowest-numbered clock until
 you set one. With a single clock — the usual case — you never need to think
 about any of this.
+
+### Probing a point
+
+Indicators only report the points you thought to instrument in advance, and
+adding one means editing the design. The **probe** reads any visible point
+without touching anything.
+
+Whenever the schematic is showing live values — a simulation running or paused,
+or a [held test-vector run](#holding-a-run-to-inspect-it) — a **Probe** button
+appears in the top bar. Click it and the cursor becomes an arrow with a question
+mark; click any point on the schematic and its logical state appears in the
+properties panel on the right:
+
+- a **pin** — its value, with its name and role from the part's type data;
+- a **wire** or a **junction** — the value of the net it belongs to;
+- a **bus** — every bit's value, listed most-significant first, plus the whole
+  word in hexadecimal;
+- a **component body** — a table of every pin of that instance and its value.
+
+Values read `0`, `1`, `U` (undefined) or `Z` (high-impedance), the same four
+states the simulator uses everywhere. A wire or bus whose net has a
+[bus conflict](#13-simulation) also says so, which matters because a `U` on a
+conflicted net means something quite different from an ordinary `U`.
+
+The reading is **live**: it tracks the circuit as the simulation advances. During
+a fast paced run the value will change faster than you can read it — that is
+expected. The probe earns its keep while **paused** or single-stepping, on a
+**settled** combinational design, and on a **held** vector run, which is where
+you can study a state at leisure.
+
+Notes:
+
+- **One point at a time.** Clicking somewhere else moves the probe there;
+  clicking empty canvas clears it.
+- **Input switches are not probe targets.** Clicking a switch still toggles it,
+  exactly as it does outside probe mode — a switch already draws its own state,
+  and being able to change an input mid-inspection is more useful than reading
+  back what you can already see.
+- **Leaving probe mode:** click **Probe** again, press **Esc**, or just stop the
+  run (or release the hold). The tool returns to Select. After a Stop the last
+  values stay frozen in the panel until you select something or edit the design.
+- The probe changes nothing: it never edits, never marks the design modified, and
+  is not saved. Probing an embedded sub-design shows its interface pins only —
+  its internals are not on this sheet. Registers a part keeps internally but
+  exposes on no pin (like the 74HC165's hidden shift stages) cannot be probed,
+  because the probe reads nets.
 
 ### Console output
 
@@ -1106,6 +1159,10 @@ no longer matches it.
 Holding is display-only. The design stays read-only, nothing is written back to
 it, and a held run is not a live simulation — you cannot step it or toggle
 switches. It runs on a throwaway copy, exactly like any other vector run.
+
+A held run is where the **[probe](#probing-a-point)** is most useful: the state
+sits still, so you can click around the schematic and read any point that the
+output columns don't assert.
 
 #### Bidirectional bus columns
 
@@ -1306,6 +1363,7 @@ clear message until then, without losing your work.
 | Double-click a text note | Edit its text |
 | Left-click input switch (while simulating) | Toggle its state `0 ↔ 1` |
 | Left-click any other item (while simulating) | Selection is locked — status bar shows "Editor is locked while the simulator is running" |
+| Left-click any point (in [probe mode](#probing-a-point)) | Show that point's logic state in the properties panel; empty canvas clears it |
 | Left-click a row number (test-vector panel) | Select that row for **Run to Row**; click again to deselect |
 
 **Keyboard**
@@ -1327,4 +1385,4 @@ clear message until then, without losing your work.
 | `Ctrl/Cmd+=` / `Ctrl/Cmd+-` | Zoom in / out (about the canvas center) |
 | `Space` (hold) | Pan with left-drag |
 | `Enter` / `Shift+Enter` (editing a text note) | Commit the note / insert a line break |
-| `Esc` | Cancel the current gesture / tool / selection / pending paste (or commit a text note being edited) |
+| `Esc` | Cancel the current gesture / tool / selection / pending paste (or commit a text note being edited); leaves [probe mode](#probing-a-point) |
