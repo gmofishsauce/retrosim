@@ -445,7 +445,7 @@
         ]
       },
       "overrides": {},
-      "switchState": "1",
+      "switchState": "0",
       "label": "/OE"
     },
     {
@@ -529,7 +529,7 @@
         ]
       },
       "overrides": {},
-      "switchState": "0",
+      "switchState": "1",
       "label": "OSA"
     },
     {
