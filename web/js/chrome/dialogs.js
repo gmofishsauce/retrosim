@@ -42,6 +42,58 @@ function joinPath(dir, name) {
   return dir.replace(/\/+$/, "") + "/" + name;
 }
 
+// POSIX path scraps used by the test-vector panel's document model (FR-115m);
+// the design-side equivalents live in model/persist.js (dirOf/baseOf).
+const baseName = (p) => p.split(/[\\/]/).pop();
+const dirOfPath = (p) => p.replace(/\/[^/]*$/, "") || "/";
+
+// tvPathFor is the pure name rule for the test-vector file a panel associates
+// itself with (FR-115m/FR-115a): the design's sibling `<base>.tv` at the project
+// root (FR-121h), falling back to the design's own directory and then to the
+// data root, and to the design's display name when it has never been saved.
+// Pure and DOM-free so it unit-tests beside applySaveExt.
+export function tvPathFor({ project = null, savePath = null, designName = "", dataDir = "" } = {}) {
+  const dir = project?.dir || (savePath ? dirOfPath(savePath) : dataDir) || "/";
+  const base = savePath ? baseName(savePath).replace(/\.[^.]*$/, "") : designName || "vectors";
+  return joinPath(dir, base + ".tv");
+}
+
+// confirmSaveDialog is the three-way unsaved-work prompt (FR-115m): the panel's
+// counterpart of the design's "Discard unsaved changes?" confirm, with the Save
+// choice a two-button confirm cannot offer. Resolves to "save" | "discard" |
+// "cancel"; Escape and the overlay's Cancel both mean cancel.
+export function confirmSaveDialog(name) {
+  return new Promise((resolve) => {
+    const overlay = el("div", "dialog-overlay");
+    const box = el("div", "dialog");
+    overlay.appendChild(box);
+    box.appendChild(el("div", "dialog-title", "Unsaved test vectors"));
+    box.appendChild(el("div", "dialog-path", `${name} has unsaved changes.`));
+
+    const buttons = el("div", "dialog-buttons");
+    buttons.append(
+      button("Cancel", () => done("cancel")),
+      button("Discard", () => done("discard")),
+      button("Save", () => done("save")),
+    );
+    box.appendChild(buttons);
+
+    function done(result) {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done("cancel");
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+  });
+}
+
 // chooseGroupDialog asks the user to pick one pin group when a bus width matches
 // more than one (FR-041b). Resolves to the chosen group name, or null on cancel.
 export function chooseGroupDialog(groups) {
@@ -1445,30 +1497,111 @@ export function openFileDialog({ mode, startPath, defaultName = "", title, exts 
 // direction, FR-115f); the user fills rows, Runs them against the slow simulator
 // (pass/fail per cell, FR-115d), Captures golden outputs, and Loads/Saves a `.tv`
 // sibling file (FR-115a). A clocked design runs sequentially (FR-115e). While the
-// panel is open the design is read-only (FR-115h). Returns { open, close, isOpen }.
+// panel is open the design is read-only (FR-115h). The panel edits one associated
+// `.tv` document (FR-115m): it binds the design's sibling name on open, auto-loads
+// it, saves back to it without a dialog, and guards a close that would lose edits.
+// Returns { open, close, isOpen, isDirty, releaseHold }.
 export function testVectorsPanel({ store, dataDir }) {
   const host = document.getElementById("vec-panel");
   let openFlag = false;
   let held = false; // this panel is publishing a held sim view (FR-115l)
   let holdListener = null; // build()'s hook to refresh its Stop button
+  // The document (FR-115m): the associated `.tv` path, whether the table has
+  // been edited since it was last written or read, the header element naming it,
+  // and build()'s handle to the load/save it owns (null when nothing is bound).
+  let docPath = null;
+  let docDirty = false;
+  let titleEl = null;
+  let ops = null;
   const isOpen = () => openFlag;
+  const isDirty = () => openFlag && docDirty;
+  const docName = () => (docPath ? baseName(docPath) : "These test vectors");
 
-  function open() {
-    if (openFlag) return;
-    openFlag = true;
-    host.hidden = false;
-    store.setVectorPanelOpen(true); // impose the read-only lock (FR-115h)
-    build();
+  // busy serializes the two async transitions (FR-115m): a second Simulate ▸ Test
+  // Vectors click while the auto-load is in flight, or while the unsaved-vectors
+  // prompt is up, must not start a second one.
+  let busy = false;
+
+  async function open() {
+    if (openFlag || busy) return;
+    busy = true;
+    try {
+      openFlag = true;
+      host.hidden = false;
+      store.setVectorPanelOpen(true); // impose the read-only lock (FR-115h)
+      build();
+      await adopt();
+    } finally {
+      busy = false;
+    }
   }
 
-  function close() {
-    if (!openFlag) return;
+  // close tears the panel down, guarding unsaved vector edits first (FR-115m).
+  // Returns false when the close was abandoned — the user cancelled, or the save
+  // they asked for failed — leaving the panel open and the document modified.
+  async function close() {
+    if (!openFlag) return true;
+    if (busy) return false; // a transition is already in flight
+    if (docDirty && ops) {
+      busy = true;
+      try {
+        const answer = await confirmSaveDialog(docName());
+        if (answer === "cancel") return false;
+        if (answer === "save" && !(await ops.save())) return false;
+      } finally {
+        busy = false;
+      }
+    }
     openFlag = false;
     clearHeld(); // the held display does not outlive the panel (FR-115l)
     holdListener = null; // the Stop button goes away with the panel's DOM
+    ops = null;
+    titleEl = null;
+    docPath = null;
+    docDirty = false;
     host.replaceChildren();
     host.hidden = true;
     store.setVectorPanelOpen(false);
+    return true;
+  }
+
+  // adopt binds the panel to the design's sibling `.tv` file and loads it when it
+  // already exists (FR-115m). Existence is probed by listing the directory rather
+  // than by loading and catching: a design with no vectors yet is the ordinary
+  // case and must not open with a 404 in the error line, while a file that is
+  // there but unreadable still reports through loadFrom.
+  async function adopt() {
+    docPath = tvPathFor({
+      project: store.state.project,
+      savePath: store.state.savePath,
+      designName: store.design.name,
+      dataDir,
+    });
+    docDirty = false;
+    refreshTitle();
+    if (!ops) return; // no bindable columns — nothing to load into
+    let found = false;
+    try {
+      const listing = await listDir(dirOfPath(docPath), ["tv"]);
+      found = listing.entries.some((e) => !e.isDir && e.name === baseName(docPath));
+    } catch (_) {
+      found = false; // unlistable directory: treat it as "no vectors yet"
+    }
+    if (found) await ops.loadFrom(docPath);
+  }
+
+  // refreshTitle names the document in the panel header, carrying the same `*`
+  // modified marker as the design-name indicator (FR-049a/FR-115m).
+  function refreshTitle() {
+    if (!titleEl) return;
+    const name = docPath ? baseName(docPath) : "(unsaved)";
+    titleEl.textContent = `Test Vectors — ${name}${docDirty ? " *" : ""}`;
+  }
+
+  function setDirty(flag) {
+    if (docDirty === flag) return;
+    docDirty = flag;
+    refreshTitle();
   }
 
   // hold publishes a finished run's retained simulation as the canvas display
@@ -1524,7 +1657,9 @@ export function testVectorsPanel({ store, dataDir }) {
     // Header: title + ✕ close. No Escape-to-close — Escape stays a canvas gesture
     // (FR-115b); the panel is dismissed by ✕ or by re-toggling the menu item.
     const header = el("div", "vec-header");
-    header.appendChild(el("div", "vec-title", "Test Vectors"));
+    titleEl = el("div", "vec-title"); // names the document (FR-115m)
+    header.appendChild(titleEl);
+    refreshTitle();
     const closeBtn = button("✕", close);
     closeBtn.classList.add("vec-close");
     closeBtn.title = "Close Test Vectors";
@@ -1725,7 +1860,7 @@ export function testVectorsPanel({ store, dataDir }) {
           td.classList.remove("io-drive", "io-expect", "io-inert");
           td.classList.add(ioRoleClass(sel.value));
         }
-        clearResults();
+        touch();
       });
       td.appendChild(sel);
       if (kind === "in") return td;
@@ -1771,7 +1906,7 @@ export function testVectorsPanel({ store, dataDir }) {
         // field is being edited under — an all-X expect group shows XX, not the
         // empty field its *ignore* classification would give.
         inp.value = groupToHex(sliceOf(row, kind, g), kind, asRole)?.text ?? "";
-        clearResults();
+        touch();
         return true;
       }
 
@@ -1858,7 +1993,7 @@ export function testVectorsPanel({ store, dataDir }) {
         const del = button("✕", () => {
           rows.splice(ri, 1);
           if (rows.length === 0) rows.push(emptyRow(columns));
-          clearResults();
+          touch();
           renderBody();
         });
         del.title = "Delete row";
@@ -1902,6 +2037,15 @@ export function testVectorsPanel({ store, dataDir }) {
       runResults = null;
       summary.textContent = "";
       renderBody();
+    }
+
+    // touch is what an edit to the table's *content* does (FR-115m): it marks the
+    // document modified and drops the now-stale results. Replacing the table from
+    // a file calls clearResults directly, so a load never dirties; presentational
+    // changes (radix toggle, row selection) call neither.
+    function touch() {
+      setDirty(true);
+      clearResults();
     }
 
     // --- actions ---
@@ -1955,7 +2099,7 @@ export function testVectorsPanel({ store, dataDir }) {
           row.out = cap.out[i];
           row.io = cap.io[i];
         });
-        clearResults();
+        touch(); // Capture rewrites the expected cells — an edit (FR-115m)
         // A captured U/Z bit lands as X and can leave a group with no hex form
         // (FR-115k); such a group falls back to per-bit rather than being edited.
         const dropped = enforceHexModes();
@@ -1966,44 +2110,65 @@ export function testVectorsPanel({ store, dataDir }) {
       }
     }
 
-    async function onSave() {
-      errEl.hidden = true;
-      const res = await openFileDialog({
-        mode: "save",
-        startPath: defaultDir(),
-        defaultName: defaultName(),
-        title: "Save test vectors (.tv)",
-        exts: ["tv"],
-        saveExt: "tv",
-      });
-      if (!res) return;
+    // writeTo writes the table to `path` and makes it the panel's document
+    // (FR-115m). Returns whether the write landed — the guarded close and Load
+    // both refuse to proceed on a failed save.
+    async function writeTo(path) {
       try {
-        await saveVectorFile(res.path, serializeVectors({ inputs: columns.inputs, outputs: columns.outputs, io: columns.io, rows }));
-        showNote(`Saved ${baseName(res.path)}`);
+        await saveVectorFile(path, serializeVectors({ inputs: columns.inputs, outputs: columns.outputs, io: columns.io, rows }));
+        docPath = path;
+        setDirty(false);
+        refreshTitle(); // Save As renames the document even when the flag did not move
+        showNote(`Saved ${baseName(path)}`);
+        return true;
       } catch (e) {
         showError(`cannot save: ${e.message}`);
+        return false;
       }
     }
 
-    async function onLoad() {
+    // Save writes the associated file outright: no dialog and no overwrite
+    // confirmation, the name having been chosen once already (FR-115m). Only a
+    // panel with no association at all (which adopt() precludes) falls back to
+    // Save As.
+    async function onSave() {
+      errEl.hidden = true;
+      return docPath ? writeTo(docPath) : onSaveAs();
+    }
+
+    // Save As picks a new name and re-points the association at it (FR-115m) —
+    // the file dialog, and its overwrite guard (FR-049b), belong here.
+    async function onSaveAs() {
       errEl.hidden = true;
       const res = await openFileDialog({
-        mode: "open",
-        startPath: defaultDir(),
-        title: "Open test vectors (.tv)",
+        mode: "save",
+        startPath: docPath ? dirOfPath(docPath) : dataDir,
+        defaultName: docPath ? baseName(docPath) : "vectors.tv",
+        title: "Save test vectors as (.tv)",
         exts: ["tv"],
+        saveExt: "tv",
       });
-      if (!res) return;
+      if (!res) return false;
+      return writeTo(res.path);
+    }
+
+    // loadFrom replaces the table from a `.tv` file and makes that file the
+    // panel's document (FR-115m). Shared by the Load button and the auto-load
+    // on open, so both reconcile, re-render, and report identically.
+    async function loadFrom(path) {
       try {
-        const obj = await loadVectorFile(res.path);
+        const obj = await loadVectorFile(path);
         const fileDoc = deserializeVectors(obj);
         const { rows: aligned, warnings } = reconcileVectors(fileDoc, columns);
         rows.length = 0;
         for (const r of aligned) rows.push(r);
         if (rows.length === 0) rows.push(emptyRow(columns));
-        clearResults();
+        clearResults(); // not touch(): a load is not an edit (FR-115m)
         runResults = null;
         summary.textContent = "";
+        docPath = path;
+        setDirty(false);
+        refreshTitle();
         // A loaded file may hold cells with no hex form (FR-115k) — those groups
         // show as bits.
         const dropped = enforceHexModes();
@@ -2012,18 +2177,43 @@ export function testVectorsPanel({ store, dataDir }) {
         if (warnings.length) {
           showNote(`Loaded with ${warnings.length} warning(s): ${warnings.join("; ")}${asBits}`);
         } else {
-          showNote(`Loaded ${baseName(res.path)}${asBits}`);
+          showNote(`Loaded ${baseName(path)}${asBits}`);
         }
+        return true;
       } catch (e) {
         showError(`cannot load: ${e.message}`);
+        return false;
       }
     }
+
+    async function onLoad() {
+      errEl.hidden = true;
+      // Loading over a modified document is guarded exactly as a close is
+      // (FR-115m) — it discards the table just as thoroughly.
+      if (docDirty) {
+        const answer = await confirmSaveDialog(docName());
+        if (answer === "cancel") return;
+        if (answer === "save" && !(await onSave())) return;
+      }
+      const res = await openFileDialog({
+        mode: "open",
+        startPath: docPath ? dirOfPath(docPath) : dataDir,
+        title: "Open test vectors (.tv)",
+        exts: ["tv"],
+      });
+      if (!res) return;
+      await loadFrom(res.path);
+    }
+
+    // Publish this build()'s document operations so open() can auto-load and
+    // close() can save without reaching into the table's closure (FR-115m).
+    ops = { loadFrom, save: onSave };
 
     // --- buttons ---
     const buttons = el("div", "dialog-buttons");
     const addBtn = button("+ Row", () => {
       rows.push(emptyRow(columns));
-      clearResults();
+      touch();
       renderBody();
     });
     // +Dup (FR-115j): append a copy of the highest-numbered row, so a working
@@ -2031,7 +2221,7 @@ export function testVectorsPanel({ store, dataDir }) {
     const dupBtn = button("+Dup", () => {
       const last = rows[rows.length - 1];
       rows.push(last ? cloneRow(last) : emptyRow(columns));
-      clearResults();
+      touch();
       renderBody();
     });
     dupBtn.title = "Duplicate the last row";
@@ -2057,26 +2247,11 @@ export function testVectorsPanel({ store, dataDir }) {
       stopBtn,
       button("Load", onLoad),
       button("Save", onSave),
+      button("Save As", onSaveAs),
     );
     box.appendChild(buttons);
 
     // --- helpers ---
-    // The `.tv` dialogs seed at the current project root (FR-121h) — the same
-    // directory the former dirOf(savePath) default produced under the flat
-    // layout, now defined even for a not-yet-saved design.
-    function defaultDir() {
-      if (store.state.project) return store.state.project.dir;
-      const sp = store.state.savePath;
-      return sp ? sp.replace(/\/[^/]*$/, "") || "/" : dataDir;
-    }
-    function defaultName() {
-      const sp = store.state.savePath;
-      const base = sp ? baseName(sp).replace(/\.[^.]*$/, "") : design.name || "vectors";
-      return base;
-    }
-    function baseName(p) {
-      return p.split(/[\\/]/).pop();
-    }
     function showError(msg) {
       errEl.textContent = msg;
       errEl.hidden = false;
@@ -2095,6 +2270,7 @@ export function testVectorsPanel({ store, dataDir }) {
   }
 
   // releaseHold is the toolbar's entry point to the same release the panel's
-  // Stop button performs (FR-115l); harmless when nothing is held.
-  return { open, close, isOpen, releaseHold: clearHeld };
+  // Stop button performs (FR-115l); harmless when nothing is held. isDirty is
+  // the page-unload guard's view of the document (FR-115m/FR-049a).
+  return { open, close, isOpen, isDirty, releaseHold: clearHeld };
 }

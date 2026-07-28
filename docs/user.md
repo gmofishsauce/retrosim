@@ -25,7 +25,7 @@ KiCad-like.
 10. [Projects and files](#10-projects-and-files)
 11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
-13. [Simulation](#13-simulation) — including [Pausing and single-stepping](#pausing-and-single-stepping), [Probing a point](#probing-a-point), [Console output](#console-output), [Test vectors](#test-vectors) — including [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
+13. [Simulation](#13-simulation) — including [Pausing and single-stepping](#pausing-and-single-stepping), [Probing a point](#probing-a-point), [Console output](#console-output), [Test vectors](#test-vectors) — including [The panel's test-vector file](#the-panels-test-vector-file) and [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
 14. [If the server disconnects](#14-if-the-server-disconnects)
 15. [Keyboard and mouse reference](#15-keyboard-and-mouse-reference)
 
@@ -1044,6 +1044,13 @@ which switches, indicators, and ports the columns correspond to. Choosing
 **Simulate ▸ Test Vectors…** again, or the **✕** in the panel's header, closes
 it. Both combinational and clocked (sequential) designs are supported.
 
+The panel is a small editor in its own right, and what it edits is a **test-vector
+file** named after your design (`<design>.tv`, beside it in the project). Opening
+the panel loads that file if it exists, so your vectors are where you left them;
+**Save** writes straight back to it; and closing with unsaved changes asks first.
+The panel's header shows the file name, with a `*` while there are unsaved
+changes. See *[The panel's test-vector file](#the-panels-test-vector-file)* below.
+
 While the panel is open the design is **read-only**: you can pan, zoom, Save,
 and Save As, but the editing commands (placing, wiring, moving, deleting, undo/redo,
 paste, property edits) are disabled — as they are while a simulation runs. The
@@ -1119,11 +1126,38 @@ Build the table and use the buttons:
   author a "golden" table from a circuit you believe is correct, which you can
   then edit. (It records whatever the circuit currently does, so eyeball the
   captured values; capturing a buggy circuit bakes in the bug.)
-- **Load** / **Save** read and write a **test-vector file** (`.tv`, stored beside
-  your design) through the same file browser as Open. Columns are matched back to
-  your switches, clocks, ports, and indicators by their internal designators, so
-  renaming a label never breaks a saved file; if the design's columns have changed
-  since the file was written, the mismatch is reported as a warning when you load.
+- **Save** writes the table back to the panel's own `.tv` file — no file browser,
+  no "overwrite?" question, because the file has a name already. **Save As** picks
+  a different name through the file browser and continues with *that* file.
+  **Load** opens another `.tv` file and likewise continues with it. See below.
+
+#### The panel's test-vector file
+
+Your vectors live in a `.tv` file beside your design, and the panel edits one such
+file at a time — the same way the main window edits one design.
+
+- **Opening** the panel binds it to `<design>.tv` in your project. If that file is
+  already there, it is loaded straight away, so closing and reopening the panel
+  brings your vectors back. If it isn't, you start with one blank row and the name
+  is still reserved: the first **Save** creates the file.
+- **Saving** writes that file directly. **Save As** writes a different name (and
+  the panel then edits *that* file), and **Load** switches to a file you pick.
+  Loading matches the file's columns back to your switches, clocks, ports, and
+  indicators by their internal designators, so renaming a label never breaks a
+  saved file; if the design's columns have changed since the file was written, the
+  mismatch is reported as a warning when you load — the rows that still line up
+  are kept.
+- The header reads e.g. `Test Vectors — cpu.tv`, with a trailing **`*`** once you
+  have edited a cell, added, duplicated, or deleted a row, or used **Capture**.
+  Switching a column between hex and bits, selecting a row, and running the table
+  are not edits and leave the `*` alone.
+- **Closing** the panel with a `*` showing asks **Save**, **Discard**, or
+  **Cancel** — Cancel leaves the panel open exactly as it was. Loading over unsaved
+  vectors asks the same question. Closing the browser tab with unsaved vectors gets
+  the usual browser warning, even if the design itself is saved.
+
+Each open starts fresh from the file, so if you save your design under a new name
+while the panel is open, close and reopen the panel to pick up the new name.
 
 #### Holding a run to inspect it
 

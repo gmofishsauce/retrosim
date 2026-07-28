@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   applySaveExt,
+  tvPathFor,
   galPartYaml,
   memDeviceYaml,
   pinGroupGeometryError,
@@ -95,6 +96,52 @@ test("applySaveExt leaves an empty name unchanged", () => {
 test("applySaveExt with a null saveExt appends nothing (§6.19 project prompt)", () => {
   assert.equal(applySaveExt("myproject", null), "myproject");
   assert.equal(applySaveExt("my.project", null), "my.project");
+});
+
+// --- tvPathFor (the test-vector panel's document name, FR-115m) ---
+
+test("tvPathFor binds the design's sibling .tv at the project root (FR-115m)", () => {
+  assert.equal(
+    tvPathFor({
+      project: { dir: "/designs/wut4" },
+      savePath: "/designs/wut4/cpu.json",
+      designName: "cpu",
+      dataDir: "/designs",
+    }),
+    "/designs/wut4/cpu.tv",
+  );
+});
+
+test("tvPathFor falls back to the design's own directory with no project", () => {
+  assert.equal(
+    tvPathFor({ savePath: "/designs/wut4/alu.json", designName: "alu", dataDir: "/designs" }),
+    "/designs/wut4/alu.tv",
+  );
+});
+
+test("tvPathFor uses the design name and data root for a never-saved design", () => {
+  assert.equal(
+    tvPathFor({ designName: "untitled-2026", dataDir: "/designs" }),
+    "/designs/untitled-2026.tv",
+  );
+  // No name at all still yields a usable document name.
+  assert.equal(tvPathFor({ dataDir: "/designs" }), "/designs/vectors.tv");
+});
+
+test("tvPathFor replaces the design extension rather than appending (FR-115m)", () => {
+  assert.equal(
+    tvPathFor({ project: { dir: "/p" }, savePath: "/p/counter.json" }),
+    "/p/counter.tv",
+  );
+  // A dotted base keeps everything but its last extension, like the save dialog.
+  assert.equal(tvPathFor({ project: { dir: "/p" }, savePath: "/p/v1.2.json" }), "/p/v1.2.tv");
+});
+
+test("tvPathFor tolerates a trailing slash on the project directory", () => {
+  assert.equal(
+    tvPathFor({ project: { dir: "/designs/wut4/" }, savePath: "/designs/wut4/cpu.json" }),
+    "/designs/wut4/cpu.tv",
+  );
 });
 
 // --- validateMemSpec (FR-114a/FR-114c) ---

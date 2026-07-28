@@ -223,9 +223,13 @@ async function main() {
   });
   document.getElementById("tool-mode").textContent = store.state.tool;
 
-  // Warn before discarding unsaved changes on tab close (FR-049a, §6.10).
+  // Warn before discarding unsaved changes on tab close (FR-049a, §6.10) —
+  // the design's, and the test-vector panel's document (FR-115m). The panel is
+  // constructed further down in main(), so the handler reads it through a
+  // hoisted binding that is null until then.
+  let vecPanel = null;
   window.addEventListener("beforeunload", (e) => {
-    if (store.state.dirty) e.preventDefault();
+    if (store.state.dirty || vecPanel?.isDirty()) e.preventDefault();
   });
 
   // Status bar (FR-072..FR-074); the state tray opens as "editing" (FR-073).
@@ -382,7 +386,10 @@ async function main() {
     const sim = createSim({ store, renderer, consolePanel }); // slow simulator (§6.13)
     // Simulate ▸ Test Vectors toggles the docked test-vector panel (FR-115b/
     // §6.16); opening it imposes the read-only lock (FR-115h).
-    const vecPanel = testVectorsPanel({ store, dataDir: defaults.dataDir });
+    vecPanel = testVectorsPanel({ store, dataDir: defaults.dataDir });
+    // Both halves of the toggle are async now (FR-115m): open auto-loads the
+    // design's `.tv` sibling, close may prompt to save it first — and a
+    // cancelled close simply leaves the panel open.
     const onTestVectors = () => (vecPanel.isOpen() ? vecPanel.close() : vecPanel.open());
     // Simulate ▸ Generate C… (FR-116/§6.17): emit the standalone C simulator —
     // the generated <design>.c plus verbatim copies of the fixed runtime pair —

@@ -19,6 +19,13 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-28 — Test-vector panel: it edits an associated `.tv` document
+What: the panel now associates itself with `<project dir>/<design base>.tv` when it opens, auto-loads that file if it exists, Saves straight to it (no dialog, no overwrite prompt), gains a Save As that re-points the association, shows the file name and a `*` in its header while modified, and prompts Save/Discard/Cancel when closed (or loaded over) while modified; the page-unload warning covers unsaved vectors too.
+Why: reported as "saving vectors a second time asks whether to overwrite". The cause was that there was no test-vector *document*: every Save went through the file dialog, so the second save hit the FR-049b overwrite guard on the name the first one had just written. The panel is a small app within the app and now behaves like one.
+Touches: FR-115m (new); FR-115a, FR-115b, FR-115h edited in place. Design §6.16 (new document-model paragraph, Load/Save/Save As, dependencies), §7.7, §10. Code in `web/js/chrome/dialogs.js`, `web/js/app.js`.
+
+---
+
 ## 2026-07-27 — Fix: 74F381 had its A3 and B2 pin numbers swapped
 What: `srv/components/74F381.yaml` gave A3 pin 18 and B2 pin 17; the datasheet connection diagram has A3 on 17 and B2 on 18. Corrected, and all 20 pins re-verified against the diagram (variant pins 13/14 as documented — Cout replaces /P, /G's pin is a no-connect).
 Why: found while investigating a reported B-input reversal, which turned out to be unrelated (a stale gate-level `74381` sub-design, since removed; the library part's equations verify 4096/4096 against an ALU reference and its function table matches the datasheet). Pin numbers are exporter-only (FR-062e), so simulation was never affected — but a netlist or PCB export would have been wrong. Note that FR-062e's completeness check cannot catch this class of error: a swap of two numbers still tiles 1..pincount exactly, so only a diagram comparison finds it. Same failure mode as the 74688 pin numbers fixed when FR-062e landed.
