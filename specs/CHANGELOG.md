@@ -19,6 +19,13 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-27 — Fix: 74F381 had its A3 and B2 pin numbers swapped
+What: `srv/components/74F381.yaml` gave A3 pin 18 and B2 pin 17; the datasheet connection diagram has A3 on 17 and B2 on 18. Corrected, and all 20 pins re-verified against the diagram (variant pins 13/14 as documented — Cout replaces /P, /G's pin is a no-connect).
+Why: found while investigating a reported B-input reversal, which turned out to be unrelated (a stale gate-level `74381` sub-design, since removed; the library part's equations verify 4096/4096 against an ALU reference and its function table matches the datasheet). Pin numbers are exporter-only (FR-062e), so simulation was never affected — but a netlist or PCB export would have been wrong. Note that FR-062e's completeness check cannot catch this class of error: a swap of two numbers still tiles 1..pincount exactly, so only a diagram comparison finds it. Same failure mode as the 74688 pin numbers fixed when FR-062e landed.
+Touches: no FR or design section (component data only). `srv/components/74F381.yaml`.
+
+---
+
 ## 2026-07-27 — Test-vector panel: retint the io group header away from the fail colour
 What: the bidirectional (io) column group's header tint moves from warm beige (`#f5efe6`) to a cool lavender (`#ece9f7`).
 Why: reported as "the column header turns pink on a failure and stays pink after the value is corrected". Investigated: headers never take result colours — `pass`/`fail` are applied only to body `<td>`s, which `renderBody` rebuilds on every run, and the CSS rules are scoped `.vec-cell.*` so a `<th>` cannot take one. The header was the **static** io group tint all along; it simply sat close enough to the fail pink (`#fde7e9`) to read as a stuck failure next to a passing green cell. Retinting removes the resemblance and so the confusion.

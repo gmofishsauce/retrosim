@@ -1,0 +1,1487 @@
+{
+  "formatVersion": 3,
+  "name": "test381",
+  "components": [
+    {
+      "refdes": "A-1",
+      "type": "type-switch",
+      "x": 65,
+      "y": 88,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "1",
+      "label": "A0"
+    },
+    {
+      "refdes": "A-2",
+      "type": "type-switch",
+      "x": 66,
+      "y": 90,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "1",
+      "label": "A1"
+    },
+    {
+      "refdes": "A-3",
+      "type": "type-switch",
+      "x": 65,
+      "y": 92,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "1",
+      "label": "A2"
+    },
+    {
+      "refdes": "A-4",
+      "type": "type-switch",
+      "x": 66,
+      "y": 94,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0",
+      "label": "A3"
+    },
+    {
+      "refdes": "A-5",
+      "type": "type-switch",
+      "x": 61,
+      "y": 95,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "1",
+      "label": "B0"
+    },
+    {
+      "refdes": "A-7",
+      "type": "type-switch",
+      "x": 63,
+      "y": 96,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "1",
+      "label": "B1"
+    },
+    {
+      "refdes": "A-8",
+      "type": "type-switch",
+      "x": 61,
+      "y": 97,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0",
+      "label": "B2"
+    },
+    {
+      "refdes": "A-9",
+      "type": "type-switch",
+      "x": 63,
+      "y": 98,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0",
+      "label": "B3"
+    },
+    {
+      "refdes": "A-10",
+      "type": "type-switch",
+      "x": 68,
+      "y": 105,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "1",
+      "label": "Cin"
+    },
+    {
+      "refdes": "A-11",
+      "type": "type-switch",
+      "x": 61,
+      "y": 101,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "1",
+      "label": "S0"
+    },
+    {
+      "refdes": "A-12",
+      "type": "type-switch",
+      "x": 63,
+      "y": 102,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "1",
+      "label": "S1"
+    },
+    {
+      "refdes": "A-13",
+      "type": "type-switch",
+      "x": 61,
+      "y": 103,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0",
+      "label": "S2"
+    },
+    {
+      "refdes": "A-14",
+      "type": "type-indicator",
+      "x": 90,
+      "y": 89,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-15",
+      "type": "type-indicator",
+      "x": 92,
+      "y": 89,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-16",
+      "type": "type-indicator",
+      "x": 94,
+      "y": 89,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-17",
+      "type": "type-indicator",
+      "x": 96,
+      "y": 89,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-18",
+      "type": "type-indicator",
+      "x": 98,
+      "y": 89,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "U1",
+      "type": "type-74F381",
+      "x": 81,
+      "y": 90,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-74F381",
+        "name": "74F381",
+        "renderType": "unit",
+        "width": 6,
+        "height": 17,
+        "pins": [
+          {
+            "name": "A0",
+            "side": "left",
+            "position": 2,
+            "direction": "in",
+            "number": 3,
+            "desc": "operand A bit 0 (LSB)"
+          },
+          {
+            "name": "A1",
+            "side": "left",
+            "position": 3,
+            "direction": "in",
+            "number": 1,
+            "desc": "operand A bit 1"
+          },
+          {
+            "name": "A2",
+            "side": "left",
+            "position": 4,
+            "direction": "in",
+            "number": 19,
+            "desc": "operand A bit 2"
+          },
+          {
+            "name": "A3",
+            "side": "left",
+            "position": 5,
+            "direction": "in",
+            "number": 18,
+            "desc": "operand A bit 3 (MSB)"
+          },
+          {
+            "name": "B0",
+            "side": "left",
+            "position": 7,
+            "direction": "in",
+            "number": 4,
+            "desc": "operand B bit 0 (LSB)"
+          },
+          {
+            "name": "B1",
+            "side": "left",
+            "position": 8,
+            "direction": "in",
+            "number": 2,
+            "desc": "operand B bit 1"
+          },
+          {
+            "name": "B2",
+            "side": "left",
+            "position": 9,
+            "direction": "in",
+            "number": 17,
+            "desc": "operand B bit 2"
+          },
+          {
+            "name": "B3",
+            "side": "left",
+            "position": 10,
+            "direction": "in",
+            "number": 16,
+            "desc": "operand B bit 3 (MSB)"
+          },
+          {
+            "name": "S0",
+            "side": "left",
+            "position": 12,
+            "direction": "in",
+            "number": 5,
+            "desc": "function select bit 0"
+          },
+          {
+            "name": "S1",
+            "side": "left",
+            "position": 13,
+            "direction": "in",
+            "number": 6,
+            "desc": "function select bit 1"
+          },
+          {
+            "name": "S2",
+            "side": "left",
+            "position": 14,
+            "direction": "in",
+            "number": 7,
+            "desc": "function select bit 2"
+          },
+          {
+            "name": "Cn",
+            "side": "left",
+            "position": 16,
+            "direction": "in",
+            "number": 15,
+            "desc": "carry input (active high)"
+          },
+          {
+            "name": "F0",
+            "side": "right",
+            "position": 2,
+            "direction": "out",
+            "number": 8,
+            "desc": "function output bit 0 (LSB)"
+          },
+          {
+            "name": "F1",
+            "side": "right",
+            "position": 4,
+            "direction": "out",
+            "number": 9,
+            "desc": "function output bit 1"
+          },
+          {
+            "name": "F2",
+            "side": "right",
+            "position": 6,
+            "direction": "out",
+            "number": 11,
+            "desc": "function output bit 2"
+          },
+          {
+            "name": "F3",
+            "side": "right",
+            "position": 8,
+            "direction": "out",
+            "number": 12,
+            "desc": "function output bit 3 (MSB)"
+          },
+          {
+            "name": "Cout",
+            "side": "right",
+            "position": 12,
+            "direction": "out",
+            "number": 14,
+            "desc": "ripple carry output (variant; bit-4 arithmetic carry)"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "A",
+            "pins": [
+              "A0",
+              "A1",
+              "A2",
+              "A3"
+            ]
+          },
+          {
+            "name": "B",
+            "pins": [
+              "B0",
+              "B1",
+              "B2",
+              "B3"
+            ]
+          },
+          {
+            "name": "S",
+            "pins": [
+              "S0",
+              "S1",
+              "S2"
+            ]
+          },
+          {
+            "name": "F",
+            "pins": [
+              "F0",
+              "F1",
+              "F2",
+              "F3"
+            ]
+          }
+        ],
+        "delays": {
+          "tpd_ab_cout": 10,
+          "tpd_ab_f": 10,
+          "tpd_cn_cout": 8,
+          "tpd_cn_f": 8,
+          "tpd_s_f": 8
+        },
+        "behavior": "; 74F381 — 4-bit ALU, A0/B0/F0 = LSB. Combinational (no clock).\n;\n; Physical-level GALasm: '/' is the complement operator and a signal name is\n; this file's pin name (all pins active-high here, so no '/' prefixes). ':+:'\n; is the extended-dialect XOR operator (FR-079a); this part models a 74-series\n; chip, so it declares no `gal:` and uses the extended dialect.\n;\n; Function select (S0 S1 S2), from the datasheet Function Select Table:\n;   L L L  Clear   (F = 0000)\n;   H L L  B minus A     (B + /A + Cn)\n;   L H L  A minus B     (A + /B + Cn)\n;   H H L  A plus B      (A + B + Cn)\n;   L L H  A XOR B\n;   H L H  A OR B\n;   L H H  A AND B\n;   H H H  Preset  (F = 1111)\n; The two subtract modes need Cn=1 (a forced carry) to make a true 2's-complement\n; difference, per the datasheet note.\n;\n; Each output bit is written  Fn = <half-sum SOP> :+: <carry-in SOP>  so the\n; mode-selected half-sum stays a tiny sum-of-products and only the ripple carry\n; grows (cf. 74283). The half-sum is Xn XOR Yn for add/xor, its complement for\n; the subtracts (Xn XOR /Yn), An+Bn for OR, An*Bn for AND, 1 for preset, and 0\n; for clear; the carry-in term is gated to the three arithmetic modes only, so\n; it is 0 (and Fn = half-sum) in the logic/clear/preset modes. Cout is the\n; bit-4 carry of the selected arithmetic operation and 0 in the non-arithmetic\n; modes (this variant's ripple-carry output; the real 74F381 has /G and /P\n; instead). Equations were machine-generated and verified against the ALU\n; reference for all 4096 (A, B, S0..S2, Cn) input combinations.\nF0 = S0*S1*/S2*A0*/B0 + S0*S1*/S2*/A0*B0 + /S0*/S1*S2*A0*/B0 + /S0*/S1*S2*/A0*B0 + /S0*S1*/S2*A0*B0 + /S0*S1*/S2*/A0*/B0 + S0*/S1*/S2*A0*B0 + S0*/S1*/S2*/A0*/B0 + S0*/S1*S2*A0 + S0*/S1*S2*B0 + /S0*S1*S2*A0*B0 + S0*S1*S2 :+: S0*S1*/S2*Cn + /S0*S1*/S2*Cn + S0*/S1*/S2*Cn\nF1 = S0*S1*/S2*A1*/B1 + S0*S1*/S2*/A1*B1 + /S0*/S1*S2*A1*/B1 + /S0*/S1*S2*/A1*B1 + /S0*S1*/S2*A1*B1 + /S0*S1*/S2*/A1*/B1 + S0*/S1*/S2*A1*B1 + S0*/S1*/S2*/A1*/B1 + S0*/S1*S2*A1 + S0*/S1*S2*B1 + /S0*S1*S2*A1*B1 + S0*S1*S2 :+: S0*S1*/S2*A0*B0 + S0*S1*/S2*A0*Cn + S0*S1*/S2*B0*Cn + /S0*S1*/S2*A0*/B0 + /S0*S1*/S2*A0*Cn + /S0*S1*/S2*/B0*Cn + S0*/S1*/S2*B0*/A0 + S0*/S1*/S2*B0*Cn + S0*/S1*/S2*/A0*Cn\nF2 = S0*S1*/S2*A2*/B2 + S0*S1*/S2*/A2*B2 + /S0*/S1*S2*A2*/B2 + /S0*/S1*S2*/A2*B2 + /S0*S1*/S2*A2*B2 + /S0*S1*/S2*/A2*/B2 + S0*/S1*/S2*A2*B2 + S0*/S1*/S2*/A2*/B2 + S0*/S1*S2*A2 + S0*/S1*S2*B2 + /S0*S1*S2*A2*B2 + S0*S1*S2 :+: S0*S1*/S2*A1*B1 + S0*S1*/S2*A1*A0*B0 + S0*S1*/S2*B1*A0*B0 + S0*S1*/S2*A0*A1*Cn + S0*S1*/S2*A0*B1*Cn + S0*S1*/S2*B0*A1*Cn + S0*S1*/S2*B0*B1*Cn + /S0*S1*/S2*A1*/B1 + /S0*S1*/S2*A1*A0*/B0 + /S0*S1*/S2*/B1*A0*/B0 + /S0*S1*/S2*A0*A1*Cn + /S0*S1*/S2*A0*/B1*Cn + /S0*S1*/S2*/B0*A1*Cn + /S0*S1*/S2*/B0*/B1*Cn + S0*/S1*/S2*B1*/A1 + S0*/S1*/S2*B1*B0*/A0 + S0*/S1*/S2*/A1*B0*/A0 + S0*/S1*/S2*B0*B1*Cn + S0*/S1*/S2*B0*/A1*Cn + S0*/S1*/S2*/A0*B1*Cn + S0*/S1*/S2*/A0*/A1*Cn\nF3 = S0*S1*/S2*A3*/B3 + S0*S1*/S2*/A3*B3 + /S0*/S1*S2*A3*/B3 + /S0*/S1*S2*/A3*B3 + /S0*S1*/S2*A3*B3 + /S0*S1*/S2*/A3*/B3 + S0*/S1*/S2*A3*B3 + S0*/S1*/S2*/A3*/B3 + S0*/S1*S2*A3 + S0*/S1*S2*B3 + /S0*S1*S2*A3*B3 + S0*S1*S2 :+: S0*S1*/S2*A2*B2 + S0*S1*/S2*A2*A1*B1 + S0*S1*/S2*B2*A1*B1 + S0*S1*/S2*A1*A2*A0*B0 + S0*S1*/S2*A1*B2*A0*B0 + S0*S1*/S2*B1*A2*A0*B0 + S0*S1*/S2*B1*B2*A0*B0 + S0*S1*/S2*A0*A1*A2*Cn + S0*S1*/S2*A0*A1*B2*Cn + S0*S1*/S2*A0*B1*A2*Cn + S0*S1*/S2*A0*B1*B2*Cn + S0*S1*/S2*B0*A1*A2*Cn + S0*S1*/S2*B0*A1*B2*Cn + S0*S1*/S2*B0*B1*A2*Cn + S0*S1*/S2*B0*B1*B2*Cn + /S0*S1*/S2*A2*/B2 + /S0*S1*/S2*A2*A1*/B1 + /S0*S1*/S2*/B2*A1*/B1 + /S0*S1*/S2*A1*A2*A0*/B0 + /S0*S1*/S2*A1*/B2*A0*/B0 + /S0*S1*/S2*/B1*A2*A0*/B0 + /S0*S1*/S2*/B1*/B2*A0*/B0 + /S0*S1*/S2*A0*A1*A2*Cn + /S0*S1*/S2*A0*A1*/B2*Cn + /S0*S1*/S2*A0*/B1*A2*Cn + /S0*S1*/S2*A0*/B1*/B2*Cn + /S0*S1*/S2*/B0*A1*A2*Cn + /S0*S1*/S2*/B0*A1*/B2*Cn + /S0*S1*/S2*/B0*/B1*A2*Cn + /S0*S1*/S2*/B0*/B1*/B2*Cn + S0*/S1*/S2*B2*/A2 + S0*/S1*/S2*B2*B1*/A1 + S0*/S1*/S2*/A2*B1*/A1 + S0*/S1*/S2*B1*B2*B0*/A0 + S0*/S1*/S2*B1*/A2*B0*/A0 + S0*/S1*/S2*/A1*B2*B0*/A0 + S0*/S1*/S2*/A1*/A2*B0*/A0 + S0*/S1*/S2*B0*B1*B2*Cn + S0*/S1*/S2*B0*B1*/A2*Cn + S0*/S1*/S2*B0*/A1*B2*Cn + S0*/S1*/S2*B0*/A1*/A2*Cn + S0*/S1*/S2*/A0*B1*B2*Cn + S0*/S1*/S2*/A0*B1*/A2*Cn + S0*/S1*/S2*/A0*/A1*B2*Cn + S0*/S1*/S2*/A0*/A1*/A2*Cn\nCout = S0*S1*/S2*A3*B3 + S0*S1*/S2*A3*A2*B2 + S0*S1*/S2*B3*A2*B2 + S0*S1*/S2*A2*A3*A1*B1 + S0*S1*/S2*A2*B3*A1*B1 + S0*S1*/S2*B2*A3*A1*B1 + S0*S1*/S2*B2*B3*A1*B1 + S0*S1*/S2*A1*A2*A3*A0*B0 + S0*S1*/S2*A1*A2*B3*A0*B0 + S0*S1*/S2*A1*B2*A3*A0*B0 + S0*S1*/S2*A1*B2*B3*A0*B0 + S0*S1*/S2*B1*A2*A3*A0*B0 + S0*S1*/S2*B1*A2*B3*A0*B0 + S0*S1*/S2*B1*B2*A3*A0*B0 + S0*S1*/S2*B1*B2*B3*A0*B0 + S0*S1*/S2*A0*A1*A2*A3*Cn + S0*S1*/S2*A0*A1*A2*B3*Cn + S0*S1*/S2*A0*A1*B2*A3*Cn + S0*S1*/S2*A0*A1*B2*B3*Cn + S0*S1*/S2*A0*B1*A2*A3*Cn + S0*S1*/S2*A0*B1*A2*B3*Cn + S0*S1*/S2*A0*B1*B2*A3*Cn + S0*S1*/S2*A0*B1*B2*B3*Cn + S0*S1*/S2*B0*A1*A2*A3*Cn + S0*S1*/S2*B0*A1*A2*B3*Cn + S0*S1*/S2*B0*A1*B2*A3*Cn + S0*S1*/S2*B0*A1*B2*B3*Cn + S0*S1*/S2*B0*B1*A2*A3*Cn + S0*S1*/S2*B0*B1*A2*B3*Cn + S0*S1*/S2*B0*B1*B2*A3*Cn + S0*S1*/S2*B0*B1*B2*B3*Cn + /S0*S1*/S2*A3*/B3 + /S0*S1*/S2*A3*A2*/B2 + /S0*S1*/S2*/B3*A2*/B2 + /S0*S1*/S2*A2*A3*A1*/B1 + /S0*S1*/S2*A2*/B3*A1*/B1 + /S0*S1*/S2*/B2*A3*A1*/B1 + /S0*S1*/S2*/B2*/B3*A1*/B1 + /S0*S1*/S2*A1*A2*A3*A0*/B0 + /S0*S1*/S2*A1*A2*/B3*A0*/B0 + /S0*S1*/S2*A1*/B2*A3*A0*/B0 + /S0*S1*/S2*A1*/B2*/B3*A0*/B0 + /S0*S1*/S2*/B1*A2*A3*A0*/B0 + /S0*S1*/S2*/B1*A2*/B3*A0*/B0 + /S0*S1*/S2*/B1*/B2*A3*A0*/B0 + /S0*S1*/S2*/B1*/B2*/B3*A0*/B0 + /S0*S1*/S2*A0*A1*A2*A3*Cn + /S0*S1*/S2*A0*A1*A2*/B3*Cn + /S0*S1*/S2*A0*A1*/B2*A3*Cn + /S0*S1*/S2*A0*A1*/B2*/B3*Cn + /S0*S1*/S2*A0*/B1*A2*A3*Cn + /S0*S1*/S2*A0*/B1*A2*/B3*Cn + /S0*S1*/S2*A0*/B1*/B2*A3*Cn + /S0*S1*/S2*A0*/B1*/B2*/B3*Cn + /S0*S1*/S2*/B0*A1*A2*A3*Cn + /S0*S1*/S2*/B0*A1*A2*/B3*Cn + /S0*S1*/S2*/B0*A1*/B2*A3*Cn + /S0*S1*/S2*/B0*A1*/B2*/B3*Cn + /S0*S1*/S2*/B0*/B1*A2*A3*Cn + /S0*S1*/S2*/B0*/B1*A2*/B3*Cn + /S0*S1*/S2*/B0*/B1*/B2*A3*Cn + /S0*S1*/S2*/B0*/B1*/B2*/B3*Cn + S0*/S1*/S2*B3*/A3 + S0*/S1*/S2*B3*B2*/A2 + S0*/S1*/S2*/A3*B2*/A2 + S0*/S1*/S2*B2*B3*B1*/A1 + S0*/S1*/S2*B2*/A3*B1*/A1 + S0*/S1*/S2*/A2*B3*B1*/A1 + S0*/S1*/S2*/A2*/A3*B1*/A1 + S0*/S1*/S2*B1*B2*B3*B0*/A0 + S0*/S1*/S2*B1*B2*/A3*B0*/A0 + S0*/S1*/S2*B1*/A2*B3*B0*/A0 + S0*/S1*/S2*B1*/A2*/A3*B0*/A0 + S0*/S1*/S2*/A1*B2*B3*B0*/A0 + S0*/S1*/S2*/A1*B2*/A3*B0*/A0 + S0*/S1*/S2*/A1*/A2*B3*B0*/A0 + S0*/S1*/S2*/A1*/A2*/A3*B0*/A0 + S0*/S1*/S2*B0*B1*B2*B3*Cn + S0*/S1*/S2*B0*B1*B2*/A3*Cn + S0*/S1*/S2*B0*B1*/A2*B3*Cn + S0*/S1*/S2*B0*B1*/A2*/A3*Cn + S0*/S1*/S2*B0*/A1*B2*B3*Cn + S0*/S1*/S2*B0*/A1*B2*/A3*Cn + S0*/S1*/S2*B0*/A1*/A2*B3*Cn + S0*/S1*/S2*B0*/A1*/A2*/A3*Cn + S0*/S1*/S2*/A0*B1*B2*B3*Cn + S0*/S1*/S2*/A0*B1*B2*/A3*Cn + S0*/S1*/S2*/A0*B1*/A2*B3*Cn + S0*/S1*/S2*/A0*B1*/A2*/A3*Cn + S0*/S1*/S2*/A0*/A1*B2*B3*Cn + S0*/S1*/S2*/A0*/A1*B2*/A3*Cn + S0*/S1*/S2*/A0*/A1*/A2*B3*Cn + S0*/S1*/S2*/A0*/A1*/A2*/A3*Cn\n",
+        "description": "4-bit ALU / function generator (74F381 function set) with ripple carry-out",
+        "datasheet": {
+          "vendor": "Fairchild Semiconductor",
+          "title": "74F381 4-Bit Arithmetic Logic Unit",
+          "rev": "DS009528, May 1988 (revised August 1999)",
+          "url": "https://media.digikey.com/pdf/Data%20Sheets/Fairchild%20PDFs/74F381.pdf"
+        },
+        "physical": {
+          "package": "DIP-20",
+          "pincount": 20,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 20
+            },
+            {
+              "name": "GND",
+              "number": 10
+            }
+          ],
+          "nc": [
+            13
+          ]
+        }
+      },
+      "overrides": {}
+    }
+  ],
+  "wires": [
+    {
+      "id": "w18",
+      "path": [
+        {
+          "t": "node",
+          "v": "v35"
+        },
+        {
+          "t": "bend",
+          "x": 91,
+          "y": 102
+        },
+        {
+          "t": "node",
+          "v": "v36"
+        }
+      ]
+    },
+    {
+      "id": "w19",
+      "path": [
+        {
+          "t": "node",
+          "v": "v37"
+        },
+        {
+          "t": "bend",
+          "x": 93,
+          "y": 98
+        },
+        {
+          "t": "node",
+          "v": "v38"
+        }
+      ]
+    },
+    {
+      "id": "w20",
+      "path": [
+        {
+          "t": "node",
+          "v": "v39"
+        },
+        {
+          "t": "bend",
+          "x": 95,
+          "y": 96
+        },
+        {
+          "t": "node",
+          "v": "v40"
+        }
+      ]
+    },
+    {
+      "id": "w21",
+      "path": [
+        {
+          "t": "node",
+          "v": "v41"
+        },
+        {
+          "t": "bend",
+          "x": 97,
+          "y": 94
+        },
+        {
+          "t": "node",
+          "v": "v42"
+        }
+      ]
+    },
+    {
+      "id": "w22",
+      "path": [
+        {
+          "t": "node",
+          "v": "v43"
+        },
+        {
+          "t": "bend",
+          "x": 99,
+          "y": 92
+        },
+        {
+          "t": "node",
+          "v": "v44"
+        }
+      ]
+    },
+    {
+      "id": "w23",
+      "path": [
+        {
+          "t": "node",
+          "v": "v45"
+        },
+        {
+          "t": "bend",
+          "x": 73,
+          "y": 89
+        },
+        {
+          "t": "bend",
+          "x": 73,
+          "y": 92
+        },
+        {
+          "t": "node",
+          "v": "v46"
+        }
+      ]
+    },
+    {
+      "id": "w24",
+      "path": [
+        {
+          "t": "node",
+          "v": "v47"
+        },
+        {
+          "t": "bend",
+          "x": 72,
+          "y": 91
+        },
+        {
+          "t": "bend",
+          "x": 72,
+          "y": 93
+        },
+        {
+          "t": "node",
+          "v": "v48"
+        }
+      ]
+    },
+    {
+      "id": "w25",
+      "path": [
+        {
+          "t": "node",
+          "v": "v49"
+        },
+        {
+          "t": "bend",
+          "x": 71,
+          "y": 93
+        },
+        {
+          "t": "bend",
+          "x": 71,
+          "y": 94
+        },
+        {
+          "t": "node",
+          "v": "v50"
+        }
+      ]
+    },
+    {
+      "id": "w26",
+      "path": [
+        {
+          "t": "node",
+          "v": "v51"
+        },
+        {
+          "t": "node",
+          "v": "v52"
+        }
+      ]
+    },
+    {
+      "id": "w27",
+      "path": [
+        {
+          "t": "node",
+          "v": "v53"
+        },
+        {
+          "t": "bend",
+          "x": 74,
+          "y": 96
+        },
+        {
+          "t": "bend",
+          "x": 74,
+          "y": 97
+        },
+        {
+          "t": "node",
+          "v": "v54"
+        }
+      ]
+    },
+    {
+      "id": "w28",
+      "path": [
+        {
+          "t": "node",
+          "v": "v55"
+        },
+        {
+          "t": "bend",
+          "x": 73,
+          "y": 97
+        },
+        {
+          "t": "bend",
+          "x": 73,
+          "y": 98
+        },
+        {
+          "t": "node",
+          "v": "v56"
+        }
+      ]
+    },
+    {
+      "id": "w29",
+      "path": [
+        {
+          "t": "node",
+          "v": "v57"
+        },
+        {
+          "t": "bend",
+          "x": 72,
+          "y": 98
+        },
+        {
+          "t": "bend",
+          "x": 72,
+          "y": 99
+        },
+        {
+          "t": "node",
+          "v": "v58"
+        }
+      ]
+    },
+    {
+      "id": "w30",
+      "path": [
+        {
+          "t": "node",
+          "v": "v59"
+        },
+        {
+          "t": "bend",
+          "x": 71,
+          "y": 99
+        },
+        {
+          "t": "bend",
+          "x": 71,
+          "y": 100
+        },
+        {
+          "t": "bend",
+          "x": 80,
+          "y": 100
+        },
+        {
+          "t": "node",
+          "v": "v60"
+        }
+      ]
+    },
+    {
+      "id": "w31",
+      "path": [
+        {
+          "t": "node",
+          "v": "v61"
+        },
+        {
+          "t": "node",
+          "v": "v62"
+        }
+      ]
+    },
+    {
+      "id": "w32",
+      "path": [
+        {
+          "t": "node",
+          "v": "v63"
+        },
+        {
+          "t": "node",
+          "v": "v64"
+        }
+      ]
+    },
+    {
+      "id": "w33",
+      "path": [
+        {
+          "t": "node",
+          "v": "v65"
+        },
+        {
+          "t": "node",
+          "v": "v66"
+        }
+      ]
+    },
+    {
+      "id": "w34",
+      "path": [
+        {
+          "t": "node",
+          "v": "v67"
+        },
+        {
+          "t": "node",
+          "v": "v68"
+        }
+      ]
+    }
+  ],
+  "buses": [],
+  "vertices": [
+    {
+      "id": "v35",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Cout",
+      "x": 87,
+      "y": 102
+    },
+    {
+      "id": "v36",
+      "kind": "pin",
+      "ref": "A-14",
+      "pin": "IN",
+      "x": 91,
+      "y": 91
+    },
+    {
+      "id": "v37",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "F3",
+      "x": 87,
+      "y": 98
+    },
+    {
+      "id": "v38",
+      "kind": "pin",
+      "ref": "A-15",
+      "pin": "IN",
+      "x": 93,
+      "y": 91
+    },
+    {
+      "id": "v39",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "F2",
+      "x": 87,
+      "y": 96
+    },
+    {
+      "id": "v40",
+      "kind": "pin",
+      "ref": "A-16",
+      "pin": "IN",
+      "x": 95,
+      "y": 91
+    },
+    {
+      "id": "v41",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "F1",
+      "x": 87,
+      "y": 94
+    },
+    {
+      "id": "v42",
+      "kind": "pin",
+      "ref": "A-17",
+      "pin": "IN",
+      "x": 97,
+      "y": 91
+    },
+    {
+      "id": "v43",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "F0",
+      "x": 87,
+      "y": 92
+    },
+    {
+      "id": "v44",
+      "kind": "pin",
+      "ref": "A-18",
+      "pin": "IN",
+      "x": 99,
+      "y": 91
+    },
+    {
+      "id": "v45",
+      "kind": "pin",
+      "ref": "A-1",
+      "pin": "OUT",
+      "x": 67,
+      "y": 89
+    },
+    {
+      "id": "v46",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "A0",
+      "x": 81,
+      "y": 92
+    },
+    {
+      "id": "v47",
+      "kind": "pin",
+      "ref": "A-2",
+      "pin": "OUT",
+      "x": 68,
+      "y": 91
+    },
+    {
+      "id": "v48",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "A1",
+      "x": 81,
+      "y": 93
+    },
+    {
+      "id": "v49",
+      "kind": "pin",
+      "ref": "A-3",
+      "pin": "OUT",
+      "x": 67,
+      "y": 93
+    },
+    {
+      "id": "v50",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "A2",
+      "x": 81,
+      "y": 94
+    },
+    {
+      "id": "v51",
+      "kind": "pin",
+      "ref": "A-4",
+      "pin": "OUT",
+      "x": 68,
+      "y": 95
+    },
+    {
+      "id": "v52",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "A3",
+      "x": 81,
+      "y": 95
+    },
+    {
+      "id": "v53",
+      "kind": "pin",
+      "ref": "A-5",
+      "pin": "OUT",
+      "x": 63,
+      "y": 96
+    },
+    {
+      "id": "v54",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "B0",
+      "x": 81,
+      "y": 97
+    },
+    {
+      "id": "v55",
+      "kind": "pin",
+      "ref": "A-7",
+      "pin": "OUT",
+      "x": 65,
+      "y": 97
+    },
+    {
+      "id": "v56",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "B1",
+      "x": 81,
+      "y": 98
+    },
+    {
+      "id": "v57",
+      "kind": "pin",
+      "ref": "A-8",
+      "pin": "OUT",
+      "x": 63,
+      "y": 98
+    },
+    {
+      "id": "v58",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "B2",
+      "x": 81,
+      "y": 99
+    },
+    {
+      "id": "v59",
+      "kind": "pin",
+      "ref": "A-9",
+      "pin": "OUT",
+      "x": 65,
+      "y": 99
+    },
+    {
+      "id": "v60",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "B3",
+      "x": 81,
+      "y": 100
+    },
+    {
+      "id": "v61",
+      "kind": "pin",
+      "ref": "A-10",
+      "pin": "OUT",
+      "x": 70,
+      "y": 106
+    },
+    {
+      "id": "v62",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Cn",
+      "x": 81,
+      "y": 106
+    },
+    {
+      "id": "v63",
+      "kind": "pin",
+      "ref": "A-13",
+      "pin": "OUT",
+      "x": 63,
+      "y": 104
+    },
+    {
+      "id": "v64",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "S2",
+      "x": 81,
+      "y": 104
+    },
+    {
+      "id": "v65",
+      "kind": "pin",
+      "ref": "A-12",
+      "pin": "OUT",
+      "x": 65,
+      "y": 103
+    },
+    {
+      "id": "v66",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "S1",
+      "x": 81,
+      "y": 103
+    },
+    {
+      "id": "v67",
+      "kind": "pin",
+      "ref": "A-11",
+      "pin": "OUT",
+      "x": 63,
+      "y": 102
+    },
+    {
+      "id": "v68",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "S0",
+      "x": 81,
+      "y": 102
+    }
+  ],
+  "refCounters": {
+    "U": 2,
+    "A": 19,
+    "N": 1,
+    "X": 2
+  },
+  "nets": [
+    {
+      "pins": [
+        "U1.Cout",
+        "A-14.IN"
+      ],
+      "members": [
+        "w18"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.F3",
+        "A-15.IN"
+      ],
+      "members": [
+        "w19"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.F2",
+        "A-16.IN"
+      ],
+      "members": [
+        "w20"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.F1",
+        "A-17.IN"
+      ],
+      "members": [
+        "w21"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U1.F0",
+        "A-18.IN"
+      ],
+      "members": [
+        "w22"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "A-1.OUT",
+        "U1.A0"
+      ],
+      "members": [
+        "w23"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-2.OUT",
+        "U1.A1"
+      ],
+      "members": [
+        "w24"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-3.OUT",
+        "U1.A2"
+      ],
+      "members": [
+        "w25"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-4.OUT",
+        "U1.A3"
+      ],
+      "members": [
+        "w26"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-5.OUT",
+        "U1.B0"
+      ],
+      "members": [
+        "w27"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-7.OUT",
+        "U1.B1"
+      ],
+      "members": [
+        "w28"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-8.OUT",
+        "U1.B2"
+      ],
+      "members": [
+        "w29"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-9.OUT",
+        "U1.B3"
+      ],
+      "members": [
+        "w30"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-10.OUT",
+        "U1.Cn"
+      ],
+      "members": [
+        "w31"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-13.OUT",
+        "U1.S2"
+      ],
+      "members": [
+        "w32"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-12.OUT",
+        "U1.S1"
+      ],
+      "members": [
+        "w33"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-11.OUT",
+        "U1.S0"
+      ],
+      "members": [
+        "w34"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    }
+  ]
+}
