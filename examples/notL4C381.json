@@ -6998,6 +6998,34 @@
         ]
       },
       "overrides": {}
+    },
+    {
+      "refdes": "A-45",
+      "type": "type-port",
+      "x": 114,
+      "y": 23,
+      "rotation": 90,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "Cin",
+      "portDir": "in"
     }
   ],
   "wires": [
@@ -9489,6 +9517,24 @@
         {
           "t": "node",
           "v": "v1359"
+        }
+      ]
+    },
+    {
+      "id": "w504",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1364"
+        },
+        {
+          "t": "bend",
+          "x": 113,
+          "y": 86
+        },
+        {
+          "t": "node",
+          "v": "v1365"
         }
       ]
     }
@@ -14037,11 +14083,27 @@
       "kind": "free",
       "x": 118,
       "y": 93
+    },
+    {
+      "id": "v1364",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "Cn",
+      "x": 120,
+      "y": 86
+    },
+    {
+      "id": "v1365",
+      "kind": "connector",
+      "ref": "A-45",
+      "pin": "P",
+      "x": 113,
+      "y": 25
     }
   ],
   "refCounters": {
     "U": 68,
-    "A": 45,
+    "A": 46,
     "N": 9,
     "X": 5
   },
@@ -14567,6 +14629,17 @@
       ],
       "provenance": [],
       "name": "OUT"
+    },
+    {
+      "pins": [
+        "X1.Cn",
+        "A-45.P"
+      ],
+      "members": [
+        "w504"
+      ],
+      "provenance": [],
+      "name": "Cin"
     },
     {
       "pins": [
