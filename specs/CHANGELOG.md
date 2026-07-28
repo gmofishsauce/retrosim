@@ -19,6 +19,13 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-28 — Fix: an unconnected pin now has a net of its own, so the probe reads it
+What: both simulation engines now allocate a single-node net for every component pin no conductor reaches, instead of leaving such a pin off the net array entirely.
+Why: reported against `examples/74163.json` — probing the counter showed its real `QA..QD` while indicators were wired to them, but all `Z` once the indicators and their wires were deleted. `buildNets` is a netlist builder and emits nets only where conductors exist, so an unwired pin had no net and `valueOfPin` returned Z for it; that made a part's observable state depend on what happened to be attached to it. The top-up lives in the engines, not in `buildNets`, because the saved `nets` array and the NDL export are netlists, where a net for an unconnected pin would be wrong. Side benefit: a behavior using an unconnected output as feedback now reads its real value rather than Z→U.
+Touches: FR-081a (new); FR-087c edited in place. Design §6.13 (new single-node-nets bullet), §6.17 (net table). Code in `web/js/engine/sim.js`, `web/js/engine/cgen.js`.
+
+---
+
 ## 2026-07-28 — Test-vector panel: it edits an associated `.tv` document
 What: the panel now associates itself with `<project dir>/<design base>.tv` when it opens, auto-loads that file if it exists, Saves straight to it (no dialog, no overwrite prompt), gains a Save As that re-points the association, shows the file name and a `*` in its header while modified, and prompts Save/Discard/Cancel when closed (or loaded over) while modified; the page-unload warning covers unsaved vectors too.
 Why: reported as "saving vectors a second time asks whether to overwrite". The cause was that there was no test-vector *document*: every Save went through the file dialog, so the second save hit the FR-049b overwrite guard on the name the first one had just written. The panel is a small app within the app and now behaves like one.

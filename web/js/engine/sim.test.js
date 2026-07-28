@@ -467,13 +467,51 @@ test("feedback loop settles to U (FR-077)", () => {
   assert.equal(sim.valueOfPin("U1", "Y"), VU);
 });
 
-test("unconnected pins read Z (treated as U by behaviors)", () => {
+test("an unconnected input reads Z (treated as U by behaviors)", () => {
   const d = mkDesign();
   place(d, "U1", NOT); // input A unconnected
   const sim = buildSimulation(d);
   sim.step();
-  assert.equal(sim.valueOfPin("U1", "A"), VZ); // not part of any net
-  assert.equal(sim.valueOfPin("U1", "Y"), VZ); // output unconnected too
+  // A is on a net of its own (FR-081a) but nothing drives it, so it resolves Z.
+  assert.equal(sim.valueOfPin("U1", "A"), VZ);
+  sim.step();
+  assert.equal(sim.valueOfPin("U1", "Y"), VU); // Z read as U → inverter drives U
+});
+
+test("an unconnected output still carries its driven value (FR-081a)", () => {
+  // The reported bug: deleting the indicators wired to a part's outputs made the
+  // part probe as all-Z. A pin with nothing attached is a net of its own.
+  const d = mkDesign();
+  place(d, "U1", CONST1); // Y drives 1, wired to nothing
+  place(d, "U2", CONST0);
+  const sim = buildSimulation(d);
+  sim.step();
+  assert.equal(sim.valueOfPin("U1", "Y"), V1);
+  assert.equal(sim.valueOfPin("U2", "Y"), V0);
+});
+
+test("an unconnected output is readable as behavior feedback (FR-081a)", () => {
+  // FB drives Y from A and Z from its own Y pin, with nothing wired to either
+  // output. Before FR-081a, Y was on no net so the Z equation read it as Z→U.
+  const FB = {
+    name: "FBX",
+    renderType: "unit",
+    pins: [
+      { name: "A", side: "left", position: 1, direction: "in" },
+      { name: "Y", side: "right", position: 1, direction: "out" },
+      { name: "Z", side: "right", position: 2, direction: "out" },
+    ],
+    behavior: "Y = A\nZ = /Y\n",
+  };
+  const d = mkDesign();
+  place(d, "U1", CONST1);
+  place(d, "U2", FB);
+  connect(d, ["U1", "Y"], ["U2", "A"]);
+
+  const sim = buildSimulation(d);
+  settle(sim);
+  assert.equal(sim.valueOfPin("U2", "Y"), V1);
+  assert.equal(sim.valueOfPin("U2", "Z"), V0);
 });
 
 // --- generated memory devices (FR-114c/FR-114d) ---

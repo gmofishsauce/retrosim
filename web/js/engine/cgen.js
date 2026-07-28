@@ -60,6 +60,17 @@ export function generateC(design, { columnsFrom = design } = {}) {
   nets.forEach((net, i) => {
     for (const pin of net.pins) netOfPin.set(pin, i);
   });
+  // Single-node nets for unconnected pins (FR-081a) — the same top-up sim.js
+  // makes, in the same component/pin order, so the two engines' net indices and
+  // net counts agree (FR-107).
+  for (const inst of design.components) {
+    for (const p of inst.typeData?.pins ?? []) {
+      const key = `${inst.refdes}.${p.name}`;
+      if (netOfPin.has(key)) continue;
+      netOfPin.set(key, nets.length);
+      nets.push({ pins: [key], members: [] });
+    }
+  }
   const netOf = (key) => netOfPin.get(key) ?? -1;
 
   // Label interning: gen_labels[] holds every "refdes.pin" driver/probe name

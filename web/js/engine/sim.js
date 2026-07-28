@@ -85,6 +85,24 @@ export function buildSimulation(
     for (const lane of net.lanes) netOfLane.set(lane, i);
   });
 
+  // Single-node nets for unconnected pins (FR-081a). buildNets is a netlist
+  // builder: it emits a net only where a conductor exists, so a pin nothing is
+  // wired to is on no net at all. Top the array up here — in the engine, not in
+  // buildNets, whose result is also saved (§7.2) and exported (§6.18), where a
+  // net for an unconnected pin would be wrong. An unconnected output then drives
+  // its own net and reads as its value (the probe, FR-087c; behavior feedback,
+  // FR-079) instead of Z; an unconnected input's net has no contribution and
+  // resolves to Z, exactly as the no-net path returned. Empty members/lanes keep
+  // these nets out of conflictedConductors and unreachable by valueOfLane.
+  for (const inst of design.components) {
+    for (const p of inst.typeData?.pins ?? []) {
+      const key = `${inst.refdes}.${p.name}`;
+      if (netOfPin.has(key)) continue;
+      netOfPin.set(key, nets.length);
+      nets.push({ pins: [key], members: [], lanes: [] });
+    }
+  }
+
   // --- Build evaluation entities ---
   const entities = [];
   const errors = [];

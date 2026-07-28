@@ -117,7 +117,9 @@ test("generateC: .T output lowers the enable to the Z/U/value branch", () => {
   const d = mkDesign();
   place(d, "U1", TBUF);
   const { code } = generateC(d);
-  assert.match(code, /rt_val e = rt_buf\(RT_Z\)[^;]*; \/\* \.E \*\//);
+  // The enable pin is unwired, but it still has a net of its own (FR-081a), so
+  // the enable reads curr[] rather than the literal RT_Z the old no-net path gave.
+  assert.match(code, /rt_val e = rt_buf\(curr\[\d+\]\)[^;]*; \/\* \.E \*\//);
   assert.match(code, /if \(e == RT_0\) v = RT_Z;/);
   assert.match(code, /else if \(e == RT_U\) v = RT_U;/);
 });
@@ -128,8 +130,9 @@ test("generateC: behavior-less type drives U and warns once (FR-080)", () => {
   place(d, "U2", NOBEHAVE);
   const { code, warnings } = generateC(d);
   assert.equal(warnings.filter((w) => w.includes("no behavior")).length, 1);
-  assert.match(code, /rt_contrib\(-1, RT_U, 0, \d+\); \/\* U1\.Y \*\//);
-  assert.match(code, /rt_contrib\(-1, RT_U, 0, \d+\); \/\* U2\.Y \*\//);
+  // Each unwired output drives its own single-node net (FR-081a), not net -1.
+  assert.match(code, /rt_contrib\(\d+, RT_U, 0, \d+\); \/\* U1\.Y \*\//);
+  assert.match(code, /rt_contrib\(\d+, RT_U, 0, \d+\); \/\* U2\.Y \*\//);
 });
 
 test("generateC: pulls, unwired probes, and empty tables", () => {
@@ -186,8 +189,9 @@ test("generateC: buried internal node becomes a virtual net with register state 
   const d = mkDesign();
   place(d, "U1", SHIFT2);
   const { code } = generateC(d);
-  // The buried node SR0 gets a virtual net even though no conductor exists.
-  assert.match(code, /const int gen_net_count = 1;/);
+  // The buried node SR0 gets a virtual net even though no conductor exists — on
+  // top of the three single-node nets the unwired DS/CP/Q1 pins get (FR-081a).
+  assert.match(code, /const int gen_net_count = 4;/);
   // Two registers: the buried SR0 and the exposed Q1.
   assert.match(code, /static rt_val reg_U1\[2\];/);
   // The buried node lowers with its synthetic "#"-tagged key and drives its net.
