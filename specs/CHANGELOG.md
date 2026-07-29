@@ -19,6 +19,13 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-07-29 — 74F381 variant: pin 13 becomes a signed-overflow output
+What: the modeling variant's spare pin 13 (the datasheet's `/G`, until now a no-connect) becomes an active-high `Ovfl` output — the signed-overflow flag of the selected arithmetic operation, valid for `A plus B`, `A minus B`, and `B minus A`, and 0 in the clear/logic/preset modes. `Cout` stays on pin 14, so this is a pin *added*, never moved.
+Why: the variant already departs from the datasheet by trading `/P` and `/G` for a ripple `Cout` (so slices cascade without a 74F182); the second lookahead pin was still spare, and a signed-overflow flag is what a CPU design actually needs from the top slice of a cascade. The equation needed no derivation: overflow is `C4 XOR C3`, and both halves already existed verbatim in the file — the `Cout` sum *is* C4 and the `:+:` group of `F3` *is* C3, each already gated to the three arithmetic modes, which is why the flag reads 0 in the non-arithmetic modes for free. Verified 4096/4096 against a signed-arithmetic reference, with 128 genuine overflow cases exercised in each of the three arithmetic modes. Only the most-significant slice's `Ovfl` is meaningful in a ripple cascade; lower slices assert their own and the design must ignore them.
+Touches: no FR or design section (component data only, as with the 2026-07-27 pin-number fix). `srv/components/74F381.yaml`.
+
+---
+
 ## 2026-07-28 — Fix: an unconnected pin now has a net of its own, so the probe reads it
 What: both simulation engines now allocate a single-node net for every component pin no conductor reaches, instead of leaving such a pin off the net array entirely.
 Why: reported against `examples/74163.json` — probing the counter showed its real `QA..QD` while indicators were wired to them, but all `Z` once the indicators and their wires were deleted. `buildNets` is a netlist builder and emits nets only where conductors exist, so an unwired pin had no net and `valueOfPin` returned Z for it; that made a part's observable state depend on what happened to be attached to it. The top-up lives in the engines, not in `buildNets`, because the saved `nets` array and the NDL export are netlists, where a net for an unconnected pin would be wrong. Side benefit: a behavior using an unconnected output as feedback now reads its real value rather than Z→U.

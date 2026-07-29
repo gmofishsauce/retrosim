@@ -191,6 +191,28 @@ simulator models this transparent behavior directly (with the usual one-unit
 delay), so it needs no clock — a handy way to hold a bus value without a clock
 edge. `D0`–`D7` and `Q0`–`Q7` are each a pin group, so buses snap to them.
 
+The `74F381` 4-bit **ALU** rounds out the set. Three select inputs `S0`–`S2` choose
+one of eight operations on the operands `A0`–`A3` and `B0`–`B3`, producing `F0`–`F3`:
+clear, `B minus A`, `A minus B`, `A plus B`, `A XOR B`, `A OR B`, `A AND B`, and
+preset (all ones). The two subtract modes want the carry input `Cn` **high** — that
+forced carry is what completes the two's-complement difference; leave `Cn` low and
+you get a result one less than you expect. `A`, `B`, `S`, and `F` are each a pin
+group, so buses snap to them.
+
+Two fidelity notes on the `74F381`, both deliberate departures from the datasheet.
+The real chip has no carry-out at all: it exposes carry-lookahead outputs `/P` and
+`/G` intended to drive a 74F182 lookahead generator. This model drops both and uses
+their pins for outputs that are more useful when you are wiring slices by hand:
+**`Cout`** (pin 14, the datasheet's `/P`) is a conventional active-high ripple
+carry-out, so slices cascade by simply wiring each `Cout` to the next slice's `Cn`;
+and **`Ovfl`** (pin 13, the datasheet's `/G`) is an active-high **signed-overflow**
+flag, high when the operands' sign bits agree but the result's disagrees. `Ovfl` is
+valid for all three arithmetic modes, including both subtracts, and reads low in the
+clear, logic, and preset modes. In a cascade, only the **most significant** slice's
+`Ovfl` means anything — the lower slices each compute overflow for their own 4-bit
+field and assert it freely, so wire the top slice's `Ovfl` to your flag register and
+leave the others unconnected.
+
 ### Creating a custom GAL part (22V10)
 
 Unlike the fixed-function 74-series parts, a GAL22V10 is **programmable** — its

@@ -8,14 +8,15 @@
 # carry-lookahead generator, and has NO carry-out pin. This model instead
 # exposes a conventional active-high ripple carry-out `Cout` (the bit-4 carry
 # of the selected arithmetic operation) so slices ripple-cascade directly
-# (Cout -> Cn), and omits /G and /P. Pin 14 (the datasheet's /P) carries Cout
-# here; pin 13 (the datasheet's /G) is a no-connect in this variant. Function
-# set, operands, and select codes are otherwise identical to the datasheet.
+# (Cout -> Cn), and an active-high signed-overflow flag `Ovfl`, in place of /G
+# and /P. Pin 14 (the datasheet's /P) carries Cout here; pin 13 (the
+# datasheet's /G) carries Ovfl. Function set, operands, and select codes are
+# otherwise identical to the datasheet.
 id: "type-74F381"
 type: "74F381"
 outline: [6, 17]
 
-description: "4-bit ALU / function generator (74F381 function set) with ripple carry-out"
+description: "4-bit ALU / function generator (74F381 function set) with ripple carry-out and signed-overflow flag"
 datasheet:
   vendor: Fairchild Semiconductor
   title: "74F381 4-Bit Arithmetic Logic Unit"
@@ -24,13 +25,13 @@ datasheet:
 
 physical: # exporter-only package metadata (FR-062e); not read by editor or sim.
   # DIP-20 numbering follows the datasheet connection diagram; this variant puts
-  # Cout where /P was (pin 14) and leaves /G's pin (13) as a no-connect.
+  # Cout where /P was (pin 14) and Ovfl where /G was (pin 13), so it has no
+  # no-connects.
   package: DIP-20
   pincount: 20
   power:
     - { name: VCC, number: 20 }
     - { name: GND, number: 10 }
-  nc: [13] # datasheet /G output, unused in this ripple-carry variant
 
 pins: # number: physical DIP-20 pin (datasheet Connection Diagram)
   - { name: A0,   side: left,  pos: 2,  dir: in,  number: 3,  desc: "operand A bit 0 (LSB)" }
@@ -50,6 +51,7 @@ pins: # number: physical DIP-20 pin (datasheet Connection Diagram)
   - { name: F2,   side: right, pos: 6,  dir: out, number: 11, desc: "function output bit 2" }
   - { name: F3,   side: right, pos: 8,  dir: out, number: 12, desc: "function output bit 3 (MSB)" }
   - { name: Cout, side: right, pos: 12, dir: out, number: 14, desc: "ripple carry output (variant; bit-4 arithmetic carry)" }
+  - { name: Ovfl, side: right, pos: 14, dir: out, number: 13, desc: "signed overflow of the selected arithmetic op (variant; 0 in the logic/clear/preset modes)" }
 
 groups:
   - { name: A, pins: [A0, A1, A2, A3] }
@@ -63,6 +65,8 @@ delays: # ns, 74F381 typical at Vcc=5V, CL=50pF, 25C (datasheet AC Electrical Ch
   tpd_s_f:     8  # Si -> Fi          (tPLH 8.3 / tPHL 8.2)
   tpd_cn_cout: 8  # Cn -> Cout        (modeled on the Cn->F path; real 381 has no carry-out)
   tpd_ab_cout: 10 # An/Bn -> Cout     (modeled on the An/Bn->F path)
+  tpd_cn_ovfl: 8  # Cn -> Ovfl        (modeled on the Cn->F path; variant output)
+  tpd_ab_ovfl: 10 # An/Bn -> Ovfl     (modeled on the An/Bn->F path)
 
 behavior: |
   ; 74F381 — 4-bit ALU, A0/B0/F0 = LSB. Combinational (no clock).
@@ -94,8 +98,23 @@ behavior: |
   ; modes (this variant's ripple-carry output; the real 74F381 has /G and /P
   ; instead). Equations were machine-generated and verified against the ALU
   ; reference for all 4096 (A, B, S0..S2, Cn) input combinations.
+  ;
+  ; Ovfl (this variant's second added output, on /G's pin) is the signed
+  ; overflow of the selected arithmetic operation: the operands' sign bits agree
+  ; and the result's disagrees with them. Equivalently it is C4 XOR C3 — the
+  ; carry out of the MSB XOR the carry into it — so its equation is literally
+  ; the Cout sum (which is C4) XORed with the :+: group of F3 (which is C3), and
+  ; no new derivation was needed. Both of those are already gated to the three
+  ; arithmetic modes, including the two subtracts, where the effective operand
+  ; is /A or /B; that gating is what makes Ovfl read 0 in the clear/logic/preset
+  ; modes rather than undefined. Verified 4096/4096 against a signed-arithmetic
+  ; reference (128 genuine overflow cases in each arithmetic mode).
+  ;
+  ; In a ripple cascade only the most significant slice's Ovfl is meaningful;
+  ; the lower slices assert their own and the design must ignore them.
   F0 = S0*S1*/S2*A0*/B0 + S0*S1*/S2*/A0*B0 + /S0*/S1*S2*A0*/B0 + /S0*/S1*S2*/A0*B0 + /S0*S1*/S2*A0*B0 + /S0*S1*/S2*/A0*/B0 + S0*/S1*/S2*A0*B0 + S0*/S1*/S2*/A0*/B0 + S0*/S1*S2*A0 + S0*/S1*S2*B0 + /S0*S1*S2*A0*B0 + S0*S1*S2 :+: S0*S1*/S2*Cn + /S0*S1*/S2*Cn + S0*/S1*/S2*Cn
   F1 = S0*S1*/S2*A1*/B1 + S0*S1*/S2*/A1*B1 + /S0*/S1*S2*A1*/B1 + /S0*/S1*S2*/A1*B1 + /S0*S1*/S2*A1*B1 + /S0*S1*/S2*/A1*/B1 + S0*/S1*/S2*A1*B1 + S0*/S1*/S2*/A1*/B1 + S0*/S1*S2*A1 + S0*/S1*S2*B1 + /S0*S1*S2*A1*B1 + S0*S1*S2 :+: S0*S1*/S2*A0*B0 + S0*S1*/S2*A0*Cn + S0*S1*/S2*B0*Cn + /S0*S1*/S2*A0*/B0 + /S0*S1*/S2*A0*Cn + /S0*S1*/S2*/B0*Cn + S0*/S1*/S2*B0*/A0 + S0*/S1*/S2*B0*Cn + S0*/S1*/S2*/A0*Cn
   F2 = S0*S1*/S2*A2*/B2 + S0*S1*/S2*/A2*B2 + /S0*/S1*S2*A2*/B2 + /S0*/S1*S2*/A2*B2 + /S0*S1*/S2*A2*B2 + /S0*S1*/S2*/A2*/B2 + S0*/S1*/S2*A2*B2 + S0*/S1*/S2*/A2*/B2 + S0*/S1*S2*A2 + S0*/S1*S2*B2 + /S0*S1*S2*A2*B2 + S0*S1*S2 :+: S0*S1*/S2*A1*B1 + S0*S1*/S2*A1*A0*B0 + S0*S1*/S2*B1*A0*B0 + S0*S1*/S2*A0*A1*Cn + S0*S1*/S2*A0*B1*Cn + S0*S1*/S2*B0*A1*Cn + S0*S1*/S2*B0*B1*Cn + /S0*S1*/S2*A1*/B1 + /S0*S1*/S2*A1*A0*/B0 + /S0*S1*/S2*/B1*A0*/B0 + /S0*S1*/S2*A0*A1*Cn + /S0*S1*/S2*A0*/B1*Cn + /S0*S1*/S2*/B0*A1*Cn + /S0*S1*/S2*/B0*/B1*Cn + S0*/S1*/S2*B1*/A1 + S0*/S1*/S2*B1*B0*/A0 + S0*/S1*/S2*/A1*B0*/A0 + S0*/S1*/S2*B0*B1*Cn + S0*/S1*/S2*B0*/A1*Cn + S0*/S1*/S2*/A0*B1*Cn + S0*/S1*/S2*/A0*/A1*Cn
   F3 = S0*S1*/S2*A3*/B3 + S0*S1*/S2*/A3*B3 + /S0*/S1*S2*A3*/B3 + /S0*/S1*S2*/A3*B3 + /S0*S1*/S2*A3*B3 + /S0*S1*/S2*/A3*/B3 + S0*/S1*/S2*A3*B3 + S0*/S1*/S2*/A3*/B3 + S0*/S1*S2*A3 + S0*/S1*S2*B3 + /S0*S1*S2*A3*B3 + S0*S1*S2 :+: S0*S1*/S2*A2*B2 + S0*S1*/S2*A2*A1*B1 + S0*S1*/S2*B2*A1*B1 + S0*S1*/S2*A1*A2*A0*B0 + S0*S1*/S2*A1*B2*A0*B0 + S0*S1*/S2*B1*A2*A0*B0 + S0*S1*/S2*B1*B2*A0*B0 + S0*S1*/S2*A0*A1*A2*Cn + S0*S1*/S2*A0*A1*B2*Cn + S0*S1*/S2*A0*B1*A2*Cn + S0*S1*/S2*A0*B1*B2*Cn + S0*S1*/S2*B0*A1*A2*Cn + S0*S1*/S2*B0*A1*B2*Cn + S0*S1*/S2*B0*B1*A2*Cn + S0*S1*/S2*B0*B1*B2*Cn + /S0*S1*/S2*A2*/B2 + /S0*S1*/S2*A2*A1*/B1 + /S0*S1*/S2*/B2*A1*/B1 + /S0*S1*/S2*A1*A2*A0*/B0 + /S0*S1*/S2*A1*/B2*A0*/B0 + /S0*S1*/S2*/B1*A2*A0*/B0 + /S0*S1*/S2*/B1*/B2*A0*/B0 + /S0*S1*/S2*A0*A1*A2*Cn + /S0*S1*/S2*A0*A1*/B2*Cn + /S0*S1*/S2*A0*/B1*A2*Cn + /S0*S1*/S2*A0*/B1*/B2*Cn + /S0*S1*/S2*/B0*A1*A2*Cn + /S0*S1*/S2*/B0*A1*/B2*Cn + /S0*S1*/S2*/B0*/B1*A2*Cn + /S0*S1*/S2*/B0*/B1*/B2*Cn + S0*/S1*/S2*B2*/A2 + S0*/S1*/S2*B2*B1*/A1 + S0*/S1*/S2*/A2*B1*/A1 + S0*/S1*/S2*B1*B2*B0*/A0 + S0*/S1*/S2*B1*/A2*B0*/A0 + S0*/S1*/S2*/A1*B2*B0*/A0 + S0*/S1*/S2*/A1*/A2*B0*/A0 + S0*/S1*/S2*B0*B1*B2*Cn + S0*/S1*/S2*B0*B1*/A2*Cn + S0*/S1*/S2*B0*/A1*B2*Cn + S0*/S1*/S2*B0*/A1*/A2*Cn + S0*/S1*/S2*/A0*B1*B2*Cn + S0*/S1*/S2*/A0*B1*/A2*Cn + S0*/S1*/S2*/A0*/A1*B2*Cn + S0*/S1*/S2*/A0*/A1*/A2*Cn
   Cout = S0*S1*/S2*A3*B3 + S0*S1*/S2*A3*A2*B2 + S0*S1*/S2*B3*A2*B2 + S0*S1*/S2*A2*A3*A1*B1 + S0*S1*/S2*A2*B3*A1*B1 + S0*S1*/S2*B2*A3*A1*B1 + S0*S1*/S2*B2*B3*A1*B1 + S0*S1*/S2*A1*A2*A3*A0*B0 + S0*S1*/S2*A1*A2*B3*A0*B0 + S0*S1*/S2*A1*B2*A3*A0*B0 + S0*S1*/S2*A1*B2*B3*A0*B0 + S0*S1*/S2*B1*A2*A3*A0*B0 + S0*S1*/S2*B1*A2*B3*A0*B0 + S0*S1*/S2*B1*B2*A3*A0*B0 + S0*S1*/S2*B1*B2*B3*A0*B0 + S0*S1*/S2*A0*A1*A2*A3*Cn + S0*S1*/S2*A0*A1*A2*B3*Cn + S0*S1*/S2*A0*A1*B2*A3*Cn + S0*S1*/S2*A0*A1*B2*B3*Cn + S0*S1*/S2*A0*B1*A2*A3*Cn + S0*S1*/S2*A0*B1*A2*B3*Cn + S0*S1*/S2*A0*B1*B2*A3*Cn + S0*S1*/S2*A0*B1*B2*B3*Cn + S0*S1*/S2*B0*A1*A2*A3*Cn + S0*S1*/S2*B0*A1*A2*B3*Cn + S0*S1*/S2*B0*A1*B2*A3*Cn + S0*S1*/S2*B0*A1*B2*B3*Cn + S0*S1*/S2*B0*B1*A2*A3*Cn + S0*S1*/S2*B0*B1*A2*B3*Cn + S0*S1*/S2*B0*B1*B2*A3*Cn + S0*S1*/S2*B0*B1*B2*B3*Cn + /S0*S1*/S2*A3*/B3 + /S0*S1*/S2*A3*A2*/B2 + /S0*S1*/S2*/B3*A2*/B2 + /S0*S1*/S2*A2*A3*A1*/B1 + /S0*S1*/S2*A2*/B3*A1*/B1 + /S0*S1*/S2*/B2*A3*A1*/B1 + /S0*S1*/S2*/B2*/B3*A1*/B1 + /S0*S1*/S2*A1*A2*A3*A0*/B0 + /S0*S1*/S2*A1*A2*/B3*A0*/B0 + /S0*S1*/S2*A1*/B2*A3*A0*/B0 + /S0*S1*/S2*A1*/B2*/B3*A0*/B0 + /S0*S1*/S2*/B1*A2*A3*A0*/B0 + /S0*S1*/S2*/B1*A2*/B3*A0*/B0 + /S0*S1*/S2*/B1*/B2*A3*A0*/B0 + /S0*S1*/S2*/B1*/B2*/B3*A0*/B0 + /S0*S1*/S2*A0*A1*A2*A3*Cn + /S0*S1*/S2*A0*A1*A2*/B3*Cn + /S0*S1*/S2*A0*A1*/B2*A3*Cn + /S0*S1*/S2*A0*A1*/B2*/B3*Cn + /S0*S1*/S2*A0*/B1*A2*A3*Cn + /S0*S1*/S2*A0*/B1*A2*/B3*Cn + /S0*S1*/S2*A0*/B1*/B2*A3*Cn + /S0*S1*/S2*A0*/B1*/B2*/B3*Cn + /S0*S1*/S2*/B0*A1*A2*A3*Cn + /S0*S1*/S2*/B0*A1*A2*/B3*Cn + /S0*S1*/S2*/B0*A1*/B2*A3*Cn + /S0*S1*/S2*/B0*A1*/B2*/B3*Cn + /S0*S1*/S2*/B0*/B1*A2*A3*Cn + /S0*S1*/S2*/B0*/B1*A2*/B3*Cn + /S0*S1*/S2*/B0*/B1*/B2*A3*Cn + /S0*S1*/S2*/B0*/B1*/B2*/B3*Cn + S0*/S1*/S2*B3*/A3 + S0*/S1*/S2*B3*B2*/A2 + S0*/S1*/S2*/A3*B2*/A2 + S0*/S1*/S2*B2*B3*B1*/A1 + S0*/S1*/S2*B2*/A3*B1*/A1 + S0*/S1*/S2*/A2*B3*B1*/A1 + S0*/S1*/S2*/A2*/A3*B1*/A1 + S0*/S1*/S2*B1*B2*B3*B0*/A0 + S0*/S1*/S2*B1*B2*/A3*B0*/A0 + S0*/S1*/S2*B1*/A2*B3*B0*/A0 + S0*/S1*/S2*B1*/A2*/A3*B0*/A0 + S0*/S1*/S2*/A1*B2*B3*B0*/A0 + S0*/S1*/S2*/A1*B2*/A3*B0*/A0 + S0*/S1*/S2*/A1*/A2*B3*B0*/A0 + S0*/S1*/S2*/A1*/A2*/A3*B0*/A0 + S0*/S1*/S2*B0*B1*B2*B3*Cn + S0*/S1*/S2*B0*B1*B2*/A3*Cn + S0*/S1*/S2*B0*B1*/A2*B3*Cn + S0*/S1*/S2*B0*B1*/A2*/A3*Cn + S0*/S1*/S2*B0*/A1*B2*B3*Cn + S0*/S1*/S2*B0*/A1*B2*/A3*Cn + S0*/S1*/S2*B0*/A1*/A2*B3*Cn + S0*/S1*/S2*B0*/A1*/A2*/A3*Cn + S0*/S1*/S2*/A0*B1*B2*B3*Cn + S0*/S1*/S2*/A0*B1*B2*/A3*Cn + S0*/S1*/S2*/A0*B1*/A2*B3*Cn + S0*/S1*/S2*/A0*B1*/A2*/A3*Cn + S0*/S1*/S2*/A0*/A1*B2*B3*Cn + S0*/S1*/S2*/A0*/A1*B2*/A3*Cn + S0*/S1*/S2*/A0*/A1*/A2*B3*Cn + S0*/S1*/S2*/A0*/A1*/A2*/A3*Cn
+  Ovfl = S0*S1*/S2*A3*B3 + S0*S1*/S2*A3*A2*B2 + S0*S1*/S2*B3*A2*B2 + S0*S1*/S2*A2*A3*A1*B1 + S0*S1*/S2*A2*B3*A1*B1 + S0*S1*/S2*B2*A3*A1*B1 + S0*S1*/S2*B2*B3*A1*B1 + S0*S1*/S2*A1*A2*A3*A0*B0 + S0*S1*/S2*A1*A2*B3*A0*B0 + S0*S1*/S2*A1*B2*A3*A0*B0 + S0*S1*/S2*A1*B2*B3*A0*B0 + S0*S1*/S2*B1*A2*A3*A0*B0 + S0*S1*/S2*B1*A2*B3*A0*B0 + S0*S1*/S2*B1*B2*A3*A0*B0 + S0*S1*/S2*B1*B2*B3*A0*B0 + S0*S1*/S2*A0*A1*A2*A3*Cn + S0*S1*/S2*A0*A1*A2*B3*Cn + S0*S1*/S2*A0*A1*B2*A3*Cn + S0*S1*/S2*A0*A1*B2*B3*Cn + S0*S1*/S2*A0*B1*A2*A3*Cn + S0*S1*/S2*A0*B1*A2*B3*Cn + S0*S1*/S2*A0*B1*B2*A3*Cn + S0*S1*/S2*A0*B1*B2*B3*Cn + S0*S1*/S2*B0*A1*A2*A3*Cn + S0*S1*/S2*B0*A1*A2*B3*Cn + S0*S1*/S2*B0*A1*B2*A3*Cn + S0*S1*/S2*B0*A1*B2*B3*Cn + S0*S1*/S2*B0*B1*A2*A3*Cn + S0*S1*/S2*B0*B1*A2*B3*Cn + S0*S1*/S2*B0*B1*B2*A3*Cn + S0*S1*/S2*B0*B1*B2*B3*Cn + /S0*S1*/S2*A3*/B3 + /S0*S1*/S2*A3*A2*/B2 + /S0*S1*/S2*/B3*A2*/B2 + /S0*S1*/S2*A2*A3*A1*/B1 + /S0*S1*/S2*A2*/B3*A1*/B1 + /S0*S1*/S2*/B2*A3*A1*/B1 + /S0*S1*/S2*/B2*/B3*A1*/B1 + /S0*S1*/S2*A1*A2*A3*A0*/B0 + /S0*S1*/S2*A1*A2*/B3*A0*/B0 + /S0*S1*/S2*A1*/B2*A3*A0*/B0 + /S0*S1*/S2*A1*/B2*/B3*A0*/B0 + /S0*S1*/S2*/B1*A2*A3*A0*/B0 + /S0*S1*/S2*/B1*A2*/B3*A0*/B0 + /S0*S1*/S2*/B1*/B2*A3*A0*/B0 + /S0*S1*/S2*/B1*/B2*/B3*A0*/B0 + /S0*S1*/S2*A0*A1*A2*A3*Cn + /S0*S1*/S2*A0*A1*A2*/B3*Cn + /S0*S1*/S2*A0*A1*/B2*A3*Cn + /S0*S1*/S2*A0*A1*/B2*/B3*Cn + /S0*S1*/S2*A0*/B1*A2*A3*Cn + /S0*S1*/S2*A0*/B1*A2*/B3*Cn + /S0*S1*/S2*A0*/B1*/B2*A3*Cn + /S0*S1*/S2*A0*/B1*/B2*/B3*Cn + /S0*S1*/S2*/B0*A1*A2*A3*Cn + /S0*S1*/S2*/B0*A1*A2*/B3*Cn + /S0*S1*/S2*/B0*A1*/B2*A3*Cn + /S0*S1*/S2*/B0*A1*/B2*/B3*Cn + /S0*S1*/S2*/B0*/B1*A2*A3*Cn + /S0*S1*/S2*/B0*/B1*A2*/B3*Cn + /S0*S1*/S2*/B0*/B1*/B2*A3*Cn + /S0*S1*/S2*/B0*/B1*/B2*/B3*Cn + S0*/S1*/S2*B3*/A3 + S0*/S1*/S2*B3*B2*/A2 + S0*/S1*/S2*/A3*B2*/A2 + S0*/S1*/S2*B2*B3*B1*/A1 + S0*/S1*/S2*B2*/A3*B1*/A1 + S0*/S1*/S2*/A2*B3*B1*/A1 + S0*/S1*/S2*/A2*/A3*B1*/A1 + S0*/S1*/S2*B1*B2*B3*B0*/A0 + S0*/S1*/S2*B1*B2*/A3*B0*/A0 + S0*/S1*/S2*B1*/A2*B3*B0*/A0 + S0*/S1*/S2*B1*/A2*/A3*B0*/A0 + S0*/S1*/S2*/A1*B2*B3*B0*/A0 + S0*/S1*/S2*/A1*B2*/A3*B0*/A0 + S0*/S1*/S2*/A1*/A2*B3*B0*/A0 + S0*/S1*/S2*/A1*/A2*/A3*B0*/A0 + S0*/S1*/S2*B0*B1*B2*B3*Cn + S0*/S1*/S2*B0*B1*B2*/A3*Cn + S0*/S1*/S2*B0*B1*/A2*B3*Cn + S0*/S1*/S2*B0*B1*/A2*/A3*Cn + S0*/S1*/S2*B0*/A1*B2*B3*Cn + S0*/S1*/S2*B0*/A1*B2*/A3*Cn + S0*/S1*/S2*B0*/A1*/A2*B3*Cn + S0*/S1*/S2*B0*/A1*/A2*/A3*Cn + S0*/S1*/S2*/A0*B1*B2*B3*Cn + S0*/S1*/S2*/A0*B1*B2*/A3*Cn + S0*/S1*/S2*/A0*B1*/A2*B3*Cn + S0*/S1*/S2*/A0*B1*/A2*/A3*Cn + S0*/S1*/S2*/A0*/A1*B2*B3*Cn + S0*/S1*/S2*/A0*/A1*B2*/A3*Cn + S0*/S1*/S2*/A0*/A1*/A2*B3*Cn + S0*/S1*/S2*/A0*/A1*/A2*/A3*Cn :+: S0*S1*/S2*A2*B2 + S0*S1*/S2*A2*A1*B1 + S0*S1*/S2*B2*A1*B1 + S0*S1*/S2*A1*A2*A0*B0 + S0*S1*/S2*A1*B2*A0*B0 + S0*S1*/S2*B1*A2*A0*B0 + S0*S1*/S2*B1*B2*A0*B0 + S0*S1*/S2*A0*A1*A2*Cn + S0*S1*/S2*A0*A1*B2*Cn + S0*S1*/S2*A0*B1*A2*Cn + S0*S1*/S2*A0*B1*B2*Cn + S0*S1*/S2*B0*A1*A2*Cn + S0*S1*/S2*B0*A1*B2*Cn + S0*S1*/S2*B0*B1*A2*Cn + S0*S1*/S2*B0*B1*B2*Cn + /S0*S1*/S2*A2*/B2 + /S0*S1*/S2*A2*A1*/B1 + /S0*S1*/S2*/B2*A1*/B1 + /S0*S1*/S2*A1*A2*A0*/B0 + /S0*S1*/S2*A1*/B2*A0*/B0 + /S0*S1*/S2*/B1*A2*A0*/B0 + /S0*S1*/S2*/B1*/B2*A0*/B0 + /S0*S1*/S2*A0*A1*A2*Cn + /S0*S1*/S2*A0*A1*/B2*Cn + /S0*S1*/S2*A0*/B1*A2*Cn + /S0*S1*/S2*A0*/B1*/B2*Cn + /S0*S1*/S2*/B0*A1*A2*Cn + /S0*S1*/S2*/B0*A1*/B2*Cn + /S0*S1*/S2*/B0*/B1*A2*Cn + /S0*S1*/S2*/B0*/B1*/B2*Cn + S0*/S1*/S2*B2*/A2 + S0*/S1*/S2*B2*B1*/A1 + S0*/S1*/S2*/A2*B1*/A1 + S0*/S1*/S2*B1*B2*B0*/A0 + S0*/S1*/S2*B1*/A2*B0*/A0 + S0*/S1*/S2*/A1*B2*B0*/A0 + S0*/S1*/S2*/A1*/A2*B0*/A0 + S0*/S1*/S2*B0*B1*B2*Cn + S0*/S1*/S2*B0*B1*/A2*Cn + S0*/S1*/S2*B0*/A1*B2*Cn + S0*/S1*/S2*B0*/A1*/A2*Cn + S0*/S1*/S2*/A0*B1*B2*Cn + S0*/S1*/S2*/A0*B1*/A2*Cn + S0*/S1*/S2*/A0*/A1*B2*Cn + S0*/S1*/S2*/A0*/A1*/A2*Cn
