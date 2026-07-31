@@ -456,6 +456,35 @@ export function initProperties({ container, store, renderer = null }) {
       }
       container.appendChild(dirRow);
 
+      // Clock source (FR-094f): a 1-wide input port may be marked as the net a
+      // test-vector run drives as a clock, so a design whose clock arrives from
+      // outside (no clock-generator built-in placed) can be tested at all. The
+      // control appears only where the marking can be honored — a 1-wide port
+      // whose EFFECTIVE direction is `in` — which is also what isClockPort
+      // checks at read time, so an unshown marking simply lies dormant rather
+      // than going stale (the dirOverride rule, FR-094d). Vector-run only: no
+      // electrical, netlist, or interactive-simulator effect.
+      const effDir = derivedDir === "bidir" ? (inst.dirOverride ?? "bidir") : derivedDir;
+      if (td.renderType === "port" && effDir === "in") {
+        const clkRow = el("div", "prop-row");
+        clkRow.appendChild(el("label", "prop-label", "clock source"));
+        // Its own class, not prop-input: that rule stretches a field to fill the
+        // value column, which a checkbox must not do.
+        const clkChk = el("input", "prop-check");
+        clkChk.type = "checkbox";
+        clkChk.checked = inst.isClock === true;
+        clkChk.disabled = locked;
+        clkChk.title =
+          "Drive this port as a clock in test-vector runs: its column takes 0/1/C " +
+          "and rows run in order on persistent state (FR-094f/FR-115e)";
+        clkChk.addEventListener("change", () => {
+          // Clear rather than store false, so an unmarked port carries no field.
+          store.dispatch(setPortPropsCmd(inst.refdes, { isClock: clkChk.checked ? true : null }));
+        });
+        clkRow.appendChild(clkChk);
+        container.appendChild(clkRow);
+      }
+
       // Only the multi-bit port has a width, fixed at placement (FR-071e), shown
       // read-only. A 1-wide port is always one bit (FR-094) — no width control.
       if (td.renderType === "portN") {

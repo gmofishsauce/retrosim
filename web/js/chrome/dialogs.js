@@ -21,7 +21,7 @@ import {
   groupToHex,
   groupFromHex,
   groupActualHex,
-  hasClockGenerators,
+  clockSources,
   isStateful,
 } from "../engine/vectors.js";
 
@@ -1642,11 +1642,12 @@ export function testVectorsPanel({ store, dataDir }) {
   function build() {
     const design = store.design;
     const columns = deriveColumns(design);
-    // Sequential mode (FR-115e): a stateful design (a clock generator or a
+    // Sequential mode (FR-115e): a stateful design (a scripted clock source or a
     // transparent latch, FR-079d) runs its rows in order on persistent state and
-    // shows a persistent notice; only a clock generator adds 0/1/C cells and the
-    // power-on preamble.
-    const clocked = hasClockGenerators(design);
+    // shows a persistent notice; only a clock source adds 0/1/C cells and the
+    // power-on preamble. A clock source is a clock generator or a port marked as
+    // one (FR-094f) — indistinguishable to the panel.
+    const clocked = clockSources(design).length > 0;
     const stateful = isStateful(design);
     const rows = [emptyRow(columns)]; // start with one blank row to fill
     let runResults = null; // [{ cells, pass }] aligned to rows, or null when stale

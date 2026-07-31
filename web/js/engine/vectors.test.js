@@ -19,7 +19,8 @@ import {
   groupToHex,
   groupFromHex,
   groupActualHex,
-  hasClockGenerators,
+  clockSources,
+  isStateful,
   FORMAT_VERSION,
 } from "./vectors.js";
 import { V0, V1 } from "./galasm.js";
@@ -700,17 +701,17 @@ test("ports: port columns union with switch/indicator columns (FR-115b/FR-115f)"
   assert.ok(cols.outputs.some((c) => c.pin === "P")); // output port
 });
 
-// --- clocked-design guard (FR-115g) ---
+// --- scripted clock sources (FR-115e/FR-094f) ---
 
-test("hasClockGenerators: false for a combinational design (FR-115g)", () => {
-  assert.equal(hasClockGenerators(bufferDesign()), false);
-  assert.equal(hasClockGenerators({ name: "empty" }), false); // no components at all
+test("clockSources: empty for a combinational design", () => {
+  assert.deepEqual(clockSources(bufferDesign()), []);
+  assert.deepEqual(clockSources({ name: "empty" }), []); // no components at all
 });
 
-test("hasClockGenerators: true when a clock built-in is placed (FR-115g)", () => {
+test("clockSources: a placed clock built-in, at its OUT pin", () => {
   const d = bufferDesign();
   place(d, "A-3", builtin("clock"));
-  assert.equal(hasClockGenerators(d), true);
+  assert.deepEqual(clockSources(d), [{ refdes: "A-3", pin: "OUT" }]);
 });
 
 // --- sequential vectors (FR-115e) ---
@@ -750,6 +751,153 @@ test("deriveColumns: a clock generator is a kind:'clock' input column; emptyRow 
   );
   const row = emptyRow(cols);
   assert.deepEqual(row.in, ["0", "C"]);
+});
+
+// --- clock-source ports (FR-094f) ---
+
+// portClockedDff: the same DFF, but its clock arrives on a PORT rather than from
+// a placed clock generator — the notL4C381 shape (a board clocked from outside).
+// `marked` sets the FR-094f flag.
+function portClockedDff({ marked = true } = {}) {
+  const d = createDesign("t");
+  const u = addInstance(d, DFF, 10, 10, 0);
+  const clk = addInstance(d, PORT, 0, 0, 0);
+  clk.label = "CLK";
+  if (marked) clk.isClock = true;
+  const dIn = addInstance(d, PORT, 0, 10, 0);
+  dIn.label = "D";
+  const q = addInstance(d, PORT, 20, 10, 0);
+  q.label = "Q";
+  wire(d, clk.refdes, "P", u.refdes, "CP");
+  wire(d, dIn.refdes, "P", u.refdes, "D");
+  wire(d, u.refdes, "Q", q.refdes, "P");
+  return { d, clk, dIn, q, u };
+}
+
+test("clockSources: a marked port is a clock source at its P pin (FR-094f)", () => {
+  const { d, clk } = portClockedDff();
+  assert.deepEqual(clockSources(d), [{ refdes: clk.refdes, pin: "P" }]);
+  // The same design unmarked has none — the label "CLK" means nothing.
+  assert.deepEqual(clockSources(portClockedDff({ marked: false }).d), []);
+});
+
+test("deriveColumns: a marked port is a kind:'clock' column; emptyRow defaults it C (FR-094f)", () => {
+  const { d, clk, dIn } = portClockedDff();
+  const cols = deriveColumns(d);
+  const byRef = Object.fromEntries(cols.inputs.map((c) => [c.refdes, c]));
+  assert.equal(byRef[clk.refdes].kind, "clock");
+  assert.equal(byRef[clk.refdes].pin, "P"); // its own identity, unchanged
+  assert.equal(byRef[dIn.refdes].kind, undefined); // an ordinary input port
+  assert.equal(cols.warnings.length, 0);
+  // A new row defaults the clock cell C and the others 0 — same as a generator.
+  const clkAt = cols.inputs.findIndex((c) => c.refdes === clk.refdes);
+  assert.equal(emptyRow(cols).in[clkAt], "C");
+});
+
+test("serializeVectors: a marked port's kind is live-only, so the .tv is unchanged (FR-094f/§7.7)", () => {
+  const { d, clk } = portClockedDff();
+  const cols = deriveColumns(d);
+  const out = serializeVectors({ ...cols, rows: [emptyRow(cols)] });
+  const col = out.inputs.find((c) => c.refdes === clk.refdes);
+  assert.deepEqual(Object.keys(col).sort(), ["label", "pin", "refdes"]); // no kind
+  assert.equal(out.formatVersion, FORMAT_VERSION); // no bump
+});
+
+test("sequential run: a marked port clocks the register — C pulses, 0 holds (FR-094f)", () => {
+  const { d, clk, dIn } = portClockedDff();
+  const cols = deriveColumns(d);
+  const at = (r) => cols.inputs.findIndex((c) => c.refdes === r);
+  const row = (dv, cv, expect) => {
+    const inSyms = new Array(cols.inputs.length).fill("0");
+    inSyms[at(dIn.refdes)] = dv;
+    inSyms[at(clk.refdes)] = cv;
+    return { in: inSyms, out: [expect] };
+  };
+  const res = runVectors(d, {
+    ...cols,
+    rows: [
+      row("1", "C", "H"), // pulse latches D=1
+      row("0", "0", "H"), // clock held low: Q keeps its state across rows
+      row("0", "C", "L"), // pulse latches D=0
+    ],
+  });
+  assert.equal(res.passed, 3);
+  assert.equal(res.total, 3);
+});
+
+test("sequential run: a 0→1 level change across rows is a real edge (FR-094f/FR-115e)", () => {
+  // The level-cell idiom: no C anywhere, just a clock line walked low then high
+  // between rows — an edge only because rows share one simulation instance.
+  const { d, clk, dIn } = portClockedDff();
+  const cols = deriveColumns(d);
+  const at = (r) => cols.inputs.findIndex((c) => c.refdes === r);
+  const row = (dv, cv, expect) => {
+    const inSyms = new Array(cols.inputs.length).fill("0");
+    inSyms[at(dIn.refdes)] = dv;
+    inSyms[at(clk.refdes)] = cv;
+    return { in: inSyms, out: [expect] };
+  };
+  const res = runVectors(d, {
+    ...cols,
+    rows: [
+      row("1", "0", "X"), // set up D=1 with the clock low
+      row("1", "1", "H"), // rising edge here: Q takes D
+      row("0", "1", "H"), // no new edge (still high): Q holds
+    ],
+  });
+  assert.equal(res.passed, 3);
+});
+
+test("without the mark the design is stateless and the register never clocks (FR-094f)", () => {
+  // The regression this feature fixes: a clock arriving on an unmarked port
+  // leaves the design combinational, so each row runs on a fresh simulation and
+  // the register's prevClock goes U→1 — never the 0→1 its edge test needs.
+  const { d, clk, dIn } = portClockedDff({ marked: false });
+  assert.equal(isStateful(d), false);
+  const cols = deriveColumns(d);
+  assert.ok(cols.inputs.every((c) => c.kind === undefined)); // no clock column
+  const at = (r) => cols.inputs.findIndex((c) => c.refdes === r);
+  const row = (dv, cv) => {
+    const inSyms = new Array(cols.inputs.length).fill("0");
+    inSyms[at(dIn.refdes)] = dv;
+    inSyms[at(clk.refdes)] = cv;
+    return { in: inSyms, out: ["X"] };
+  };
+  const res = runVectors(d, { ...cols, rows: [row("1", "0"), row("1", "1")] });
+  assert.equal(res.sim.valueOfPin("U1", "Q"), 2); // VU — never latched
+});
+
+test("isStateful: a marked port alone makes the design stateful (FR-094f)", () => {
+  assert.equal(isStateful(portClockedDff().d), true);
+});
+
+test("deriveColumns: an unhonorable clock mark is ignored with a warning (FR-094f)", () => {
+  // On a multi-bit port: a clock is one bit.
+  const d1 = createDesign("t");
+  const p = addInstance(d1, portNType(2), 0, 0, 0);
+  p.label = "B";
+  p.isClock = true;
+  const u = addInstance(d1, NOT, 10, 0, 0);
+  wire(d1, p.refdes, "P0", u.refdes, "A");
+  const c1 = deriveColumns(d1);
+  assert.equal(c1.warnings.length, 1);
+  assert.match(c1.warnings[0], /multi-bit/);
+  assert.ok(c1.inputs.every((c) => c.kind === undefined));
+  assert.deepEqual(clockSources(d1), []);
+  assert.equal(isStateful(d1), false);
+
+  // On an output port: not an input column at all.
+  const d2 = createDesign("t");
+  const u2 = addInstance(d2, NOT, 10, 0, 0);
+  const out = addInstance(d2, PORT, 20, 0, 0);
+  out.label = "Y";
+  out.isClock = true;
+  wire(d2, u2.refdes, "Y", out.refdes, "P");
+  const c2 = deriveColumns(d2);
+  assert.equal(c2.warnings.length, 1);
+  assert.match(c2.warnings[0], /not in/);
+  assert.ok(c2.outputs.every((c) => c.kind === undefined));
+  assert.deepEqual(clockSources(d2), []);
 });
 
 test("sequential run: rows persist register state; C pulses, 0 holds (FR-115e)", () => {

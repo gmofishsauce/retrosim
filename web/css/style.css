@@ -316,6 +316,9 @@ body {
 .prop-label { flex: 0 0 5rem; color: #444; }
 .prop-value { color: #111; }
 .prop-input { flex: 1 1 auto; width: 4rem; padding: 0.2rem; }
+/* A boolean per-instance field (the FR-094f clock-source mark): sits at its
+   natural size at the left of the value column instead of stretching. */
+.prop-check { flex: 0 0 auto; margin: 0.2rem auto 0.2rem 0; }
 .prop-row.overridden .prop-label { font-weight: 600; color: #1565c0; }
 /* Probe sheet (FR-087c): a tag marking the panel as a live reading rather than
    a selection, and monospace values so a column of bits lines up. */

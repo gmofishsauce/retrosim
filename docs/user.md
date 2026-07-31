@@ -793,6 +793,20 @@ properties panel:
   the derived value is bidir — if the wiring later becomes definite, the wiring
   wins. The effective direction drives the embedded block's pin layout and the
   [test-vector](#test-vectors) column binding.
+- **clock source** (optional) — a checkbox, shown only on a **1-wide port whose
+  effective direction is `in`**, that marks this port as the net a
+  [test-vector](#test-vectors) run should drive as a **clock**. Use it when the
+  circuit under test is clocked from *outside* — a board whose clock arrives on
+  an interface pin, rather than one carrying a clock-generator built-in. Ticking
+  it makes the port's vector column a clock column (cells `0`/`1`/`C`) and makes
+  the design **sequential** for vector runs, so rows run in order on persistent
+  state. It changes nothing else: the port still drives nothing of its own, the
+  netlist is untouched, and it has **no effect on the interactive simulator** —
+  a marked port carries no waveform and no period, so pressing **Run** on a
+  design whose only clock is a marked port still gives you a combinational run,
+  with nothing to pace and no cycle to step. (For an interactive run you need a
+  real clock generator.) You may mark more than one port, and marked ports work
+  alongside clock generators.
 - **off-sheet target** (optional) — two fields, **target file** and **target
   label**, that turn the port into an *off-sheet connector*: its net continues
   to the port carrying that label in another sheet of the same circuit. The
@@ -1084,8 +1098,11 @@ panel to edit or run the design again.
 The table's columns come from your design automatically:
 
 - one **input** column per [input switch](#11-built-in-components), holding `0` or `1`;
-- one **input** column per **clock generator**, holding `0`, `1`, or `C`
-  (sequential designs — see below);
+- one **input** column per **clock source**, holding `0`, `1`, or `C`
+  (sequential designs — see below). A clock source is either a **clock
+  generator** built-in or an input **port marked "clock source"** in the
+  properties panel (see [Sub-designs and ports](#12-sub-designs-and-ports)) —
+  the table treats the two identically;
 - your design's [ports](#12-sub-designs-and-ports) become columns according to
   their direction — an **input** port's cell drives its net (`0`/`1`), an
   **output** port's cell is checked like an indicator (`H`/`L`/`X`); a multi-bit
@@ -1101,17 +1118,17 @@ The table's columns come from your design automatically:
 A design containing [sub-designs](#12-sub-designs-and-ports) runs **flattened**,
 exactly as the interactive simulator does; the columns still come only from the
 top sheet's own switches, clocks, indicators, and ports. One restriction: a
-**clock generator inside an embedded child** can't be scripted by the table, so
-Run and Capture refuse such a design with a message — keep clocks on the sheet
-under test.
+**clock source inside an embedded child** — a clock generator, or a port marked
+as a clock source — can't be scripted by the table, so Run and Capture refuse
+such a design with a message. Keep clocks on the sheet under test.
 
-**Combinational designs** (no clock generator): each row is one **independent**
+**Combinational designs** (no clock source): each row is one **independent**
 case — its inputs are applied, the circuit settles, and the outputs are compared.
 
-**Sequential designs** (at least one clock generator): the panel shows a notice
+**Sequential designs** (at least one clock source): the panel shows a notice
 that rows run **in order** on one continuous simulation — registers keep their
 state from each row to the next, so the table reads as a script. Each clock
-generator gets its own column:
+source gets its own column:
 
 - **`C`** (the default in a new row) applies **one full clock pulse**: the row's
   other inputs are applied and settled first, then the clock goes high and back
@@ -1326,7 +1343,11 @@ in a debug run, switches hold the positions they were in when you generated,
 and after the last cycle the program prints each observable point (the same
 column set) as a `LABEL=value` line — values `0`, `1`, `U`, or `Z`. This is
 the mode for letting a design — a ROM-driven circuit, a counter, eventually a
-CPU — simply run.
+CPU — simply run. Note that a port marked **clock source** is *not* driven in
+this mode — like the interactive **Run**, free-running needs a real clock
+generator, since a marked port has no waveform to produce. A design clocked
+only through a marked port free-runs with that net undriven; test-vector mode
+is where such a design is exercised.
 
 Any **[magic UART](#11-built-in-components)** in the design writes its emitted
 characters to the program's real standard output in both modes, so you can pipe

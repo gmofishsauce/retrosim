@@ -1,0 +1,621 @@
+{
+  "formatVersion": 3,
+  "name": "port-clock",
+  "components": [
+    {
+      "refdes": "U1",
+      "type": "type-74174",
+      "x": 30,
+      "y": 10,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-74174",
+        "name": "74174",
+        "renderType": "unit",
+        "width": 6,
+        "height": 14,
+        "pins": [
+          {
+            "name": "D0",
+            "side": "left",
+            "position": 2,
+            "direction": "in",
+            "number": 3,
+            "desc": "data input bit 0"
+          },
+          {
+            "name": "D1",
+            "side": "left",
+            "position": 3,
+            "direction": "in",
+            "number": 4,
+            "desc": "data input bit 1"
+          },
+          {
+            "name": "D2",
+            "side": "left",
+            "position": 4,
+            "direction": "in",
+            "number": 6,
+            "desc": "data input bit 2"
+          },
+          {
+            "name": "D3",
+            "side": "left",
+            "position": 5,
+            "direction": "in",
+            "number": 11,
+            "desc": "data input bit 3"
+          },
+          {
+            "name": "D4",
+            "side": "left",
+            "position": 6,
+            "direction": "in",
+            "number": 13,
+            "desc": "data input bit 4"
+          },
+          {
+            "name": "D5",
+            "side": "left",
+            "position": 7,
+            "direction": "in",
+            "number": 14,
+            "desc": "data input bit 5"
+          },
+          {
+            "name": "Q0",
+            "side": "right",
+            "position": 2,
+            "direction": "out",
+            "number": 2,
+            "desc": "registered output bit 0"
+          },
+          {
+            "name": "Q1",
+            "side": "right",
+            "position": 3,
+            "direction": "out",
+            "number": 5,
+            "desc": "registered output bit 1"
+          },
+          {
+            "name": "Q2",
+            "side": "right",
+            "position": 4,
+            "direction": "out",
+            "number": 7,
+            "desc": "registered output bit 2"
+          },
+          {
+            "name": "Q3",
+            "side": "right",
+            "position": 5,
+            "direction": "out",
+            "number": 10,
+            "desc": "registered output bit 3"
+          },
+          {
+            "name": "Q4",
+            "side": "right",
+            "position": 6,
+            "direction": "out",
+            "number": 12,
+            "desc": "registered output bit 4"
+          },
+          {
+            "name": "Q5",
+            "side": "right",
+            "position": 7,
+            "direction": "out",
+            "number": 15,
+            "desc": "registered output bit 5"
+          },
+          {
+            "name": "CP",
+            "side": "top",
+            "position": 2,
+            "direction": "in",
+            "number": 9,
+            "desc": "clock input, rising-edge triggered"
+          },
+          {
+            "name": "/MR",
+            "side": "top",
+            "position": 5,
+            "direction": "in",
+            "number": 1,
+            "desc": "active-low asynchronous master reset"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "D",
+            "pins": [
+              "D0",
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5"
+            ]
+          },
+          {
+            "name": "Q",
+            "pins": [
+              "Q0",
+              "Q1",
+              "Q2",
+              "Q3",
+              "Q4",
+              "Q5"
+            ]
+          }
+        ],
+        "delays": {
+          "th": 3,
+          "tpd_cp": 20,
+          "tpd_mr": 16,
+          "tsu": 12
+        },
+        "behavior": "; 74174 — hex D-type flip-flop with a common asynchronous master reset.\n; Derived from the function table (datasheet Table 3): while /MR is LOW all\n; six outputs are forced LOW asynchronously; otherwise each output Qn loads\n; the value of Dn at the LOW-to-HIGH transition of CP.\n;\n; SEQUENTIAL-PART CLOCK CONVENTION (74574.yaml): GALasm's .R registered\n; outputs are clocked by the GAL22V10's dedicated pin-1 clock\n; (galasmManual.txt section 3.4). That pin-1 clock role is played by the\n; part's named clock pin — here CP, rising-edge triggered. CP therefore does\n; NOT appear as a term in any equation below; the .R suffix implies it.\n;\n; The asynchronous master reset uses GALasm's global AR (galasmManual.txt\n; section 3.6): while its term is true every register is held at 0,\n; independent of the clock. Pin /MR is active LOW, so AR = /MR.\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (pin /MR is GAL signal MR, so '/MR' means \"pin /MR is LOW\").\nAR   = /MR\nQ0.R = D0\nQ1.R = D1\nQ2.R = D2\nQ3.R = D3\nQ4.R = D4\nQ5.R = D5\n",
+        "clock": "CP",
+        "description": "Hex D flip-flop with common async reset, positive edge-trigger",
+        "datasheet": {
+          "vendor": "Nexperia",
+          "title": "74HC174; 74HCT174 Hex D-type flip-flop with reset; positive-edge trigger",
+          "rev": "Rev. 7, 14 March 2024",
+          "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT174.pdf"
+        },
+        "physical": {
+          "package": "DIP-16",
+          "pincount": 16,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 16
+            },
+            {
+              "name": "GND",
+              "number": 8
+            }
+          ]
+        }
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-1",
+      "type": "type-port",
+      "x": 0,
+      "y": 0,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "CLK",
+      "portDir": "in",
+      "isClock": true
+    },
+    {
+      "refdes": "A-2",
+      "type": "type-port",
+      "x": 0,
+      "y": 10,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "D0",
+      "portDir": "in"
+    },
+    {
+      "refdes": "A-3",
+      "type": "type-port",
+      "x": 60,
+      "y": 10,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "Q0",
+      "portDir": "in"
+    },
+    {
+      "refdes": "A-4",
+      "type": "type-port",
+      "x": 0,
+      "y": 20,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "D1",
+      "portDir": "in"
+    },
+    {
+      "refdes": "A-5",
+      "type": "type-port",
+      "x": 60,
+      "y": 20,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "Q1",
+      "portDir": "in"
+    },
+    {
+      "refdes": "A-6",
+      "type": "type-reset",
+      "x": 0,
+      "y": 40,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-reset",
+        "name": "reset",
+        "builtin": true,
+        "title": "power-on reset",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"3\" y=\"11\" width=\"30\" height=\"14\" fill=\"#fff\" stroke=\"#333\"/><text x=\"18\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"10\" fill=\"#000\">RST</text></svg>",
+        "renderType": "reset",
+        "width": 3,
+        "height": 3,
+        "pins": [
+          {
+            "name": "R",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          },
+          {
+            "name": "/R",
+            "side": "right",
+            "position": 2,
+            "direction": "out"
+          }
+        ],
+        "properties": [
+          {
+            "name": "cycles",
+            "unit": "cycles",
+            "default": 3
+          }
+        ]
+      },
+      "overrides": {}
+    }
+  ],
+  "wires": [
+    {
+      "id": "w1",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1"
+        },
+        {
+          "t": "node",
+          "v": "v2"
+        }
+      ]
+    },
+    {
+      "id": "w2",
+      "path": [
+        {
+          "t": "node",
+          "v": "v3"
+        },
+        {
+          "t": "node",
+          "v": "v4"
+        }
+      ]
+    },
+    {
+      "id": "w3",
+      "path": [
+        {
+          "t": "node",
+          "v": "v5"
+        },
+        {
+          "t": "node",
+          "v": "v6"
+        }
+      ]
+    },
+    {
+      "id": "w4",
+      "path": [
+        {
+          "t": "node",
+          "v": "v7"
+        },
+        {
+          "t": "node",
+          "v": "v8"
+        }
+      ]
+    },
+    {
+      "id": "w5",
+      "path": [
+        {
+          "t": "node",
+          "v": "v9"
+        },
+        {
+          "t": "node",
+          "v": "v10"
+        }
+      ]
+    },
+    {
+      "id": "w6",
+      "path": [
+        {
+          "t": "node",
+          "v": "v11"
+        },
+        {
+          "t": "node",
+          "v": "v12"
+        }
+      ]
+    }
+  ],
+  "buses": [],
+  "vertices": [
+    {
+      "id": "v1",
+      "kind": "connector",
+      "ref": "A-1",
+      "pin": "P",
+      "x": 2,
+      "y": 1
+    },
+    {
+      "id": "v2",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "CP",
+      "x": 32,
+      "y": 10
+    },
+    {
+      "id": "v3",
+      "kind": "connector",
+      "ref": "A-2",
+      "pin": "P",
+      "x": 2,
+      "y": 11
+    },
+    {
+      "id": "v4",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D0",
+      "x": 30,
+      "y": 12
+    },
+    {
+      "id": "v5",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Q0",
+      "x": 36,
+      "y": 12
+    },
+    {
+      "id": "v6",
+      "kind": "connector",
+      "ref": "A-3",
+      "pin": "P",
+      "x": 62,
+      "y": 11
+    },
+    {
+      "id": "v7",
+      "kind": "connector",
+      "ref": "A-4",
+      "pin": "P",
+      "x": 2,
+      "y": 21
+    },
+    {
+      "id": "v8",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D1",
+      "x": 30,
+      "y": 13
+    },
+    {
+      "id": "v9",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "Q1",
+      "x": 36,
+      "y": 13
+    },
+    {
+      "id": "v10",
+      "kind": "connector",
+      "ref": "A-5",
+      "pin": "P",
+      "x": 62,
+      "y": 21
+    },
+    {
+      "id": "v11",
+      "kind": "pin",
+      "ref": "A-6",
+      "pin": "/R",
+      "x": 3,
+      "y": 42
+    },
+    {
+      "id": "v12",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "/MR",
+      "x": 35,
+      "y": 10
+    }
+  ],
+  "refCounters": {
+    "U": 2,
+    "A": 7,
+    "N": 1,
+    "X": 1
+  },
+  "nets": [
+    {
+      "pins": [
+        "U1.CP",
+        "A-1.P"
+      ],
+      "members": [
+        "w1"
+      ],
+      "provenance": [],
+      "name": "CLK"
+    },
+    {
+      "pins": [
+        "U1.D0",
+        "A-2.P"
+      ],
+      "members": [
+        "w2"
+      ],
+      "provenance": [],
+      "name": "D0"
+    },
+    {
+      "pins": [
+        "U1.Q0",
+        "A-3.P"
+      ],
+      "members": [
+        "w3"
+      ],
+      "provenance": [],
+      "name": "Q0"
+    },
+    {
+      "pins": [
+        "U1.D1",
+        "A-4.P"
+      ],
+      "members": [
+        "w4"
+      ],
+      "provenance": [],
+      "name": "D1"
+    },
+    {
+      "pins": [
+        "U1.Q1",
+        "A-5.P"
+      ],
+      "members": [
+        "w5"
+      ],
+      "provenance": [],
+      "name": "Q1"
+    },
+    {
+      "pins": [
+        "A-6./R",
+        "U1./MR"
+      ],
+      "members": [
+        "w6"
+      ],
+      "provenance": [],
+      "name": "/R"
+    }
+  ]
+}

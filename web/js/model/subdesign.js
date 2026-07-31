@@ -89,6 +89,23 @@ export function effectivePortDir(design, portRefdes) {
   return inst?.dirOverride ?? derived;
 }
 
+// isClockPort reports whether a port is marked as a scripted clock source
+// (FR-094f): a 1-wide port carrying `isClock` whose *effective* direction is
+// `in`. The marking is honored at READ time, not at set time — a marked port
+// whose wiring later makes it an output simply stops being a clock column
+// (the dormancy rule effectivePortDir applies to dirOverride, FR-094d) rather
+// than going stale. This is the single predicate every consumer reads: the
+// vector runner (§6.16), the panel, and the C generator's column tables
+// (§6.17). Nothing in sim.js/netlist.js/canvas.js consults it — a clock-source
+// port draws, wires, and simulates as an ordinary port.
+//
+// `dir` is injectable so a caller that already resolved the effective direction
+// (deriveColumns does, per port) does not pay for a second buildNets pass.
+export function isClockPort(design, portRefdes, dir = effectivePortDir(design, portRefdes)) {
+  const inst = (design.components ?? []).find((c) => c.refdes === portRefdes);
+  return inst?.isClock === true && inst.typeData?.renderType === "port" && dir === "in";
+}
+
 // applyOverride folds a port instance's optional override into a derived
 // direction, with the same bidir-only rule as effectivePortDir (FR-094d).
 function applyOverride(dir, inst) {

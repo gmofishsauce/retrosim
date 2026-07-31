@@ -1,11 +1,14 @@
 // Test vectors (§6.16, FR-115): a DOM-free runner and file model for an authored
 // table of input patterns + expected outputs, scored against the slow simulator.
-// A combinational design (no clock generator) evaluates each row independently
-// (FR-115c): drive the inputs, settle to quiescence (FR-085), compare outputs.
-// A sequential design (≥1 clock generator) runs its rows IN ORDER on a single
-// simulation instance (FR-115e): state persists row to row, each clock generator
-// is a 0/1/C input column (C = one positive pulse, PLD/JEDEC style), and an
-// implicit power-on preamble asserts the reset built-ins before row 1.
+// A combinational design (no scripted clock source, no latch) evaluates each row
+// independently (FR-115c): drive the inputs, settle to quiescence (FR-085),
+// compare outputs. A stateful design runs its rows IN ORDER on a single
+// simulation instance (FR-115e): state persists row to row, each scripted clock
+// source is a 0/1/C input column (C = one positive pulse, PLD/JEDEC style), and
+// an implicit power-on preamble asserts the reset built-ins before row 1.
+// A scripted clock source is a clock-generator built-in (FR-071) or a port
+// marked as a clock source (FR-094f) — see clockSources; the two are
+// interchangeable from here on down.
 //
 // Shapes used throughout:
 //   column  { refdes, pin, label, kind? }  — one bound connection point; kind
@@ -17,7 +20,7 @@
 
 import { buildSimulation, SETTLE_BOUND } from "./sim.js";
 import { V0, V1 } from "./galasm.js";
-import { effectivePortDir } from "../model/subdesign.js";
+import { effectivePortDir, isClockPort } from "../model/subdesign.js";
 
 // FORMAT_VERSION is the `.tv` file format this client writes and understands
 // (§7.7); mirror persist.js — bump it and add a MIGRATIONS step on any change.
@@ -58,15 +61,35 @@ export function migrate(obj, { target = FORMAT_VERSION, migrations = MIGRATIONS 
   return obj;
 }
 
-// hasClockGenerators reports whether the design contains at least one clock
-// generator built-in (FR-071) — the condition that makes it sequential (FR-086)
-// and selects the ordered, scripted-clock run path (FR-115e), the clock columns
-// in deriveColumns, and the dialog's sequential-mode notice. A design scan
-// (renderType === "clock", the same identification buildSimulation uses) rather
-// than buildSimulation(...).hasClocks(), which would compile every behavior
-// just to answer a yes/no question.
-export function hasClockGenerators(design) {
-  return (design.components ?? []).some((c) => c.typeData?.renderType === "clock");
+// clockSources lists the design's SCRIPTED CLOCK SOURCES (FR-115e) as
+// [{ refdes, pin }] — the things a vector run drives as a clock:
+//   • every clock generator built-in (FR-071), at its (refdes, "OUT")
+//   • every port marked as a clock source (FR-094f), at its (refdes, "P")
+// The two are indistinguishable downstream: deriveColumns marks both
+// kind:"clock", the panel offers both 0/1/C, and runSequentialPass drives both
+// through the same stimulus entries. Replaces the former hasClockGenerators —
+// a second, generator-only predicate is exactly how a clock-source port would
+// get silently dropped from one of the three consumers, and no consumer wants
+// "generators only" (the C-pulse columns and the preamble apply to a marked
+// port identically, which is the point of FR-094f).
+//
+// A pure, DOM-free design scan — deliberately not buildSimulation(...).hasClocks(),
+// which would compile every behavior just to answer a yes/no question, and which
+// answers a DIFFERENT question anyway: hasClocks() counts free-running waveform
+// sources and correctly ignores a marked port, keeping the interactive simulator
+// combinational (FR-094f, §6.13).
+export function clockSources(design) {
+  const out = [];
+  for (const c of design.components ?? []) {
+    if (c.typeData?.renderType === "clock") {
+      out.push({ refdes: c.refdes, pin: "OUT" });
+    } else if (c.isClock === true && isClockPort(design, c.refdes)) {
+      // The cheap flag test guards the call: isClockPort resolves the effective
+      // direction, which builds the netlist, so it must not run per component.
+      out.push({ refdes: c.refdes, pin: "P" });
+    }
+  }
+  return out;
 }
 
 // LATCH_SUFFIX_RE matches a `.L` transparent-latch output suffix (FR-079d) in a
@@ -90,13 +113,11 @@ function behaviorHasLatch(behavior) {
 // isStateful reports whether the design carries state that must survive from one
 // vector row to the next, selecting the ordered/persistent run path (FR-115e) in
 // runVectors/captureVectors — so a latch's hold spans rows even in a clock-less
-// design. True when the design has a clock generator OR any in-use type whose
-// behavior declares a transparent latch (a `.L` output, FR-079d). A pure,
-// DOM-free design scan — deliberately not buildSimulation(...).hasClocks(),
-// which would compile every behavior. hasClockGenerators still gates the
-// clock-specific machinery (the C-pulse columns and the scripted-clock preamble).
+// design, and so a design clocked only through a marked port (FR-094f) runs its
+// rows in order at all. True when the design has any scripted clock source OR any
+// in-use type whose behavior declares a transparent latch (a `.L` output, FR-079d).
 export function isStateful(design) {
-  if (hasClockGenerators(design)) return true;
+  if (clockSources(design).length > 0) return true;
   return (design.components ?? []).some((c) => behaviorHasLatch(c.typeData?.behavior));
 }
 
@@ -148,6 +169,18 @@ export function deriveColumns(design) {
       // in → input, out → output, bidir → io (a three-state bus column, FR-115i).
       const bucket = dir === "out" ? outputs : dir === "bidir" ? io : inputs;
       const isIo = dir === "bidir";
+      // A clock-source port (FR-094f) takes the same kind:"clock" marker a clock
+      // generator does, so the whole 0/1/C path below and downstream applies
+      // unchanged — same identity, same (refdes,"P"), nothing new in the file.
+      // A marking that cannot be honored (multi-bit, or not an input column) is
+      // ignored with a warning rather than silently dropped.
+      if (c.isClock === true && !isClockPort(design, c.refdes, dir)) {
+        warnings.push(
+          `${label}: marked as a clock source but ${
+            rt === "portN" ? "is a multi-bit port (a clock is one bit)" : `its direction is ${dir}, not in`
+          } — the marking is ignored (FR-094f)`,
+        );
+      }
       if (rt === "portN") {
         const n = (c.typeData.pins ?? []).length;
         for (let i = 0; i < n; i++) {
@@ -161,7 +194,14 @@ export function deriveColumns(design) {
           });
         }
       } else {
-        bucket.push({ refdes: c.refdes, pin: "P", label, ...(isIo && { io: true }) });
+        const clock = isClockPort(design, c.refdes, dir); // FR-094f
+        bucket.push({
+          refdes: c.refdes,
+          pin: "P",
+          label,
+          ...(isIo && { io: true }),
+          ...(clock && { kind: "clock" }),
+        });
       }
     }
   }
@@ -172,17 +212,16 @@ export function deriveColumns(design) {
 }
 
 // refuseHiddenClocks throws when a flattened design (FR-102/FR-103, §6.14)
-// carries a clock generator inside a sub-design or peer sheet — its refdes is
-// hierarchical. Scripted-clock vector runs (FR-115e) drive clocks through
+// carries a scripted clock source inside a sub-design or peer sheet — its refdes
+// is hierarchical. Scripted-clock vector runs (FR-115e) drive clocks through
 // top-sheet columns only; a hidden clock would silently float U, so refuse
-// instead (FR-115e deferred scope).
+// instead (FR-115e deferred scope). Reading clockSources covers a marked port
+// (FR-094f) by the same rule, from the same list, with no second scan.
 function refuseHiddenClocks(design) {
-  const hidden = (design.components ?? []).find(
-    (c) => c.typeData?.renderType === "clock" && c.refdes.includes("/"),
-  );
+  const hidden = clockSources(design).find((c) => c.refdes.includes("/"));
   if (hidden) {
     throw new Error(
-      `clock generator ${hidden.refdes} is inside a sub-design or peer sheet; ` +
+      `clock source ${hidden.refdes} is inside a sub-design or peer sheet; ` +
         `test vectors support clocks on the top sheet only`,
     );
   }
@@ -275,7 +314,12 @@ function effectiveProp(inst, name) {
 function runSequentialPass(design, inputs, io, rows, romContent, onRow, limit = Infinity) {
   const clone = structuredClone(design);
   const byRefdes = new Map(clone.components.map((c) => [c.refdes, c]));
-  const clocks = clone.components.filter((c) => c.typeData?.renderType === "clock");
+  // Clocks are addressed BY COLUMN, not by component (FR-094f): each clock
+  // column carries its own pin — "OUT" for a generator, "P" for a clock-source
+  // port — and setStimulus is keyed by (refdes, pin), a port's net being
+  // drivable per FR-094e. So one set of entries serves both kinds through every
+  // phase below (preamble, per-row level, pulse), with no branch on which it is.
+  const clocks = inputs.filter((c) => c.kind === "clock");
   const resets = clone.components.filter((c) => c.typeData?.renderType === "reset");
   // scriptedClocks suppresses the clock/reset simTime behaviors (§6.13); this
   // pass owns their nets through the stimulus list.
@@ -294,7 +338,7 @@ function runSequentialPass(design, inputs, io, rows, romContent, onRow, limit = 
       ];
     });
   const clockLevels = (level) =>
-    clocks.map((c) => ({ refdes: c.refdes, pin: "OUT", value: level }));
+    clocks.map((c) => ({ refdes: c.refdes, pin: c.pin, value: level }));
 
   // Power-on preamble (FR-115e): with every reset asserted, apply max(cycles)
   // scripted pulses; each reset releases on the low phase after its own count
@@ -321,15 +365,18 @@ function runSequentialPass(design, inputs, io, rows, romContent, onRow, limit = 
     // cells force their nets (FR-115i); switches set on the clone's instances
     // (behaviors read switchState live each step).
     const base = resetEntries(Infinity);
-    const pulseClocks = new Set(); // refdes of clocks with a C cell this row
+    // Keyed by refdes.pin, not refdes alone: a clock column's pin is "OUT" for a
+    // generator but "P" for a clock-source port (FR-094f), and a port's refdes
+    // also names its non-clock columns in other designs.
+    const pulseClocks = new Set(); // clocks with a C cell this row
     inputs.forEach((col, j) => {
       const sym = row.in[j];
       const inst = byRefdes.get(col.refdes);
       if (!inst) return;
       const rt = inst.typeData?.renderType;
-      if (rt === "clock") {
-        base.push({ refdes: col.refdes, pin: "OUT", value: sym === "1" ? V1 : V0 });
-        if (sym === "C") pulseClocks.add(col.refdes);
+      if (col.kind === "clock") {
+        base.push({ refdes: col.refdes, pin: col.pin, value: sym === "1" ? V1 : V0 });
+        if (sym === "C") pulseClocks.add(`${col.refdes}.${col.pin}`);
       } else if (rt === "port" || rt === "portN") {
         base.push({ refdes: col.refdes, pin: col.pin, value: sym === "1" ? V1 : V0 });
       } else {
@@ -343,7 +390,7 @@ function runSequentialPass(design, inputs, io, rows, romContent, onRow, limit = 
       // One shared positive pulse for every C clock in the row (FR-115e):
       // high, settle, low, settle — outputs are sampled after the pulse.
       const high = base.map((s) =>
-        pulseClocks.has(s.refdes) && s.pin === "OUT" ? { ...s, value: V1 } : s,
+        pulseClocks.has(`${s.refdes}.${s.pin}`) ? { ...s, value: V1 } : s,
       );
       sim.setStimulus(high);
       settleSim(sim);

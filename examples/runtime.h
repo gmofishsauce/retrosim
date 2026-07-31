@@ -313,6 +313,17 @@ extern const int gen_uart_count;
  * vectors.js isStateful (§6.16). */
 extern const int gen_latch_count;
 
+/* gen_clockport_count > 0 marks a clock-source port present (FR-094f): a 1-wide
+ * input port the design marked as the net a vector run drives as a clock, for a
+ * board whose clock arrives from outside rather than from a placed generator.
+ * It is the third way to be STATEFUL (with gen_clock_count and gen_latch_count)
+ * and the cue that some clock columns pulse through port_stim rather than
+ * gen_clocks. Such a port deliberately has NO gen_clocks entry: it carries no
+ * waveform and no period, so free-running mode (--cycles, FR-117a) does not
+ * drive it — matching the slow engine, where a marked port leaves the design
+ * combinational for an interactive run. */
+extern const int gen_clockport_count;
+
 /* --- Vector columns (FR-117) --- */
 
 /* Input column kinds: what the row symbol drives. */
@@ -321,6 +332,9 @@ typedef enum {
   RT_COL_CLOCK,  /* ref indexes gen_clocks; symbols 0/1/C (FR-115e) */
   RT_COL_PORT,   /* ref is a net index; symbol strong-drives the net
                   * (the external-stimulus force of FR-115f) */
+  RT_COL_PORT_CLOCK, /* a clock-source port (FR-094f): ref is a net index and the
+                      * symbol drives it exactly as RT_COL_PORT, but symbols are
+                      * 0/1/C and a C pulses it like a clock column */
 } rt_col_kind;
 
 typedef struct {

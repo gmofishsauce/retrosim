@@ -436,12 +436,31 @@ export function generateC(design, { columnsFrom = design } = {}) {
     );
   }
   const instByRefdes = new Map(design.components.map((c) => [c.refdes, c]));
+  let clockPorts = 0; // clock-source port columns (FR-094f), counted while lowering
   const incols = cols.inputs.map((col) => {
     // (refdes,pin) identity baked alongside the label so tv2txt can
     // reconcile a .tv file to the row format via --columns (design §6.17 M2).
     const id = { name: cstr(col.label), refdes: cstr(col.refdes), pin: cstr(col.pin) };
     if (col.kind === "clock") {
-      return { kind: "RT_COL_CLOCK", ref: clockIdx.get(col.refdes), ...id, label: 0 };
+      if (clockIdx.has(col.refdes)) {
+        return { kind: "RT_COL_CLOCK", ref: clockIdx.get(col.refdes), ...id, label: 0 };
+      }
+      // A clock-source port (FR-094f): a clock column whose refdes is a port, so
+      // it has no gen_clocks entry. It forces its own net exactly like an
+      // ordinary port column below, and the runner pulses it there. Deliberately
+      // NOT lowered as a synthesized gen_clocks entry: that would make
+      // gen_clock_count > 0 and hand the port a free-running FR-084 square wave
+      // in --cycles mode (plus a clock_period vote) that the slow engine does not
+      // have — a divergence outside vector mode, where no parity leg would catch
+      // it. FR-094f keeps a marked port out of the free-running path entirely.
+      clockPorts++;
+      driverCount++;
+      return {
+        kind: "RT_COL_PORT_CLOCK",
+        ref: netOf(`${col.refdes}.${col.pin}`),
+        ...id,
+        label: intern(`${col.refdes}.${col.pin}`),
+      };
     }
     if (instByRefdes.get(col.refdes)?.typeData?.renderType === "switch") {
       return { kind: "RT_COL_SWITCH", ref: switchIdx.get(col.refdes), ...id, label: 0 };
@@ -580,6 +599,11 @@ export function generateC(design, { columnsFrom = design } = {}) {
   // analogue of vectors.js isStateful (§6.16).
   const latchCount = latchUnits.reduce((n, u) => n + u.latches.length, 0);
   L.push(`const int gen_latch_count = ${latchCount};`);
+  // gen_clockport_count > 0 marks a clock-source port present (FR-094f): another
+  // way for a design to be STATEFUL with no clock generator placed, and the
+  // runner's cue that some clock columns pulse through port_stim rather than
+  // gen_clocks. Counted from the lowered columns above, not scanned separately.
+  L.push(`const int gen_clockport_count = ${clockPorts};`);
   L.push(``);
 
   L.push(`/* --- vector columns (FR-117; column order is the row format) --- */`);

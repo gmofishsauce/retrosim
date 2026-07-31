@@ -101,8 +101,9 @@ static void *xalloc(size_t n) {
 }
 
 /* Per-input-column port stimulus (FR-115f): the current forced value for
- * an RT_COL_PORT column, or RT_Z when not driving. The vector runner sets
- * these row by row; drive_builtins deposits them each step. */
+ * an RT_COL_PORT or RT_COL_PORT_CLOCK column (FR-094f), or RT_Z when not
+ * driving. The vector runner sets these row by row — and, for a clock-source
+ * port, pulses them; drive_builtins deposits them each step. */
 static rt_val *port_stim;
 
 /* Per-UART CLK edge state (FR-122b): the previous step's CLK level, for 0→1
@@ -270,8 +271,12 @@ static void drive_builtins(void) {
     rt_contrib(r->r_net, active ? RT_1 : RT_0, 0, r->r_label);
     rt_contrib(r->rn_net, active ? RT_0 : RT_1, 0, r->rn_label);
   }
+  /* A clock-source port (FR-094f) forces its net exactly as an ordinary port
+   * column does — the only difference is upstream, in how its symbol is read
+   * and pulsed. */
   for (int i = 0; i < gen_incol_count; i++) {
-    if (gen_incols[i].kind == RT_COL_PORT && port_stim[i] != RT_Z) {
+    rt_col_kind k = gen_incols[i].kind;
+    if ((k == RT_COL_PORT || k == RT_COL_PORT_CLOCK) && port_stim[i] != RT_Z) {
       rt_contrib(gen_incols[i].ref, port_stim[i], 0, gen_incols[i].label);
     }
   }
@@ -748,7 +753,8 @@ static void parse_row(char *line, int rowno, char *in_syms, char *out_syms) {
       seen_bar = 1;
     } else if (!seen_bar) {
       if (nin >= gen_incol_count) parse_fail(rowno, "too many input symbols");
-      if (c == 'C' && gen_incols[nin].kind != RT_COL_CLOCK)
+      if (c == 'C' && gen_incols[nin].kind != RT_COL_CLOCK &&
+          gen_incols[nin].kind != RT_COL_PORT_CLOCK)
         parse_fail(rowno, "C is legal only in a clock column");
       if (c != '0' && c != '1' && c != 'C')
         parse_fail(rowno, "input symbol must be 0, 1, or C");
@@ -768,8 +774,9 @@ static void parse_row(char *line, int rowno, char *in_syms, char *out_syms) {
 /* apply_inputs drives the row's input symbols: a switch column sets its
  * instance's level, a clock column sets its scripted level (C reads as
  * low until pulsed, FR-115e), a port column arms the external-stimulus
- * force (FR-115f). Sets pulse[] per input column (1 = this clock column
- * has a C cell this row). */
+ * force (FR-115f) — and a clock-source port column (FR-094f) arms that
+ * same force, its 0/1/C symbol read like a clock's. Sets pulse[] per input
+ * column (1 = this clock column has a C cell this row). */
 static void apply_inputs(const char *in_syms, unsigned char *pulse) {
   for (int i = 0; i < gen_incol_count; i++) {
     const rt_incol *col = &gen_incols[i];
@@ -783,10 +790,28 @@ static void apply_inputs(const char *in_syms, unsigned char *pulse) {
         gen_clocks[col->ref].level = c == '1' ? RT_1 : RT_0;
         break;
       case RT_COL_PORT:
+      case RT_COL_PORT_CLOCK:
         port_stim[i] = c == '1' ? RT_1 : RT_0;
         break;
     }
   }
+}
+
+/* is_clock_col reports whether input column i is a clock column — a generator
+ * (RT_COL_CLOCK) or a clock-source port (RT_COL_PORT_CLOCK, FR-094f). These are
+ * the columns whose cells accept C and that the preamble pulses. */
+static int is_clock_col(int i) {
+  return gen_incols[i].kind == RT_COL_CLOCK || gen_incols[i].kind == RT_COL_PORT_CLOCK;
+}
+
+/* set_clock_col drives one clock column's net to `v`, dispatching on how that
+ * column reaches its net: a generator through gen_clocks, a clock-source port
+ * (FR-094f) through the external-stimulus force. Every phase that moves a clock
+ * — the preamble's pulses and the per-row C pulse — goes through here, so the
+ * two kinds stay indistinguishable to the runner. */
+static void set_clock_col(int i, rt_val v) {
+  if (gen_incols[i].kind == RT_COL_CLOCK) gen_clocks[gen_incols[i].ref].level = v;
+  else port_stim[i] = v;
 }
 
 /* score_row reads each output column's settled net value and scores it
@@ -824,12 +849,21 @@ static void preamble(void) {
     gen_resets[i].released = gen_resets[i].cycles <= 0;
     if (gen_resets[i].cycles > maxc) maxc = gen_resets[i].cycles;
   }
-  for (int i = 0; i < gen_clock_count; i++) gen_clocks[i].level = RT_0;
+  /* Every clock column is pulsed here, generator and clock-source port alike
+   * (FR-094f) — a port-clocked design needs its reset window driven too, so the
+   * walk is over the columns rather than over gen_clocks. */
+  for (int i = 0; i < gen_incol_count; i++) {
+    if (is_clock_col(i)) set_clock_col(i, RT_0);
+  }
   rt_settle();
   for (int p = 1; p <= maxc; p++) {
-    for (int i = 0; i < gen_clock_count; i++) gen_clocks[i].level = RT_1;
+    for (int i = 0; i < gen_incol_count; i++) {
+      if (is_clock_col(i)) set_clock_col(i, RT_1);
+    }
     rt_settle();
-    for (int i = 0; i < gen_clock_count; i++) gen_clocks[i].level = RT_0;
+    for (int i = 0; i < gen_incol_count; i++) {
+      if (is_clock_col(i)) set_clock_col(i, RT_0);
+    }
     rt_settle();
     for (int i = 0; i < gen_reset_count; i++) {
       if (p >= gen_resets[i].cycles) gen_resets[i].released = 1;
@@ -858,11 +892,11 @@ int rt_run_vectors(void) {
   char *out_syms = xalloc((size_t)(gen_outcol_count > 0 ? gen_outcol_count : 1));
   unsigned char *pulse = xalloc((size_t)(gen_incol_count > 0 ? gen_incol_count : 1));
   /* A design is STATEFUL — run its rows in order on persistent state (FR-115e)
-   * — when it has a clock generator OR any transparent latch (FR-079d), matching
-   * vectors.js isStateful (§6.16). A clock-less latch design has no C pulses and
-   * no preamble (both keyed on gen_clock_count below), but its rows still share
-   * state so a latch's hold spans rows. */
-  int sequential = gen_clock_count > 0 || gen_latch_count > 0;
+   * — when it has any scripted clock source (a clock generator, or a clock-source
+   * port, FR-094f) OR any transparent latch (FR-079d), matching vectors.js
+   * isStateful (§6.16). A latch design with no clock source has no C pulses and
+   * no preamble, but its rows still share state so a latch's hold spans rows. */
+  int sequential = gen_clock_count > 0 || gen_clockport_count > 0 || gen_latch_count > 0;
   int rowno = 0, failed = 0;
 
   /* Sequential (FR-115e): the rows run in order on this one persistent
@@ -891,11 +925,11 @@ int rt_run_vectors(void) {
       for (int i = 0; i < gen_incol_count; i++) any |= pulse[i];
       if (any) {
         for (int i = 0; i < gen_incol_count; i++) {
-          if (pulse[i]) gen_clocks[gen_incols[i].ref].level = RT_1;
+          if (pulse[i]) set_clock_col(i, RT_1);
         }
         rt_settle();
         for (int i = 0; i < gen_incol_count; i++) {
-          if (pulse[i]) gen_clocks[gen_incols[i].ref].level = RT_0;
+          if (pulse[i]) set_clock_col(i, RT_0);
         }
         rt_settle();
       }
@@ -919,9 +953,10 @@ int rt_run_vectors(void) {
  * itself. */
 static int incol_net(const rt_incol *c) {
   switch (c->kind) {
-    case RT_COL_SWITCH: return gen_switches[c->ref].net;
-    case RT_COL_CLOCK:  return gen_clocks[c->ref].net;
-    case RT_COL_PORT:   return c->ref;
+    case RT_COL_SWITCH:     return gen_switches[c->ref].net;
+    case RT_COL_CLOCK:      return gen_clocks[c->ref].net;
+    case RT_COL_PORT:       return c->ref;
+    case RT_COL_PORT_CLOCK: return c->ref; /* a port's own net (FR-094f) */
   }
   return -1;
 }
@@ -1056,12 +1091,16 @@ static void vcd_sample(void) {
  *
  * DIR is IN or OUT; KIND is SWITCH/CLOCK/PORT (inputs) or PROBE (outputs);
  * REFDES and PIN are the column identity; LABEL is the display label — the
- * remainder of the line, so it may contain spaces. */
+ * remainder of the line, so it may contain spaces. A clock-source port
+ * (FR-094f) reports KIND CLOCK, not PORT: KIND tells a consumer what the
+ * column's cells accept (tv2txt defaults a CLOCK cell to C, not 0), and on that
+ * question a marked port is a clock. How it reaches its net is internal. */
 static const char *col_kind_name(rt_col_kind k) {
   switch (k) {
-    case RT_COL_SWITCH: return "SWITCH";
-    case RT_COL_CLOCK:  return "CLOCK";
-    case RT_COL_PORT:   return "PORT";
+    case RT_COL_SWITCH:     return "SWITCH";
+    case RT_COL_CLOCK:      return "CLOCK";
+    case RT_COL_PORT_CLOCK: return "CLOCK";
+    case RT_COL_PORT:       return "PORT";
   }
   return "?";
 }

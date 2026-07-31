@@ -98,6 +98,53 @@ test("generateC: inverter emits nets, tables, columns, and lowered logic", () =>
   assert.match(code, /const int gen_clock_count = 0;/);
 });
 
+test("generateC: a clock-source port lowers to RT_COL_PORT_CLOCK, not a clock (FR-094f)", () => {
+  // A registered part clocked through a marked port (the notL4C381 shape).
+  const DFF = {
+    name: "DFFX",
+    renderType: "unit",
+    clock: "CP",
+    pins: [
+      { name: "D", side: "left", position: 1, direction: "in" },
+      { name: "CP", side: "left", position: 2, direction: "in" },
+      { name: "Q", side: "right", position: 1, direction: "out" },
+    ],
+    behavior: "Q.R = D\n",
+  };
+  const d = mkDesign();
+  place(d, "U1", DFF);
+  place(d, "A-1", builtin("port"), { label: "CLK", isClock: true });
+  place(d, "A-2", builtin("port"), { label: "D" });
+  place(d, "A-3", builtin("port"), { label: "Q" });
+  connect(d, ["A-1", "P"], ["U1", "CP"]);
+  connect(d, ["A-2", "P"], ["U1", "D"]);
+  connect(d, ["U1", "Q"], ["A-3", "P"]);
+
+  const { code } = generateC(d);
+  // The marked port is a clock COLUMN carrying its own (refdes,pin) identity,
+  // and it drives a net — it is not indexed into gen_clocks.
+  assert.match(code, /\{ RT_COL_PORT_CLOCK, \d+, "CLK", "A-1", "P", \d+ \}/);
+  // The unmarked data port stays an ordinary port column.
+  assert.match(code, /\{ RT_COL_PORT, \d+, "D", "A-2", "P", \d+ \}/);
+  assert.match(code, /const int gen_clockport_count = 1;/);
+  // Crucially NOT a synthesized generator: no free-running waveform for it, so
+  // --cycles mode and clock_period stay as they are without a clock placed.
+  assert.match(code, /const int gen_clock_count = 0;/);
+});
+
+test("generateC: an unmarked clock port is an ordinary port column (FR-094f)", () => {
+  const d = mkDesign();
+  place(d, "U1", NOT);
+  place(d, "A-1", builtin("port"), { label: "CLK" }); // named CLK, not marked
+  place(d, "A-2", builtin("port"), { label: "Y" });
+  connect(d, ["A-1", "P"], ["U1", "A"]);
+  connect(d, ["U1", "Y"], ["A-2", "P"]);
+  const { code } = generateC(d);
+  assert.match(code, /\{ RT_COL_PORT, \d+, "CLK", "A-1", "P", \d+ \}/);
+  assert.doesNotMatch(code, /RT_COL_PORT_CLOCK,/);
+  assert.match(code, /const int gen_clockport_count = 0;/);
+});
+
 test("generateC: declared-active-low output gets the polarity flip", () => {
   const LOWNOT = {
     ...NOT,
