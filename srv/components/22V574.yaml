@@ -22,11 +22,11 @@ pins:
   - { name: "D5", side: left, pos: 7, dir: in, number: 7 }
   - { name: "D6", side: left, pos: 8, dir: in, number: 8 }
   - { name: "D7", side: left, pos: 9, dir: in, number: 9 }
-  - { name: "CLR", side: left, pos: 10, dir: in, number: 10 }
-  - { name: "EN", side: left, pos: 11, dir: in, number: 11 }
-  - { name: "OE", side: left, pos: 12, dir: in, number: 13 }
-  - { name: "SET", side: right, pos: 1, dir: in, number: 14 }
-  - { name: "RST", side: right, pos: 2, dir: in, number: 15 }
+  - { name: "/CLR", side: left, pos: 10, dir: in, number: 10 }
+  - { name: "/EN", side: left, pos: 11, dir: in, number: 11 }
+  - { name: "/OE", side: left, pos: 12, dir: in, number: 13 }
+  - { name: "/SET", side: right, pos: 1, dir: in, number: 14 }
+  - { name: "/RST", side: right, pos: 2, dir: in, number: 15 }
   - { name: "Q7", side: right, pos: 3, dir: out, number: 16 }
   - { name: "Q6", side: right, pos: 4, dir: out, number: 17 }
   - { name: "Q5", side: right, pos: 5, dir: out, number: 18 }
@@ -39,6 +39,29 @@ groups:
   - { name: D, pins: [D0, D1, D2, D3, D4, D5, D6, D7] }
   - { name: Q, pins: [Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7] }
 behavior: |
+  ; 22V574 — 8-bit register with synchronous clear, load enable, output
+  ; enable, and asynchronous set/reset.
+  ;
+  ; ALL FIVE CONTROL PINS ARE ACTIVE LOW, which is what their leading '/'
+  ; records (renamed 2026-07-31; they were CLR/EN/OE/SET/RST, whose names
+  ; read active-high while the equations below have always been active-low):
+  ;   /CLR  LOW  clears the register synchronously, at the next clock edge
+  ;   /EN   LOW  loads D at the clock edge; HIGH holds the current value
+  ;   /OE   LOW  enables the Q outputs; HIGH floats them
+  ;   /RST  LOW  clears the register asynchronously (GALasm global AR)
+  ;   /SET  LOW  presets the register asynchronously (GALasm global SP)
+  ;
+  ; Equations are physical-level GALasm (design §7.6): a signal name is the
+  ; pin name with any leading '/' dropped, so the '/' above is documentation
+  ; and these equations are unchanged by the rename. A bare signal means
+  ; "that pin reads HIGH", a slashed one "that pin reads LOW" — so
+  ; `CLR * /EN * Dn` loads Dn while /CLR is high (not clearing) and /EN is
+  ; low (load enabled), and `CLR * EN * Qn` holds while both pins are high.
+  ; With /CLR low both terms vanish and the register clocks in zeros.
+  ;
+  ; SEQUENTIAL-PART CLOCK CONVENTION: GALasm's .R outputs are clocked by the
+  ; GAL22V10's dedicated pin-1 clock, a role played here by CLK (rising
+  ; edge). CLK therefore appears in no equation; the .R suffix implies it.
   Q0.R = CLR * /EN * D0
        + CLR *  EN * Q0
   Q1.R = CLR * /EN * D1
