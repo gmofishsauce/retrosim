@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { generateC } from "./cgen.js";
-import { BUILTINS } from "../builtins.js";
+import { BUILTINS, portNFields } from "../builtins.js";
 import { flatten } from "../model/subdesign.js";
 
 // --- design fixtures (literal model shapes per §7.1a/§7.2), mirroring
@@ -13,6 +13,7 @@ function mkDesign() {
 }
 
 const builtin = (name) => BUILTINS.find((b) => b.name === name);
+const portNType = (width) => ({ ...builtin("portN"), ...portNFields(width) });
 
 function place(d, refdes, type, extra = {}) {
   d.components.push({
@@ -85,8 +86,9 @@ test("generateC: inverter emits nets, tables, columns, and lowered logic", () =>
   assert.match(code, /const int gen_net_count = 2;/);
   // Switch table with baked level, indexed by the input column.
   assert.match(code, /rt_switch gen_switches\[\] = \{\n  \{ \d+, RT_0, \d+ \}, \/\* A-1 \*\//);
-  // Input column: baked (refdes,pin) identity alongside the label (M2).
-  assert.match(code, /\{ RT_COL_SWITCH, 0, "A-1", "A-1", "OUT", 0 \}/);
+  // Input column: baked (refdes,pin) identity alongside the label (M2), then the
+  // active-low flag (M9, FR-115p) — 0 here, the switch's label being its refdes.
+  assert.match(code, /\{ RT_COL_SWITCH, 0, "A-1", "A-1", "OUT", 0, 0 \}/);
   assert.match(code, /const int gen_incol_count = 1;/);
   // Output column carries its (refdes,pin) identity too.
   assert.match(code, /\{ \d+, "A-2", "A-2", "IN" \}/);
@@ -123,9 +125,9 @@ test("generateC: a clock-source port lowers to RT_COL_PORT_CLOCK, not a clock (F
   const { code } = generateC(d);
   // The marked port is a clock COLUMN carrying its own (refdes,pin) identity,
   // and it drives a net — it is not indexed into gen_clocks.
-  assert.match(code, /\{ RT_COL_PORT_CLOCK, \d+, "CLK", "A-1", "P", \d+ \}/);
+  assert.match(code, /\{ RT_COL_PORT_CLOCK, \d+, "CLK", "A-1", "P", \d+, 0 \}/);
   // The unmarked data port stays an ordinary port column.
-  assert.match(code, /\{ RT_COL_PORT, \d+, "D", "A-2", "P", \d+ \}/);
+  assert.match(code, /\{ RT_COL_PORT, \d+, "D", "A-2", "P", \d+, 0 \}/);
   assert.match(code, /const int gen_clockport_count = 1;/);
   // Crucially NOT a synthesized generator: no free-running waveform for it, so
   // --cycles mode and clock_period stay as they are without a clock placed.
@@ -140,9 +142,29 @@ test("generateC: an unmarked clock port is an ordinary port column (FR-094f)", (
   connect(d, ["A-1", "P"], ["U1", "A"]);
   connect(d, ["U1", "Y"], ["A-2", "P"]);
   const { code } = generateC(d);
-  assert.match(code, /\{ RT_COL_PORT, \d+, "CLK", "A-1", "P", \d+ \}/);
+  assert.match(code, /\{ RT_COL_PORT, \d+, "CLK", "A-1", "P", \d+, 0 \}/);
   assert.doesNotMatch(code, /RT_COL_PORT_CLOCK,/);
   assert.match(code, /const int gen_clockport_count = 0;/);
+});
+
+test("generateC: bakes the active-low stamp as rt_incol.active_low (FR-115p, M9)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("switch"), { label: "/RESET" }); // active low: leading /
+  place(d, "A-2", builtin("switch"), { label: "DATA" }); // plain
+  place(d, "A-3", portNType(2), { label: "CS/" }); // active low: trailing /
+  place(d, "U1", NOT);
+  place(d, "U2", NOT);
+  connect(d, ["A-3", "P0"], ["U1", "A"]);
+  connect(d, ["A-3", "P1"], ["U2", "A"]);
+
+  const { code } = generateC(d);
+  assert.match(code, /\{ RT_COL_SWITCH, \d+, "\/RESET", "A-1", "OUT", 0, 1 \}/);
+  assert.match(code, /\{ RT_COL_SWITCH, \d+, "DATA", "A-2", "OUT", 0, 0 \}/);
+  // Every bit of the port is flagged, though each per-bit label ("CS/0") is not
+  // itself active-low — the stamp comes from the instance's base label, which is
+  // exactly why the flag is baked instead of recovered from the label (M9).
+  assert.match(code, /\{ RT_COL_PORT, \d+, "CS\/0", "A-3", "P0", \d+, 1 \}/);
+  assert.match(code, /\{ RT_COL_PORT, \d+, "CS\/1", "A-3", "P1", \d+, 1 \}/);
 });
 
 test("generateC: declared-active-low output gets the polarity flip", () => {

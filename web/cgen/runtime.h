@@ -344,6 +344,15 @@ typedef struct {
   const char *refdes; /* column identity: instance ref (FR-115a, --columns) */
   const char *pin;    /* column identity: pin name (FR-115a, --columns) */
   int label;          /* gen_labels index for the stimulus driver */
+  int active_low;     /* 1 when this column's signal is active low (FR-115p): its
+                       * display label begins or ends with '/'. Baked by the
+                       * generator, which reads the stamp deriveColumns applied to
+                       * the column — a portN's per-bit label (CS/0) cannot yield
+                       * the instance's base label (CS/) back, so the answer, not
+                       * the name, makes the trip. The runtime never reads it; it
+                       * exists so --columns can report it and a tool building
+                       * rows (tv2txt) can default an omitted cell to the inactive
+                       * level (1) exactly as the editor's panel does. */
 } rt_incol;
 extern const rt_incol gen_incols[];
 extern const int gen_incol_count;

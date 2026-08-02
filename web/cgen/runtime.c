@@ -1087,11 +1087,18 @@ static void vcd_sample(void) {
  * (refdes,pin) — exactly reconcileVectors (§6.16) — without parsing the
  * generated .c or the design. One line per column, in row-format order:
  *
- *   DIR KIND REFDES PIN LABEL...
+ *   IN  KIND ALOW REFDES PIN LABEL...
+ *   OUT PROBE     REFDES PIN LABEL...
  *
  * DIR is IN or OUT; KIND is SWITCH/CLOCK/PORT (inputs) or PROBE (outputs);
  * REFDES and PIN are the column identity; LABEL is the display label — the
- * remainder of the line, so it may contain spaces. A clock-source port
+ * remainder of the line, so it may contain spaces. ALOW is the input column's
+ * active_low flag, 0 or 1 (FR-115p): a fixed-width token, and ahead of the
+ * label because LABEL already claims the rest of the line and two space-bearing
+ * fields cannot both be positional. It lets a consumer default a cell the .tv
+ * omits to the inactive level, as the editor's panel does. OUT lines carry no
+ * ALOW — FR-115p governs input cells only, and a consumer branches on DIR
+ * first. A clock-source port
  * (FR-094f) reports KIND CLOCK, not PORT: KIND tells a consumer what the
  * column's cells accept (tv2txt defaults a CLOCK cell to C, not 0), and on that
  * question a marked port is a clock. How it reaches its net is internal. */
@@ -1108,7 +1115,7 @@ static const char *col_kind_name(rt_col_kind k) {
 static void rt_dump_columns(void) {
   for (int i = 0; i < gen_incol_count; i++) {
     const rt_incol *c = &gen_incols[i];
-    printf("IN %s %s %s %s\n", col_kind_name(c->kind), c->refdes, c->pin, c->name);
+    printf("IN %s %d %s %s %s\n", col_kind_name(c->kind), c->active_low ? 1 : 0, c->refdes, c->pin, c->name);
   }
   for (int i = 0; i < gen_outcol_count; i++) {
     const rt_outcol *c = &gen_outcols[i];

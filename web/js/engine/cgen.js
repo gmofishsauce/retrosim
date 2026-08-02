@@ -440,7 +440,16 @@ export function generateC(design, { columnsFrom = design } = {}) {
   const incols = cols.inputs.map((col) => {
     // (refdes,pin) identity baked alongside the label so tv2txt can
     // reconcile a .tv file to the row format via --columns (design §6.17 M2).
-    const id = { name: cstr(col.label), refdes: cstr(col.refdes), pin: cstr(col.pin) };
+    // alow is the FR-115p stamp deriveColumns already applied (§6.16) — baked
+    // rather than re-derived because the rule reads a portN's instance base
+    // label, which the baked per-bit label cannot yield back (CS/ → CS/0). It
+    // lets tv2txt default an omitted cell exactly as the panel does (M9).
+    const id = {
+      name: cstr(col.label),
+      refdes: cstr(col.refdes),
+      pin: cstr(col.pin),
+      alow: col.activeLow ? 1 : 0,
+    };
     if (col.kind === "clock") {
       if (clockIdx.has(col.refdes)) {
         return { kind: "RT_COL_CLOCK", ref: clockIdx.get(col.refdes), ...id, label: 0 };
@@ -610,11 +619,11 @@ export function generateC(design, { columnsFrom = design } = {}) {
   if (incols.length) {
     L.push(`const rt_incol gen_incols[] = {`);
     for (const c of incols) {
-      L.push(`  { ${c.kind}, ${c.ref}, ${c.name}, ${c.refdes}, ${c.pin}, ${c.label} },`);
+      L.push(`  { ${c.kind}, ${c.ref}, ${c.name}, ${c.refdes}, ${c.pin}, ${c.label}, ${c.alow} },`);
     }
     L.push(`};`);
   } else {
-    L.push(`const rt_incol gen_incols[] = { { RT_COL_SWITCH, -1, "", "", "", 0 } }; /* none */`);
+    L.push(`const rt_incol gen_incols[] = { { RT_COL_SWITCH, -1, "", "", "", 0, 0 } }; /* none */`);
   }
   L.push(`const int gen_incol_count = ${incols.length};`);
   L.push(``);
