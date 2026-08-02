@@ -195,13 +195,39 @@ body {
    when open, docks as a fixed bottom third. Shrinking the canvas host shrinks
    the canvas box, which the ResizeObserver refits at the unchanged viewport
    (§6.13) — content is not rescaled, only its visible extent (FR-115h). */
+/* position: relative anchors the dock grips (§6.16a, FR-115n), which are this
+   element's own absolutely-positioned children rather than the panels' — a panel
+   rebuilds its host's children on every open and would delete a grip parked
+   inside it. */
 #canvas-area {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
+
+/* Draggable divider at each open panel's top edge (FR-115n, §6.16a). Transparent
+   over the panel's own 2px border-top, which stays the visible line; the dock
+   positions it from the same fractions it gives the panels. No keyboard gesture —
+   FR-115n asks for a drag and nothing more. */
+.dock-grip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 7px;
+  margin-bottom: -3px;
+  z-index: 3;
+  cursor: row-resize;
+  background: transparent;
+}
+.dock-grip:hover { background: rgba(74, 144, 217, 0.35); }
+.dock-grip[hidden] { display: none; }
+/* While dragging, the cursor must not flicker as the pointer crosses elements and
+   nothing may select under it. */
+body.dock-dragging { cursor: row-resize; user-select: none; }
+body.dock-dragging .dock-grip { background: rgba(74, 144, 217, 0.35); }
 
 #canvas-host {
   flex: 1 1 auto;
@@ -213,9 +239,12 @@ body {
 
 /* Docked test-vector panel (FR-115b): bottom third of the canvas area, its own
    vertical scroll. `display` here overrides the [hidden] UA rule, so the
-   explicit [hidden] selector below re-hides it. */
+   explicit [hidden] selector below re-hides it. The third is the FALLBACK and the
+   initial height only — the dock (§6.16a, FR-115n) overrides flex-basis inline as
+   the user drags, and if it were never constructed this is exactly the
+   pre-FR-115n layout. */
 #vec-panel {
-  flex: 0 0 33%;
+  flex: 0 0 33.333%;
   min-height: 0;
   overflow: hidden;
   display: flex;
@@ -250,9 +279,11 @@ body {
 
 /* Docked, modeless Console panel (FR-122c): the magic UART's stdout surface,
    bottom third of the canvas area like the test-vector panel. When both are
-   open they stack. The [hidden] rule below re-hides it past the flex display. */
+   open they stack. The [hidden] rule below re-hides it past the flex display.
+   The third is the fallback/initial height; the dock owns it thereafter
+   (§6.16a, FR-115n). */
 #console-panel {
-  flex: 0 0 33%;
+  flex: 0 0 33.333%;
   min-height: 0;
   overflow: hidden;
   display: flex;

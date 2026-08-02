@@ -27,6 +27,7 @@ import { makeFileOps } from "./chrome/fileops.js";
 import { makeProjectOps } from "./chrome/project.js";
 import { initProperties } from "./chrome/properties.js";
 import { createConsolePanel } from "./chrome/console.js";
+import { createDock } from "./chrome/dock.js";
 import { initStatusBar, postMessage } from "./chrome/statusbar.js";
 import { createSim } from "./engine/sim.js";
 import { startConnectionMonitor } from "./connection.js";
@@ -391,6 +392,12 @@ async function main() {
     // design's `.tv` sibling, close may prompt to save it first — and a
     // cancelled close simply leaves the panel open.
     const onTestVectors = () => (vecPanel.isOpen() ? vecPanel.close() : vecPanel.open());
+    // Docked-panel heights and their draggable top edges (§6.16a, FR-115n).
+    // Constructed once, after both panels exist. It reads the two open flags off
+    // the store and needs nothing from either panel module, which is why neither
+    // knows it exists; the canvas learns about a resize through the
+    // ResizeObserver it already has, not through a call.
+    createDock({ store });
     // Simulate ▸ Generate C… (FR-116/§6.17): emit the standalone C simulator —
     // the generated <design>.c plus verbatim copies of the fixed runtime pair —
     // into a user-chosen directory. Generation is read-only; refusals and

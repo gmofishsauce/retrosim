@@ -19,6 +19,20 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-08-01 — Spec fix: §6.16a placed the grips on each panel's bottom edge
+What: §6.16a's grip bullet said each grip's `bottom` is "`fc%` for the vec divider, `0` for the console divider". Those are the panels' *bottom* edges. Since `bottom` is measured from the bottom of `#canvas-area`, a panel's **top** edge is the total fraction of everything below the divider: `(fv + fc)%` for the vec divider and `fc%` for the console divider. Corrected in place.
+Why: found by using it — implemented literally, both handles sat along the bottom of their panel instead of at the boundary with the region above, so the vec panel's grip landed on the console's title bar and the console's on the status bar. The section already contradicted itself: the DOM diagram three lines above correctly says "fraction of everything below the divider", and FR-115n's opening clause is "the top edge … shall be a draggable divider".
+Touches: FR-115n; design §6.16a.
+
+---
+
+## 2026-08-01 — Spec fix: §6.16a's `createDock` signature carried an unused `canvasHost`
+What: §6.16a's wiring paragraph gave `createDock({ store, area, canvasHost, panels })`. The dock has no use for the canvas host — it is the flex remainder, and the same section's `ResizeObserver` decision is precisely that the dock never touches the canvas or calls into it. Dropped the argument and noted that `area`/`panels` are test seams, so the real call is `createDock({ store })`.
+Why: found while implementing FR-115n. Keeping it would have meant a parameter that is passed and never read, which reads as a missing dependency rather than a deliberate absence — the opposite of what the section argues.
+Touches: FR-115n; design §6.16a.
+
+---
+
 ## 2026-08-01 — Spec fix: §6.17 M9 named a `columnIsActiveLow` function that does not exist
 What: §6.17's M9 said `cgen.js` "imports the same `columnIsActiveLow` stamp `deriveColumns` applies". There is no such export: §6.16 names the predicate `isActiveLowName` and specifies that consumers read the *stamped* `activeLow` field rather than call a predicate. Corrected the M9 sentence to say the generator reads the stamp `deriveColumns` already applied and imports no predicate at all.
 Why: found while implementing FR-115p step 1. The two sections disagreed on both the function's name and whether the generator calls one, and M9's wording would have led an implementer to add a second entry point to `vectors.js` — the opposite of the single-evaluation rule (FR-109) the same sentence invokes.
