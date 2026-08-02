@@ -25,7 +25,7 @@ KiCad-like.
 10. [Projects and files](#10-projects-and-files)
 11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
-13. [Simulation](#13-simulation) — including [Pausing and single-stepping](#pausing-and-single-stepping), [Probing a point](#probing-a-point), [Console output](#console-output), [Test vectors](#test-vectors) — including [The panel's test-vector file](#the-panels-test-vector-file) and [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
+13. [Simulation](#13-simulation) — including [Pausing and single-stepping](#pausing-and-single-stepping), [Probing a point](#probing-a-point), [The bottom panel area](#the-bottom-panel-area), [Console output](#console-output), [Test vectors](#test-vectors) — including [The panel's test-vector file](#the-panels-test-vector-file) and [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
 14. [If the server disconnects](#14-if-the-server-disconnects)
 15. [Keyboard and mouse reference](#15-keyboard-and-mouse-reference)
 
@@ -120,7 +120,10 @@ The window has four regions plus a status bar:
   the **lower** region holds the
   built-in objects (see [Built-in components](#11-built-in-components)).
 - **Canvas** (center): the grid drawing surface. Everything snaps to grid
-  intersections.
+  intersections. A **panel area** docks along its bottom when you open the
+  Console or the Test Vectors panel, which share it as tabs (see
+  [The bottom panel area](#the-bottom-panel-area)); with neither open the canvas
+  fills the region.
 - **Properties panel** (right): shows the type data and per-instance overrides of
   a single selected component (see [Per-instance overrides](#8-per-instance-overrides)),
   or, while a point is probed, that point's live logic state
@@ -695,7 +698,7 @@ cross-project save.
   transmission gates, relays) are recorded as comment lines so no connectivity
   is silently dropped. Output is deterministic: exporting the same design twice
   gives byte-identical text, so exports diff cleanly. Unavailable while a
-  simulation runs or the test-vector panel is open.
+  simulation runs.
 
 Designs are JSON files. The designs root `~/Documents/retrosim`
 (`%USERPROFILE%\Documents\retrosim` on Windows) is the default home for project
@@ -1046,17 +1049,49 @@ Notes:
   exposes on no pin (like the 74HC165's hidden shift stages) cannot be probed,
   because the probe reads nets.
 
+### The bottom panel area
+
+Two surfaces dock along the bottom of the canvas area — the **Console** and the
+**Test Vectors** panel — and they share one region as **tabs**. The schematic
+stays visible and fully usable above it.
+
+- The area appears when you open the first tab and **disappears entirely** when
+  you close the last one. There is never an empty tab strip.
+- Only the **frontmost** tab's contents are shown. Click a tab to bring it
+  forward; its **✕** closes it.
+- **Simulate ▸ Test Vectors…** and **View ▸ Console** do three things depending
+  on where their tab is: **open** it if closed, **bring it forward** if it is
+  open behind the other one, and **close** it only if it is already frontmost. So
+  a background tab is never closed by the menu item that would reveal it — the
+  first invocation shows it, a second closes it. Both items show a check mark
+  while their tab is open.
+- A tab you switch away from is **hidden, not discarded**. Your vector rows, run
+  results, row selection, held run, console text, and scroll position are all
+  exactly as you left them when you come back.
+- Drag the area's **top edge** (above the tab strip) to resize it. It starts at
+  the bottom third; after that it stays where you put it, and switching tabs never
+  resizes it. Neither the schematic nor the panel area can be dragged below a tenth
+  of the canvas. The height lasts the session — reloading the page starts over
+  with no tab open.
+- If output arrives in a tab you are **not** looking at, a **dot** appears beside
+  its label. Selecting the tab clears it. Nothing ever steals focus or switches
+  tabs on you.
+
+Closing the tab is what "closing the panel" means: closing the Test Vectors tab
+releases its held run and, if you have unsaved vectors, asks first.
+
 ### Console output
 
-The **[magic UART](#11-built-in-components)** built-in emits characters to a
-**Console panel** — the slow simulator's standard-output surface. Toggle it from
-**View ▸ Console** (the menu item shows a check mark while it is open). The panel
-docks along the bottom of the canvas area, like the Test Vectors panel, and shows
-the interleaved characters emitted by every placed magic UART during a run.
+The **[magic UART](#11-built-in-components)** built-in emits characters to the
+**Console** — the slow simulator's standard-output surface, one tab of the
+[bottom panel area](#the-bottom-panel-area). Open it from **View ▸ Console**. It
+shows the interleaved characters emitted by every placed magic UART during a run.
 
-Unlike the Test Vectors panel, the Console is **modeless**: it imposes no
-read-only lock and is meant to be opened *during* a run — you can leave it open,
-press Run, and watch text appear. It scrolls and sticks to the newest output
+The Console is meant to be opened *during* a run — you can leave it open, press
+Run, and watch text appear. Output **accumulates whether or not you are looking
+at it**: bytes arriving while the tab is hidden behind Test Vectors, or while it
+is closed altogether, are all there when you open it, and a hidden tab that
+receives output shows the unread dot. It scrolls and sticks to the newest output
 unless you scroll up to read earlier lines. Characters are rendered as you'd
 expect — printable ASCII verbatim, newline and tab literally, carriage return
 ignored, and any other byte as a visible `\xNN` escape. **Clear** empties it, and
@@ -1065,7 +1100,8 @@ state are session-only — they are **not** saved with the design.
 
 To try it: place a **UART**, wire an 8-bit value to `D0`–`D7` (a bus snaps to the
 whole `DATA` group at once), hold `CS/` and `CE/` low, drive `CLK` from a clock
-generator, open **View ▸ Console**, and press **Run**. In the [generated C
+generator, press **Run**, and open **View ▸ Console** — before or after starting
+the run, it makes no difference to what you see. In the [generated C
 simulator](#generating-a-standalone-c-simulator) the same bytes go to the
 program's real standard output instead.
 
@@ -1074,11 +1110,10 @@ program's real standard output instead.
 Instead of toggling switches and reading indicators by hand, you can write a
 **table of test vectors** — input patterns paired with the outputs you expect —
 and have the simulator run and score them. Open it from **Simulate ▸ Test
-Vectors…**, which toggles a **panel docked across the bottom third of the
-canvas**. The schematic stays visible above it, so you can pan and zoom to see
-which switches, indicators, and ports the columns correspond to. Choosing
-**Simulate ▸ Test Vectors…** again, or the **✕** in the panel's header, closes
-it. Both combinational and clocked (sequential) designs are supported.
+Vectors…**; it is one tab of the [bottom panel area](#the-bottom-panel-area). The
+schematic stays visible above it, so you can pan and zoom to see which switches,
+indicators, and ports the columns correspond to. The **✕** on its tab closes it.
+Both combinational and clocked (sequential) designs are supported.
 
 The panel is a small editor in its own right, and what it edits is a **test-vector
 file** named after your design (`<design>.tv`, beside it in the project). Opening
@@ -1087,13 +1122,28 @@ the panel loads that file if it exists, so your vectors are where you left them;
 The panel's header shows the file name, with a `*` while there are unsaved
 changes. See *[The panel's test-vector file](#the-panels-test-vector-file)* below.
 
-While the panel is open the design is **read-only**: you can pan, zoom, Save,
-and Save As, but the editing commands (placing, wiring, moving, deleting, undo/redo,
-paste, property edits) are disabled — as they are while a simulation runs. The
-**Run/Stop** button is disabled too, since the panel and a live simulation are
-mutually exclusive (its one other use is releasing a held run — see
-*[Holding a run to inspect it](#holding-a-run-to-inspect-it)* below). Close the
-panel to edit or run the design again.
+**You can keep editing the design with the panel open.** Place, wire, move,
+delete, undo, redo, edit properties, run the interactive simulator — none of it is
+blocked. (Earlier versions locked the design while the panel was open; they no
+longer do.) Two things follow from that, both automatic:
+
+- **The columns follow the design.** Add an input switch and a column for it
+  appears; delete an indicator and its column goes. Your other cells are kept —
+  columns are matched by the component's internal designator, so **renaming a
+  label never disturbs a cell**. A new column arrives at its default (`0`, or `1`
+  for an active-low signal, and `X` for outputs). A note under the table says what
+  was added or dropped, and the header's `*` appears, because the table now
+  differs from the file on disk.
+- **Editing the design clears displayed results.** Any change to the circuit drops
+  the green/red pass/fail painting and releases a held run
+  (*[Holding a run to inspect it](#holding-a-run-to-inspect-it)* below) — those
+  results describe a circuit that no longer exists. Re-run to get fresh ones.
+
+The one restriction that remains is that a **vector run and a live simulation
+cannot overlap**: the panel's Run, Run to Row, and Capture are disabled while the
+interactive simulator is running, and while a vector run is *held* the toolbar's
+**Run/Stop** button is the **Stop** that releases the hold rather than a way to
+start a run.
 
 The table's columns come from your design automatically:
 
@@ -1187,16 +1237,21 @@ file at a time — the same way the main window edits one design.
   mismatch is reported as a warning when you load — the rows that still line up
   are kept.
 - The header reads e.g. `Test Vectors — cpu.tv`, with a trailing **`*`** once you
-  have edited a cell, added, duplicated, or deleted a row, or used **Capture**.
-  Switching a column between hex and bits, selecting a row, and running the table
-  are not edits and leave the `*` alone.
-- **Closing** the panel with a `*` showing asks **Save**, **Discard**, or
-  **Cancel** — Cancel leaves the panel open exactly as it was. Loading over unsaved
+  have edited a cell, added, duplicated, or deleted a row, used **Capture**, or
+  made a design change that added or dropped a column (the rows really did change
+  shape, so the file no longer matches them). Switching a column between hex and
+  bits, selecting a row, and running the table are not edits and leave the `*`
+  alone.
+- **Closing** the tab with a `*` showing asks **Save**, **Discard**, or
+  **Cancel** — Cancel leaves the tab open exactly as it was. Loading over unsaved
   vectors asks the same question. Closing the browser tab with unsaved vectors gets
   the usual browser warning, even if the design itself is saved.
 
-Each open starts fresh from the file, so if you save your design under a new name
-while the panel is open, close and reopen the panel to pick up the new name.
+The panel binds to its file **once, when you open it** — switching tabs does not
+rebind it, but a real close does. So if you save your design under a new name while
+the panel is open, close and reopen the panel to pick up the new name. For the same
+reason, opening a *different design* while the panel is open leaves it bound to the
+file it started with: close and reopen it to bind to the new design's `.tv`.
 
 #### Holding a run to inspect it
 
@@ -1222,16 +1277,17 @@ Two details worth knowing:
   run ends with its final state visible.
 
 To release the hold, click **Stop** — either the one in the panel, or the main
-toolbar's **Run/Stop** button, which becomes an enabled **Stop** while a run is
-held and returns to its usual disabled state once you release. The pass/fail
-results stay; only the schematic display is cleared. A hold is also released
-automatically when you **edit any cell**, add or delete a row, **Capture**,
-**Load** a file, or close the panel — once the table changes, the state on screen
-no longer matches it.
+toolbar's **Run/Stop** button, which reads **Stop** while a run is held and goes
+back to **Run** once you release. The pass/fail results stay; only the schematic
+display is cleared. A hold is also released automatically when you **edit any
+cell**, add or delete a row, **Capture**, **Load** a file, **edit the design**, or
+close the tab — once the table or the circuit changes, the state on screen no
+longer matches it. Switching to the Console tab and back does *not* release it.
 
-Holding is display-only. The design stays read-only, nothing is written back to
-it, and a held run is not a live simulation — you cannot step it or toggle
-switches. It runs on a throwaway copy, exactly like any other vector run.
+Holding is display-only: nothing is written back to the design, and a held run is
+not a live simulation — you cannot step it or toggle switches. It runs on a
+throwaway copy, exactly like any other vector run. You are free to edit the design
+while a run is held, but the first change releases the hold, for the reason above.
 
 A held run is where the **[probe](#probing-a-point)** is most useful: the state
 sits still, so you can click around the schematic and read any point that the
@@ -1402,7 +1458,7 @@ clock and pointing at `--cycles`, exit status 2), while `--cycles` free-runs
 such clocks normally.
 
 The menu item is unavailable while a
-simulation is running or the test-vector panel is open.
+simulation is running.
 
 ---
 
@@ -1442,6 +1498,8 @@ clear message until then, without losing your work.
 | Left-click any other item (while simulating) | Selection is locked — status bar shows "Editor is locked while the simulator is running" |
 | Left-click any point (in [probe mode](#probing-a-point)) | Show that point's logic state in the properties panel; empty canvas clears it |
 | Left-click a row number (test-vector panel) | Select that row for **Run to Row**; click again to deselect |
+| Left-click a tab in the [bottom panel area](#the-bottom-panel-area) | Bring that tab forward; its **✕** closes it |
+| Drag the top edge of the bottom panel area | Resize the area against the schematic |
 
 **Keyboard**
 
