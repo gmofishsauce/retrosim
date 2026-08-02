@@ -1526,6 +1526,15 @@ export function testVectorsPanel({ store, dataDir }) {
   let docDirty = false;
   let titleEl = null;
   let ops = null;
+  // Live-column tracking (FR-115h). The design can change under an open panel
+  // now that the panel does not lock it, so the panel watches the store: a
+  // `designRev` change means the design was edited at all, and a change to the
+  // column signature means the table's SHAPE must change with it. `pendingRows`
+  // hands a reconciled table to the next build().
+  let unsubscribe = null;
+  let lastDesignRev = -1;
+  let lastColSig = null;
+  let pendingRows = null;
   const isOpen = () => openFlag;
   const isDirty = () => openFlag && docDirty;
   const docName = () => (docPath ? baseName(docPath) : "These test vectors");
@@ -1541,9 +1550,16 @@ export function testVectorsPanel({ store, dataDir }) {
     try {
       openFlag = true;
       // The host's visibility is the dock's (FR-123, §6.16a): setting the open
-      // flag opens the tab, makes it frontmost, and reveals the area.
-      store.setVectorPanelOpen(true); // impose the read-only lock (FR-115h)
+      // flag opens the tab, makes it frontmost, and reveals the area. It imposes
+      // no edit lock — the design stays editable underneath (FR-115h).
+      store.setVectorPanelOpen(true);
       build();
+      // Prime the live-column tracking from the design we just built against, so
+      // the first notification cannot look like a change (FR-115h), then watch
+      // for real ones for as long as the panel is open.
+      lastDesignRev = store.state.designRev ?? 0;
+      lastColSig = columnSignature(deriveColumns(store.design));
+      unsubscribe = store.subscribe(syncToDesign);
       await adopt();
     } finally {
       busy = false;
@@ -1573,6 +1589,13 @@ export function testVectorsPanel({ store, dataDir }) {
     openFlag = false;
     clearHeld(); // the held display does not outlive the panel (FR-115l)
     holdListener = null; // the Stop button goes away with the panel's DOM
+    // Stop tracking the design (FR-115h): a closed panel has no table to keep
+    // current, and the next open primes itself afresh.
+    unsubscribe?.();
+    unsubscribe = null;
+    lastDesignRev = -1;
+    lastColSig = null;
+    pendingRows = null;
     ops = null;
     titleEl = null;
     docPath = null;
@@ -1646,8 +1669,10 @@ export function testVectorsPanel({ store, dataDir }) {
   // clearHeld drops the retained simulation view this panel published to the
   // canvas (FR-115l). It clears only its own: a view left behind by a stopped
   // interactive run (FR-085) belongs to the simulator and is not ours to wipe.
-  // The interactive simulator cannot be running here (FR-115h), so restoring
-  // the tray to "editing" can never stomp a "simulating"/"paused" state.
+  // The interactive simulator cannot be running here — a hold and a live run are
+  // still mutually exclusive (FR-115h), the toolbar's Run being the Stop that
+  // releases a hold rather than a start — so restoring the tray to "editing" can
+  // never stomp a "simulating"/"paused" state.
   function clearHeld() {
     if (!held) return;
     held = false;
@@ -1657,9 +1682,70 @@ export function testVectorsPanel({ store, dataDir }) {
     holdListener?.();
   }
 
-  // build (re)populates the panel from the current design. Called on open; the
-  // design cannot change while open (FR-115h), so the derived columns are a
-  // stable snapshot for the panel's lifetime.
+  // columnSignature reduces a derived column set to the string that changes
+  // exactly when the table's shape or headings would (FR-115h). Identity is
+  // (refdes,pin) — the pair reconcileVectors aligns on — plus the label, since a
+  // relabel (FR-011b) changes a heading without moving a cell.
+  function columnSignature(cols) {
+    const part = (list, kind) =>
+      (list ?? []).map((c) => `${kind}:${c.refdes}:${c.pin}:${c.label}`).join(",");
+    return `${part(cols.inputs, "i")}|${part(cols.io, "b")}|${part(cols.outputs, "o")}`;
+  }
+
+  // syncToDesign is the panel's reaction to a design edit (FR-115h). It runs on
+  // every store notification while the panel is open, and does nothing at all
+  // unless the design actually changed — the store notifies for selections, tool
+  // changes, and tab switches too, none of which concern the table.
+  //
+  // lastDesignRev is updated BEFORE anything else, because the work below
+  // notifies the store again (clearHeld publishes a null sim view), which
+  // re-enters this function; the early return then makes that a no-op.
+  function syncToDesign() {
+    if (!openFlag) return;
+    const rev = store.state.designRev ?? 0;
+    if (rev === lastDesignRev) return;
+    lastDesignRev = rev;
+
+    // Any design edit invalidates values on display: a held run's schematic
+    // values and the table's pass/fail painting both describe a circuit that no
+    // longer exists (FR-115h, the rule FR-085 applies to the interactive view).
+    clearHeld();
+
+    const cols = deriveColumns(store.design);
+    const sig = columnSignature(cols);
+    if (sig === lastColSig) {
+      // The netlist changed but the table's shape did not: nothing to reconcile,
+      // and the user's cells stay exactly as authored.
+      ops?.clearResults();
+      return;
+    }
+    lastColSig = sig;
+
+    // The bound I/O changed. Align the live table to the new columns by
+    // (refdes,pin), reusing the `.tv` load path verbatim (FR-115a): a surviving
+    // column keeps its cells, a new one arrives at its default (FR-115p/FR-115i),
+    // and a dropped one takes its cells with it.
+    const prev = ops?.snapshot() ?? null;
+    const { rows: aligned, warnings } = prev
+      ? reconcileVectors(prev, cols)
+      : { rows: [], warnings: [] };
+    pendingRows = aligned;
+    build(); // re-derives columns, clocked, stateful, hex groups, and the DOM
+    // The rows genuinely changed shape, so the file on disk no longer matches
+    // them: dirty the document (FR-115m) rather than let the user close the tab
+    // and silently lose a table nothing on disk describes.
+    setDirty(true);
+    if (warnings.length) {
+      ops?.note(`Columns follow the design: ${warnings.join("; ")}`);
+    }
+  }
+
+  // build (re)populates the panel from the current design. Called on open, and
+  // again by syncToDesign() whenever the design's bound I/O changes underneath
+  // (FR-115h): re-running it is what keeps `columns`, `clocked`, `stateful`, the
+  // hex groups, and the DOM consistent with each other, rather than patching
+  // each one separately. Rows survive across a rebuild through `pendingRows`,
+  // which the caller fills with the reconciled table.
   function build() {
     const design = store.design;
     const columns = deriveColumns(design);
@@ -1670,7 +1756,10 @@ export function testVectorsPanel({ store, dataDir }) {
     // one (FR-094f) — indistinguishable to the panel.
     const clocked = clockSources(design).length > 0;
     const stateful = isStateful(design);
-    const rows = [emptyRow(columns)]; // start with one blank row to fill
+    // Rows carried over from a column reconciliation (FR-115h), else one blank
+    // row to fill. Consumed once: a later rebuild gets whatever is current then.
+    const rows = pendingRows?.length ? pendingRows : [emptyRow(columns)];
+    pendingRows = null;
     let runResults = null; // [{ cells, pass }] aligned to rows, or null when stale
     let selRow = null; // selected row index for Run to Row (FR-115l), or null
     let runToBtn = null; // the Run to Row button, enabled only with a selection
@@ -2254,9 +2343,25 @@ export function testVectorsPanel({ store, dataDir }) {
       await loadFrom(res.path);
     }
 
-    // Publish this build()'s document operations so open() can auto-load and
-    // close() can save without reaching into the table's closure (FR-115m).
-    ops = { loadFrom, save: onSave };
+    // Publish this build()'s document operations so open() can auto-load,
+    // requestClose() can save, and syncToDesign() can invalidate or re-align the
+    // table, without any of them reaching into this closure (FR-115m/FR-115h).
+    ops = {
+      loadFrom,
+      save: onSave,
+      clearResults, // drop stale pass/fail painting after a design edit
+      note: showNote, // report reconciliation warnings in the notice line
+      // snapshot renders the LIVE table in `.tv` shape so reconcileVectors can
+      // align it to a new column set — the same call a Load makes, with the
+      // in-memory table playing the part of the file (FR-115h).
+      snapshot: () =>
+        serializeVectors({
+          inputs: columns.inputs,
+          outputs: columns.outputs,
+          io: columns.io,
+          rows,
+        }),
+    };
 
     // --- buttons ---
     const buttons = el("div", "dialog-buttons");

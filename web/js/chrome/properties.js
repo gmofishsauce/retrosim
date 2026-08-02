@@ -358,8 +358,8 @@ export function initProperties({ container, store, renderer = null }) {
     const doc = docSection(td);
     if (doc) container.appendChild(doc);
 
-    // The panel is read-only while a simulation runs or the test-vector panel
-    // is open (FR-087/FR-115h).
+    // The panel is read-only while a simulation runs (FR-087). An open
+    // test-vector panel no longer locks it (FR-115h, 2026-08-02).
     const locked = store.isReadonly();
 
     // Editable designator label (FR-011b): free-form, duplicate-allowed text for

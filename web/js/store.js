@@ -64,6 +64,16 @@ function restoreDesign(design, snap) {
 export function createStore(initial = {}) {
   const state = {
     design: initial.design ?? null,
+    // designRev counts DESIGN MUTATIONS, and nothing else (§6.10, FR-115h). The
+    // store notifies for many reasons a subscriber cannot tell apart — a
+    // selection, a tool change, a tab switch — and the test-vector panel must
+    // react to design edits specifically, now that they can happen while it is
+    // open. Comparing a remembered value is O(1) and can neither miss an edit nor
+    // fire without one; hashing or diffing the design per notification would be
+    // work proportional to the design for the same answer. Bumped by dispatch,
+    // undo, redo, applyLive, and replaceDesign — see bumpDesign() — and by
+    // nothing else. Session-only; no meaning beyond "different from last time".
+    designRev: 0,
     tool: initial.tool ?? "select",
     placeType: initial.placeType ?? null, // type name armed for click-to-place (FR-009a)
     selection: initial.selection ?? [],
@@ -139,11 +149,14 @@ export function createStore(initial = {}) {
     for (const fn of subscribers) fn(state);
   }
 
-  // isReadonly reports the read-only condition shared by the interactive
-  // simulator (FR-087) and the open test-vector panel (FR-115h): the design
-  // cannot be edited under either.
+  // isReadonly reports the read-only condition: a running interactive simulation
+  // (FR-087), and nothing else. It formerly also reported an open test-vector
+  // panel (FR-115h); that lock was removed 2026-08-02 — once the panel became a
+  // TAB (FR-123) it could be open behind the Console, leaving the user with a
+  // design that refuses edits for no cause they can see. The panel now keeps its
+  // derived columns current instead (§6.16 "Live columns").
   function isReadonly() {
-    return state.simulating || state.vectorPanelOpen;
+    return state.simulating;
   }
 
   // blocked refuses design mutations while the design is read-only
@@ -158,10 +171,7 @@ export function createStore(initial = {}) {
       return true;
     }
     if (!isReadonly()) return false;
-    const why = state.simulating
-      ? "the simulator is running — press Stop first"
-      : "the Test Vectors panel is open — close it first";
-    onBlocked(`${what} is disabled while ${why}`);
+    onBlocked(`${what} is disabled while the simulator is running — press Stop first`);
     return true;
   }
 
@@ -191,6 +201,13 @@ export function createStore(initial = {}) {
       state.dockActive = state.dockMru[0] ?? null;
     }
     notify();
+  }
+
+  // bumpDesign records that the design just changed (§6.10, FR-115h). Called
+  // only after a mutation has actually landed — a refused or thrown-and-restored
+  // command must not bump, having changed nothing.
+  function bumpDesign() {
+    state.designRev++;
   }
 
   // clearSimView drops a retained simulation display view on the first design
@@ -241,6 +258,7 @@ export function createStore(initial = {}) {
       if (undoStack.length > UNDO_CAP) undoStack.shift();
       redoStack.length = 0;
       state.dirty = true;
+      bumpDesign();
       notify();
     },
 
@@ -261,6 +279,7 @@ export function createStore(initial = {}) {
       }
       redoStack.push(cmd);
       state.dirty = true;
+      bumpDesign();
       notify();
     },
 
@@ -281,6 +300,7 @@ export function createStore(initial = {}) {
       }
       undoStack.push(cmd);
       state.dirty = true;
+      bumpDesign();
       notify();
     },
 
@@ -294,6 +314,7 @@ export function createStore(initial = {}) {
     applyLive(mutate) {
       mutate(state.design);
       state.dirty = true;
+      bumpDesign();
       notify();
       for (const fn of liveListeners) fn();
     },
@@ -360,6 +381,7 @@ export function createStore(initial = {}) {
       state.dirty = dirty;
       undoStack.length = 0;
       redoStack.length = 0;
+      bumpDesign(); // a wholly different design: the strongest change of all
       notify();
     },
 

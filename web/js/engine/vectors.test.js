@@ -1206,3 +1206,111 @@ test("reconcileVectors: a clock column absent from the file defaults its cells t
   assert.deepEqual(rows[0].in, ["1", "C"]);
   assert.equal(warnings.length, 1); // clock column in the design but not the file
 });
+
+// --- Live column reconciliation (§6.16, FR-115h) -----------------------------
+//
+// With the read-only lock removed (2026-08-02) the design can change while the
+// test-vector panel is open, so the panel re-derives its columns and realigns
+// its rows. It does that by reusing this pair — serializeVectors then
+// reconcileVectors — with the LIVE TABLE playing the part of a loaded file and
+// the design supplying the columns. These tests pin that usage, which is the
+// reason removing the lock was cheap: no new alignment logic exists.
+
+const liveTable = (columns, rows) =>
+  deserializeVectors(serializeVectors({ ...columns, rows }));
+
+test("live reconcile: an unchanged column set returns the rows untouched (FR-115h)", () => {
+  // The no-op case matters most: a design edit that does not touch the bound I/O
+  // must not disturb a single authored cell.
+  const columns = {
+    inputs: [{ refdes: "A-1", pin: "OUT", label: "A" }],
+    outputs: [{ refdes: "A-2", pin: "IN", label: "Q" }],
+    io: [],
+  };
+  const rows = [
+    { in: ["1"], io: [], out: ["H"] },
+    { in: ["0"], io: [], out: ["L"] },
+  ];
+  const { rows: out, warnings } = reconcileVectors(liveTable(columns, rows), columns);
+  assert.deepEqual(out, rows);
+  assert.deepEqual(warnings, []);
+});
+
+test("live reconcile: a gained column arrives at its default, others preserved (FR-115h)", () => {
+  const before = {
+    inputs: [{ refdes: "A-1", pin: "OUT", label: "A" }],
+    outputs: [{ refdes: "A-3", pin: "IN", label: "Q" }],
+    io: [],
+  };
+  const rows = [{ in: ["1"], io: [], out: ["H"] }];
+  // The user drops in a second input switch, sorted between the two existing
+  // columns, plus an io port.
+  const after = {
+    inputs: [
+      { refdes: "A-1", pin: "OUT", label: "A" },
+      { refdes: "A-2", pin: "OUT", label: "B" },
+    ],
+    outputs: [{ refdes: "A-3", pin: "IN", label: "Q" }],
+    io: [{ refdes: "A-4", pin: "P", label: "BUS" }],
+  };
+  const { rows: out, warnings } = reconcileVectors(liveTable(before, rows), after);
+  assert.deepEqual(out[0].in, ["1", "0"]); // authored cell kept, new one defaulted
+  assert.deepEqual(out[0].out, ["H"]); // untouched
+  assert.deepEqual(out[0].io, ["X"]); // new io column defaults to release (FR-115i)
+  assert.ok(warnings.some((w) => w.includes("A-2")));
+  assert.ok(warnings.some((w) => w.includes("A-4")));
+});
+
+test("live reconcile: an active-low column gained defaults to its inactive level (FR-115p)", () => {
+  // A gained input comes in at the level that leaves the circuit alone, which
+  // for an active-low signal is 1 — the same rule emptyRow follows.
+  const before = { inputs: [], outputs: [], io: [] };
+  const after = {
+    inputs: [{ refdes: "A-1", pin: "OUT", label: "RESET/", activeLow: true }],
+    outputs: [],
+    io: [],
+  };
+  const { rows } = reconcileVectors(liveTable(before, [{ in: [], io: [], out: [] }]), after);
+  assert.deepEqual(rows[0].in, ["1"]);
+});
+
+test("live reconcile: a dropped column takes only its own cells (FR-115h)", () => {
+  const before = {
+    inputs: [
+      { refdes: "A-1", pin: "OUT", label: "A" },
+      { refdes: "A-2", pin: "OUT", label: "B" },
+    ],
+    outputs: [{ refdes: "A-3", pin: "IN", label: "Q" }],
+    io: [],
+  };
+  const rows = [{ in: ["1", "0"], io: [], out: ["H"] }];
+  // A-1 is deleted from the design; B and Q must keep their authored values.
+  const after = {
+    inputs: [{ refdes: "A-2", pin: "OUT", label: "B" }],
+    outputs: [{ refdes: "A-3", pin: "IN", label: "Q" }],
+    io: [],
+  };
+  const { rows: out, warnings } = reconcileVectors(liveTable(before, rows), after);
+  assert.deepEqual(out[0].in, ["0"]);
+  assert.deepEqual(out[0].out, ["H"]);
+  assert.ok(warnings.some((w) => w.includes("A-1")));
+});
+
+test("live reconcile: a relabeled column keeps its cells — identity is (refdes,pin) (FR-115h)", () => {
+  // Renaming a switch's display label (FR-011b) changes a heading, not a column:
+  // the cells must survive, which is why the panel reconciles rather than rebuilds.
+  const before = {
+    inputs: [{ refdes: "A-1", pin: "OUT", label: "old name" }],
+    outputs: [],
+    io: [],
+  };
+  const rows = [{ in: ["1"], io: [], out: [] }, { in: ["0"], io: [], out: [] }];
+  const after = {
+    inputs: [{ refdes: "A-1", pin: "OUT", label: "new name" }],
+    outputs: [],
+    io: [],
+  };
+  const { rows: out, warnings } = reconcileVectors(liveTable(before, rows), after);
+  assert.deepEqual(out, rows);
+  assert.deepEqual(warnings, []);
+});

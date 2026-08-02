@@ -308,14 +308,17 @@ export function initToolbar({ container, store, interaction, fileops, projectops
   function refresh() {
     const simming = store.state.simulating;
     const panelOpen = store.state.vectorPanelOpen;
-    const locked = store.isReadonly(); // simming || panelOpen (FR-087/FR-115h)
+    // `locked` is the simulation lock alone (FR-087). The test-vector panel used
+    // to OR into it (FR-115h); since 2026-08-02 it does not, so every disable
+    // below that reads `locked` is live again while the panel is open.
+    const locked = store.isReadonly();
     // No-project state (FR-121c, §6.11): while no project is current the
     // design is the inert FR-004 placeholder — everything is disabled except
     // New Project…, Open Project…, Open, Select, and the View items.
     const noProject = !store.state.project;
     for (const t of tools) {
       toolEls[t.tool].classList.toggle("active", store.state.tool === t.tool);
-      // Wire/Bus arm design mutations; Select stays usable (FR-087/FR-115h).
+      // Wire/Bus arm design mutations; Select stays usable (FR-087).
       if (t.tool !== "select") toolEls[t.tool].disabled = locked || noProject;
     }
     undoItem.disabled = locked || noProject || !store.canUndo();
@@ -343,19 +346,21 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     // (FR-115b). Checked while its tab is open, frontmost or not.
     vectorsItem.disabled = simming || noProject;
     vectorsItem.classList.toggle("checked", panelOpen);
-    // Generate C… is disabled under either lock (FR-116): while simulating
-    // and while the vector panel is open. Export… follows the same rule
-    // (FR-119).
+    // Generate C… is disabled while simulating (FR-116); Export… follows the
+    // same rule (FR-119). An open test-vector panel no longer disables either
+    // (FR-115h).
     generateItem.disabled = locked || noProject;
     exportItem.disabled = locked || noProject;
-    // Run and the panel are mutually exclusive (FR-115h): Run is disabled while
-    // the panel is open. Stop stays usable while simulating. The one exception
-    // is a held vector run (FR-115l): the button is live as the Stop that
-    // releases it, and reverts to the disabled Run form once released.
+    // Run/Stop (FR-076/FR-115h). An open test-vector panel no longer disables
+    // Run — that blanket disable existed only because the panel locked the
+    // design, and the lock is gone (2026-08-02). What survives is the narrower
+    // mutual exclusion: while a vector run is HELD (FR-115l) the button is the
+    // Stop that RELEASES the hold, never a start, so a vector run and a live run
+    // still cannot overlap. Stop stays usable while simulating.
     // Console is modeless output (FR-122c): always enabled, checked when open.
     consoleItem.classList.toggle("checked", store.state.consolePanelOpen);
     const holding = store.state.vectorHold;
-    runBtn.disabled = (panelOpen && !holding) || noProject;
+    runBtn.disabled = noProject;
     runBtn.textContent = simming || holding ? "Stop" : "Run";
     runBtn.title = holding
       ? "Release the held test-vector state"

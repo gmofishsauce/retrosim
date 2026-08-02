@@ -265,16 +265,19 @@ test("vectorHold marks a held vector run and notifies (FR-115l)", () => {
   assert.equal(store.state.vectorHold, false);
 });
 
-test("vectorHold is independent of the panel lock and of simulating (FR-115l)", () => {
+test("vectorHold is independent of the panel flag and of simulating (FR-115l)", () => {
   const store = newStore();
   // A hold happens with the panel open and the interactive simulator stopped:
   // the two flags answer different questions, so neither implies the other.
   store.setVectorPanelOpen(true);
   store.setVectorHold(true);
   assert.equal(store.state.simulating, false);
-  assert.equal(store.isReadonly(), true); // the FR-115h lock still applies
+  // Neither the open panel nor the hold locks the design (FR-115h, reworked
+  // 2026-08-02): the hold's effect on editing is that the FIRST design edit
+  // releases it (the panel's rule, §6.16), not that edits are refused.
+  assert.equal(store.isReadonly(), false);
   store.setVectorHold(false);
-  assert.equal(store.isReadonly(), true); // releasing the hold does not unlock
+  assert.equal(store.isReadonly(), false);
 });
 
 // --- atomic command failure (FR-024a): a throwing apply/revert restores the
@@ -463,15 +466,77 @@ test("markDockUnread notifies once per burst, not once per call (FR-122/FR-123)"
   assert.equal(notes, 1);
 });
 
-test("the tab flags still drive the read-only lock, frontmost or not (FR-115h)", () => {
+test("neither tab locks the design; only a running simulation does (FR-115h)", () => {
+  // The regression test for the lock REMOVED on 2026-08-02. An open test-vector
+  // panel used to make isReadonly() true and have blocked() refuse every
+  // mutation; once the panel became a tab that can sit behind the Console, a
+  // design that refuses edits for no visible cause was worse than the column
+  // staleness the lock prevented (the panel now tracks the design instead).
   const store = newStore();
   store.setVectorPanelOpen(true);
-  store.setConsolePanelOpen(true); // the Console is now frontmost
+  store.setConsolePanelOpen(true);
   assert.equal(store.state.dockActive, "console");
-  assert.equal(store.isReadonly(), true, "the vec TAB is open, so the design is locked");
-  store.setVectorPanelOpen(false);
-  assert.equal(store.isReadonly(), false);
-  // The Console is modeless: its tab never locks the design.
-  assert.equal(store.state.consolePanelOpen, true);
-  assert.equal(store.isReadonly(), false);
+  assert.equal(store.isReadonly(), false, "an open test-vector tab does not lock");
+
+  // The real proof: a command dispatched with the panel open must land.
+  store.dispatch(addCmd(5));
+  assert.equal(store.design.v, 5);
+  assert.equal(store.canUndo(), true);
+  store.undo();
+  assert.equal(store.design.v, 0);
+
+  // A running simulation still locks, panel or no panel (FR-087).
+  store.setSimulating(true);
+  assert.equal(store.isReadonly(), true);
+  store.dispatch(addCmd(5));
+  assert.equal(store.design.v, 0, "refused while simulating");
+});
+
+// --- designRev (§6.10, FR-115h): the signal the test-vector panel uses to tell
+// a design edit from the many other reasons the store notifies. ---
+
+test("designRev advances on every design mutation and nothing else (FR-115h)", () => {
+  const store = newStore();
+  const rev = () => store.state.designRev;
+  const start = rev();
+
+  store.dispatch(addCmd(1));
+  assert.ok(rev() > start, "dispatch bumps");
+  const afterDispatch = rev();
+  store.undo();
+  assert.ok(rev() > afterDispatch, "undo bumps — it changes the design too");
+  const afterUndo = rev();
+  store.redo();
+  assert.ok(rev() > afterUndo, "redo bumps");
+  const afterRedo = rev();
+  store.applyLive((d) => (d.v += 1));
+  assert.ok(rev() > afterRedo, "applyLive bumps (FR-087b)");
+  const afterLive = rev();
+  store.replaceDesign({ v: 0 });
+  assert.ok(rev() > afterLive, "replaceDesign bumps");
+
+  // Everything that is NOT a design edit must leave it alone, or the panel would
+  // reconcile its columns on every selection change.
+  const quiet = rev();
+  store.setSelection([{ kind: "component", refdes: "U1" }]);
+  store.setTool("wire");
+  store.setVectorPanelOpen(true);
+  store.setConsolePanelOpen(true);
+  store.setDockActive("vec");
+  store.markDockUnread("console");
+  store.setSim({ valueOfPin: () => 0 });
+  store.setVectorHold(true);
+  store.setProbe(null);
+  store.markSaved("/p/d.json", "d");
+  assert.equal(rev(), quiet, "no view or document change may bump designRev");
+});
+
+test("a refused dispatch does not advance designRev (FR-115h/FR-121c)", () => {
+  // Nothing changed, so nothing may look changed: a no-project refusal must not
+  // make the panel rebuild its columns.
+  const store = createStore({ design: { v: 0 }, project: null, onBlocked: () => {} });
+  const before = store.state.designRev;
+  store.dispatch(addCmd(1));
+  assert.equal(store.design.v, 0);
+  assert.equal(store.state.designRev, before);
 });

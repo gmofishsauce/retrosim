@@ -95,8 +95,6 @@ import { postMessage } from "../chrome/statusbar.js";
 // LOCKED_MSG is posted when a click attempts to select an item while the
 // simulator is running (FR-087): editing — including selection — is locked.
 const LOCKED_MSG = "Editor is locked while the simulator is running";
-// VEC_LOCKED_MSG is the same notice for the open test-vector panel (FR-115h).
-const VEC_LOCKED_MSG = "Editor is locked while the Test Vectors panel is open";
 
 const DEFAULT_BUS_WIDTH = 8;
 
@@ -1093,9 +1091,10 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     if (store.isReadonly()) {
       const world = worldOf(e);
       const comp = hitComponent(store.design, world);
-      // The live-sim switch-click (FR-087a) requires a running simulation; under
-      // the panel lock (FR-115h, not simulating) it does not apply.
-      if (comp && store.state.simulating) {
+      // The live-sim switch-click (FR-087a) requires a running simulation, which
+      // the lock now implies: isReadonly() is `simulating` alone since the
+      // test-vector panel stopped locking the design (FR-115h, 2026-08-02).
+      if (comp) {
         const inst = store.design.components.find((c) => c.refdes === comp.refdes);
         const interact = inst && INTERACTIONS[inst.type];
         if (interact) return interactDuringSim(inst, interact);
@@ -1114,7 +1113,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
         comp ||
         hitSegment(store.design, world, segTol()) ||
         hitBusSegment(store.design, world, segTol());
-      if (onItem) postMessage(store.state.simulating ? LOCKED_MSG : VEC_LOCKED_MSG);
+      if (onItem) postMessage(LOCKED_MSG);
       return;
     }
 
