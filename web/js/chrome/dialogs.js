@@ -1509,7 +1509,11 @@ export function openFileDialog({ mode, startPath, defaultName = "", title, exts 
 // panel is open the design is read-only (FR-115h). The panel edits one associated
 // `.tv` document (FR-115m): it binds the design's sibling name on open, auto-loads
 // it, saves back to it without a dialog, and guards a close that would lose edits.
-// Returns { open, close, isOpen, isDirty, releaseHold }.
+// It is a TAB of the docked panel area (FR-123, §6.16a): the dock owns the host's
+// `hidden` — an open tab sitting behind the Console must stay open while hidden,
+// which is what keeps the FR-115h lock and a held run alive — and the tab's ✕ is
+// the close control, so the header carries none.
+// Returns { open, requestClose, isOpen, isDirty, releaseHold }.
 export function testVectorsPanel({ store, dataDir }) {
   const host = document.getElementById("vec-panel");
   let openFlag = false;
@@ -1536,7 +1540,8 @@ export function testVectorsPanel({ store, dataDir }) {
     busy = true;
     try {
       openFlag = true;
-      host.hidden = false;
+      // The host's visibility is the dock's (FR-123, §6.16a): setting the open
+      // flag opens the tab, makes it frontmost, and reveals the area.
       store.setVectorPanelOpen(true); // impose the read-only lock (FR-115h)
       build();
       await adopt();
@@ -1545,10 +1550,14 @@ export function testVectorsPanel({ store, dataDir }) {
     }
   }
 
-  // close tears the panel down, guarding unsaved vector edits first (FR-115m).
-  // Returns false when the close was abandoned — the user cancelled, or the save
-  // they asked for failed — leaving the panel open and the document modified.
-  async function close() {
+  // requestClose tears the panel down, guarding unsaved vector edits first
+  // (FR-115m). Returns false when the close was abandoned — the user cancelled,
+  // or the save they asked for failed — leaving the panel open and the document
+  // modified. The dock calls this for the tab's ✕ and for Simulate ▸ Test Vectors
+  // on an already-frontmost tab (FR-123): closing stays the panel's business
+  // precisely because it can be refused, and the dock never touches the open flag
+  // itself, so a cancelled close redraws the identical strip.
+  async function requestClose() {
     if (!openFlag) return true;
     if (busy) return false; // a transition is already in flight
     if (docDirty && ops) {
@@ -1568,8 +1577,11 @@ export function testVectorsPanel({ store, dataDir }) {
     titleEl = null;
     docPath = null;
     docDirty = false;
+    // A real close drops the DOM — which is exactly what distinguishes it from
+    // being hidden behind another tab, where the host keeps everything (FR-123).
+    // Clearing the open flag closes the tab and hands the front to the most
+    // recently used remaining one; the dock hides the area if none remains.
     host.replaceChildren();
-    host.hidden = true;
     store.setVectorPanelOpen(false);
     return true;
   }
@@ -1664,16 +1676,14 @@ export function testVectorsPanel({ store, dataDir }) {
     let runToBtn = null; // the Run to Row button, enabled only with a selection
 
     host.replaceChildren();
-    // Header: title + ✕ close. No Escape-to-close — Escape stays a canvas gesture
-    // (FR-115b); the panel is dismissed by ✕ or by re-toggling the menu item.
+    // Header: the document's name and its modified `*` (FR-115m), and no ✕ — the
+    // close control is the TAB's (FR-123), so the tab can stay labeled by its kind
+    // while the file name stays here, inside the tab. No Escape-to-close either:
+    // Escape stays a canvas gesture (FR-115b).
     const header = el("div", "vec-header");
     titleEl = el("div", "vec-title"); // names the document (FR-115m)
     header.appendChild(titleEl);
     refreshTitle();
-    const closeBtn = button("✕", close);
-    closeBtn.classList.add("vec-close");
-    closeBtn.title = "Close Test Vectors";
-    header.appendChild(closeBtn);
     host.appendChild(header);
 
     const box = el("div", "vec-body");
@@ -2311,5 +2321,5 @@ export function testVectorsPanel({ store, dataDir }) {
   // releaseHold is the toolbar's entry point to the same release the panel's
   // Stop button performs (FR-115l); harmless when nothing is held. isDirty is
   // the page-unload guard's view of the document (FR-115m/FR-049a).
-  return { open, close, isOpen, isDirty, releaseHold: clearHeld };
+  return { open, requestClose, isOpen, isDirty, releaseHold: clearHeld };
 }

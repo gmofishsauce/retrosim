@@ -195,10 +195,10 @@ body {
    when open, docks as a fixed bottom third. Shrinking the canvas host shrinks
    the canvas box, which the ResizeObserver refits at the unchanged viewport
    (§6.13) — content is not rescaled, only its visible extent (FR-115h). */
-/* position: relative anchors the dock grips (§6.16a, FR-115n), which are this
-   element's own absolutely-positioned children rather than the panels' — a panel
-   rebuilds its host's children on every open and would delete a grip parked
-   inside it. */
+/* position: relative anchors the dock grip (§6.16a, FR-115n), which is this
+   element's own absolutely-positioned child rather than the panel area's — a
+   panel rebuilds its host's children on every open, and the dock rebuilds the
+   tab strip, either of which would delete a grip parked inside. */
 #canvas-area {
   flex: 1 1 auto;
   display: flex;
@@ -208,10 +208,10 @@ body {
   position: relative;
 }
 
-/* Draggable divider at each open panel's top edge (FR-115n, §6.16a). Transparent
-   over the panel's own 2px border-top, which stays the visible line; the dock
-   positions it from the same fractions it gives the panels. No keyboard gesture —
-   FR-115n asks for a drag and nothing more. */
+/* Draggable divider at the panel area's top edge (FR-115n, §6.16a) — one grip,
+   since tabs never stack (FR-123). Transparent over #dock's own 2px border-top,
+   which stays the visible line; the dock positions it from the same fraction it
+   gives the area. No keyboard gesture — FR-115n asks for a drag and nothing more. */
 .dock-grip {
   position: absolute;
   left: 0;
@@ -237,20 +237,97 @@ body.dock-dragging .dock-grip { background: rgba(74, 144, 217, 0.35); }
   background: #fafafa;
 }
 
-/* Docked test-vector panel (FR-115b): bottom third of the canvas area, its own
-   vertical scroll. `display` here overrides the [hidden] UA rule, so the
-   explicit [hidden] selector below re-hides it. The third is the FALLBACK and the
-   initial height only — the dock (§6.16a, FR-115n) overrides flex-basis inline as
-   the user drags, and if it were never constructed this is exactly the
-   pre-FR-115n layout. */
-#vec-panel {
+/* The docked panel area (FR-123, §6.16a): a tab strip over the frontmost tab's
+   body, hidden entirely while no tab is open. The third is the FALLBACK and the
+   initial height only — the dock overrides flex-basis inline as the user drags
+   (FR-115n), and if it were never constructed this is a sane layout. The 2px
+   border-top is the visible divider line the .dock-grip sits transparently over. */
+#dock {
   flex: 0 0 33.333%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-top: 2px solid #bbb;
+}
+#dock[hidden] { display: none; }
+
+/* The strip. One row of chrome no matter how many tab kinds exist — the point of
+   FR-123. Tints are greys and the #4a90d9 accent: nothing here may resemble the
+   pass-green/fail-pink result palette (§6.16), which would read as a stuck run
+   result no re-run clears. */
+.dock-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 0.2rem 0.4rem 0;
+  background: #dcdcdc;
+  border-bottom: 1px solid #bbb;
+}
+.dock-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.5rem;
+  margin-bottom: -1px; /* sit on the strip's bottom border */
+  border: 1px solid #bbb;
+  border-bottom: 1px solid transparent;
+  border-radius: 4px 4px 0 0;
+  background: #e7e7e7;
+  color: #444;
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.dock-tab:hover { background: #efefef; }
+/* The frontmost tab joins the body below it: same fill, accent cap on top. */
+.dock-tab[aria-selected="true"] {
+  background: #f3f3f3;
+  color: #111;
+  font-weight: 600;
+  box-shadow: inset 0 2px 0 #4a90d9;
+}
+.dock-tab:focus-visible { outline: 2px solid #4a90d9; outline-offset: -2px; }
+/* Unseen-content marker (FR-123): a dot beside the label, never a focus change. */
+.dock-tab-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #4a90d9;
+}
+/* The tab's ✕ — the close control the panels' own headers used to carry. */
+.dock-tab-close {
+  border: none;
+  background: transparent;
+  padding: 0 0.1rem;
+  color: #777;
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.dock-tab-close:hover { color: #000; }
+
+/* The body holds every open tab's host; the dock hides all but the frontmost. */
+.dock-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+/* Docked test-vector panel (FR-115b): a tab of the area above, its own vertical
+   scroll. `display` here overrides the [hidden] UA rule, so the explicit
+   [hidden] selector below re-hides it when another tab is frontmost. */
+#vec-panel {
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   background: #f3f3f3;
-  border-top: 2px solid #bbb;
 }
 
 /* Header stays pinned (flex:0); the body below scrolls (§6.16). */
@@ -264,7 +341,6 @@ body.dock-dragging .dock-grip { background: rgba(74, 144, 217, 0.35); }
   border-bottom: 1px solid #ccc;
 }
 .vec-title { font-weight: 600; font-size: 0.9rem; }
-.vec-close { padding: 0 0.45rem; }
 .vec-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -277,19 +353,19 @@ body.dock-dragging .dock-grip { background: rgba(74, 144, 217, 0.35); }
 
 #vec-panel[hidden] { display: none; }
 
-/* Docked, modeless Console panel (FR-122c): the magic UART's stdout surface,
-   bottom third of the canvas area like the test-vector panel. When both are
-   open they stack. The [hidden] rule below re-hides it past the flex display.
-   The third is the fallback/initial height; the dock owns it thereafter
+/* Docked, modeless Console panel (FR-122c): the magic UART's stdout surface, a
+   peer tab of the test-vector panel (FR-123) — never stacked with it, only ever
+   in front of or behind it. The [hidden] rule below re-hides it past the flex
+   display when the other tab is frontmost. The area's height is the dock's
    (§6.16a, FR-115n). */
 #console-panel {
-  flex: 0 0 33.333%;
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   background: #1e1e1e;
-  border-top: 2px solid #bbb;
 }
 .console-header {
   flex: 0 0 auto;
@@ -302,7 +378,6 @@ body.dock-dragging .dock-grip { background: rgba(74, 144, 217, 0.35); }
 }
 .console-title { font-weight: 600; font-size: 0.9rem; margin-right: auto; }
 .console-clear { padding: 0 0.5rem; }
-.console-close { padding: 0 0.45rem; }
 /* Scrolling monospace output region; light-on-dark like a terminal. */
 .console-body {
   flex: 1 1 auto;

@@ -379,25 +379,34 @@ async function main() {
     }
     startBackup(store);
     // Modeless Console panel (§6.20, FR-122c): the magic UART's standard-output
-    // surface. createSim routes each UART's emitted byte to it and clears it at
-    // Run start; View ▸ Console drives store.state.consolePanelOpen, to which the
-    // panel's visibility is subscribed below.
+    // surface, and one tab of the docked area (FR-123). createSim routes each
+    // UART's emitted byte to it and clears it at Run start. Its visibility is the
+    // dock's — bytes accumulate whether its tab is frontmost, behind another, or
+    // closed, and a byte arriving while it is not frontmost raises the tab's
+    // unread dot.
     const consolePanel = createConsolePanel({ store });
-    store.subscribe(() => consolePanel.setOpen(store.state.consolePanelOpen));
     const sim = createSim({ store, renderer, consolePanel }); // slow simulator (§6.13)
-    // Simulate ▸ Test Vectors toggles the docked test-vector panel (FR-115b/
-    // §6.16); opening it imposes the read-only lock (FR-115h).
+    // The test-vector panel (FR-115b/§6.16), the other tab of the docked area;
+    // opening it imposes the read-only lock (FR-115h), which holds while its tab
+    // is open whether or not that tab is frontmost.
     vecPanel = testVectorsPanel({ store, dataDir: defaults.dataDir });
-    // Both halves of the toggle are async now (FR-115m): open auto-loads the
-    // design's `.tv` sibling, close may prompt to save it first — and a
-    // cancelled close simply leaves the panel open.
-    const onTestVectors = () => (vecPanel.isOpen() ? vecPanel.close() : vecPanel.open());
-    // Docked-panel heights and their draggable top edges (§6.16a, FR-115n).
-    // Constructed once, after both panels exist. It reads the two open flags off
-    // the store and needs nothing from either panel module, which is why neither
-    // knows it exists; the canvas learns about a resize through the
-    // ResizeObserver it already has, not through a call.
-    createDock({ store });
+    // The docked panel area (§6.16a, FR-123/FR-115n): the tab strip, which tab is
+    // displayed, the shared height, and its draggable top edge. Constructed once,
+    // after both panels exist, since it drives them through their handles —
+    // open() and the guarded requestClose(), so a cancelled close (FR-115m)
+    // leaves the strip untouched. Neither panel module knows about tabs, and the
+    // canvas learns about a resize through the ResizeObserver it already has,
+    // not through a call.
+    const dock = createDock({
+      store,
+      panels: { vec: vecPanel, console: consolePanel },
+    });
+    // Both menu items open a closed tab, select a backgrounded one, and close
+    // only a frontmost one (FR-123). Both halves are async for the vector panel
+    // (FR-115m): open auto-loads the design's `.tv` sibling, close may prompt to
+    // save it first.
+    const onTestVectors = () => dock.menuInvoke("vec");
+    const onConsole = () => dock.menuInvoke("console");
     // Simulate ▸ Generate C… (FR-116/§6.17): emit the standalone C simulator —
     // the generated <design>.c plus verbatim copies of the fixed runtime pair —
     // into a user-chosen directory. Generation is read-only; refusals and
@@ -502,7 +511,8 @@ async function main() {
       sim,
       library, // for the Refresh Types action (FR-088)
       reloadLibrary, // Refresh Types rescans the project's components/ first (FR-121i)
-      onTestVectors, // FR-115: Simulate ▸ Test Vectors…
+      onTestVectors, // FR-115: Simulate ▸ Test Vectors… (open/select/close, FR-123)
+      onConsole, // FR-122c: View ▸ Console (open/select/close, FR-123)
       onReleaseHold: () => vecPanel.releaseHold(), // FR-115l: Stop releases a held vector run
       onGenerateC, // FR-116: Simulate ▸ Generate C…
       onExport, // FR-119: File ▸ Export…

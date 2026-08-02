@@ -334,3 +334,144 @@ test("a throwing undo restores the design and leaves the stacks unmoved (FR-024a
   assert.equal(store.canUndo(), true); // still undoable (stack unmoved)
   assert.equal(store.canRedo(), false);
 });
+
+// --- Docked panel area: tab bookkeeping (§6.16a, FR-123) ---------------------
+//
+// The store owns which tabs are open, which is frontmost, where each sits in the
+// strip, and which carries an unseen-content dot, so that "opening makes a tab
+// frontmost" and "closing the frontmost tab selects the most recently used
+// remaining one" are single rules in a single place rather than a handshake
+// between the dock and two panel modules. These are pure state transitions —
+// no DOM, no dock.
+
+test("opening a tab appends it to the strip and makes it frontmost (FR-123)", () => {
+  const store = newStore();
+  assert.equal(store.state.dockActive, null); // a reload starts with no tab open
+  assert.deepEqual(store.state.dockOrder, []);
+
+  store.setVectorPanelOpen(true);
+  assert.equal(store.state.vectorPanelOpen, true);
+  assert.deepEqual(store.state.dockOrder, ["vec"]);
+  assert.equal(store.state.dockActive, "vec");
+
+  // Opening a second tab leaves the first in the strip and takes the front;
+  // tabs appear in the order opened, newest at the right end.
+  store.setConsolePanelOpen(true);
+  assert.deepEqual(store.state.dockOrder, ["vec", "console"]);
+  assert.equal(store.state.dockActive, "console");
+  assert.equal(store.state.vectorPanelOpen, true); // still open, just hidden
+});
+
+test("closing the frontmost tab selects the most recently used remaining one (FR-123)", () => {
+  const store = newStore();
+  store.setVectorPanelOpen(true); // vec front
+  store.setConsolePanelOpen(true); // console front
+  store.setDockActive("vec"); // used: vec, then console
+  store.setVectorPanelOpen(false);
+  assert.equal(store.state.dockActive, "console");
+  assert.deepEqual(store.state.dockOrder, ["console"]);
+});
+
+test("closing a background tab does not change the selection (FR-123)", () => {
+  const store = newStore();
+  store.setVectorPanelOpen(true);
+  store.setConsolePanelOpen(true); // console is frontmost, vec is behind
+  store.setVectorPanelOpen(false);
+  assert.equal(store.state.dockActive, "console");
+  assert.deepEqual(store.state.dockOrder, ["console"]);
+});
+
+test("closing the last tab leaves no selection and an empty strip (FR-123)", () => {
+  const store = newStore();
+  store.setConsolePanelOpen(true);
+  store.setConsolePanelOpen(false);
+  assert.equal(store.state.dockActive, null); // the area disappears entirely
+  assert.deepEqual(store.state.dockOrder, []);
+  assert.deepEqual(store.state.dockMru, []);
+});
+
+test("reopening a closed tab puts it at the right end of the strip (FR-123)", () => {
+  const store = newStore();
+  store.setVectorPanelOpen(true);
+  store.setConsolePanelOpen(true);
+  assert.deepEqual(store.state.dockOrder, ["vec", "console"]);
+  store.setVectorPanelOpen(false);
+  store.setVectorPanelOpen(true);
+  assert.deepEqual(store.state.dockOrder, ["console", "vec"]);
+  assert.equal(store.state.dockActive, "vec");
+});
+
+test("setDockActive selects an open tab and ignores a closed or unknown one (FR-123)", () => {
+  const store = newStore();
+  store.setVectorPanelOpen(true);
+  store.setConsolePanelOpen(true);
+  store.setDockActive("vec");
+  assert.equal(store.state.dockActive, "vec");
+  assert.deepEqual(store.state.dockMru, ["vec", "console"]);
+
+  // A stray call cannot desync the strip: neither a closed tab nor a key with no
+  // tab kind may take the front.
+  store.setConsolePanelOpen(false);
+  store.setDockActive("console");
+  assert.equal(store.state.dockActive, "vec");
+  store.setDockActive("drc");
+  assert.equal(store.state.dockActive, "vec");
+});
+
+test("markDockUnread marks only an open, non-frontmost tab; selecting clears it (FR-123)", () => {
+  const store = newStore();
+  // Closed: nothing to mark — there is no tab in the strip to carry a dot.
+  store.markDockUnread("console");
+  assert.deepEqual(store.state.dockUnread, {});
+
+  store.setConsolePanelOpen(true); // open AND frontmost
+  store.markDockUnread("console");
+  assert.deepEqual(store.state.dockUnread, {}, "the frontmost tab is never marked");
+
+  store.setVectorPanelOpen(true); // vec takes the front, console goes behind
+  store.markDockUnread("console");
+  assert.equal(store.state.dockUnread.console, true);
+
+  store.setDockActive("console"); // selecting clears the mark
+  assert.deepEqual(store.state.dockUnread, {});
+});
+
+test("a tab's unread mark does not survive a close and reopen (FR-123)", () => {
+  const store = newStore();
+  store.setConsolePanelOpen(true);
+  store.setVectorPanelOpen(true);
+  store.markDockUnread("console");
+  assert.equal(store.state.dockUnread.console, true);
+  store.setConsolePanelOpen(false);
+  assert.deepEqual(store.state.dockUnread, {});
+  store.setConsolePanelOpen(true);
+  assert.deepEqual(store.state.dockUnread, {}, "a tab arrives unmarked");
+});
+
+test("markDockUnread notifies once per burst, not once per call (FR-122/FR-123)", () => {
+  // The Console calls this from every rAF frame that wrote bytes; the setter is
+  // idempotent so a long run costs one notification, preserving FR-122's
+  // non-blocking buffering.
+  const store = newStore();
+  store.setConsolePanelOpen(true);
+  store.setVectorPanelOpen(true);
+  let notes = 0;
+  store.subscribe(() => notes++);
+  store.markDockUnread("console");
+  store.markDockUnread("console");
+  store.markDockUnread("console");
+  assert.equal(notes, 1);
+});
+
+test("the tab flags still drive the read-only lock, frontmost or not (FR-115h)", () => {
+  const store = newStore();
+  store.setVectorPanelOpen(true);
+  store.setConsolePanelOpen(true); // the Console is now frontmost
+  assert.equal(store.state.dockActive, "console");
+  assert.equal(store.isReadonly(), true, "the vec TAB is open, so the design is locked");
+  store.setVectorPanelOpen(false);
+  assert.equal(store.isReadonly(), false);
+  // The Console is modeless: its tab never locks the design.
+  assert.equal(store.state.consolePanelOpen, true);
+  assert.equal(store.isReadonly(), false);
+});

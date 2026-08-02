@@ -29,6 +29,13 @@ function sameRefIn(list, ref) {
 // as they were. Local to the store (which stays dependency-free) and tolerant
 // of the toy designs the store tests use — only fields actually present are
 // captured and restored; restore preserves design object identity (§6.10).
+// DOCK_FLAG names the open flag behind each tab of the docked panel area
+// (§6.16a, FR-123). It is the store's whole knowledge of tab kinds: a future tab
+// (a design-rule-check report, say) adds a flag to the state and an entry here,
+// and setTabOpen/setDockActive/markDockUnread need no change. The labels, hosts,
+// and strip live in chrome/dock.js.
+const DOCK_FLAG = { vec: "vectorPanelOpen", console: "consolePanelOpen" };
+
 const DESIGN_COLLECTIONS = ["components", "wires", "buses", "vertices"];
 const DESIGN_COUNTERS = ["nextWireId", "nextBusId", "nextVertexId"];
 
@@ -90,6 +97,17 @@ export function createStore(initial = {}) {
     // isReadonly()/blocked(), so it coexists with a running simulation and
     // imposes no edit lock. Session-only UI state, never persisted.
     consolePanelOpen: false,
+    // Tab bookkeeping for the docked panel area (§6.16a, FR-123). The two flags
+    // above say which tabs are OPEN; these say which one is frontmost, where each
+    // sits in the strip, which was used most recently, and which carries an
+    // unseen-content dot. All session-only view state that nonetheless notifies,
+    // because the toolbar's menu items branch on it (open/select/close, FR-123).
+    // Maintained only by setTabOpen/setDockActive/markDockUnread below, so the
+    // four members can never disagree with each other or with the open flags.
+    dockActive: null, // "vec" | "console" | null — the frontmost tab
+    dockOrder: [], // strip order: appended on open (FR-123 "order opened")
+    dockMru: [], // most-recently-used first; picks the successor on close
+    dockUnread: {}, // { console: true } — unseen-content marks (FR-123)
     // The current project (FR-121, §6.19): null or { dir, name, manifestFile,
     // mainDesign } — the client-side mirror of the server's ProjectInfo minus
     // its warnings. Transient session state, never persisted (the server holds
@@ -145,6 +163,34 @@ export function createStore(initial = {}) {
       : "the Test Vectors panel is open — close it first";
     onBlocked(`${what} is disabled while ${why}`);
     return true;
+  }
+
+  // setTabOpen opens or closes one tab of the docked panel area (§6.16a,
+  // FR-123): it sets that tab's open flag AND maintains the strip bookkeeping in
+  // one place, so "opening makes it frontmost" and "closing the frontmost tab
+  // selects the most recently used remaining one" are single rules rather than a
+  // handshake between the dock and two panel modules. Unknown keys are ignored.
+  function setTabOpen(key, open) {
+    const flag = DOCK_FLAG[key];
+    if (!flag) return;
+    state[flag] = !!open;
+    // dockOrder is rebuilt by remove-then-append, so reopening a closed tab
+    // lands at the RIGHT END of the strip (FR-123 "order opened").
+    state.dockOrder = state.dockOrder.filter((k) => k !== key);
+    state.dockMru = state.dockMru.filter((k) => k !== key);
+    delete state.dockUnread[key]; // a tab arrives, and departs, unmarked
+    if (open) {
+      state.dockOrder.push(key);
+      state.dockMru.unshift(key);
+      state.dockActive = key; // opening a tab makes it frontmost (FR-123)
+    } else if (state.dockActive === key) {
+      // Closing the FRONTMOST tab hands the front to the most recently used
+      // remaining tab, or to nothing when it was the last one — at which point
+      // the whole area disappears (FR-123). Closing a BACKGROUND tab leaves the
+      // selection alone, which is this branch not running.
+      state.dockActive = state.dockMru[0] ?? null;
+    }
+    notify();
   }
 
   // clearSimView drops a retained simulation display view on the first design
@@ -332,11 +378,41 @@ export function createStore(initial = {}) {
       notify();
     },
 
-    // setVectorPanelOpen flips the read-only test-vector-panel mode (FR-115h);
-    // the panel owns the transitions (§6.16). Notifies so chrome can react.
-    setVectorPanelOpen(flag) {
-      state.vectorPanelOpen = flag;
+    // setTabOpen opens or closes one tab of the docked panel area (§6.16a,
+    // FR-123). The panels reach it through the two named setters below; nothing
+    // else writes the four dock members.
+    setTabOpen,
+
+    // setDockActive selects an already-open tab (§6.16a, FR-123): it moves to the
+    // head of the MRU list, becomes frontmost, and loses its unseen-content mark.
+    // A no-op for a tab that is closed or already frontmost, so a stray call can
+    // neither desync the strip nor cost a notification.
+    setDockActive(key) {
+      if (!DOCK_FLAG[key] || !state[DOCK_FLAG[key]]) return;
+      if (state.dockActive === key && !state.dockUnread[key]) return;
+      state.dockMru = [key, ...state.dockMru.filter((k) => k !== key)];
+      state.dockActive = key;
+      delete state.dockUnread[key];
       notify();
+    },
+
+    // markDockUnread raises a tab's unseen-content dot (§6.16a, FR-123) — content
+    // arrived in a tab the user is not looking at. Deliberately a no-op for a
+    // frontmost or closed tab, and idempotent once set, so its caller (the
+    // Console's per-frame repaint, §6.20) needs no condition of its own and a
+    // long burst of output costs one notification, not one per frame.
+    markDockUnread(key) {
+      if (!DOCK_FLAG[key] || !state[DOCK_FLAG[key]]) return;
+      if (state.dockActive === key || state.dockUnread[key]) return;
+      state.dockUnread[key] = true;
+      notify();
+    },
+
+    // setVectorPanelOpen flips the read-only test-vector-panel mode (FR-115h);
+    // the panel owns the transitions (§6.16). Routes through setTabOpen so the
+    // tab bookkeeping (§6.16a) follows. Notifies so chrome can react.
+    setVectorPanelOpen(flag) {
+      setTabOpen("vec", flag);
     },
 
     // setVectorHold flips the held-vector-run state (FR-115l); the panel owns
@@ -349,11 +425,11 @@ export function createStore(initial = {}) {
 
     // setConsolePanelOpen toggles the modeless Console panel (FR-122c); the
     // panel and the View ▸ Console item own the transitions (§6.20). It does
-    // NOT feed isReadonly()/blocked() — the panel imposes no edit lock.
-    // Notifies so chrome (the panel visibility, the menu check) can react.
+    // NOT feed isReadonly()/blocked() — the panel imposes no edit lock. Routes
+    // through setTabOpen so the tab bookkeeping (§6.16a) follows. Notifies so
+    // chrome (the tab strip, the menu check) can react.
     setConsolePanelOpen(flag) {
-      state.consolePanelOpen = flag;
-      notify();
+      setTabOpen("console", flag);
     },
 
     // isReadonly is the shared edit-lock predicate (FR-087/FR-115h): true while

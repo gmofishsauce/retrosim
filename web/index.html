@@ -30,15 +30,24 @@
       <div id="canvas-host">
         <canvas id="canvas"></canvas>
       </div>
-      <div id="vec-panel" hidden></div>
-      <!-- Modeless Console panel (FR-122c): the magic UART's stdout surface. -->
-      <div id="console-panel" hidden>
-        <div class="console-header">
-          <div class="console-title">Console</div>
-          <button class="console-clear" type="button" title="Clear the console">Clear</button>
-          <button class="console-close" type="button" title="Close the console">✕</button>
+      <!-- The docked panel area (FR-123, §6.16a): a tab strip over one visible
+           tab body. dock.js fills .dock-tabs from the open tabs and hides every
+           host but the frontmost one; the whole area is hidden while no tab is
+           open. A hidden host keeps its DOM, which is how a background tab keeps
+           its rows, results, held run, console text, and scroll position. -->
+      <div id="dock" hidden>
+        <div class="dock-tabs" role="tablist" aria-label="docked panels"></div>
+        <div class="dock-body">
+          <div id="vec-panel" role="tabpanel" hidden></div>
+          <!-- Modeless Console panel (FR-122c): the magic UART's stdout surface. -->
+          <div id="console-panel" role="tabpanel" hidden>
+            <div class="console-header">
+              <div class="console-title">Console</div>
+              <button class="console-clear" type="button" title="Clear the console">Clear</button>
+            </div>
+            <div class="console-body" aria-label="console output"></div>
+          </div>
         </div>
-        <div class="console-body" aria-label="console output"></div>
       </div>
     </section>
     <aside id="properties" aria-label="properties"></aside>

@@ -417,14 +417,21 @@ reworked.
   (Z→U); emit on CLK 0→1 **only** when CS/ and CE/ are exactly 0 (uncertain ⇒ no
   emit — a side effect, unlike memory's pessimistic-U bus); data bits masked non-1→0
   (U→0, FR-114g); at most one byte per edge; register state transient.
-- **FR-122c** — Optional **Console panel**: docked bottom panel toggled from View ▸
-  Console; modeless (no read-only lock); monospace, sticky-tail autoscroll; byte
-  rendering (printable + LF/TAB verbatim, CR ignored, else `\xNN`); interleaves all
-  UARTs; Clear action; cleared at Run start; bounded retained history; open state +
-  text are session-only (not saved). Its bottom third is an **initial** height: the
-  panel's top edge is a draggable divider (FR-115n, §6.16a) which, when the
-  test-vector panel is also open, trades area with that panel rather than with the
-  schematic.
+- **FR-122c** — Optional **Console panel**: a **tab of the docked panel area** (FR-123)
+  opened/selected/closed from View ▸ Console; modeless (no read-only lock); monospace,
+  sticky-tail autoscroll; byte rendering (printable + LF/TAB verbatim, CR ignored, else
+  `\xNN`); interleaves all UARTs; Clear action, close ✕ on its tab; cleared at Run
+  start; bounded retained history; open state + text are session-only (not saved).
+  Output accumulates while hidden or closed and raises the tab's **unread dot**. The
+  area's bottom third is an **initial** height: its top edge is a draggable divider
+  (FR-115n, §6.16a) trading area with the schematic.
+- **FR-123** — The docked bottom panels are **tabs in one panel area**: strip shows only
+  open tabs (each with a ✕), area absent when none is open, one frontmost tab displayed,
+  order-opened strip, MRU selection on closing the frontmost tab, menu items
+  open/select/close, unread dot for content arriving in a non-frontmost tab (Console
+  only), hidden tabs keep all state, "open" in every other FR means *tab open* (so
+  FR-115h's lock survives a tab switch), one shared height with one divider (FR-115n),
+  session-only, tablist/tab/tabpanel roles, no keyboard shortcuts. §6.16a owns it.
 - **FR-122d** — Fast (generated C) sim reproduces FR-122b bit-for-bit (FR-107),
   emitting each byte to real stdout in both batch modes, fully buffered; generator
   bakes a per-UART device table, runtime owns the latch/emit. Shares stdout with the
@@ -1695,7 +1702,10 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   dirty tracking; pub/sub.
 - **Satisfies:** FR-024, FR-049a, FR-121c (the no-project lock), NFR-006.
 - **State:** `{ design, tool, selection, hover, viewport, dirty, savePath, designName,
-  simulating, sim, vectorPanelOpen, vectorHold, probe, project }`.
+  simulating, sim, vectorPanelOpen, consolePanelOpen, dockActive, dockOrder, dockMru,
+  dockUnread, vectorHold, probe, project }`. The five `dock*`/panel-open members are
+  the docked panel area's tab bookkeeping (§6.16a, FR-123) — session-only view state
+  that nonetheless notifies, because the toolbar's menu items branch on it.
   `project` (FR-121, §6.19) is the client-held **current project**: `null` or
   `{ dir, name, manifestFile, mainDesign }`, set via a notifying
   `setProject(p)`. Transient session state, never persisted (the server holds
@@ -1817,8 +1827,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   Project…, Duplicate Project… (FR-121b, §6.19), New, Open, Save, Save As,
   Export… (FR-119, §6.18), Refresh Types; **Edit** — Undo, Redo, Copy, Paste
   (FR-111/FR-112, §6.15), Design Properties… (FR-076b, dialog below); **View** — Zoom In, Zoom Out, Fit to Screen (FR-022a,
-  `interaction.fitToScreen`); **Simulate** — Test Vectors… (FR-115b, §6.16) and
-  Generate C… (FR-116, §6.17). **Buttons:**
+  `interaction.fitToScreen`), Console (FR-122c, §6.20); **Simulate** — Test Vectors… (FR-115b, §6.16) and
+  Generate C… (FR-116, §6.17). The Test Vectors and Console items are **not** plain
+  toggles: each calls `dock.menuInvoke(key)` (§6.16a) — through the
+  `onTestVectors`/`onConsole` callbacks `app.js` supplies, so the toolbar depends
+  on no panel or dock module — which opens a closed tab,
+  selects an open-but-background one, and closes it only when it is already
+  frontmost (FR-123); both render checked while their tab is open. **Buttons:**
   Select, Wire, Bus (modal tools), then **Run/Stop**, then — shown
   only while a run of a sequential design is active — the **pause/step cluster**
   (FR-076a):
@@ -2781,7 +2796,7 @@ no sequential part could ever leave U.)
 ### 6.16 JS: test vectors (`web/js/engine/vectors.js` + `chrome/dialogs.js`/`toolbar.js`/`app.js`)
 
 - **Purpose:** author and run a table of input patterns + expected outputs against the slow simulator — combinational rows independently (FR-115c), sequential (clocked) rows in order with scripted clocks (FR-115e). Implements requirements §3.19a in full.
-- **Satisfies:** FR-115, FR-115a, FR-115b, FR-115c, FR-115d, FR-115e (sequential), FR-115f (port binding), FR-094f (clock-source ports), FR-115i (bidirectional bus columns), FR-115j (duplicate row), FR-115k (grouped hex cells), FR-115l (run through the selected row and hold), FR-115m (the panel edits an associated `.tv` document), FR-115o (cycling cell buttons), FR-115p (inactive-level input defaults); extends FR-004a (new **Simulate** menu). The panel's **height** and its draggable top edge (FR-115n) are §6.16a, which owns that rule for both docked panels. (FR-115g, the interim clocked-design guard, is superseded and removed.)
+- **Satisfies:** FR-115, FR-115a, FR-115b, FR-115c, FR-115d, FR-115e (sequential), FR-115f (port binding), FR-094f (clock-source ports), FR-115i (bidirectional bus columns), FR-115j (duplicate row), FR-115k (grouped hex cells), FR-115l (run through the selected row and hold), FR-115m (the panel edits an associated `.tv` document), FR-115o (cycling cell buttons), FR-115p (inactive-level input defaults); extends FR-004a (new **Simulate** menu). The panel's **tab** (FR-123), the area's **height**, and its draggable top edge (FR-115n) are §6.16a, which owns those rules for every docked tab. (FR-115g, the interim clocked-design guard, is superseded and removed.)
 
 **Pure runner & file model (`engine/vectors.js`, DOM-free, unit-tested in `vectors.test.js`).** A new module, deliberately free of any DOM so it tests like `validateMemSpec`/`memDeviceSpec`:
   - `deriveColumns(design) → { inputs, outputs, io, warnings }`. Enumerates `design.components` (the same iteration the simulator uses, §6.13) filtered by `typeData.renderType`: `"switch"` → one **input** column `{ refdes, pin:"OUT", label }`; `"indicator"` → one **output** column `{ refdes, pin:"IN", label }`; `"indicator8"` → eight output columns `{ refdes, pin:"D0".."D7", label }`; and **ports** (`"port"`/`"portN"`, FR-115f) by their **effective direction** (`effectivePortDir`, §6.14, FR-094c/FR-094d): an effective-`in` port → input column(s), an effective-`out` port → output column(s), an effective-`bidir` port → a **bidirectional column** `{ refdes, pin, label, io:true }` collected into a third **`io`** group (FR-115i, superseding the former skip-with-warning; a 1-wide port yields one io column, a `portN` N per-bit io columns). A 1-wide port contributes one column `{ refdes, pin:"P", label }`; a `portN` of width N expands to **N one-bit columns** `{ refdes, pin:"P"+i, label:label+i }` (uniform per-bit, no whole-bus column). A port column is thus identified by the port's **own** `(refdes, pin)` — the natural, stable identity (FR-115f). `label` is the instance's display label (FR-011b) falling back to `refdes`; columns are sorted by refdes (numeric-aware, then pin) for stable order — port-derived columns **coexist** with any switch/indicator columns. `"clock"` (FR-115e) → one **input** column `{ refdes, pin:"OUT", label, kind:"clock" }` whose cells take `0`/`1`/`C`; `kind` is a live-only marker (the dialog's cell options and `validateVectors`' `C` legality key off it) and is **not** persisted in the `.tv` file — reconciliation stays pure `(refdes,pin)`. A **clock-source port** (FR-094f) takes the *same* marker: in the port branch, an input-bucket 1-wide port satisfying `isClockPort` (§6.14) is pushed as `{ refdes, pin:"P", label, kind:"clock" }` instead of a plain input column. Because `kind` is live-only, **the `.tv` format does not change and no `formatVersion` bump is needed** (§7.7): an existing file's column list and column order are untouched by marking a port, and only the cell alphabet of that one column widens from `0`/`1` to `0`/`1`/`C`. `isClock` set where it cannot be honored — on a `portN`, or on a port whose effective direction is not `in` — is **ignored with a non-fatal warning** into `cols.warnings` (FR-094f), surfacing in the panel's notice line beside the FR-115a reconciliation warnings.
@@ -2801,7 +2816,7 @@ no sequential part could ever leave U.)
   - `clockSources(design) → [{ refdes, pin }]` (**replaces `hasClockGenerators`**, FR-094f) enumerates the design's **scripted clock sources** in one place: every component whose `typeData.renderType` is `"clock"` as `(refdes, "OUT")`, plus every port satisfying `isClockPort` (§6.14) as `(refdes, "P")`. It is the one answer to "what does a vector run drive as a clock", and the three consumers read it: `deriveColumns`' `kind:"clock"` marking, the panel's `0`/`1`/`C` cell options and sequential-mode notice, and `refuseHiddenClocks`, which throws when any source's refdes contains `/` — a clock inside a flattened child or peer sheet, unreachable from a top-sheet column (FR-115e hierarchy). A marked port inside a child is caught by the same rule, from the same list, with no second scan. `hasClockGenerators` is **removed** rather than kept alongside — a second, narrower predicate is exactly how a clock-source port would get silently dropped from one of the three, and no consumer wants "generators only": the `C`-pulse columns and the preamble apply to a marked port identically (FR-094f), which is the point of the feature.
   - `isStateful(design) → boolean` (generalized for FR-079d, then FR-094f). True when the design carries any persistent state that must survive from one vector row to the next: `clockSources(design)` is non-empty **or** any component's behavior declares a transparent latch (a `.L` output, FR-079d). It selects the **ordered/persistent** run path (FR-115e) in `runVectors`/`captureVectors` — so a latch's hold spans rows even in a clock-less design, and so a design clocked only through a marked port runs its rows in order at all. Both helpers are pure, DOM-free design scans — deliberately not `buildSimulation(...).hasClocks()`, which would compile every behavior to answer a yes/no question, and which in any case answers a *different* question now: `sim.hasClocks()` counts clock **generators** (free-running waveform sources) and correctly ignores a marked port, keeping the interactive simulator combinational per FR-094f. The latch test reads each in-use `typeData.behavior` for a `.L`-suffixed output (cheap string/compiled-shape check). (The original clock scan was introduced for the FR-115g guard, now superseded.)
 
-**Panel (`chrome/dialogs.js` `testVectorsPanel({ store, dataDir })`).** A **docked, modeless panel** (FR-115b, reworked 2026-07-02 from the former `.dialog-overlay` modal so the schematic stays visible while authoring). It mounts into `#vec-panel`, the bottom docked host inside a flex-column `#canvas-area` (canvas host on top, panel hosts below); opening reveals the host and shrinks the canvas box, which the `canvas.js` `ResizeObserver` refits automatically at the unchanged viewport — content keeps its scale/aspect, only the visible extent shrinks (§6.13) — and closing hides it so the canvas grows back. The host's **height** is no longer a fixed third: it is a session fraction of the canvas area owned by the dock layout (§6.16a, FR-115n), which reads the same `store.state.vectorPanelOpen` flag the panel sets and needs nothing from the panel itself; a third is only its initial value. It exposes `open()`/`close()`/`isOpen()`/`releaseHold()` (FR-115l) and a header **✕/Close** control, and binds **no** Escape-to-close (Escape remains a canvas gesture). While open it sets `store.state.vectorPanelOpen`, imposing the FR-115h read-only lock (see toolbar/store wiring below). It renders an HTML `<table>` whose header comes from `deriveColumns(store.design)` — which includes the design's port columns (FR-115f) and bidirectional (io) columns (FR-115i) directly, so the panel and runner operate on `store.design` itself (no wrapper); any `warnings` it returns (FR-115a reconciliation mismatches — the former bidir-port skip warning is gone now that bidir ports bind as io columns, FR-115i) show in the notice line — and whose body is rows of cell controls (**cycling buttons** for input/clock/output cells, FR-115o; `<select>` for io cells; `<input>` for hex group cells) that **write straight through** to the `rows` model on each edit. There is no `gather()` pass and no 2-D ref array: a control's handler assigns `cells[ci]` and calls `touch()`, so the model is never stale and a re-render can rebuild the body from `rows` alone. (Corrected 2026-08-01: this paragraph previously described a `gather()` read-back modeled on the GAL pin rows; the panel has always written through, and FR-115o's mixed control kinds make write-through the only sane shape.) Buttons: **+ Row** (append a blank `emptyRow`) and **+Dup** (append `cloneRow(rows[rows.length-1])` — a copy of the highest-numbered row, falling back to `emptyRow` on an empty table, FR-115j), both clearing stale results like any cell edit; row removal is a per-row **✕** button in the table's trailing column (not a global "− Row"); **Run** → `runVectors` then paint each output cell — and each io **release** cell (FR-115i) — green/red (a failing cell shows its `actual`) and write an "N of M rows passed" summary line (FR-115d); **Run to Row** → the same with `through` set to the selected row, holding its state on the schematic (FR-115l, below); **Stop** → release the hold, enabled only while holding (FR-115l); **Capture** → `captureVectors` filling every row's expected cells (ordered pass for a sequential design, FR-115e); **sequential mode** (FR-115e): when `clockSources(store.design)` is non-empty, a clock column's cell cycles `0`→`1`→`C` (per its `kind:"clock"` marker, whether the column came from a generator or a marked port, FR-094f) and defaults to `C`, and a persistent notice line (`vec-mode`) states that rows run in order, state persists, and `C` pulses the clock — replacing the removed FR-115g guard; an **io** column's cell keeps its `<select>` (FR-115i) offering `0`/`1`/`H`/`L`/`X`, defaults to `X`, and styles by role (driving `0`/`1`, expected `H`/`L`, inert `X`); **Load**/**Save**/**Save As** → the document model below (FR-115m): `Save` writes the associated path outright, `Save As`/`Load` go through `openFileDialog` (§6.11) seeded at the **project root** (`store.state.project.dir`, FR-121h — identical to the former `dirOf(store.state.savePath)` under the flat project layout, and defined even for a not-yet-saved design) with default `<base>.tv`, then the design load/save API wrappers (`api.js`) — the `.tv` payload is JSON and rides the existing `/api/v1/design/{load,save}` endpoints (§6.4), which neither interpret nor extension-check the body. New `vec-*` CSS classes in `style.css` reuse the dialog primitives, the raised tray shadow, accent `#4a90d9`, error `#b00`, success `#1a7f37`. **Colour rule:** pass/fail tints (`.vec-cell.pass` / `.vec-cell.fail`) are applied **only to body cells**, rebuilt by `renderBody` on every run — no `<th>` ever takes a result colour, and the rules are scoped `.vec-cell.*` so one cannot land there by accident. Consequently the **static group tints must stay clear of the result palette**: a header that resembles pass-green or fail-pink reads as a stuck result that no re-run clears. The io group tint was moved from warm beige to a cool lavender (`#ece9f7`) for exactly this reason (2026-07-27), the OUT group being pale blue; any future tint must pick a hue neither green nor pink.
+**Panel (`chrome/dialogs.js` `testVectorsPanel({ store, dataDir })`).** A **modeless tab of the docked panel area** (FR-115b/FR-123, reworked 2026-07-02 from the former `.dialog-overlay` modal so the schematic stays visible while authoring; made a tab 2026-08-02, superseding the standalone panel that stacked with the Console). It mounts into `#vec-panel`, which now sits inside `#dock`'s `.dock-body` (§6.16a) rather than directly in `#canvas-area`; opening reveals the area and shrinks the canvas box, which the `canvas.js` `ResizeObserver` refits automatically at the unchanged viewport — content keeps its scale/aspect, only the visible extent shrinks (§6.13) — and closing the last open tab hides the area so the canvas grows back. The area's **height** is not a fixed third: it is a session fraction of the canvas area owned by the dock layout (§6.16a, FR-115n), which reads the same `store.state.vectorPanelOpen` flag the panel sets and needs nothing from the panel itself; a third is only its initial value. It exposes `open()`/`requestClose()`/`isOpen()`/`isDirty()`/`releaseHold()` (FR-115l) — `requestClose()` is the guarded close, **renamed** from `close()` on 2026-08-02 (the menu no longer toggles, so the dock's tab ✕ and `menuInvoke` are its only callers and one name suffices), and it is what the dock calls for a tab ✕ or the menu's close, so the FR-115m guard stays inside the panel; `isDirty()` feeds the page-unload warning (FR-049a). It binds **no** Escape-to-close (Escape remains a canvas gesture). It sets **no** `hidden` on `#vec-panel`: the **dock** owns host visibility (§6.16a), because an open-but-not-frontmost tab must be hidden while `vectorPanelOpen` stays set, and two owners of one `hidden` attribute would race through the subscriber list. `open()` builds into the host and `requestClose()` still `replaceChildren()`s it — a real close drops the DOM, which is exactly what distinguishes it from being hidden behind another tab. Its header keeps the `.tv` file name and modified `*` (FR-115m) but **no longer carries a ✕**: the close control is the tab's (FR-123). Being **hidden** (another tab frontmost) is not closing — the host keeps its DOM and the panel keeps its rows, results, selection, association, and held run (FR-123); the panel has no hidden/shown hook and needs none. While open it sets `store.state.vectorPanelOpen`, imposing the FR-115h read-only lock (see toolbar/store wiring below). It renders an HTML `<table>` whose header comes from `deriveColumns(store.design)` — which includes the design's port columns (FR-115f) and bidirectional (io) columns (FR-115i) directly, so the panel and runner operate on `store.design` itself (no wrapper); any `warnings` it returns (FR-115a reconciliation mismatches — the former bidir-port skip warning is gone now that bidir ports bind as io columns, FR-115i) show in the notice line — and whose body is rows of cell controls (**cycling buttons** for input/clock/output cells, FR-115o; `<select>` for io cells; `<input>` for hex group cells) that **write straight through** to the `rows` model on each edit. There is no `gather()` pass and no 2-D ref array: a control's handler assigns `cells[ci]` and calls `touch()`, so the model is never stale and a re-render can rebuild the body from `rows` alone. (Corrected 2026-08-01: this paragraph previously described a `gather()` read-back modeled on the GAL pin rows; the panel has always written through, and FR-115o's mixed control kinds make write-through the only sane shape.) Buttons: **+ Row** (append a blank `emptyRow`) and **+Dup** (append `cloneRow(rows[rows.length-1])` — a copy of the highest-numbered row, falling back to `emptyRow` on an empty table, FR-115j), both clearing stale results like any cell edit; row removal is a per-row **✕** button in the table's trailing column (not a global "− Row"); **Run** → `runVectors` then paint each output cell — and each io **release** cell (FR-115i) — green/red (a failing cell shows its `actual`) and write an "N of M rows passed" summary line (FR-115d); **Run to Row** → the same with `through` set to the selected row, holding its state on the schematic (FR-115l, below); **Stop** → release the hold, enabled only while holding (FR-115l); **Capture** → `captureVectors` filling every row's expected cells (ordered pass for a sequential design, FR-115e); **sequential mode** (FR-115e): when `clockSources(store.design)` is non-empty, a clock column's cell cycles `0`→`1`→`C` (per its `kind:"clock"` marker, whether the column came from a generator or a marked port, FR-094f) and defaults to `C`, and a persistent notice line (`vec-mode`) states that rows run in order, state persists, and `C` pulses the clock — replacing the removed FR-115g guard; an **io** column's cell keeps its `<select>` (FR-115i) offering `0`/`1`/`H`/`L`/`X`, defaults to `X`, and styles by role (driving `0`/`1`, expected `H`/`L`, inert `X`); **Load**/**Save**/**Save As** → the document model below (FR-115m): `Save` writes the associated path outright, `Save As`/`Load` go through `openFileDialog` (§6.11) seeded at the **project root** (`store.state.project.dir`, FR-121h — identical to the former `dirOf(store.state.savePath)` under the flat project layout, and defined even for a not-yet-saved design) with default `<base>.tv`, then the design load/save API wrappers (`api.js`) — the `.tv` payload is JSON and rides the existing `/api/v1/design/{load,save}` endpoints (§6.4), which neither interpret nor extension-check the body. New `vec-*` CSS classes in `style.css` reuse the dialog primitives, the raised tray shadow, accent `#4a90d9`, error `#b00`, success `#1a7f37`. **Colour rule:** pass/fail tints (`.vec-cell.pass` / `.vec-cell.fail`) are applied **only to body cells**, rebuilt by `renderBody` on every run — no `<th>` ever takes a result colour, and the rules are scoped `.vec-cell.*` so one cannot land there by accident. Consequently the **static group tints must stay clear of the result palette**: a header that resembles pass-green or fail-pink reads as a stuck result that no re-run clears. The io group tint was moved from warm beige to a cool lavender (`#ece9f7`) for exactly this reason (2026-07-27), the OUT group being pale blue; any future tint must pick a hue neither green nor pink.
 
 **Grouped hex cells in the panel (FR-115k).** The table is rendered from a **plan** per bucket rather than one cell per column: `planFor(kind)` walks the sorted columns and emits either a single-column item or a `bitGroups` item, the latter rendered as **one hex cell** (span 1) or as its `width` per-bit cells depending on a live `hexMode` map keyed `kind:refdes` (every group defaults to hex). The plan drives all three rows in step — the IN/OUT/IO span is the sum of the items' spans, the label row shows `base[w-1:0]` for a collapsed group, and the body renders one control per item — so header and body can never disagree; a radix toggle therefore re-renders `thead` as well as `tbody` (`render()` = `renderHead()` + `renderBody()`), a small change from the build-header-once shape. A hex cell is a text `<input>` (monospace, sized to `groupDigits`) committing on `change`: `groupFromHex` either writes the group's per-bit cells and normalizes the field text (`a5` → `A5`, `5` → `05`), or leaves the cells untouched and reports its `error` in the panel's error line with the field reverted — an invalid edit never half-writes a bus. An **io** group's cell pairs the field with a role `<select>` (Drive/Expect/Ignore, FR-115k); changing the role re-parses the current text under the new role (ignore → all `X`; an empty field defaults to `0` for drive, all-`X` for expect) and disables the field for ignore. `enforceHexModes()` runs after **Capture** and **Load** — the two paths that can produce cells with no hex form — and flips any affected group back to per-bit with a notice naming it; the manual toggle uses the same check and refuses with an error rather than rewriting cells. Run results paint per group: a grouped cell is green only when every bit passes, red otherwise with `got <hex>` from `groupActualHex`; an io group whose cells are drive is stimulus and stays unpainted, exactly as a per-bit drive cell is.
 
@@ -2819,51 +2834,89 @@ no sequential part could ever leave U.)
 
 **`openFileDialog` extension (`chrome/dialogs.js`).** Its save mode hardcodes a `.json` suffix; generalize it to take an optional target extension (e.g. `saveExt`) so the picker lists and names `.tv` files. The server `ListDir`/`exts` filter already accepts arbitrary extensions (the `.bin`/`.hex` ROM precedent, §6.4/FR-114e); no server change.
 
-**Chrome wiring (`chrome/toolbar.js`, `chrome/properties.js`, `app.js`, `store.js`).** `toolbar.js` gains a **Simulate** menu (`createMenu`) with a **Test Vectors…** item (`addItem`) invoking an `onTestVectors` callback; the item stays enabled while the panel is open so it can toggle it closed (only `store.state.simulating` disables it, FR-115b). `app.js` supplies `onTestVectors`, which **toggles** the singleton `testVectorsPanel({ store, dataDir })` open/closed. **Read-only lock (FR-115h):** `store.js` adds `state.vectorPanelOpen` plus a read-only predicate `isReadonly() = simulating || vectorPanelOpen`; `blocked(what)` uses it (with a panel-specific message), so every canvas mutation is refused while the panel is open exactly as while simulating. `refresh()` ORs `vectorPanelOpen` into the FR-087 disables (Wire/Bus, Undo/Redo, New/Open/Refresh, Copy/Paste) and additionally disables the interactive **Run** button (mutual exclusion, FR-115h) — except while `vectorHold` is set, where it is a live **Stop** that releases the hold (FR-115l, above) — while Select and the zoom/Fit commands stay enabled. `chrome/properties.js` swaps its `store.state.simulating` edit-lock checks for `isReadonly()`, so per-instance property edits are locked under the panel too.
+**Chrome wiring (`chrome/toolbar.js`, `chrome/properties.js`, `app.js`, `store.js`).** `toolbar.js` gains a **Simulate** menu (`createMenu`) with a **Test Vectors…** item (`addItem`) invoking an `onTestVectors` callback; the item stays enabled while the panel is open so it can select and then close the tab (only `store.state.simulating` disables it, FR-115b). `app.js` supplies `onTestVectors`, which calls `dock.menuInvoke("vec")` (§6.16a) against the singleton `testVectorsPanel({ store, dataDir })` — open if closed, select if backgrounded, close if frontmost (FR-123), superseding the plain open/closed toggle it used before 2026-08-02. **Read-only lock (FR-115h):** `store.js` adds `state.vectorPanelOpen` plus a read-only predicate `isReadonly() = simulating || vectorPanelOpen`; `blocked(what)` uses it (with a panel-specific message), so every canvas mutation is refused while the panel is open exactly as while simulating. `refresh()` ORs `vectorPanelOpen` into the FR-087 disables (Wire/Bus, Undo/Redo, New/Open/Refresh, Copy/Paste) and additionally disables the interactive **Run** button (mutual exclusion, FR-115h) — except while `vectorHold` is set, where it is a live **Stop** that releases the hold (FR-115l, above) — while Select and the zoom/Fit commands stay enabled. `chrome/properties.js` swaps its `store.state.simulating` edit-lock checks for `isReadonly()`, so per-instance property edits are locked under the panel too.
 - **Dependencies:** `engine/sim.js` (`buildSimulation` with `stimulus`/`scriptedClocks`, `setStimulus`, settle bound, `loadRomContents`), `engine/galasm.js` (`V0`/`V1`/`VU`/`VZ`), `model/design.js` (instance shape), `model/subdesign.js` (`effectivePortDir` for port-column direction, FR-115f), `store.js` (`state.design`, `state.savePath`, `state.simulating`, `state.vectorPanelOpen`, `isReadonly()`, `setSim()`/`setVectorHold()` for the held display, FR-115l), `chrome/statusbar.js` (`setAppState("held")`, FR-073), `chrome/dialogs.js` (`openFileDialog`, `confirmSaveDialog`), `chrome/fileops.js` (`dirOf`), `api.js` (`loadVectorFile`/`saveVectorFile`, plus `listDir` for the FR-115m auto-load probe), `chrome/toolbar.js`, `chrome/properties.js`, `app.js`. The panel does **not** depend on `chrome/dock.js` (§6.16a): the dock reads the store flag the panel already sets, so neither module knows the other exists.
 
 ---
 
-### 6.16a JS: docked-panel layout and dividers (`web/js/chrome/dock.js` + `index.html`/`style.css`)
+### 6.16a JS: the docked panel area — tabs, layout, and the divider (`web/js/chrome/dock.js` + `index.html`/`style.css`)
 
-- **Purpose:** own the vertical split of `#canvas-area` between the schematic canvas and the docked bottom panels, and make each open panel's top edge a drag handle. The rule is written once for **both** panels, as FR-115n is.
-- **Satisfies:** FR-115n; amends FR-115b and FR-122c, whose "bottom third" becomes the *initial* fraction rather than a fixed height.
+- **Purpose:** own the **docked panel area** at the bottom of `#canvas-area` — its tab strip, which tab's content is displayed, and the single divider that splits the area from the schematic canvas above it. One module owns the whole region so that adding a tab kind (a DRC report, say) is a table entry here, not a new layout.
+- **Satisfies:** FR-123, FR-115n; amends FR-115b and FR-122c, whose "bottom third" is the *initial* fraction rather than a fixed height, and whose separate panels are now tab kinds.
+- **Supersedes (2026-08-02, FR-123):** the stacking layout this section previously described — `#vec-panel` above `#console-panel`, each with its own grip and its own remembered fraction (`frac = { vec, console }`), the console's divider trading area with the test-vector panel above it. Two panels never stack now, so the two-fraction `layout`/`dragTo` arithmetic and the second grip are gone. What survives unchanged: fractions rather than pixels, the 10% floors, the rAF-coalesced drag, and the deliberate decision to keep the fraction out of `store.state`.
 
-**The model: two remembered fractions.** A panel's height is a **fraction of the canvas area's height** (FR-115n), held in module state for the page's lifetime — `frac = { vec: 1/3, console: 1/3 }` — beside the open flags the dock reads from the store (`state.vectorPanelOpen`, `state.consolePanelOpen`). Deliberately **not** in `store.state`: a drag would then notify every store subscriber (canvas, toolbar, properties, status bar) up to 60 times a second for a change none of them can act on, and the store is the design/command pipeline (§6.10), not a view-geometry cache. Deliberately **not** inside the two panel modules either: the console's divider trades area with the test-vector panel, so one of them would have to reach into the other. Nothing persists it — no design file, no `.tv` file, no `localStorage` — so a reload is back to thirds, which is FR-115n's session-only clause satisfied by construction rather than by a rule someone must remember.
+**The tab registry.** One module-level table names the tab kinds in the order this design knows about them, and nothing else in the module special-cases a tab:
 
-**Pure geometry (exported, DOM-free, unit-tested in `dock.test.js`).**
-  - `DOCK_MIN = 0.10` (the FR-115n floor) and `DOCK_DEFAULT = 1/3` (FR-115b/FR-122c).
-  - `layout(frac, open) → { vec, console }` — the fractions actually applied, zero for a closed panel. One open panel `k`: `clamp(frac[k], DOCK_MIN, 1 - DOCK_MIN)`. Both open: clamp the **vec** panel first, `fv = clamp(frac.vec, DOCK_MIN, 1 - 2·DOCK_MIN)`, then the console into what is left, `fc = clamp(frac.console, DOCK_MIN, 1 - DOCK_MIN - fv)`. The invariant it guarantees — `fv ≥ MIN`, `fc ≥ MIN`, and canvas host `= 1 - fv - fc ≥ MIN` — is the FR-115n floor for every region, and it holds for *any* stored fractions, so no caller has to pre-validate. Clamping the vec panel first (the top-most, whose divider bounds the schematic) means that when two large remembered fractions collide it is the bottom-most output view that yields. With the defaults it is the identity: 1/3, 1/3, and a 1/3 canvas — **exactly today's layout**, so opening and closing panels behaves as it does now and only dragging is new.
-  - `dragTo(frac, open, key, want) → frac'` — the FR-115n trade rules, as pure arithmetic on fractions:
-    - `key === "vec"`: the console's fraction is **held fixed** and the schematic absorbs the change — `frac.vec = clamp(want, DOCK_MIN, 1 - DOCK_MIN - fcOpen)`, where `fcOpen` is the console's applied fraction (0 when closed).
-    - `key === "console"` with the vec panel open: the **sum** `T = fv + fc` is held fixed, so the schematic does not move — `fc' = clamp(want, DOCK_MIN, T - DOCK_MIN)`, `fv' = T - fc'`. Both remembered fractions are updated, because the user has just changed both panels' heights.
-    - `key === "console"` with the vec panel closed: as the vec case, against the schematic.
-    A drag on a closed panel's key is a no-op (there is no divider to grab; the guard is there so the rule "never resizes a panel that is not open" is enforced by the geometry, not only by the DOM).
+```js
+const TABS = [
+  { key: "vec",     label: "Test Vectors", host: "#vec-panel",     openFlag: "vectorPanelOpen"  },
+  { key: "console", label: "Console",      host: "#console-panel", openFlag: "consolePanelOpen" },
+];
+```
 
-**DOM and CSS.** `#canvas-area` gains `position: relative`; the two grips are its own absolutely-positioned children, created once by `createDock` and never touched by the panels:
+A future tab adds a row plus its host element and its store flag. The **strip order is the order opened** (FR-123), not this table's order — the table supplies labels and hosts, `state.dockOrder` supplies position.
+
+**What lives where.** The split follows the frequency-of-change argument that put the fraction in module state in the first place:
+
+| State | Where | Why |
+|---|---|---|
+| Which tabs are open | `store.state.vectorPanelOpen` / `consolePanelOpen` (unchanged) | Already there; already feeds `isReadonly()` (FR-115h) and the menu checkmarks. Panels keep setting them; nothing about `open()`/`close()` changes. |
+| Which tab is frontmost | `store.state.dockActive` (`"vec"` \| `"console"` \| `null`) | The toolbar reads it — the menu items' open/select/close rule (FR-123) needs to know whether a tab is *frontmost*, not just open — so it must notify. It changes on a click, not 60×/second. |
+| Open order + MRU | `store.state.dockOrder` (array, append on open) and `dockMru` (array, most-recent first) | Derived bookkeeping the same setters maintain; keeping them beside the flags means "close the frontmost tab ⇒ select the most recently used remaining one" is one rule in one place. |
+| Unseen-content marks | `store.state.dockUnread` (`{ console: true, … }`) | Read by the dock to paint the dot; set at most once per animation frame (below). |
+| The area's dragged height | module state in `dock.js` (`let frac = 1/3`) | Unchanged decision: a drag would otherwise notify every store subscriber up to 60×/second for a change none of them can act on. One fraction now, shared by every tab (FR-115n as reworked). |
+
+**Store setters (`store.js`).** `setVectorPanelOpen(bool)` and `setConsolePanelOpen(bool)` keep their names and their callers, and each now routes through one shared helper, `setTabOpen(key, open)`:
+  - **Opening:** set the flag; append `key` to `dockOrder` if absent; make it frontmost (`dockActive = key`, `dockMru` unshifted); clear `dockUnread[key]`.
+  - **Closing:** clear the flag; remove `key` from `dockOrder`, `dockMru`, and `dockUnread`; if it was `dockActive`, set `dockActive` to the head of the remaining `dockMru` (**most recently used**, FR-123) or `null` when none remains.
+  - `setDockActive(key)` — select an open tab: move it to the head of `dockMru`, set `dockActive`, clear `dockUnread[key]`. A no-op for a tab that is not open or already active (so a stray call cannot desync the strip).
+  - `markDockUnread(key)` — set `dockUnread[key]` **only when** `key` is open and not `dockActive`; a no-op otherwise, so the frontmost tab can never be marked (FR-123) and no caller needs the check.
+  - `isReadonly()` is untouched: it still tests `vectorPanelOpen`, which is exactly FR-115h's "open, frontmost or not".
+
+**The menu rule (FR-123), in one function.** `dock.menuInvoke(key)` implements open/select/close and is what the toolbar's Test Vectors and Console items call:
+  1. tab closed → `panels[key].open()` (which sets its flag ⇒ store makes it frontmost);
+  2. open, not frontmost → `store.setDockActive(key)`;
+  3. open and frontmost → `panels[key].requestClose()`.
+  A tab's ✕ calls step 3 directly. **Closing stays the panel's business**, because the test-vector panel's close is guarded (FR-115m) and may be cancelled: `requestClose()` is the panel's existing close path, and the dock never touches the open flag itself. A cancelled close leaves the flag set, and the dock's next render — driven by the store notification it subscribes to — redraws the identical strip. This is why the dock asks the panels to close rather than closing them: the guard belongs to the document, not the layout.
+
+**Pure geometry (exported, DOM-free, unit-tested in `dock.test.js`).** One fraction, so the arithmetic collapses to two clamps:
+  - `DOCK_MIN = 0.10` (the FR-115n floor), `DOCK_DEFAULT = 1/3` (FR-115b/FR-122c).
+  - `layout(frac, anyOpen) → f` — `anyOpen ? clamp(frac, DOCK_MIN, 1 - DOCK_MIN) : 0`. The invariant is FR-115n's floor for both regions (area ≥ MIN, canvas host `= 1 - f` ≥ MIN) and it holds for any stored fraction, so no caller pre-validates.
+  - `dragTo(frac, anyOpen, want) → frac'` — `anyOpen ? clamp(want, DOCK_MIN, 1 - DOCK_MIN) : frac`. Dragging with no tab open is a no-op; there is no grip to grab, and the guard keeps the rule in the geometry rather than only in the DOM.
+  - The superseded `layout(frac, open) → { vec, console }` and its four-way `dragTo(frac, open, key, want)` are deleted, along with their tests. Tab **selection** changes no fraction — FR-115n's "one height for the area", satisfied because no code path ties a fraction to a tab.
+
+**DOM and CSS.** `#canvas-area` stays `position: relative`; the two panel hosts move **inside** a new `#dock` element, and there is now one grip:
 
 ```
-#canvas-area (relative)
+#canvas-area (relative, flex column)
 ├─ #canvas-host        flex: 1 1 auto              ← takes the remainder
-├─ #vec-panel          flex: 0 0 <fv%>  (inline)
-├─ #console-panel      flex: 0 0 <fc%>  (inline)
-└─ .dock-grip ×2       absolute, left:0 right:0, height 7px, margin-bottom -3px,
-                       bottom: <(fraction of everything below the divider)%>,
-                       cursor: row-resize, hidden with its panel
+├─ #dock               flex: 0 0 <f>%  (inline)    ← hidden when no tab is open
+│   ├─ .dock-tabs      role="tablist" — built by dock.js, one button per open tab
+│   │                  (label, unread dot, ✕), in dockOrder
+│   └─ .dock-body      flex: 1 1 auto, min-height: 0
+│       ├─ #vec-panel      hidden unless dockActive === "vec"
+│       └─ #console-panel  hidden unless dockActive === "console"
+└─ .dock-grip          absolute, left:0 right:0, height 7px, margin-bottom -3px,
+                       bottom: <f>%, cursor: row-resize, hidden with #dock
 ```
 
-  - **Sizes are percentages, so a window resize needs no JS at all.** `flex-basis: <f>%` in a column flex container resolves against the canvas area's content height, so every region rescales proportionally when the window, palette, properties panel, or status bar changes size — FR-115n's "a resize preserves the proportion" holds by construction, and since the stored fractions already satisfy the floors, so does the re-clamp. The dock listens to no resize event.
-  - **The grips are outside the panels on purpose.** `testVectorsPanel.build()` calls `host.replaceChildren()` on every open and rebuild; a grip parked inside `#vec-panel` would be deleted by it. Absolute positioning against `#canvas-area` also keeps the flex arithmetic exact (a grip in the flex flow would eat pixels the floors are computed without) and lets one CSS rule serve both panels. Each grip's `bottom` is set from the same applied fractions — it is the total fraction of **everything below that divider**, which for a panel's *top* edge means the panel's own fraction plus any panel stacked beneath it: **`(fv + fc)%` for the vec divider** (the vec panel sits above the console) and **`fc%` for the console divider**, both `0` for a panel that is closed beneath. So the handle tracks its panel with no measurement. (Corrected 2026-08-01: this sentence previously read "`fc%` for the vec divider, `0` for the console divider" — each panel's *bottom* edge, contradicting the diagram above it and FR-115n's "the top edge … shall be a draggable divider". Implemented literally, it put both grips along the bottom of their panels, the vec panel's handle landing on the console's title bar and the console's on the status bar.)
-  - **Visuals.** The grip is transparent over the panel's existing 2px `border-top` (which stays the visible divider line) and takes a light accent tint on `:hover`/while dragging. `role="separator"`, `aria-orientation="horizontal"`, and an `aria-label` naming the panel; **no** keyboard resize gesture — FR-115n asks for a drag and nothing more.
+  - **The hosts keep their ids and their contents.** `testVectorsPanel` still mounts into `#vec-panel` and `createConsolePanel` into `#console-panel`; only their **parent** changes. Neither panel module learns about tabs: the dock sets `hidden` on the non-frontmost host, and a hidden host keeps its DOM, so a hidden tab keeps rows, results, held-run state, console text, and scroll position (FR-123) for free — there is no teardown path to get wrong.
+  - **The panels' own ✕ is removed** from both headers (`.vec-header`, `.console-header`); the tab's ✕ is now the close control (FR-123). Everything else in those headers stays — the `.tv` file name and `*` (FR-115m) remain inside the tab, so the tab label can stay the kind name.
+  - **Sizes are percentages, so a window resize needs no JS.** `flex-basis: <f>%` resolves against the canvas area's content height, so every region rescales proportionally when the window, palette, properties panel, or status bar changes size, and the stored fraction already satisfies the floors. The dock listens to no resize event.
+  - **The grip stays outside `#dock`,** absolutely positioned against `#canvas-area` at `bottom: <f>%` — the area's own fraction, since nothing is stacked beneath it any more. Keeping it out of the flex flow keeps the arithmetic exact (a grip in the flow would eat pixels the floors are computed without) and out of reach of `replaceChildren()` rebuilds inside the panels. It is transparent over `#dock`'s 2px `border-top` (still the visible divider line) with a light accent tint on `:hover`/drag; `role="separator"`, `aria-orientation="horizontal"`, `aria-label="Resize panel area"`; **no** keyboard resize gesture (FR-115n).
+  - **The strip.** `.dock-tabs` is `role="tablist"`; each tab is a `<button role="tab">` carrying `aria-selected`, `aria-controls` pointing at its host (which takes `role="tabpanel"` and `aria-labelledby`), a `.dock-tab-dot` span shown when `dockUnread[key]`, and a nested ✕ button with its own `aria-label` ("Close Test Vectors") whose click handler `stopPropagation()`s so closing is never also a select. Pointer selection only — FR-123 adds no keyboard shortcut and no arrow-key cycling.
 
-**The drag.** `pointerdown` on a grip: `preventDefault()`, `setPointerCapture`, record `startY`, the area's `clientHeight`, and the applied fractions; add `dock-dragging` to `<body>` (global `cursor: row-resize` and `user-select: none`, so the pointer does not flicker and no text selects). `pointermove`: `want = startFrac + (startY - e.clientY) / areaHeight` — dragging **up** grows the panel below the divider — stored in a pending variable and applied from a single `requestAnimationFrame`, so **at most one layout change per frame** no matter how fast the pointer reports. `pointerup`/`pointercancel`: release capture, drop the class, cancel any pending frame. A zero-height canvas area (the panel opened before layout) short-circuits rather than dividing by zero.
+**Rendering.** `render()` runs on every store notification (cheap, and self-healing after any DOM rebuild — the same reasoning as before): compute `anyOpen` from the flags, `f = layout(frac, anyOpen)`, set `#dock`'s `hidden` and `flex-basis`, set the grip's `hidden` and `bottom`, `hidden` each host by `dockActive`, and rebuild the strip from `dockOrder`. The strip is rebuilt only when its **signature** — `dockOrder`, `dockActive`, and `dockUnread` joined into a string — differs from the last render, so a store notification from an unrelated command (every design edit notifies) does not churn the strip's DOM or steal focus from a ✕ the user is tabbing to.
 
-**Interaction with the canvas `ResizeObserver` (§6.13, FR-115n's re-extend guarantee).** Changing a panel's `flex-basis` changes `#canvas-host`'s box, which fires the `ResizeObserver` `canvas.js` already installs; `resize()` matches the backing store to the new CSS box and calls `requestRender()`. It touches **no** view state — no `view.scale`, no pan, no `fitToScreen` — so the drawing keeps its scale, aspect, and pan and only its visible extent changes, which is precisely the FR-115n "re-extend, not rescale" guarantee and the same code path that already runs when a panel opens or closes. The only new property is frequency, and it is bounded: the rAF coalescing above means the observer fires at most once per frame and `resize()` is idempotent (it early-returns when width, height, and DPR are unchanged), so a continuous drag costs one backing-store resize plus one redraw per frame — the cost of a pan gesture, which the canvas is already built for. Nothing else in the app observes the canvas box.
+**The drag.** Unchanged except for having one grip and one fraction. `pointerdown`: `preventDefault()`, `setPointerCapture`, record `startY`, the area's `clientHeight`, and the applied fraction; add `dock-dragging` to `<body>` (global `cursor: row-resize`, `user-select: none`). `pointermove`: `want = startFrac + (startY - e.clientY) / areaHeight` — dragging **up** grows the area — stored in a pending variable and applied from a single `requestAnimationFrame`, so at most one layout change per frame. `pointerup`/`pointercancel`: release capture, drop the class, cancel any pending frame. A zero-height canvas area short-circuits rather than dividing by zero.
 
-**Wiring.** `createDock({ store, area, panels }) → { destroy() }` is constructed once in `app.js` `main()` after the panels exist — `area` and `panels` being test seams that default to the `#canvas-area` / `#vec-panel` / `#console-panel` lookups, so the real call is `createDock({ store })`. (Corrected 2026-08-01: this signature previously also listed a `canvasHost` argument. The dock has no use for it — the canvas host is the flex remainder, and the dock deliberately never touches it or the canvas, per the `ResizeObserver` decision above — so it was dropped rather than carried unread.) It subscribes to the store and, on every notification, applies `layout(frac, open)` — reading `state.vectorPanelOpen` and `state.consolePanelOpen`, the flags the two panels already set (`setVectorPanelOpen` in §6.16, `setConsolePanelOpen` in §6.20) — and shows or hides each grip. Neither panel module changes, and neither learns about the dock: open/close remains theirs, height becomes the dock's. Applying on *every* notification (not only on a flag change) is deliberate — it is a handful of style writes and it makes the layout self-healing after any DOM rebuild. The dock consults **no** mode state: not `isReadonly()`, not `simulating`, not `vectorHold`, so a divider drags while the design is locked (FR-115h), while a run is held (FR-115l), and while a simulation runs (FR-076) — FR-115n's "always available", satisfied by not writing the check. Resizing sets no dirty flag, releases no hold, and clears no results; the dock calls nothing on the store but `subscribe`.
-  - **Fallback:** the CSS keeps `flex: 0 0 33.333%` on both panels, so if the dock were never constructed the layout is exactly the pre-FR-115n one. Inline `flex-basis` from the dock overrides it.
-- **Error handling:** a missing `#canvas-area`, `#vec-panel`, or `#console-panel` (headless/unit context) makes `createDock` return an inert handle rather than throwing, so `app.js` bootstrap order cannot break the page; a pointer capture the browser refuses is ignored (the drag then simply ends at the next `pointerup` on the grip); `layout` and `dragTo` are total over any stored fractions, including ones a future change might set outside `[MIN, 1-MIN]`.
-- **Dependencies:** `store.js` (`subscribe`, `state.vectorPanelOpen`, `state.consolePanelOpen`) and the DOM. It does **not** depend on `dialogs.js`, `console.js`, or `canvas.js` — the canvas learns about the resize through its own `ResizeObserver`, not through a call.
+**Interaction with the canvas `ResizeObserver` (§6.13, FR-115n's re-extend guarantee).** Unchanged, and it now also covers tab switching: changing `#dock`'s `flex-basis`, showing or hiding `#dock`, and hiding one host to show another all change `#canvas-host`'s box (or, for a tab switch, do not change it at all), and `canvas.js`'s observer calls `resize()` + `requestRender()`, which touch **no** view state — no `view.scale`, no pan, no `fitToScreen`. A tab switch keeps the area's height, so the canvas box does not change and the observer does not even fire: selecting a tab is a display change and nothing more (FR-123). A continuous drag costs one backing-store resize plus one redraw per frame, bounded by the rAF coalescing.
+
+**Wiring.** `createDock({ store, area, panels }) → { menuInvoke(key), destroy() }`, constructed once in `app.js` `main()` after the panels exist — `panels` maps tab key to the panel handle (`{ open, requestClose }`), and `area` defaults to `#canvas-area`, so the real call is `createDock({ store, panels: { vec: vectorPanel, console: consolePanel } })`. The pre-FR-123 `panels` argument named the **host elements** (an injection seam no caller used, since the hosts are fixed page furniture); the name now means handles, and `#dock`, `#vec-panel`, and `#console-panel` are always looked up by id. `toolbar.js` calls `dock.menuInvoke("vec")` / `dock.menuInvoke("console")` from the Test Vectors and Console items in place of the former open/close toggles; both items still render checked when their tab is open. The dock consults **no** mode state: not `isReadonly()`, not `simulating`, not `vectorHold`, so the divider drags and tabs switch while the design is locked (FR-115h), while a run is held (FR-115l), and while a simulation runs (FR-076) — FR-115n's and FR-123's "always available", satisfied by not writing the check. Resizing and tab switching set no dirty flag, release no hold, and clear no results; the dock calls the store only through `subscribe` and `setDockActive`.
+  - **Fallback:** the CSS keeps `flex: 0 0 33.333%` on `#dock`, so if the dock were never constructed the area still has a sane height. Inline `flex-basis` from the dock overrides it.
+- **Unseen-content marks in practice (FR-123).** Only `console.js` raises one, and it does so from **inside its existing rAF repaint** — the frame that flushes buffered bytes to the DOM calls `store.markDockUnread("console")` when it wrote anything. So the cost is at most one store notification per frame during output (and in practice one per burst, since the setter is a no-op once the flag is set and while the tab is frontmost), never one per byte: the "asynchronous, non-blocking, heavily buffered" property of FR-122 is preserved. The test-vector panel never marks anything — its runs are synchronous and started from its own tab.
+- **Error handling:** a missing `#canvas-area`, `#dock`, or a host element (headless/unit context) makes `createDock` return an inert handle whose `menuInvoke` is a no-op rather than throwing, so `app.js` bootstrap order cannot break the page; a pointer capture the browser refuses is ignored; `layout` and `dragTo` are total over any stored fraction, including one outside `[MIN, 1-MIN]`; `menuInvoke` with an unknown key is a no-op; and a `dockActive` naming a closed tab (only reachable by a bug) renders as no visible host rather than throwing.
+- **Dependencies:** `store.js` (`subscribe`, the open flags, `dockActive`/`dockOrder`/`dockUnread`, `setDockActive`), the panel handles' `open`/`requestClose`, and the DOM. It does **not** depend on `dialogs.js` or `console.js` as modules (only on the handles passed in), nor on `canvas.js` — the canvas learns about a resize through its own `ResizeObserver`, not through a call.
 
 ---
 
@@ -3166,7 +3219,7 @@ picker (`ignoreLastDir`, §3.1 A11).
 
 - **Purpose:** a built-in, output-only character device (requirements §3.26) and the
   slow simulator's console surface for it.
-- **Satisfies:** FR-122, FR-122a, FR-122b, FR-122c, FR-122d (and FR-107/FR-078 for it).
+- **Satisfies:** FR-122, FR-122a, FR-122b, FR-122c, FR-122d (and FR-107/FR-078 for it); the Console's **tab** (FR-123) and the area's height (FR-115n) are §6.16a's.
 
 **Component kind — a fixed built-in, not a metatype.** The UART is byte-fixed with
 no parameters, so it is a built-in in `builtins.js` `BUILTIN_DEFS` (like the
@@ -3203,11 +3256,18 @@ a step follows entity order (deterministic, for stable parity). `createSim.run()
 passes `onConsole: (b)=>consolePanel.write(b)` and clears the panel at run start
 (beside the message-tray clear, FR-076). No change to `stop()`.
 
-**Console panel (`web/js/chrome/console.js`, FR-122c).** A **bottom-docked** panel
-in the canvas area, structurally like the test-vector panel (§6.16) but **modeless —
+**Console panel (`web/js/chrome/console.js`, FR-122c).** A **tab of the docked panel
+area** (§6.16a, FR-123), the peer of the test-vector tab (§6.16) but **modeless —
 it never contributes to `isReadonly()`** (contrast FR-115h) and coexists with a live
-run. `createConsolePanel({ store }) → { write(byte), clear(), setOpen(bool),
-isOpen() }`. `write` pushes into an in-memory buffer and schedules a single
+run. `createConsolePanel({ store }) → { write(byte), clear(), open(), requestClose(),
+isOpen() }` — `open()` and `requestClose()` are the panel handle the dock is given
+(§6.16a) and are simply `store.setConsolePanelOpen(true/false)`, the Console having no
+document to guard, and `isOpen()` reads `store.state.consolePanelOpen`. The former
+`setOpen(bool)`, which set `#console-panel`'s `hidden` from an `app.js` subscription,
+is **gone** (2026-08-02, FR-123): the dock owns every host's `hidden`, since an open
+Console behind the Test Vectors tab must be hidden with its flag still set, and a
+second writer of that attribute would fight the dock through the subscriber list.
+`isOpen()` therefore reads the flag rather than the DOM. `write` pushes into an in-memory buffer and schedules a single
 `requestAnimationFrame` repaint that flushes the buffer to the DOM, coalescing many
 bytes/frame into one update — the "asynchronous, non-blocking, heavily buffered"
 requirement (no backpressure ⇒ no overrun). Byte rendering is centralized in
@@ -3216,22 +3276,43 @@ requirement (no backpressure ⇒ no overrun). Byte rendering is centralized in
 at bottom). A **retained-history cap** (`CONSOLE_MAX_CHARS`, e.g. 200 000) head-trims
 with a "…output truncated…" marker. `clear()` empties buffer+DOM (Clear button and
 Run-start). DOM skeleton (`#console-panel` with `.console-header` holding the title +
-Clear + close, and a scrolling monospace `.console-body`) lives in `web/index.html`
-with CSS; open/close is driven by `store.state.consolePanelOpen`. Accumulated text and
-open state are session-only (not saved). Unit-tested where logic allows
-(`console.test.js`: `renderByte`, buffering/coalescing, cap trim, sticky-tail, clear). Its **height** is the dock layout's (§6.16a, FR-115n):
-the bottom third is only an initial fraction, its top edge is a draggable divider, and
-when the test-vector panel is open above it that divider trades area with **that
-panel**, leaving the schematic where it is. `console.js` itself is unchanged by
-FR-115n — it owns `hidden`, the dock owns `flex-basis`, and the dock learns the panel
-is open from `store.state.consolePanelOpen`, which `setOpen`'s caller already sets.
+Clear — the close ✕ moved to the tab, FR-123 — and a scrolling monospace
+`.console-body`) lives in `web/index.html` with CSS, mounted inside `#dock`'s
+`.dock-body`; open/close is driven by `store.state.consolePanelOpen`. Accumulated text
+and open state are session-only (not saved). Unit-tested where logic allows
+(`console.test.js`: `renderByte`, buffering/coalescing, cap trim, sticky-tail, clear).
+The unread mark itself is one line inside the rAF repaint over a DOM the unit tests do
+not have: its *rule* is tested on the store (`markDockUnread`, §11.1) and its wiring is
+a §11.2 manual item. Its **height** is the dock layout's (§6.16a, FR-115n): the bottom
+third is only an initial fraction and the area's top edge is a draggable divider that
+trades area with the schematic. `console.js` is otherwise unchanged by FR-115n/FR-123
+— the **dock** hides its host when another tab is frontmost and owns `flex-basis`, and
+the dock learns the panel is open from `store.state.consolePanelOpen`, which the
+menu item's `menuInvoke` sets through the panel handle.
+
+**Writing while hidden or closed (FR-122c/FR-123).** `write()` is indifferent to the
+tab's state: bytes buffer and repaint into the (possibly hidden) host exactly as when
+displayed, so nothing is lost and there is no subscribe-on-open path to get wrong. The
+one addition is the **unread mark**: the existing rAF repaint, on any frame that wrote
+bytes, calls `store.markDockUnread("console")`, which is a no-op when the Console is
+frontmost or closed (§6.16a). Cost is at most one store notification per frame — in
+practice one per output burst, since the flag is already set thereafter — never one per
+byte, preserving FR-122's non-blocking buffering. Selecting the tab clears the mark via
+`setDockActive`; nothing in `console.js` clears or reads it.
 
 **Chrome wiring.** `store.js` gains `consolePanelOpen:false` + `setConsolePanelOpen`
-(notifying subscribers) that **does not** feed `isReadonly()`/`blocked()` (modeless).
-`toolbar.js` adds a **View ▸ Console** toggle item (rendered checked when open),
-enabled while simulating (it is meant to be opened during a run). `app.js`
-instantiates the panel, wires `onConsole`, and subscribes it to
-`consolePanelOpen`. `canvas.js` gains a `renderType==="uart"` draw branch (IC-style
+(notifying subscribers) that **does not** feed `isReadonly()`/`blocked()` (modeless);
+that setter now routes through the shared tab bookkeeping (`setTabOpen`, §6.16a), so
+opening the Console also makes its tab frontmost and closing it hands the selection to
+the most recently used remaining tab. `toolbar.js`'s **View ▸ Console** item (rendered
+checked when the tab is open) calls `dock.menuInvoke("console")` — open, select, or
+close per FR-123 — and stays enabled while simulating (it is meant to be opened during
+a run). It reaches the dock through a new `initToolbar({ onConsole })` callback, the
+peer of the existing `onTestVectors`, replacing the direct
+`store.setConsolePanelOpen(!…)` toggle the item called before 2026-08-02: the toolbar
+knows menu items, not tabs. `app.js` instantiates the panel, passes its handle to
+`createDock`, and supplies `onConsole: () => dock.menuInvoke("console")`. Nothing
+subscribes the panel's visibility to `consolePanelOpen` any more — the dock renders it. `canvas.js` gains a `renderType==="uart"` draw branch (IC-style
 box labeled "UART" + pin stubs from the type data), with pin geometry in `symbols.js`
 if needed; the same glyph is the palette icon (FR-122a).
 
@@ -3883,7 +3964,9 @@ A JSON file at the project root:
 | Magic UART: built-in vs. metatype (FR-122) | Server-persisted generated metatype with a New-UART dialog (the memory path, FR-114); a fixed built-in in `BUILTIN_DEFS` | **Fixed built-in** | The device is byte-fixed with no configurable parameters, so the FR-114 machinery (dialog, `mem`-block YAML, Go server parsing) buys nothing (YAGNI). A built-in needs no server change, no dialog, no library file — much less surface. A future width-configurable variant would migrate toward the FR-114 generator |
 | Magic UART: behavior location (FR-122b) | Inline in `sim.js`; a source-only `BEHAVIORS` function (like clock/reset) | **Dedicated net-free `uart.js` core** | The behavior reads input nets and keeps state — the exact criterion that made `memory.js` a separate, unit-testable core rather than a `BEHAVIORS` entry. Mirrors a proven pattern and gives the fast engine one semantic reference |
 | Magic UART: uncertain (U/Z) CS//CE/ at edge (FR-122b) | Emit pessimistically (as memory drives U on the bus, FR-114d); emit a placeholder byte; **do not emit** | **Emit only when CS/ and CE/ are exactly 0** | A character is an irreversible side effect; a phantom byte corrupts the console stream unrecoverably. Requiring certainty keeps output deterministic and both engines trivially in agreement — a deliberate divergence from memory's recoverable-bus pessimism. Undefined data bits mask to 0 (U→0, FR-114g), since ASCII has no U encoding |
-| Where a docked panel's dragged height lives (FR-115n) | `store.state` with a notifying setter; inside each panel module; recomputed pixel heights kept in JS on a window-resize listener | **Two fractions in a small `chrome/dock.js` module, applied as `flex-basis` percentages** | The store is the design/command pipeline (§6.10): a drag would notify canvas, toolbar, properties, and status bar up to 60×/s for a change none of them read. Panel-local state cannot work either — the console's divider trades area with the *test-vector panel*, so one panel would have to reach into the other. Percentages make a window resize a pure CSS event (no listener, no JS), which is exactly FR-115n's "a resize preserves the proportion", and module state gives the session-only, never-persisted lifetime for free |
+| Where the panel area's dragged height lives (FR-115n) | `store.state` with a notifying setter; inside each panel module; recomputed pixel heights kept in JS on a window-resize listener | **One fraction in a small `chrome/dock.js` module, applied as a `flex-basis` percentage** | The store is the design/command pipeline (§6.10): a drag would notify canvas, toolbar, properties, and status bar up to 60×/s for a change none of them read. Panel-local state cannot work either — the height belongs to the area, which outlives any one tab. Percentages make a window resize a pure CSS event (no listener, no JS), which is exactly FR-115n's "a resize preserves the proportion", and module state gives the session-only, never-persisted lifetime for free. (Was *two* fractions while the panels stacked; one since FR-123, §6.16a) |
+| Stacked panels vs. tabs for the bottom dock (FR-123) | Keep stacking and add a third panel per surface; a single panel that swaps content with no strip; an accordion (all headers visible, one body expanded) | **A tabbed area: one strip, one visible body, one height** | Stacking divides a fixed bottom region N ways — with three surfaces open nothing has usable height, and each addition needs new divider arithmetic (the two-fraction `dragTo` this change deletes). A tab strip costs one row of chrome no matter how many kinds exist, which is the point: a DRC report becomes a `TABS` row and a host element. An accordion keeps every header visible but re-opens the same division-of-height problem the moment two bodies are expanded, and a strip-less swap gives the user no way to see what else is open |
+| Where "which tab is frontmost" lives (FR-123) | `dock.js` module state, beside the fraction; a DOM query (`:not([hidden])`) at read time | **`store.state.dockActive`/`dockOrder`/`dockUnread`, maintained by the same setters as the open flags** | Unlike the height, the *toolbar* reads it: FR-123's menu rule branches on open-but-not-frontmost, so the value must notify subscribers. It changes on a click, not per frame, so the cost objection that keeps the fraction out of the store does not apply. Keeping it beside `vectorPanelOpen`/`consolePanelOpen` also makes "close the frontmost tab ⇒ select the MRU remaining one" a single rule in a single place, rather than a handshake between the dock and two panel modules |
 | How a divider resize reaches the canvas (FR-115n) | Call `canvas.resize()`/`requestRender()` from the drag handler; resize only on pointer-up (drag a preview line); throttle the canvas with a timer | **Change `flex-basis` and let the existing `ResizeObserver` (§6.13) refit, with the drag coalesced into one `requestAnimationFrame`** | The observer path is the same one that already runs when a panel opens or closes, and `resize()` touches no view state — so "re-extend, not rescale" is inherited rather than re-implemented, and the dock needs no reference to the canvas at all. rAF coalescing bounds the work at one backing-store resize + one redraw per frame (a pan gesture's cost); resize-on-release would show a stale schematic under a moving divider |
 | Which cells cycle and which keep a list (FR-115o) | All cells cycle (io included); all cells stay `<select>`; a per-cell text field | **Cycle input/clock/output cells (2–3 symbols); keep `<select>` for io cells (5 symbols) and the hex role selector (named roles)** | One click per state change is a real gain at 2–3 symbols and a real loss at 5, where reaching `X` can cost four wrong values — each of which is a live edit that dirties the document and clears results. A native `<button>` also satisfies FR-115o's keyboard clause with no key handler of ours, and the io cell's list keeps its two-role alphabet visible at a glance |
 | Where the FR-115p active-low rule is evaluated | Test the label at each use (panel, `reconcileVectors`, `tv2txt`); bake the base label into the generated program; recover the base in `tv2txt` by stripping the bit index | **Evaluate `isActiveLowName` once in `deriveColumns` and stamp `activeLow` on the column; bake that flag as `rt_incol.active_low` for `--columns` consumers** | The rule reads a `portN`'s *instance* base label, which no consumer downstream of the label can recover — the per-bit label appends the bit index and hides a trailing slash, and inverting that formatting elsewhere is what §6.16 already warns against. Baking the base instead would put two free-text fields on one `--columns` line, which cannot be parsed positionally; baking the derived flag keeps the predicate written once (FR-109), costs one fixed-width token, and lets `tv2txt` reach the panel's answer with no rule of its own |
@@ -3943,7 +4026,7 @@ web/
   js/chrome/contextmenu.js  right-click menu (§6.11)
   js/chrome/statusbar.js    bottom status bar trays (§6.11)
   js/chrome/console.js      docked debug-sim Console panel (§6.20, FR-122c)  [CREATE]
-  js/chrome/dock.js         docked-panel heights + dividers (§6.16a, FR-115n)  [CREATE]
+  js/chrome/dock.js         docked panel area: tabs, height, divider (§6.16a, FR-123/FR-115n)
   cgen/runtime.h            fast-engine C runtime API, documented (§6.17)
   cgen/runtime.c            fast-engine C runtime implementation (§6.17)
   tools/tv2txt.js           .tv → generated-program stdin rows (§6.17 M2)
@@ -4083,6 +4166,7 @@ the original greenfield plan, whose `sim/` root and never-created
 | FR-099c | §6.9a, §6.14 | `subdesign.js`, `router.js`, `fileops.js` |
 | FR-121, FR-121a, FR-121b, FR-121c, FR-121d, FR-121e, FR-121f, FR-121g, FR-121h | §6.19, §6.4, §6.5a, §6.10, §6.11, §6.12, §6.14, §7.8, §8, §3.1 A8–A11 | `project.go`, `api.go`, `storage.go`, `chrome/project.js`, `chrome/fileops.js`, `chrome/dialogs.js`, `chrome/toolbar.js`, `store.js`, `app.js`, `api.js`, `model/persist.js`, `index.html`, `style.css` |
 | FR-115n | §6.16a, §6.16, §6.20, §8 | `chrome/dock.js`, `chrome/dock.test.js`, `app.js`, `css/style.css` |
+| FR-123 | §6.16a, §6.16, §6.20, §6.11, §8 | `chrome/dock.js`, `chrome/dock.test.js`, `chrome/dialogs.js`, `chrome/console.js`, `chrome/toolbar.js`, `store.js`, `store.test.js`, `app.js`, `index.html`, `css/style.css` |
 | FR-115o | §6.16, §8 | `chrome/dialogs.js`, `chrome/dialogs.test.js`, `css/style.css` |
 | FR-115p | §6.16, §6.17 (M9), §8 | `engine/vectors.js`, `engine/vectors.test.js`, `engine/cgen.js`, `cgen/runtime.h`, `cgen/runtime.c`, `tools/tv2txt.js` |
 | FR-122, FR-122a, FR-122b | §6.20 | `builtins.js`, `engine/uart.js`, `engine/sim.js`, `engine/canvas.js`, `engine/symbols.js` |
@@ -4256,16 +4340,25 @@ tests beside them per §9).
   *does* record untouched (including a `0` authored into an active-low column).
   `serializeVectors` drops `activeLow` (as it drops `kind`/`base`/`bit`), so a
   round trip through the `.tv` shape is unchanged and no `formatVersion` moves.
-- **JS `dock` (§6.16a, FR-115n):** the pure geometry, DOM-free. `layout` with the
-  defaults reproduces today's thirds; one panel open clamps to `[0.1, 0.9]`; both
-  open always leaves canvas host, vec, and console each ≥ 0.1 **for any** stored
-  fractions, including two remembered 0.8s. `dragTo("vec", …)` leaves the console
-  fraction untouched and moves the schematic; `dragTo("console", …)` with both
-  open holds `fv + fc` constant (the schematic does not move) and shrinks the vec
-  panel; with the vec panel closed it moves the schematic instead. Dragging past
-  either floor pins at the floor rather than overshooting or inverting; a drag on
-  a closed panel's key is the identity. Fractions are pixel-free, so the same
-  inputs give the same outputs at any area height (the window-resize property).
+- **JS `dock` (§6.16a, FR-115n/FR-123):** the pure geometry, DOM-free. `layout`
+  with the default gives a third to the area and the rest to the canvas host; with
+  a tab open it clamps to `[0.1, 0.9]` **for any** stored fraction, including a
+  remembered 0.99, so both regions keep their tenth; with no tab open it is 0.
+  `dragTo` pins at either floor rather than overshooting or inverting, and is the
+  identity when no tab is open. Fractions are pixel-free, so the same inputs give
+  the same outputs at any area height (the window-resize property). Selecting a
+  tab is not an input to either function — nothing can tie a height to a tab.
+- **JS store tab bookkeeping (§6.16a, FR-123):** `setTabOpen` and `setDockActive`
+  as pure state transitions. Opening appends to `dockOrder` and makes the tab
+  frontmost; opening a second tab leaves the first in the strip and takes the
+  front; closing the frontmost selects the **most recently used** remaining tab
+  (vec → console → vec, then close vec ⇒ console) and closing a background tab
+  leaves the selection alone; closing the last tab leaves `dockActive === null`
+  and an empty `dockOrder`. Reopening a closed tab puts it at the **right end** of
+  `dockOrder`. `markDockUnread` sets the flag only for an open, non-frontmost tab
+  and is a no-op for a frontmost or closed one; `setDockActive` clears it. Every
+  setter is total: unknown keys, double opens, and closes of an already-closed tab
+  leave the state untouched.
 - **JS `dialogs` cycle helper (§6.16, FR-115o):** `nextSymbol` advances and wraps
   for each alphabet (`0`→`1`→`0`, `0`→`1`→`C`→`0`, `H`→`L`→`X`→`H`) and maps an
   unrecognized symbol to the first option rather than throwing. The button
@@ -4359,23 +4452,37 @@ tests beside them per §9).
   listing each pin's role; select a built-in with no docs → no documentation
   block appears (FR-104, FR-105). Docs survive save/open and a "Refresh Types"
   (FR-057, FR-088).
-- **Docked-panel dividers (FR-115n).** Open Test Vectors: the panel is the bottom
-  third and its top edge shows a `row-resize` cursor. Drag it up and down — the
-  schematic re-extends without rescaling (note a component's on-screen size and
-  the pan position before and after; zoom and Fit are unaffected), and both the
-  schematic and the panel stop at a tenth of the canvas area rather than
-  collapsing. Close and reopen the panel: it returns at the height it was
-  dragged to, not the default third; reload the page: back to the third. Open
-  the Console under it: dragging the **Console's** divider grows the console out
-  of the test-vector panel with the schematic held still, while dragging the
-  test-vector panel's divider still trades with the schematic and leaves the
-  console alone; the floors hold for all three regions. Resize the browser
-  window (and toggle the properties panel): the proportions are preserved.
-  Divider drags keep working while the design is read-only under the panel
+- **Panel-area divider (FR-115n).** Open Test Vectors: the area is the bottom
+  third and its top edge (above the tab strip) shows a `row-resize` cursor. Drag
+  it up and down — the schematic re-extends without rescaling (note a component's
+  on-screen size and the pan position before and after; zoom and Fit are
+  unaffected), and both the schematic and the area stop at a tenth of the canvas
+  area rather than collapsing. Close and reopen the tab: the area returns at the
+  height it was dragged to, not the default third; reload the page: back to the
+  third. Open the Console too and switch between the tabs: the height does not
+  change, and neither does the schematic. Resize the browser window (and toggle
+  the properties panel): the proportions are preserved. Divider drags and tab
+  switches keep working while the design is read-only under the test-vector tab
   (FR-115h), while a run is **held** (FR-115l), and while a simulation runs
   (FR-076) — and none of them dirties the document, releases the hold, or clears
   results (the `*` marker, the held values on the schematic, and the pass/fail
-  painting all survive a drag).
+  painting all survive a drag and a round trip through the Console tab).
+- **Tabbed panel area (FR-123).** With nothing open the schematic fills the canvas
+  area and there is no strip. Simulate ▸ Test Vectors: the area appears with a
+  single "Test Vectors" tab, frontmost. View ▸ Console: a second tab appears at
+  the right and takes the front; the test-vector table is hidden but the design is
+  **still read-only** (try to drag a component — the read-only notice appears) and
+  a held run's values are still on the schematic. Invoke Simulate ▸ Test Vectors
+  once: the tab comes forward with its rows, results, row selection, and scroll
+  position exactly as left. Invoke it again: it closes (with the Save/Discard/
+  Cancel prompt if the `.tv` file is modified — Cancel leaves the tab open and
+  frontmost), the Console takes the front, and editing is enabled again. Close the
+  Console: the area disappears entirely. Run a design with a magic UART while the
+  Test Vectors tab is in front: a dot appears on the Console tab, focus does not
+  move, and selecting the Console shows the whole output and clears the dot; open
+  the Console for the first time *after* a run and the accumulated output is there.
+  Close the tabs in various orders and confirm the front tab is always the one
+  used most recently, and that reopening a tab puts it at the right end.
 - **Cycling cell buttons (FR-115o).** Each input, clock, and output cell is a
   button showing its symbol; clicking advances `0`→`1`→`0`, `0`→`1`→`C`→`0`,
   `H`→`L`→`X`→`H`. Tab to a cell and press Space and Enter — both advance it —

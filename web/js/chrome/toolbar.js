@@ -52,7 +52,7 @@ function accelLabel({ key, shift }) {
     : `Ctrl+${shift ? "Shift+" : ""}${key}`;
 }
 
-export function initToolbar({ container, store, interaction, fileops, projectops, sim, library, reloadLibrary = async () => {}, onTestVectors, onGenerateC, onExport, onDesignProperties, onReleaseHold = () => {} }) {
+export function initToolbar({ container, store, interaction, fileops, projectops, sim, library, reloadLibrary = async () => {}, onTestVectors, onConsole, onGenerateC, onExport, onDesignProperties, onReleaseHold = () => {} }) {
   const tools = [
     { tool: "select", label: "Select" },
     { tool: "wire", icon: WIRE_ICON },
@@ -132,11 +132,15 @@ export function initToolbar({ container, store, interaction, fileops, projectops
   addItem(viewMenu.panel, "Fit to Screen", "Fit the design to the canvas", () =>
     interaction.fitToScreen(),
   );
-  // View ▸ Console (FR-122c): toggle the modeless Console panel. It imposes no
-  // edit lock, so it stays enabled while simulating (it is meant to be opened
-  // during a run); refresh() renders it checked when open.
+  // View ▸ Console (FR-122c): NOT a plain toggle. It opens the Console tab if
+  // closed, selects it if open behind another tab, and closes it only when it is
+  // already frontmost (FR-123) — the rule lives in dock.menuInvoke, reached
+  // through the onConsole callback, so the toolbar depends on no panel or dock
+  // module. The Console imposes no edit lock, so the item stays enabled while
+  // simulating (it is meant to be opened during a run); refresh() renders it
+  // checked while its tab is open.
   const consoleItem = addItem(viewMenu.panel, "Console", "Show the simulator console output", () =>
-    store.setConsolePanelOpen(!store.state.consolePanelOpen),
+    onConsole?.(),
   );
   container.appendChild(viewMenu.menu);
 
@@ -333,10 +337,12 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     newProjectItem.disabled = locked;
     openProjectItem.disabled = locked;
     dupProjectItem.disabled = locked || noProject;
-    // The Test Vectors item toggles the panel, so it stays enabled while the
-    // panel is open (to close it); only a running simulation disables it
-    // (FR-115b).
+    // The Test Vectors item opens, selects, or closes its tab (FR-123), so it
+    // stays enabled while the panel is open — one invocation to bring the tab
+    // forward, another to close it; only a running simulation disables it
+    // (FR-115b). Checked while its tab is open, frontmost or not.
     vectorsItem.disabled = simming || noProject;
+    vectorsItem.classList.toggle("checked", panelOpen);
     // Generate C… is disabled under either lock (FR-116): while simulating
     // and while the vector panel is open. Export… follows the same rule
     // (FR-119).

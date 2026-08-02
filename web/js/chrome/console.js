@@ -79,10 +79,16 @@ export function createConsoleModel({ max = CONSOLE_MAX_CHARS } = {}) {
 
 // createConsolePanel wires the model to the docked #console-panel DOM (FR-122c):
 // write buffers a byte and schedules a single rAF repaint that flushes to the
-// body (coalescing many bytes/frame into one update), sticky-tail autoscroll,
-// Clear + close controls. Returns { write, clear, setOpen, isOpen }. Modeless:
-// it never touches the store's read-only lock; app.js subscribes setOpen to
-// store.state.consolePanelOpen.
+// body (coalescing many bytes/frame into one update), sticky-tail autoscroll, and
+// a Clear control. Returns { write, clear, open, requestClose, isOpen } — open
+// and requestClose are the panel handle the dock is given (§6.16a), and are just
+// the store flag, the Console having no document to guard (contrast the
+// test-vector panel's FR-115m prompt). Modeless: it never touches the store's
+// read-only lock.
+//
+// The panel does NOT own its host's `hidden`: the dock does (FR-123), because an
+// open Console sitting behind the Test Vectors tab must be hidden with its open
+// flag still set. isOpen() therefore reads the flag, not the DOM.
 export function createConsolePanel({ store }) {
   const host = document.getElementById("console-panel");
   const body = host.querySelector(".console-body");
@@ -92,8 +98,15 @@ export function createConsolePanel({ store }) {
   function repaint() {
     raf = null;
     const stick = shouldStickTail(body);
+    const wrote = model.isDirty();
     body.textContent = model.flush();
     if (stick) body.scrollTop = body.scrollHeight; // re-pin to the tail
+    // Unseen-content marker (FR-123): raised once per frame that actually wrote
+    // bytes, never once per byte, so FR-122's non-blocking buffering survives.
+    // markDockUnread is itself a no-op while the Console is frontmost or closed
+    // and once the flag is already set, so a long output burst costs one store
+    // notification, not one per frame.
+    if (wrote) store.markDockUnread("console");
   }
   function schedule() {
     if (raf === null) raf = requestAnimationFrame(repaint);
@@ -114,17 +127,22 @@ export function createConsolePanel({ store }) {
       }
       body.textContent = "";
     },
-    // setOpen shows/hides the docked panel; driven by consolePanelOpen (app.js).
-    setOpen(open) {
-      host.hidden = !open;
+    // open opens the Console tab (FR-123); the store makes it frontmost and the
+    // dock reveals the area. Called by the dock for View ▸ Console on a closed
+    // tab.
+    open() {
+      store.setConsolePanelOpen(true);
     },
-    isOpen: () => !host.hidden,
+    // requestClose closes the tab — what the dock calls for the tab's ✕ and for
+    // the menu item on an already-frontmost tab. Nothing to guard: the Console
+    // holds no document, only a view of the run's output.
+    requestClose() {
+      store.setConsolePanelOpen(false);
+    },
+    isOpen: () => !!store.state.consolePanelOpen,
   };
 
   host.querySelector(".console-clear").addEventListener("click", () => api.clear());
-  host
-    .querySelector(".console-close")
-    .addEventListener("click", () => store.setConsolePanelOpen(false));
 
   return api;
 }
