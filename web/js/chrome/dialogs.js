@@ -38,6 +38,15 @@ function button(label, onClick) {
   return b;
 }
 
+// nextSymbol is the whole cycle rule behind the test-vector panel's cycling cell
+// buttons (FR-115o): advance one place in the column's established symbol order
+// and wrap. An unrecognized symbol (indexOf → -1) normalizes to opts[0] rather
+// than throwing, so a cell holding something the column no longer offers is
+// repaired by one click. Pure and DOM-free so it unit-tests beside tvPathFor.
+export function nextSymbol(opts, cur) {
+  return opts[(opts.indexOf(cur) + 1) % opts.length];
+}
+
 function joinPath(dir, name) {
   return dir.replace(/\/+$/, "") + "/" + name;
 }
@@ -1853,17 +1862,34 @@ export function testVectorsPanel({ store, dataDir }) {
       if (kind === "in") opts = col.kind === "clock" ? ["0", "1", "C"] : ["0", "1"]; // C = one pulse (FR-115e)
       else if (kind === "out") opts = ["H", "L", "X"];
       else opts = ["0", "1", "H", "L", "X"];
-      if (kind === "io") td.classList.add(ioRoleClass(cells[ci]));
-      const sel = mkSelect(opts, cells[ci]);
-      sel.addEventListener("change", () => {
-        cells[ci] = sel.value;
-        if (kind === "io") {
+      if (kind === "io") {
+        td.classList.add(ioRoleClass(cells[ci]));
+        // An io cell keeps its drop-down (FR-115o): five symbols spanning two
+        // different roles read better from a list than from a cycle, where
+        // reaching X can cost four wrong values — each one a live edit.
+        const sel = mkSelect(opts, cells[ci]);
+        sel.addEventListener("change", () => {
+          cells[ci] = sel.value;
           td.classList.remove("io-drive", "io-expect", "io-inert");
           td.classList.add(ioRoleClass(sel.value));
-        }
-        touch();
-      });
-      td.appendChild(sel);
+          touch();
+        });
+        td.appendChild(sel);
+      } else {
+        // Input, clock, and output cells cycle forward through the column's
+        // symbol order (FR-115o). A native <button> is focusable and activated by
+        // Space/Enter, so the keyboard clause needs no key handler of ours; the
+        // data-cell key lets renderBody restore focus across a rebuild (below).
+        const b = el("button", "vec-cycle", cells[ci]);
+        b.dataset.cell = `${kind}:${ri}:${ci}`;
+        b.title = `${opts.join(" → ")} → ${opts[0]}`;
+        b.addEventListener("click", () => {
+          cells[ci] = nextSymbol(opts, cells[ci]);
+          b.textContent = cells[ci];
+          touch(); // an ordinary cell edit: dirties, clears results and any hold
+        });
+        td.appendChild(b);
+      }
       if (kind === "in") return td;
       const status = el("span", "vec-status");
       td.appendChild(status);
@@ -1963,6 +1989,13 @@ export function testVectorsPanel({ store, dataDir }) {
     }
 
     function renderBody() {
+      // A cell edit clears stale results, which rebuilds tbody — that would drop
+      // focus mid-fill and defeat FR-115o's keyboard clause, so remember which
+      // cycling button held focus and restore it after the rebuild. The key is a
+      // data attribute rather than an index closure precisely because the button
+      // it lands on is a different element than the one that had focus.
+      const active = document.activeElement;
+      const focusKey = active && tbody.contains(active) ? (active.dataset?.cell ?? null) : null;
       tbody.replaceChildren();
       // A removed row must never leave the selection dangling past the end
       // (FR-115l); clamping keeps a selection alive as the table shrinks.
@@ -2003,6 +2036,11 @@ export function testVectorsPanel({ store, dataDir }) {
         tbody.appendChild(tr);
       });
       if (runToBtn) runToBtn.disabled = selRow === null;
+      // No match (the row was deleted, or the group collapsed to hex) leaves
+      // nothing focused, which is the pre-FR-115o behavior and never an error.
+      if (focusKey) {
+        tbody.querySelector(`.vec-cycle[data-cell="${CSS.escape(focusKey)}"]`)?.focus();
+      }
     }
 
     // render redraws header and body together — a radix toggle changes both.

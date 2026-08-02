@@ -586,6 +586,27 @@ body {
 .vec-cell.io-expect { background: #fbf3df; }
 .vec-cell.io-inert { color: #999; }
 .vec-select { font-size: 0.85rem; padding: 0 0.1rem; }
+/* Cycling cell button (FR-115o): input, clock, and output cells advance through
+   their symbol set on click. Monospace at a fixed width sized to the widest
+   symbol, so a column never reflows as its value changes. The cell's own tints —
+   pass/fail and the io roles above — stay on the <td>, so the button is
+   deliberately transparent and borderless. */
+.vec-cycle {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  width: 1.5rem;
+  padding: 0.05rem 0;
+  text-align: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  cursor: pointer;
+  user-select: none;
+  color: inherit;
+}
+.vec-cycle:hover { border-color: #ccc; background: #fff; }
+.vec-cycle:focus-visible { outline: 2px solid #4a90d9; outline-offset: -1px; }
 /* Grouped hexadecimal cells (FR-115k): a multi-bit port/indicator collapsed to
    one MSB-first field, with a tiny header toggle back to individual bits. */
 .vec-hexinput {

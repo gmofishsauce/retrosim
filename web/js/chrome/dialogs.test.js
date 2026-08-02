@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   applySaveExt,
   tvPathFor,
+  nextSymbol,
   galPartYaml,
   memDeviceYaml,
   pinGroupGeometryError,
@@ -96,6 +97,23 @@ test("applySaveExt leaves an empty name unchanged", () => {
 test("applySaveExt with a null saveExt appends nothing (§6.19 project prompt)", () => {
   assert.equal(applySaveExt("myproject", null), "myproject");
   assert.equal(applySaveExt("my.project", null), "my.project");
+});
+
+// --- nextSymbol (the cycling cell buttons' whole rule, FR-115o) ---
+
+test("nextSymbol advances and wraps within each column's symbol set (FR-115o)", () => {
+  assert.deepEqual(["0", "1"].map((s) => nextSymbol(["0", "1"], s)), ["1", "0"]);
+  const clock = ["0", "1", "C"];
+  assert.deepEqual(clock.map((s) => nextSymbol(clock, s)), ["1", "C", "0"]);
+  const out = ["H", "L", "X"];
+  assert.deepEqual(out.map((s) => nextSymbol(out, s)), ["L", "X", "H"]);
+});
+
+test("nextSymbol normalizes an unrecognized symbol to the first option (FR-115o)", () => {
+  // indexOf → -1, so the cycle lands on opts[0] rather than throwing: a cell
+  // holding a symbol its column no longer offers is repaired by one click.
+  assert.equal(nextSymbol(["0", "1"], "C"), "0");
+  assert.equal(nextSymbol(["H", "L", "X"], undefined), "H");
 });
 
 // --- tvPathFor (the test-vector panel's document name, FR-115m) ---
