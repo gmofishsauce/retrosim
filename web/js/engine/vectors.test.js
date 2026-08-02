@@ -21,6 +21,7 @@ import {
   groupActualHex,
   clockSources,
   isStateful,
+  isActiveLowName,
   FORMAT_VERSION,
 } from "./vectors.js";
 import { V0, V1 } from "./galasm.js";
@@ -351,6 +352,89 @@ test("emptyRow: an io column defaults its cell to X (FR-115i)", () => {
     io: [{ refdes: "A-5", pin: "P", label: "BUS" }],
   };
   assert.deepEqual(emptyRow(cols), { in: ["0"], io: ["X"], out: [] });
+});
+
+// --- inactive-level input defaults (FR-115p) ---
+
+test("isActiveLowName: a leading or trailing slash, and nothing else (FR-115p)", () => {
+  for (const n of ["/R", "CS/", "/BOTH/", "/"]) assert.equal(isActiveLowName(n), true, n);
+  for (const n of ["A/B", "AB", "", undefined, null]) assert.equal(isActiveLowName(n), false, String(n));
+});
+
+test("deriveColumns stamps activeLow on input columns from the instance's own label (FR-115p)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("switch"), { label: "/RESET" });
+  place(d, "A-2", builtin("switch"), { label: "DATA" });
+  place(d, "A-3", builtin("indicator"), { label: "/Q" }); // an output: never stamped
+  const byRef = Object.fromEntries(deriveColumns(d).inputs.map((c) => [c.refdes, c]));
+  assert.equal(byRef["A-1"].activeLow, true);
+  assert.equal(byRef["A-2"].activeLow, undefined);
+  assert.equal(deriveColumns(d).outputs[0].activeLow, undefined);
+});
+
+test("deriveColumns stamps every bit of an active-low portN, whose per-bit labels test false (FR-115p)", () => {
+  const d = createDesign("t");
+  const p = addInstance(d, portNType(8), 0, 0, 0);
+  p.label = "CS/";
+  const u = addInstance(d, NOT, 10, 0, 0);
+  for (let i = 0; i < 8; i++) wire(d, p.refdes, `P${i}`, u.refdes, "A"); // drives loads → input port
+  const cols = deriveColumns(d);
+  assert.equal(cols.inputs.length, 8);
+  assert.deepEqual(cols.inputs.map((c) => c.activeLow), new Array(8).fill(true));
+  // The point: each per-bit label on its own is not active-low. The stamp comes
+  // from the instance's base label, which is the only place the slash survives.
+  assert.deepEqual(cols.inputs.map((c) => c.label), ["CS/0", "CS/1", "CS/2", "CS/3", "CS/4", "CS/5", "CS/6", "CS/7"]);
+  assert.ok(cols.inputs.every((c) => !isActiveLowName(c.label)));
+});
+
+test("emptyRow: an active-low input defaults 1, a clock still C even when active-low (FR-115p)", () => {
+  const cols = {
+    inputs: [
+      { refdes: "A-1", pin: "OUT", label: "/RESET", activeLow: true },
+      { refdes: "A-2", pin: "OUT", label: "DATA" },
+      { refdes: "A-3", pin: "OUT", label: "/CLK", kind: "clock", activeLow: true },
+    ],
+    outputs: [{ refdes: "A-4", pin: "IN", label: "/Q" }],
+    io: [{ refdes: "A-5", pin: "P", label: "/BUS" }],
+  };
+  assert.deepEqual(emptyRow(cols), { in: ["1", "0", "C"], io: ["X"], out: ["X"] });
+});
+
+test("reconcileVectors: a column the file omits comes in at its inactive level (FR-115p)", () => {
+  // The file predates the /RESET switch and authored a deliberate 0 into /CS.
+  const fileDoc = deserializeVectors({
+    formatVersion: 3,
+    inputs: [{ refdes: "A-2", pin: "OUT", label: "/CS" }],
+    outputs: [],
+    rows: [{ in: ["0"], io: [], out: [] }],
+  });
+  const columns = {
+    inputs: [
+      { refdes: "A-1", pin: "OUT", label: "/RESET", activeLow: true },
+      { refdes: "A-2", pin: "OUT", label: "/CS", activeLow: true },
+      { refdes: "A-3", pin: "OUT", label: "DATA" },
+      { refdes: "A-4", pin: "OUT", label: "CLK", kind: "clock" },
+    ],
+    outputs: [{ refdes: "A-5", pin: "IN", label: "Q" }],
+  };
+  const { rows } = reconcileVectors(fileDoc, columns);
+  // Manufactured cells: 1 (active-low), 0 (plain), C (clock), X (output). The
+  // cell the file records — a 0 in an active-low column — is taken verbatim.
+  assert.deepEqual(rows[0].in, ["1", "0", "0", "C"]);
+  assert.deepEqual(rows[0].out, ["X"]);
+  // Cell for cell, a manufactured row is what emptyRow would have produced.
+  assert.deepEqual(emptyRow(columns).in, ["1", "1", "0", "C"]);
+});
+
+test("serializeVectors drops activeLow, so the .tv shape and formatVersion are unchanged (FR-115p/§7.7)", () => {
+  const cols = {
+    inputs: [{ refdes: "A-1", pin: "OUT", label: "/RESET", activeLow: true }],
+    outputs: [],
+    io: [],
+  };
+  const out = serializeVectors({ ...cols, rows: [emptyRow(cols)] });
+  assert.deepEqual(Object.keys(out.inputs[0]).sort(), ["label", "pin", "refdes"]);
+  assert.equal(out.formatVersion, FORMAT_VERSION);
 });
 
 test("cloneRow copies every cell of a row, io included (FR-115j)", () => {

@@ -130,6 +130,25 @@ function refdesCompare(a, b) {
   );
 }
 
+// isActiveLowName is the whole active-low rule (FR-115p): a non-empty name that
+// begins or ends with "/" (the /R and CS/ conventions of FR-071b/FR-122). A slash
+// elsewhere does not count; a name with both does. This is the only place the
+// string is inspected — deriveColumns stamps the answer on each input column and
+// every consumer reads the stamp (FR-109).
+export function isActiveLowName(name) {
+  return typeof name === "string" && name.length > 0 && (name.startsWith("/") || name.endsWith("/"));
+}
+
+// defaultInputCell is the single answer to "what does a freshly manufactured
+// input cell hold" (FR-115p): C for a clock column (FR-115e, unconditional — a
+// clock's name never overrides it), else 1 for an active-low column, else 0.
+// emptyRow and reconcileVectors both call it; nothing else manufactures an input
+// cell. Output and io cells default X, unchanged.
+export function defaultInputCell(col) {
+  if (col?.kind === "clock") return "C";
+  return col?.activeLow ? "1" : "0";
+}
+
 // deriveColumns reads a design's bound I/O for the vector table (FR-115b): one
 // input column per input switch (its OUT pin), one output column per indicator
 // bit — a 1-wide indicator contributes its IN pin, an 8-wide contributes D0..D7.
@@ -149,12 +168,21 @@ export function deriveColumns(design) {
     const rt = c.typeData?.renderType;
     const label = c.label ?? c.refdes;
     if (rt === "switch") {
-      inputs.push({ refdes: c.refdes, pin: "OUT", label });
+      // activeLow (FR-115p) is stamped on input columns only, from the instance's
+      // own label, and is live-only like kind/base/bit below: serializeVectors
+      // keeps refdes/pin/label, so it never reaches the .tv file (§7.7).
+      inputs.push({ refdes: c.refdes, pin: "OUT", label, ...(isActiveLowName(label) && { activeLow: true }) });
     } else if (rt === "clock") {
       // A clock generator is a scripted input column in a sequential vector set
       // (FR-115e): cells 0/1/C. kind is live-only (dialog options, C validation);
       // it is stripped on save and re-derived on load (§7.7).
-      inputs.push({ refdes: c.refdes, pin: "OUT", label, kind: "clock" });
+      inputs.push({
+        refdes: c.refdes,
+        pin: "OUT",
+        label,
+        kind: "clock",
+        ...(isActiveLowName(label) && { activeLow: true }),
+      });
     } else if (rt === "indicator") {
       outputs.push({ refdes: c.refdes, pin: "IN", label });
     } else if (rt === "indicator8") {
@@ -169,6 +197,10 @@ export function deriveColumns(design) {
       // in → input, out → output, bidir → io (a three-state bus column, FR-115i).
       const bucket = dir === "out" ? outputs : dir === "bidir" ? io : inputs;
       const isIo = dir === "bidir";
+      // FR-115p: input columns only, and always from the instance's own label —
+      // a portN's per-bit label appends the bit index, which would hide a
+      // trailing slash (CS/ → CS/0), so the per-bit labels are never tested.
+      const alow = bucket === inputs && isActiveLowName(label);
       // A clock-source port (FR-094f) takes the same kind:"clock" marker a clock
       // generator does, so the whole 0/1/C path below and downstream applies
       // unchanged — same identity, same (refdes,"P"), nothing new in the file.
@@ -191,6 +223,7 @@ export function deriveColumns(design) {
             base: label, // group label for hex cells (FR-115k), live-only
             bit: i,
             ...(isIo && { io: true }),
+            ...(alow && { activeLow: true }),
           });
         }
       } else {
@@ -201,6 +234,7 @@ export function deriveColumns(design) {
           label,
           ...(isIo && { io: true }),
           ...(clock && { kind: "clock" }),
+          ...(alow && { activeLow: true }),
         });
       }
     }
@@ -606,9 +640,10 @@ export function deserializeVectors(obj) {
 
 // reconcileVectors aligns a loaded file (fileDoc) to the design's current columns
 // by (refdes,pin) (FR-115a): the returned rows follow `columns` order, pulling each
-// cell from the file when that column still matches and defaulting otherwise ("0"
-// for inputs, "X" for outputs and io, FR-115i). A column present in only one side
-// is a non-fatal warning. Returns { rows, warnings }.
+// cell from the file when that column still matches and defaulting otherwise
+// (defaultInputCell for inputs, FR-115p — so a column the file omits comes in at 1
+// when it is active-low — and "X" for outputs and io, FR-115i). A column present in
+// only one side is a non-fatal warning. Returns { rows, warnings }.
 export function reconcileVectors(fileDoc, columns) {
   const warnings = [];
   const inIdx = new Map(fileDoc.inputs.map((c, i) => [colKey(c), i]));
@@ -639,7 +674,7 @@ export function reconcileVectors(fileDoc, columns) {
 
   const rows = fileDoc.rows.map((r) => ({
     in: columns.inputs.map((c) => {
-      const dflt = c.kind === "clock" ? "C" : "0"; // match emptyRow's defaults
+      const dflt = defaultInputCell(c); // match emptyRow's defaults (FR-115p)
       const i = inIdx.get(colKey(c));
       return i !== undefined ? (r.in[i] ?? dflt) : dflt;
     }),
@@ -655,12 +690,13 @@ export function reconcileVectors(fileDoc, columns) {
   return { rows, warnings };
 }
 
-// emptyRow returns a fresh row sized to the columns: inputs default 0 — except a
-// clock column, which defaults C so one new row is one clock cycle (FR-115e) —
-// and outputs and io cells default X (FR-115i: X = release, don't-check).
+// emptyRow returns a fresh row sized to the columns: each input cell takes
+// defaultInputCell — C for a clock column, so one new row is one clock cycle
+// (FR-115e), 1 for an active-low column (FR-115p), 0 otherwise — and outputs and
+// io cells default X (FR-115i: X = release, don't-check).
 export function emptyRow(columns) {
   return {
-    in: columns.inputs.map((c) => (c.kind === "clock" ? "C" : "0")),
+    in: columns.inputs.map(defaultInputCell),
     io: (columns.io ?? []).map(() => "X"),
     out: columns.outputs.map(() => "X"),
   };

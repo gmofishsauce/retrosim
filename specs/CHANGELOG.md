@@ -19,6 +19,13 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-08-01 — Spec fix: §6.17 M9 named a `columnIsActiveLow` function that does not exist
+What: §6.17's M9 said `cgen.js` "imports the same `columnIsActiveLow` stamp `deriveColumns` applies". There is no such export: §6.16 names the predicate `isActiveLowName` and specifies that consumers read the *stamped* `activeLow` field rather than call a predicate. Corrected the M9 sentence to say the generator reads the stamp `deriveColumns` already applied and imports no predicate at all.
+Why: found while implementing FR-115p step 1. The two sections disagreed on both the function's name and whether the generator calls one, and M9's wording would have led an implementer to add a second entry point to `vectors.js` — the opposite of the single-evaluation rule (FR-109) the same sentence invokes.
+Touches: FR-115p; design §6.17 (M9).
+
+---
+
 ## 2026-08-01 — Test-vector panel usability: resizable docked panels, cycling cells, inactive-level defaults
 What: three changes to the docked panels. (1) The top edge of **every** docked bottom panel — test-vector and Console — is a draggable divider; the bottom third becomes an initial height, each panel's height is a session fraction of the canvas area, floors at 10% for every region, and with both panels open the Console's divider trades area with the test-vector panel above it while the test-vector panel's trades with the schematic. (2) Input, clock, and output cells become forward-cycling buttons showing the current symbol, keyboard-activatable; io cells (five symbols) and the hex role selector keep their drop-downs. (3) A manufactured input cell defaults to the **inactive** level — `1` when the column's display label begins or ends with `/`, `0` otherwise — in `+ Row`, the opening blank row, load reconciliation, and the `.tv`→rows converter; clock cells still default to `C`, output/io cells to `X`, `+Dup` still copies.
 Why: the fixed third fought the user on any table wider or taller than it; a drop-down costs two clicks and a popup to change one bit; and a fresh row asserting every active-low signal is the wrong starting point — the interesting stimulus is one signal moving, not all of them. The active-low rule is derived from the label rather than declared anywhere, so nothing about the design format changes.
