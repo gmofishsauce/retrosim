@@ -3626,13 +3626,22 @@ categories before any rule runs, and the rules consume the categories, never
 | Category | Test | Used by |
 |---|---|---|
 | `weak` | host instance's `typeData.renderType` is `"pullup"` or `"pulldown"` (FR-083) | R4, R5 |
-| `port` | host instance's `renderType` is `"port"` (FR-094) | suppresses R3, R4, R9 |
+| `port` | host instance's `renderType` is `"port"` (FR-094) **or `"portN"`** (the multi-bit port, FR-071e) | suppresses R1, R3, R4, R9 |
 | `strong` | `direction` is `out`, `tristate`, or `bidir`, and not `weak`/`port` | R1, R2, R4, R9 |
 | `load` | `direction` is `in` or `bidir` | R3, R9 |
 
 `bidir` is deliberately in **two** categories — it both drives and loads, which is
 what makes `bidir + bidir` normal in R1 and what stops a bidirectional bus from
 being reported as load-less by R9.
+
+**`portN` classifies as `port` too** (added 2026-08-03, with FR-124's sheet-boundary
+clause). Both port built-ins declare `bidir` pins (`builtins.js`, `portNFields`), and
+the 1-bit port escapes the `strong` category only by being caught as `port` first; a
+`renderType === "port"` test alone would leave the multi-bit port `strong`+`load`, so
+an ordinary output feeding a multi-bit port would be reported as an R1 `out + bidir`
+fight — a false positive on correct wiring, which is the exact failure mode this whole
+classification pre-pass exists to prevent. Hence the `port` row suppresses R1 as well:
+a port is a sheet boundary at every width.
 
 **Rule implementations.** Each is a small pure function `(ctx) → Finding[]`, where
 `ctx` carries the design, the nets from `buildNets`, and the derived indices below;
@@ -3668,12 +3677,16 @@ function plus one table row — nothing dispatches on rule id anywhere else.
   instance's `typeData.pins` and subtracting the set of pins appearing in any net.
   One finding per pin.
 - **R4 (can-float)** — a net that is **1 bit wide**, has ≥1 `strong` pin, has
-  **every** `strong` pin `tristate`, and has no `weak` and no `port` pin. Width
-  comes from the net's `lanes`: a net whose lanes are all `wire:` keys is 1-bit; a
-  net with any `bus:` lane belongs to a bus and is exempt (FR-124a — a floating
-  multi-bit bus is normal practice). Note the rule needs the **net's** width, not
-  the conductor's: a single lane broken out of a bus (FR-043a) is a 1-bit net and is
-  correctly checked.
+  **every** `strong` pin `tristate`, and has no `weak` and no `port` pin. The
+  1-bit test reads the net's `lanes`: a net is **exempt exactly when it carries no
+  `wire:` lane at all** — one that lives purely inside buses is a lane of a bus, and
+  a floating multi-bit bus is normal practice (FR-124a); a net including a plain
+  wire is a lone signal and is checked. Note the rule needs the **net's** width, not
+  the conductor's: a single lane broken out of a bus (FR-043a) reaches its pin over a
+  wire, so its net is `["wire:w1", "bus:b1:2"]` — 1 bit, and correctly checked, even
+  though it touches a 4-bit bus. (The test was stated as "any `bus:` lane exempts the
+  net" until 2026-08-03, which contradicted both this sentence and §11.1's breakout
+  case; superseded by the no-`wire:`-lane test above.)
 - **R5 (opposing pulls)** — a net whose `weak` pins include both a `pullup` and a
   `pulldown` host. `refs` lists both instances.
 - **R6 (unconnected outputs)** — group instances by **package**: the refdes with any
@@ -3800,7 +3813,11 @@ and `#console-panel`. `toolbar.js` renames `createMenu("Simulate")` to
 `createMenu("Tools")` (FR-124h — a label change; the menu object, its items, and
 their enablement are untouched) and adds a **Design Rule Check** item invoking
 `onDesignRuleCheck`, disabled by the same predicate that disables Generate C…
-(`simulating || vectorHold`, FR-116/FR-124). `app.js` constructs the panel once and
+(`isReadonly() || noProject`, i.e. `simulating || noProject`, FR-116/FR-124). This
+was written as `simulating || vectorHold` until 2026-08-03, which described neither
+Generate C… nor Export… — a held vector run leaves `simulating` false and all three
+items enabled. What the FR wanted was one rule for the whole menu, and sharing
+FR-116's real predicate is that rule. `app.js` constructs the panel once and
 supplies `onDesignRuleCheck: () => drcPanel.run()`, and passes `drc: drcPanel` in
 `createDock`'s `panels` map so the tab's ✕ can close it.
 

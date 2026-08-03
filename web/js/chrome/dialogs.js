@@ -277,6 +277,53 @@ export function promptWidthDialog(current) {
   });
 }
 
+// promptNoteDialog asks for the optional note recorded with a design-rule waiver
+// (FR-124e) — "tied high on the board", "spare gate, intentional". Resolves to
+// the entered string (possibly empty, which the caller stores as no note at all)
+// or to null when the user cancels, which abandons the waive entirely. `message`
+// is the finding being waived, shown so the user can see what they are agreeing
+// to hide.
+export function promptNoteDialog(message) {
+  return new Promise((resolve) => {
+    const overlay = el("div", "dialog-overlay");
+    const box = el("div", "dialog");
+    overlay.appendChild(box);
+
+    box.appendChild(el("div", "dialog-title", "Waive this finding"));
+    // `dialog-path` is this module's existing style for a quoted context line;
+    // reused rather than adding a near-identical class for one dialog.
+    box.appendChild(el("div", "dialog-path", message));
+    const row = el("div", "dialog-row");
+    const input = el("input", "dialog-name");
+    input.type = "text";
+    input.placeholder = "optional";
+    row.append(el("label", "dialog-label", "Note:"), input);
+    box.appendChild(row);
+
+    const buttons = el("div", "dialog-buttons");
+    buttons.append(button("Cancel", () => done(null)), button("Waive", () => done(input.value)));
+    box.appendChild(buttons);
+
+    function done(result) {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        done(null);
+      } else if (e.key === "Enter") {
+        e.stopPropagation();
+        done(input.value);
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+    input.focus();
+  });
+}
+
 // promptPortWidthDialog asks for a multi-bit port's bit width on placement
 // (FR-071e). The width is constrained to [min, max] (2–16); resolves to an
 // integer in range, or null on cancel / out-of-range input.

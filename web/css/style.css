@@ -393,6 +393,125 @@ body.dock-dragging .dock-grip { background: rgba(74, 144, 217, 0.35); }
 }
 #console-panel[hidden] { display: none; }
 
+/* Docked design-rule-check report (FR-124g): the third peer tab (FR-123), laid
+   out exactly like the test-vector panel above — pinned header, scrolling body,
+   the same [hidden] override — since it is the same kind of surface. The area's
+   height is the dock's (§6.16a, FR-115n). */
+#drc-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #f3f3f3;
+}
+#drc-panel[hidden] { display: none; }
+
+.drc-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  background: #e7e7e7;
+  border-bottom: 1px solid #ccc;
+}
+/* The design name, the check time, and "unsaved changes" (FR-124d). */
+.drc-title { font-weight: 600; font-size: 0.9rem; margin-right: auto; }
+.drc-copy { padding: 0 0.5rem; }
+
+/* Stale banner (FR-124i): prominent, and never re-rendered — the store
+   subscriber toggles only its [hidden], so the findings below keep their scroll
+   position while the user edits the design behind the report. */
+.drc-stale {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.5rem;
+  background: #fff3cd;
+  border-bottom: 1px solid #e0c97f;
+  color: #664d03;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.drc-stale[hidden] { display: none; }
+
+/* Notice line: buildNets and probe warnings (§6.21) — about the FILE or the
+   server, never about the circuit, so they are never findings. */
+.drc-notices {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid #ddd;
+  font-size: 0.75rem;
+  color: #555;
+}
+.drc-notices[hidden] { display: none; }
+
+/* The work list: one row per finding, top to bottom, not grouped (FR-124d). */
+.drc-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.drc-empty { padding: 0.5rem; font-size: 0.85rem; color: #555; }
+
+.drc-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  border-bottom: 1px solid #e6e6e6;
+}
+.drc-row:hover { background: #eef; }
+/* The whole message is the click target: select + reveal (FR-124f). */
+.drc-finding {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.15rem 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+.drc-finding:focus-visible { outline: 2px solid #4a90d9; outline-offset: -2px; }
+.drc-sev { flex: 0 0 3.2rem; font-weight: 600; font-size: 0.7rem; }
+.drc-rule { flex: 0 0 1.8rem; font-weight: 600; color: #555; }
+.drc-msg { flex: 1 1 auto; }
+
+/* Severity colours the row and nothing else (FR-124b): there is no verdict. */
+.drc-error .drc-sev { color: #b00; }
+.drc-warning .drc-sev { color: #a86400; }
+.drc-info .drc-sev { color: #555; }
+
+.drc-action {
+  flex: 0 0 auto;
+  padding: 0 0.4rem;
+  font-size: 0.7rem;
+}
+/* A waived finding stays visible and reversible (FR-124e), greyed with its note. */
+.drc-row-waived .drc-finding { color: #888; }
+.drc-note { flex: 0 0 auto; font-size: 0.75rem; font-style: italic; color: #777; }
+
+/* The collapsed "Waived (N)" section closing the report (FR-124e). */
+.drc-waived {
+  flex: 0 0 auto;
+  max-height: 40%;
+  overflow: auto;
+  border-top: 1px solid #ccc;
+  background: #ececec;
+}
+.drc-waived[hidden] { display: none; }
+.drc-waived > summary {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 /* Checked menu item (FR-122c View ▸ Console): a leading check mark. */
 .menu-item.checked .menu-item-label::before { content: "✓ "; }
 

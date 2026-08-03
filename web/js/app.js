@@ -28,6 +28,7 @@ import { makeProjectOps } from "./chrome/project.js";
 import { initProperties } from "./chrome/properties.js";
 import { createConsolePanel } from "./chrome/console.js";
 import { createDock } from "./chrome/dock.js";
+import { createDrcPanel } from "./chrome/drcpanel.js";
 import { initStatusBar, postMessage } from "./chrome/statusbar.js";
 import { createSim } from "./engine/sim.js";
 import { startConnectionMonitor } from "./connection.js";
@@ -390,16 +391,21 @@ async function main() {
     // opening it imposes the read-only lock (FR-115h), which holds while its tab
     // is open whether or not that tab is frontmost.
     vecPanel = testVectorsPanel({ store, dataDir: defaults.dataDir });
+    // The design-rule-check report (FR-124g/§6.21), the third tab. Modeless like
+    // the Console — it imposes no lock, the whole point being that the design
+    // stays editable while its findings are on screen. It takes `interaction` for
+    // one call: revealing the objects a clicked finding names (FR-124f).
+    const drcPanel = createDrcPanel({ store, interaction });
     // The docked panel area (§6.16a, FR-123/FR-115n): the tab strip, which tab is
     // displayed, the shared height, and its draggable top edge. Constructed once,
-    // after both panels exist, since it drives them through their handles —
+    // after the three panels exist, since it drives them through their handles —
     // open() and the guarded requestClose(), so a cancelled close (FR-115m)
     // leaves the strip untouched. Neither panel module knows about tabs, and the
     // canvas learns about a resize through the ResizeObserver it already has,
     // not through a call.
     const dock = createDock({
       store,
-      panels: { vec: vecPanel, console: consolePanel },
+      panels: { vec: vecPanel, console: consolePanel, drc: drcPanel },
     });
     // Both menu items open a closed tab, select a backgrounded one, and close
     // only a frontmost one (FR-123). Both halves are async for the vector panel
@@ -407,7 +413,13 @@ async function main() {
     // save it first.
     const onTestVectors = () => dock.menuInvoke("vec");
     const onConsole = () => dock.menuInvoke("console");
-    // Simulate ▸ Generate C… (FR-116/§6.17): emit the standalone C simulator —
+    // Tools ▸ Design Rule Check (FR-124/§6.21) is NOT a panel toggle and so does
+    // NOT go through dock.menuInvoke: it runs the check, which opens the report
+    // tab or selects it if it is backgrounded, and never closes it (FR-124g) —
+    // a menu item that ran a check and then hid its own results would be
+    // indefensible. The tab's ✕ closes it, like any other.
+    const onDesignRuleCheck = () => drcPanel.run();
+    // Tools ▸ Generate C… (FR-116/§6.17): emit the standalone C simulator —
     // the generated <design>.c plus verbatim copies of the fixed runtime pair —
     // into a user-chosen directory. Generation is read-only; refusals and
     // generator warnings post to the message tray (FR-074).
@@ -511,10 +523,11 @@ async function main() {
       sim,
       library, // for the Refresh Types action (FR-088)
       reloadLibrary, // Refresh Types rescans the project's components/ first (FR-121i)
-      onTestVectors, // FR-115: Simulate ▸ Test Vectors… (open/select/close, FR-123)
+      onTestVectors, // FR-115: Tools ▸ Test Vectors… (open/select/close, FR-123)
       onConsole, // FR-122c: View ▸ Console (open/select/close, FR-123)
       onReleaseHold: () => vecPanel.releaseHold(), // FR-115l: Stop releases a held vector run
-      onGenerateC, // FR-116: Simulate ▸ Generate C…
+      onGenerateC, // FR-116: Tools ▸ Generate C…
+      onDesignRuleCheck, // FR-124: Tools ▸ Design Rule Check (runs; never closes)
       onExport, // FR-119: File ▸ Export…
       onDesignProperties, // FR-076b: Edit ▸ Design Properties…
     });

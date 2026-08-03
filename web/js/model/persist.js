@@ -158,6 +158,10 @@ export function serializeDesign(design) {
     name: design.name,
     ...(design.defaultRender ? { defaultRender: design.defaultRender } : {}),
     ...(design.primaryClock ? { primaryClock: design.primaryClock } : {}), // FR-076b, additive-optional
+    // FR-124e: design-rule waivers, additive-optional like the two above —
+    // written only when there are some, so no existing file gains a key and no
+    // formatVersion bump or migration step is needed (§7.4).
+    ...(design.drcWaivers?.length ? { drcWaivers: design.drcWaivers } : {}),
     components: design.components.map((c) =>
       c.kind === "subdesign" ? stripSubDesign(c) : c,
     ),
@@ -289,6 +293,13 @@ export function deserializeDesign(obj, { onWarn = () => {} } = {}) {
     if (ok) d.primaryClock = obj.primaryClock;
     else onWarn(`dropped primary clock ${obj.primaryClock}: no such clock generator`);
   }
+  // FR-124e: design-rule waivers, absent in every file written before this
+  // feature and defaulted to none. They are deliberately NOT validated here —
+  // repairStructure leaves them alone (§7.4): a waiver naming a deleted object is
+  // not corruption but the ordinary result of an edit, and the checker drops it
+  // silently on its next run. A waiver list is also uniquely safe to lose, costing
+  // at worst a noisier report.
+  d.drcWaivers = structuredClone(obj.drcWaivers ?? []);
   // Sub-designs persist no typeData (live reference, FR-098). Give each a
   // wiring-derived placeholder so the design is always renderable; the load
   // flow's resolveSubDesigns (§6.14) then refines it from the child file (or

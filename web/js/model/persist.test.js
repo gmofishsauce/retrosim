@@ -7,7 +7,7 @@ import {
   addWire,
   addBus,
 } from "./design.js";
-import { serializeDesign, deserializeDesign, migrate } from "./persist.js";
+import { serializeDesign, deserializeDesign, migrate, FORMAT_VERSION } from "./persist.js";
 
 function ty() {
   return {
@@ -378,6 +378,48 @@ test("primaryClock round-trips through serialize/deserialize (FR-076b)", () => {
   assert.equal(obj.primaryClock, "A-1");
   const back = deserializeDesign(structuredClone(obj));
   assert.equal(back.primaryClock, "A-1");
+});
+
+test("drcWaivers round-trip through serialize/deserialize (FR-124e)", () => {
+  const d = createDesign("t");
+  d.drcWaivers = [
+    { rule: "R3", refs: ["U5C.A"], note: "tied high on the board" },
+    { rule: "R7", refs: ["w4:v9"] },
+  ];
+  const obj = serializeDesign(d);
+  assert.deepEqual(obj.drcWaivers, d.drcWaivers);
+  assert.deepEqual(deserializeDesign(structuredClone(obj)).drcWaivers, d.drcWaivers);
+});
+
+// Additive-optional (§7.4): a design with no waivers must not gain the key, and
+// a file written before the feature existed must load unchanged — which is what
+// makes this a no-migration, no-version-bump change.
+test("no waivers means no key at all, and an older file loads with none (FR-124e)", () => {
+  const d = createDesign("t");
+  const obj = serializeDesign(d);
+  assert.ok(!("drcWaivers" in obj));
+  assert.equal(obj.formatVersion, FORMAT_VERSION);
+  assert.equal(FORMAT_VERSION, 3); // FR-124e adds no format version
+
+  const older = structuredClone(obj); // a pre-2026-08-02 save: no drcWaivers key
+  const back = deserializeDesign(older);
+  assert.deepEqual(back.drcWaivers, []);
+  assert.ok(!("drcWaivers" in serializeDesign(back))); // and still writes none
+});
+
+// A waiver naming objects that no longer exist is the ordinary result of an edit,
+// not corruption: the checker drops it on its next run (FR-124e), so the load
+// path must neither repair nor warn about it.
+test("a stale or malformed waiver loads untouched and unreported (§7.4)", () => {
+  const d = createDesign("t");
+  const obj = {
+    ...serializeDesign(d),
+    drcWaivers: [{ rule: "R1", refs: ["U99.Q"] }, { refs: "junk" }],
+  };
+  const warns = [];
+  const back = deserializeDesign(structuredClone(obj), { onWarn: (m) => warns.push(m) });
+  assert.deepEqual(back.drcWaivers, obj.drcWaivers);
+  assert.deepEqual(warns, []);
 });
 
 test("absent primaryClock stays absent; a dangling one is dropped with a warning (FR-076b)", () => {

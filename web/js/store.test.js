@@ -417,8 +417,27 @@ test("setDockActive selects an open tab and ignores a closed or unknown one (FR-
   store.setConsolePanelOpen(false);
   store.setDockActive("console");
   assert.equal(store.state.dockActive, "vec");
-  store.setDockActive("drc");
+  store.setDockActive("drc"); // a real tab kind (FR-124g), but not open
   assert.equal(store.state.dockActive, "vec");
+  store.setDockActive("nosuchtab");
+  assert.equal(store.state.dockActive, "vec");
+});
+
+test("the report is a third tab with no new dock code (FR-124g)", () => {
+  const store = newStore();
+  store.setVectorPanelOpen(true);
+  store.setConsolePanelOpen(true);
+  store.setDrcPanelOpen(true);
+  assert.equal(store.state.drcPanelOpen, true);
+  assert.deepEqual(store.state.dockOrder, ["vec", "console", "drc"]);
+  assert.equal(store.state.dockActive, "drc"); // opening makes it frontmost
+
+  // It obeys the MRU close rule like any other tab, and imposes no edit lock:
+  // the design stays editable while the report is open (FR-124g).
+  assert.equal(store.isReadonly(), false);
+  store.setDrcPanelOpen(false);
+  assert.equal(store.state.dockActive, "console");
+  assert.deepEqual(store.state.dockOrder, ["vec", "console"]);
 });
 
 test("markDockUnread marks only an open, non-frontmost tab; selecting clears it (FR-123)", () => {

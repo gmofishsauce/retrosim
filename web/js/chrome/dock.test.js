@@ -13,6 +13,12 @@ import { layout, dragTo, DOCK_MIN, DOCK_DEFAULT } from "./dock.js";
 // is NOT a parameter of either function: which tab is frontmost. Nothing here can
 // tie a height to a tab, which is precisely FR-123's "switching tabs never
 // resizes the area".
+//
+// The design-rule report (FR-124g) made this concrete: adding a THIRD tab kind
+// needed a TABS row, a host element, and a store flag — and not one line here,
+// because neither function has ever taken a tab. The strip order and the MRU
+// close rule it also inherits are store transitions, covered in store.test.js
+// ("the report is a third tab with no new dock code").
 
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`);
 

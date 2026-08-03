@@ -52,7 +52,7 @@ function accelLabel({ key, shift }) {
     : `Ctrl+${shift ? "Shift+" : ""}${key}`;
 }
 
-export function initToolbar({ container, store, interaction, fileops, projectops, sim, library, reloadLibrary = async () => {}, onTestVectors, onConsole, onGenerateC, onExport, onDesignProperties, onReleaseHold = () => {} }) {
+export function initToolbar({ container, store, interaction, fileops, projectops, sim, library, reloadLibrary = async () => {}, onTestVectors, onConsole, onGenerateC, onDesignRuleCheck, onExport, onDesignProperties, onReleaseHold = () => {} }) {
   const tools = [
     { tool: "select", label: "Select" },
     { tool: "wire", icon: WIRE_ICON },
@@ -144,9 +144,12 @@ export function initToolbar({ container, store, interaction, fileops, projectops
   );
   container.appendChild(viewMenu.menu);
 
-  // Simulate menu: the test-vector table editor (FR-115). Disabled while the
-  // interactive simulator is running (FR-087/FR-115b).
-  const simMenu = createMenu("Simulate");
+  // Tools menu: the test-vector table editor (FR-115), the C generator, and the
+  // design rule checker. Named "Simulate" until the FR-124h rename — a label
+  // change only, no item's behavior, enablement, or position moved: generating C
+  // is not simulating, and a rule checker simulates nothing at all. Disabled
+  // while the interactive simulator is running (FR-087/FR-115b).
+  const simMenu = createMenu("Tools");
   const vectorsItem = addItem(
     simMenu.panel,
     "Test Vectors…",
@@ -159,6 +162,17 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     "Generate C…",
     "Generate a standalone C simulator for this design",
     () => onGenerateC?.(),
+  );
+  // Design Rule Check (FR-124): NO trailing ellipsis — it opens no dialog and
+  // asks for nothing, it runs the check immediately — and, unlike Test Vectors
+  // and Console, NO checkmark: it is a command, not a panel toggle. It opens or
+  // selects its report tab and never closes it (FR-124g), so it does not route
+  // through dock.menuInvoke; the panel owns that (§6.21).
+  const drcItem = addItem(
+    simMenu.panel,
+    "Design Rule Check",
+    "Check the design for likely wiring mistakes",
+    () => onDesignRuleCheck?.(),
   );
   container.appendChild(simMenu.menu);
 
@@ -351,6 +365,10 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     // (FR-115h).
     generateItem.disabled = locked || noProject;
     exportItem.disabled = locked || noProject;
+    // Design Rule Check shares that predicate exactly — one rule for the whole
+    // menu (FR-124). It renders no checkmark: the report tab's open state is not
+    // this item's state, since running the check only ever opens or selects it.
+    drcItem.disabled = locked || noProject;
     // Run/Stop (FR-076/FR-115h). An open test-vector panel no longer disables
     // Run — that blanket disable existed only because the panel locked the
     // design, and the lock is gone (2026-08-02). What survives is the narrower

@@ -30,11 +30,16 @@ function sameRefIn(list, ref) {
 // of the toy designs the store tests use — only fields actually present are
 // captured and restored; restore preserves design object identity (§6.10).
 // DOCK_FLAG names the open flag behind each tab of the docked panel area
-// (§6.16a, FR-123). It is the store's whole knowledge of tab kinds: a future tab
-// (a design-rule-check report, say) adds a flag to the state and an entry here,
-// and setTabOpen/setDockActive/markDockUnread need no change. The labels, hosts,
-// and strip live in chrome/dock.js.
-const DOCK_FLAG = { vec: "vectorPanelOpen", console: "consolePanelOpen" };
+// (§6.16a, FR-123). It is the store's whole knowledge of tab kinds: a new tab
+// adds a flag to the state and an entry here, and setTabOpen/setDockActive/
+// markDockUnread need no change. The labels, hosts, and strip live in
+// chrome/dock.js. The `drc` row (FR-124g, 2026-08-02) is the first tab added
+// after that claim was written, and it cost exactly this line plus its flag.
+const DOCK_FLAG = {
+  vec: "vectorPanelOpen",
+  console: "consolePanelOpen",
+  drc: "drcPanelOpen",
+};
 
 const DESIGN_COLLECTIONS = ["components", "wires", "buses", "vertices"];
 const DESIGN_COUNTERS = ["nextWireId", "nextBusId", "nextVertexId"];
@@ -107,14 +112,21 @@ export function createStore(initial = {}) {
     // isReadonly()/blocked(), so it coexists with a running simulation and
     // imposes no edit lock. Session-only UI state, never persisted.
     consolePanelOpen: false,
-    // Tab bookkeeping for the docked panel area (§6.16a, FR-123). The two flags
+    // `drcPanelOpen` toggles the docked design-rule-check report (FR-124g). Like
+    // the Console it is MODELESS — it deliberately does NOT feed isReadonly()/
+    // blocked(), because the whole point of a checker is that the design stays
+    // editable while its findings are on screen (FR-124g). Session-only view
+    // state: a report is never persisted, and reloading discards it — waivers
+    // (FR-124e) are a check's only durable product, and they live in the design.
+    drcPanelOpen: false,
+    // Tab bookkeeping for the docked panel area (§6.16a, FR-123). The flags
     // above say which tabs are OPEN; these say which one is frontmost, where each
     // sits in the strip, which was used most recently, and which carries an
     // unseen-content dot. All session-only view state that nonetheless notifies,
     // because the toolbar's menu items branch on it (open/select/close, FR-123).
     // Maintained only by setTabOpen/setDockActive/markDockUnread below, so the
     // four members can never disagree with each other or with the open flags.
-    dockActive: null, // "vec" | "console" | null — the frontmost tab
+    dockActive: null, // "vec" | "console" | "drc" | null — the frontmost tab
     dockOrder: [], // strip order: appended on open (FR-123 "order opened")
     dockMru: [], // most-recently-used first; picks the successor on close
     dockUnread: {}, // { console: true } — unseen-content marks (FR-123)
@@ -452,6 +464,16 @@ export function createStore(initial = {}) {
     // chrome (the tab strip, the menu check) can react.
     setConsolePanelOpen(flag) {
       setTabOpen("console", flag);
+    },
+
+    // setDrcPanelOpen toggles the modeless design-rule-check report (FR-124g).
+    // The panel owns the transitions (§6.21), and running a check only ever
+    // OPENS or SELECTS the tab — never closes it — so the report cannot hide its
+    // own results; the tab's ✕ closes it like any other. Like the Console it does
+    // NOT feed isReadonly()/blocked(). Routes through setTabOpen so the tab
+    // bookkeeping (§6.16a) follows.
+    setDrcPanelOpen(flag) {
+      setTabOpen("drc", flag);
     },
 
     // isReadonly is the shared edit-lock predicate (FR-087/FR-115h): true while

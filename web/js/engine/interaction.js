@@ -11,6 +11,7 @@ import {
   zoomAbout,
   centerViewportOn,
   clampZoom,
+  ZOOM_MAX,
   PX_PER_UNIT_DEFAULT,
   WHEEL_ZOOM_SENSITIVITY,
   rotateOffset,
@@ -67,6 +68,7 @@ import {
   selectedConductorWiring,
   mergeWiringRefs,
   getVertex,
+  vertexWorld,
   danglingEndAt,
   busGroupBrace,
   typeIdentity,
@@ -144,6 +146,12 @@ const PROBE_CURSOR =
 // re-hit-tests; resolving once at click time is safe because the design cannot
 // change under the locks probe mode lives inside (FR-087/FR-115h). Pure and
 // tolerance-injected, so it is exported for testing.
+// REVEAL_MAX_ZOOM caps the zoom revealRefs may compute (FR-124f): a fit against
+// a one-point box — a single pin — is otherwise unbounded, and magnifying the
+// schematic 16× to show one pin is useless. 2× the default view (1.6) is enough
+// to read a pin's surroundings.
+const REVEAL_MAX_ZOOM = 3.2;
+
 export function probeTarget(design, world, { pin: pinT, seg: segT }) {
   const ph = hitPin(design, world, pinT);
   if (ph) return { kind: "pin", refdes: ph.refdes, pin: ph.pin };
@@ -1872,19 +1880,23 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     return minX === Infinity ? null : { minX, minY, maxX, maxY };
   }
 
-  // fitToScreen sets zoom and pan so the whole design fits the canvas, centered
-  // with a small margin (FR-022a). No-op on an empty design.
-  function fitToScreen() {
-    const box = designBBox();
-    if (!box) return;
+  // frameBox sets zoom and pan so a world-space box fills the canvas, centered
+  // with a small margin (FR-022a). `maxZoom` caps the fit: fitToScreen wants no
+  // cap beyond the global one, while revealRefs (FR-124f) frames a box that can
+  // be a single point and must not magnify to absurdity. Spans are floored at one
+  // grid unit so a degenerate box never divides by zero.
+  function frameBox(box, maxZoom = ZOOM_MAX) {
     const rect = canvas.getBoundingClientRect();
-    const margin = 0.9; // fraction of the canvas the design may occupy
+    const margin = 0.9; // fraction of the canvas the box may occupy
     const spanX = Math.max(box.maxX - box.minX, 1);
     const spanY = Math.max(box.maxY - box.minY, 1);
-    const zoom = clampZoom(
-      Math.min(
-        (rect.width * margin) / (spanX * PX_PER_UNIT_DEFAULT),
-        (rect.height * margin) / (spanY * PX_PER_UNIT_DEFAULT),
+    const zoom = Math.min(
+      maxZoom,
+      clampZoom(
+        Math.min(
+          (rect.width * margin) / (spanX * PX_PER_UNIT_DEFAULT),
+          (rect.height * margin) / (spanY * PX_PER_UNIT_DEFAULT),
+        ),
       ),
     );
     const center = { x: (box.minX + box.maxX) / 2, y: (box.minY + box.maxY) / 2 };
@@ -1893,10 +1905,68 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     );
   }
 
+  // fitToScreen sets zoom and pan so the whole design fits the canvas (FR-022a).
+  // No-op on an empty design.
+  function fitToScreen() {
+    const box = designBBox();
+    if (box) frameBox(box);
+  }
+
+  // refBox resolves one design-rule object reference (§6.21) to a world-space
+  // box: "U12" → the instance's footprint, "U5C.A" → its pin as a point,
+  // "w7:v31" → that conductor endpoint as a point. Returns null for anything
+  // that no longer resolves — a stale finding names objects that may be gone
+  // (FR-124i) — which is also why the position lookups run under try/catch:
+  // pinWorldPos and vertexWorld throw on a missing pin or instance, and reveal
+  // must be total over any ref array.
+  function refBox(ref) {
+    const point = (p) => ({ minX: p.x, minY: p.y, maxX: p.x, maxY: p.y });
+    try {
+      const colon = ref.indexOf(":");
+      if (colon >= 0) {
+        const vertex = getVertex(store.design, ref.slice(colon + 1));
+        return vertex ? point(vertexWorld(store.design, vertex)) : null;
+      }
+      const dot = ref.indexOf(".");
+      const refdes = dot < 0 ? ref : ref.slice(0, dot);
+      const inst = store.design.components.find((c) => c.refdes === refdes);
+      if (!inst) return null;
+      return dot < 0 ? componentBBox(inst) : point(pinWorldPos(inst, ref.slice(dot + 1)));
+    } catch {
+      return null;
+    }
+  }
+
+  // revealRefs pans and zooms so the objects a finding names fill the canvas
+  // (FR-124f). It is the only entry point here not driven by a pointer or key
+  // event: the DRC report calls it directly, having already set the selection.
+  // Refs that resolve to nothing are skipped, and a call whose refs ALL fail to
+  // resolve moves the view not at all — the right behavior for a stale finding,
+  // which is why the empty check precedes the union rather than falling out of
+  // it. Framing is view state, so this dispatches no command.
+  function revealRefs(refs) {
+    const boxes = [];
+    for (const ref of refs ?? []) {
+      const box = refBox(ref);
+      if (box) boxes.push(box);
+    }
+    if (!boxes.length) return;
+    frameBox(
+      {
+        minX: Math.min(...boxes.map((b) => b.minX)),
+        minY: Math.min(...boxes.map((b) => b.minY)),
+        maxX: Math.max(...boxes.map((b) => b.maxX)),
+        maxY: Math.max(...boxes.map((b) => b.maxY)),
+      },
+      REVEAL_MAX_ZOOM,
+    );
+  }
+
   return {
     setTool,
     zoomBy,
     fitToScreen,
+    revealRefs,
     copySelection,
     startPaste,
     hasClipboard: () => !!clipboard,
