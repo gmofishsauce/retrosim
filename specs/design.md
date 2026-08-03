@@ -3597,6 +3597,10 @@ A `Finding` is `{ rule, severity, message, refs }` (FR-124c). `rule` is one of t
 frozen ids `"R1"`…`"R10"`; `severity` is `"error" | "warning" | "info"`; `refs` is a
 **sorted** array of object references, each a string in one of three forms:
 
+Every `message` **ends with `(rule Rn)`** (FR-124c, added 2026-08-03), appended by
+the `finding()` constructor rather than by each of the ten rules — one place, so no
+rule can forget it and no rule can format it differently.
+
 | Form | Example | Means |
 |---|---|---|
 | `refdes` | `"U12"` | a component instance |

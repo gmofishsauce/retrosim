@@ -579,6 +579,19 @@ test("two runs of one design produce byte-identical output (FR-124d)", async () 
   assert.ok(first.findings.length >= 4);
 });
 
+// Every message carries its own rule id (FR-124c), so a line quoted or copied
+// out of the report still says which of the ten rules produced it.
+test("every finding's message ends with its rule id (FR-124c)", async () => {
+  const { findings } = await runDesignRuleCheck(mixed(), { fileExists: () => false });
+  assert.ok(findings.length >= 4);
+  for (const found of findings) {
+    assert.ok(
+      found.message.endsWith(` (rule ${found.rule})`),
+      `${found.rule}: ${found.message}`,
+    );
+  }
+});
+
 test("findings sort by severity, then rule, then refs (FR-124d)", async () => {
   const { findings } = await runDesignRuleCheck(mixed());
   const keys = findings.map((f) => [RANK[f.severity], f.rule, f.refs.join(",")]);

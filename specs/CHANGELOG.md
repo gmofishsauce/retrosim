@@ -19,6 +19,13 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-08-03 — DRC: every finding message names its own rule
+What: a finding's `message` now ends with `(rule Rn)` — `Undriven input U5C.A: it is connected to nothing (rule R3)`. Appended once in the engine's `finding()` constructor, so it reaches the report rows, the Copy text, and anywhere else a message is read.
+Why: requested by the user for debugging. The report already shows the rule id as its own column (FR-124d), but a message quoted or copied out of that context lost it, leaving no way to tell which of ten rules produced a line. The duplication inside the report is accepted deliberately: the column is for scanning a list, the suffix is for a message that has left the list.
+Touches: FR-124c (message shape); design §6.21 (`Finding`)
+
+---
+
 ## 2026-08-03 — DRC menu item: the Tools-menu disable rule, as it actually is
 What: FR-124's enablement clause is corrected. The Design Rule Check item is disabled by **`isReadonly() || noProject`** — the predicate Generate C… (FR-116) and Export… (FR-119) really use — not by `simulating || vectorHold`.
 Why: found while wiring the toolbar. FR-124 asserted that Generate C… and Export… are disabled while a test-vector run is **held**, and specified the new item to match "exactly". They are not: a held run leaves `simulating` false, `vectorHold` is read only by the Run/Stop button, and all three items stay live. Rather than invent a hold-disable for the new item alone (which would have broken the very "one rule for the whole menu" the FR asked for) or change FR-116/FR-119's behavior as a side effect of an unrelated feature, the item shares the real predicate and the FR now describes it. Waiving during a held run is harmless regardless: `applyLive` bypasses the read-only lock by design (FR-087a).

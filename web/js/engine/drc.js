@@ -32,8 +32,13 @@ const RULES = [
 // so a finding's identity is order-independent: two runs — and a run before and
 // after an unrelated edit — produce byte-identical ref arrays, which is what
 // lets a waiver match by set equality with no canonicalization at match time.
+//
+// The message gets its rule id appended here too, rather than in each of the ten
+// rules: one place, so no rule can forget it or format it differently. The report
+// also shows the rule in its own column (FR-124d) — the duplication is deliberate,
+// since a message quoted or copied on its own has left that column behind.
 function finding(rule, severity, message, refs) {
-  return { rule, severity, message, refs: [...refs].sort() };
+  return { rule, severity, message: `${message} (rule ${rule})`, refs: [...refs].sort() };
 }
 
 // packageOf groups sibling subunit instances into their package (FR-013a):
