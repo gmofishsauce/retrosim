@@ -26,8 +26,9 @@ KiCad-like.
 11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
 13. [Simulation](#13-simulation) — including [Pausing and single-stepping](#pausing-and-single-stepping), [Probing a point](#probing-a-point), [The bottom panel area](#the-bottom-panel-area), [Console output](#console-output), [Test vectors](#test-vectors) — including [The panel's test-vector file](#the-panels-test-vector-file) and [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
-14. [If the server disconnects](#14-if-the-server-disconnects)
-15. [Keyboard and mouse reference](#15-keyboard-and-mouse-reference)
+14. [Checking a design](#14-checking-a-design) — including [Reading the report](#reading-the-report), [Fixing what it finds](#fixing-what-it-finds), [Waiving a finding](#waiving-a-finding), and [What each rule means](#what-each-rule-means)
+15. [If the server disconnects](#15-if-the-server-disconnects)
+16. [Keyboard and mouse reference](#16-keyboard-and-mouse-reference)
 
 ---
 
@@ -103,13 +104,13 @@ The window has four regions plus a status bar:
 - **Menu bar** (top): the **File** menu (`New Project…`, `Open Project…`,
   `Duplicate Project…`, `New`, `Open`, `Save`, `Save As`,
   `Export…`, `Refresh Types`), the **Edit** menu (`Undo`, `Redo`, `Copy`, `Paste`),
-  the **View** menu (`Zoom In`, `Zoom Out`, `Fit to Screen`, `Console`), and the **Simulate**
-  menu (`Test Vectors…`, `Generate C…`), followed by the tool buttons `Select`,
+  the **View** menu (`Zoom In`, `Zoom Out`, `Fit to Screen`, `Console`), and the **Tools**
+  menu (`Test Vectors…`, `Generate C…`, `Design Rule Check`), followed by the tool buttons `Select`,
   `Wire`, `Bus` and the `Run` button. Two more buttons appear when they apply:
   the pause/step controls while a clocked run is active
   ([Pausing and single-stepping](#pausing-and-single-stepping)), and `Probe`
   whenever the schematic is showing live values ([Probing a point](#probing-a-point)). Menu items with a standard keyboard shortcut
-  show it in the menu (see [§15](#15-keyboard-and-mouse-reference)). Click a menu to open it; click an item to run it, or
+  show it in the menu (see [§16](#16-keyboard-and-mouse-reference)). Click a menu to open it; click an item to run it, or
   press `Esc` / click elsewhere to dismiss it. The current **project** name, the
   current design name, and the tool mode are shown next to the buttons; an
   asterisk marks unsaved changes.
@@ -1051,23 +1052,27 @@ Notes:
 
 ### The bottom panel area
 
-Two surfaces dock along the bottom of the canvas area — the **Console** and the
-**Test Vectors** panel — and they share one region as **tabs**. The schematic
-stays visible and fully usable above it.
+Three surfaces dock along the bottom of the canvas area — the **Console**, the
+**Test Vectors** panel, and the **Design Rules** report ([§14](#14-checking-a-design))
+— and they share one region as **tabs**. The schematic stays visible and fully
+usable above it.
 
 - The area appears when you open the first tab and **disappears entirely** when
   you close the last one. There is never an empty tab strip.
 - Only the **frontmost** tab's contents are shown. Click a tab to bring it
   forward; its **✕** closes it.
-- **Simulate ▸ Test Vectors…** and **View ▸ Console** do three things depending
+- **Tools ▸ Test Vectors…** and **View ▸ Console** do three things depending
   on where their tab is: **open** it if closed, **bring it forward** if it is
-  open behind the other one, and **close** it only if it is already frontmost. So
+  open behind another one, and **close** it only if it is already frontmost. So
   a background tab is never closed by the menu item that would reveal it — the
   first invocation shows it, a second closes it. Both items show a check mark
-  while their tab is open.
+  while their tab is open. **Tools ▸ Design Rule Check** is the exception: it is
+  a command rather than a panel switch, so it always opens or reveals its report
+  tab and never closes it — a check that hid its own results would be no use.
+  It shows no check mark. Its **✕** closes it like any other tab.
 - A tab you switch away from is **hidden, not discarded**. Your vector rows, run
-  results, row selection, held run, console text, and scroll position are all
-  exactly as you left them when you come back.
+  results, row selection, held run, console text, findings, and scroll position
+  are all exactly as you left them when you come back.
 - Drag the area's **top edge** (above the tab strip) to resize it. It starts at
   the bottom third; after that it stays where you put it, and switching tabs never
   resizes it. Neither the schematic nor the panel area can be dragged below a tenth
@@ -1078,7 +1083,8 @@ stays visible and fully usable above it.
   tabs on you.
 
 Closing the tab is what "closing the panel" means: closing the Test Vectors tab
-releases its held run and, if you have unsaved vectors, asks first.
+releases its held run and, if you have unsaved vectors, asks first. The Console
+and Design Rules tabs close without asking — neither holds anything you can lose.
 
 ### Console output
 
@@ -1109,7 +1115,7 @@ program's real standard output instead.
 
 Instead of toggling switches and reading indicators by hand, you can write a
 **table of test vectors** — input patterns paired with the outputs you expect —
-and have the simulator run and score them. Open it from **Simulate ▸ Test
+and have the simulator run and score them. Open it from **Tools ▸ Test
 Vectors…**; it is one tab of the [bottom panel area](#the-bottom-panel-area). The
 schematic stays visible above it, so you can pan and zoom to see which switches,
 indicators, and ports the columns correspond to. The **✕** on its tab closes it.
@@ -1327,7 +1333,7 @@ press Stop first.
 
 ### Generating a standalone C simulator
 
-**Simulate ▸ Generate C…** turns the current design into a self-contained C
+**Tools ▸ Generate C…** turns the current design into a self-contained C
 program — the "fast" engine. A file dialog asks where to put it (defaulting to
 the project folder); three files are written there:
 
@@ -1462,7 +1468,123 @@ simulation is running.
 
 ---
 
-## 14. If the server disconnects
+## 14. Checking a design
+
+**Tools ▸ Design Rule Check** looks over the current design and reports the
+mistakes that are easy to make while drawing a circuit — undriven inputs, two
+drivers fighting over one net, a bus that nothing holds at a defined level, a
+wire left hanging. It is meant to be run **before** you simulate, when a missing
+connection is far cheaper to find than to debug.
+
+The item has no `…` because it asks you nothing: choosing it runs the check
+immediately and opens the **Design Rules** tab of the [bottom panel
+area](#the-bottom-panel-area). It is fast enough that there is nothing to wait
+for. It reads the design **as it stands in front of you**, unsaved edits
+included, and never saves, never prompts to save, and never changes your design
+(waiving a finding, below, is the one exception, and only when you ask for it).
+
+The check looks at the **open sheet only**. Sub-designs are not opened and
+off-sheet connections are not followed, so a port counts as a connection to the
+outside world rather than a defect — nothing wired to a port is reported as
+undriven or as driving nothing. To check a sub-design, open it and check it.
+
+The menu item is unavailable while a simulation is running, exactly like
+`Generate C…` and `Export…`.
+
+### Reading the report
+
+The report is a flat list, worst first: **errors**, then **warnings**, then
+**info**. It is deliberately not grouped or nested — it reads top to bottom as a
+work list. Each row shows the severity, the rule id, and a message naming the
+objects involved:
+
+```
+ERROR   R1   Output fight on net DATA0: U3.Q0 (out) vs U7.Y2 (out) (rule R1)
+WARN    R3   Undriven input U12.B: it is connected to nothing (rule R3)
+INFO    R7   Dangling end of w41 at (118, 73) (rule R7)
+```
+
+There is **no pass/fail verdict**. Severity orders and colours the list and does
+nothing else — it does not gate Run, Save, or anything else you might want to do.
+A design with real errors still simulates, and it is entirely normal to leave
+info-level findings alone forever.
+
+The header names the design and the time of the check, and says `unsaved changes`
+when the design has them — a reminder that the report describes what is on your
+screen, not what is on disk. **Copy** puts the whole report on the clipboard as
+plain text, one finding per line, including the waived ones. The report itself is
+never saved to a file: it takes milliseconds to regenerate.
+
+A run that finds nothing still opens the tab and says **No findings**, so you can
+always tell a clean design from a menu item that did not work.
+
+### Fixing what it finds
+
+**Click any finding** and the objects it names become the selection, and the view
+pans and zooms to frame them. This happens on every click, whether or not they
+were already on screen, so the gesture always does the same thing. It is the
+reason the report is a panel rather than a dialog: fix the problem right there,
+with the report still open beside the schematic.
+
+Because the design stays fully editable, a report can describe a design you have
+since changed. When that happens a **stale** banner appears across the top of the
+report — *the design has changed since this check ran*. Every finding stays
+listed and stays clickable; nothing is cleared and nothing re-runs behind your
+back. Run the check again when you want a fresh list, and the banner goes away.
+
+Closing the tab with its **✕** discards the report and asks nothing — unlike the
+Test Vectors tab, there is nothing to lose. Reloading the page discards it too.
+Waivers are the only thing a check leaves behind.
+
+### Waiving a finding
+
+Real designs legitimately contain spare gates, unused outputs, and conductors
+left dangling on purpose. A report that lists forty of them every time is a
+report nobody reads, so any finding can be **waived**:
+
+- Press **Waive** on its row. You are offered an optional note — *"tied high on
+  the board"*, *"spare gate, intentional"* — which is stored with the waiver and
+  shown beside it. Cancelling the note cancels the waiver.
+- The finding leaves the main list and joins a collapsed **Waived (N)** section
+  at the end of the report. Expand it to see them, greyed, each with its note and
+  an **Un-waive** button. Nothing you waive becomes unreachable.
+- Waivers are stored **in the design file**, so they survive re-runs, closing the
+  tab, reloading, and reopening the design tomorrow. They travel with the design
+  through copy, rename, and `Duplicate Project…`, and they cost nothing in older
+  files — a design saved before this feature existed simply has none.
+- Waiving marks the design **modified**, because it really did change it. It does
+  **not** go on the undo stack: `Ctrl+Z` right after waiving undoes your last
+  *wiring* change, not the waiver. **Un-waive** is how you reverse a waiver.
+- A waiver is matched to a finding by its rule and the exact objects it names, so
+  it keeps working while you edit elsewhere and can never drift onto some
+  unrelated component. If you **delete** a waived object, its waiver matches
+  nothing and is quietly dropped at the next check — the check does not mark the
+  design modified for that.
+
+Waiving does not re-run the check; it only re-sorts the findings already on
+screen, so the report does not move under you.
+
+### What each rule means
+
+| Id | Fires when | Severity |
+|---|---|---|
+| R1 | **Output fight** — two ordinary (totem-pole) outputs on one net, which is always wrong. Several **3-state** drivers on one bus is how a bus is built and is *not* reported; neither is a bidirectional pair | error |
+| R2 | **Same-enable contention** — two 3-state drivers on one net whose enables come from the *same net with the same polarity*, so they are guaranteed to fight the moment it asserts. Drivers sharing an enable while driving *different* nets are correct design and are not reported | error |
+| R3 | **Undriven input** — an input with no driver on its net, including one connected to nothing at all. A net held by a pull-up or pull-down counts as driven | warning |
+| R4 | **Can-float net** — a **1-bit** net whose only drivers are 3-state, with no pull-up or pull-down, so nothing defines its level when every driver is off. Multi-bit buses are exempt: a floating bus is normal | warning |
+| R5 | **Opposing pulls** — a pull-up and a pull-down on the same net | warning |
+| R6 | **Unconnected outputs** — a whole package none of whose outputs goes anywhere. Judged per package, so wiring any one gate of a 7400 silences it for all four, and a counter with only `Q0`–`Q3` used is silent | warning |
+| R7 | **Dangling conductor end** — a wire or bus end left free in space. A bus end snapped to a pin group is connected, and is not reported | info |
+| R8 | **Stray component** — a placed part with no connection on any pin. A spare gate in a package you *are* using is not stray; its floating inputs show up as R3 instead | info |
+| R9 | **No loads** — a net something drives but nothing listens to: a wire to nowhere, or a bus lane whose destination was deleted | info |
+| R10 | **Unresolvable port target** — a port whose off-sheet target names a file that is not there. Silent if the file cannot be checked at all, rather than guessing | info |
+
+Rule ids are permanent: they are never renumbered or reused, because your waivers
+are stored against them.
+
+---
+
+## 15. If the server disconnects
 
 Your design's source of truth is the browser tab, so editing keeps working even if
 the server goes away (the connection tray shows "disconnected"). **Do not reload
@@ -1474,7 +1596,7 @@ clear message until then, without losing your work.
 
 ---
 
-## 15. Keyboard and mouse reference
+## 16. Keyboard and mouse reference
 
 **Mouse (Select tool)**
 
