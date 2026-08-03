@@ -117,56 +117,56 @@
             "name": "Q7",
             "side": "right",
             "position": 3,
-            "direction": "out",
+            "direction": "tristate",
             "number": 16
           },
           {
             "name": "Q6",
             "side": "right",
             "position": 4,
-            "direction": "out",
+            "direction": "tristate",
             "number": 17
           },
           {
             "name": "Q5",
             "side": "right",
             "position": 5,
-            "direction": "out",
+            "direction": "tristate",
             "number": 18
           },
           {
             "name": "Q4",
             "side": "right",
             "position": 6,
-            "direction": "out",
+            "direction": "tristate",
             "number": 19
           },
           {
             "name": "Q3",
             "side": "right",
             "position": 7,
-            "direction": "out",
+            "direction": "tristate",
             "number": 20
           },
           {
             "name": "Q2",
             "side": "right",
             "position": 8,
-            "direction": "out",
+            "direction": "tristate",
             "number": 21
           },
           {
             "name": "Q1",
             "side": "right",
             "position": 9,
-            "direction": "out",
+            "direction": "tristate",
             "number": 22
           },
           {
             "name": "Q0",
             "side": "right",
             "position": 10,
-            "direction": "out",
+            "direction": "tristate",
             "number": 23
           }
         ],
@@ -198,7 +198,7 @@
             ]
           }
         ],
-        "behavior": "Q0.R = CLR * /EN * D0\n     + CLR *  EN * Q0\nQ1.R = CLR * /EN * D1\n     + CLR *  EN * Q1\nQ2.R = CLR * /EN * D2\n     + CLR *  EN * Q2\nQ3.R = CLR * /EN * D3\n     + CLR *  EN * Q3\nQ4.R = CLR * /EN * D4\n     + CLR *  EN * Q4\nQ5.R = CLR * /EN * D5\n     + CLR *  EN * Q5\nQ6.R = CLR * /EN * D6\n     + CLR *  EN * Q6\nQ7.R = CLR * /EN * D7\n     + CLR *  EN * Q7\n\nQ0.E = /OE\nQ1.E = /OE\nQ2.E = /OE\nQ3.E = /OE\nQ4.E = /OE\nQ5.E = /OE\nQ6.E = /OE\nQ7.E = /OE\n\nAR   = /RST\nSP   = /SET\n",
+        "behavior": "; 22V574 — 8-bit register with synchronous clear, load enable, output\n; enable, and asynchronous set/reset.\n;\n; ALL FIVE CONTROL PINS ARE ACTIVE LOW, which is what their leading '/'\n; records (renamed 2026-07-31; they were CLR/EN/OE/SET/RST, whose names\n; read active-high while the equations below have always been active-low):\n;   /CLR  LOW  clears the register synchronously, at the next clock edge\n;   /EN   LOW  loads D at the clock edge; HIGH holds the current value\n;   /OE   LOW  enables the Q outputs; HIGH floats them\n;   /RST  LOW  clears the register asynchronously (GALasm global AR)\n;   /SET  LOW  presets the register asynchronously (GALasm global SP)\n;\n; Equations are physical-level GALasm (design §7.6): a signal name is the\n; pin name with any leading '/' dropped, so the '/' above is documentation\n; and these equations are unchanged by the rename. A bare signal means\n; \"that pin reads HIGH\", a slashed one \"that pin reads LOW\" — so\n; `CLR * /EN * Dn` loads Dn while /CLR is high (not clearing) and /EN is\n; low (load enabled), and `CLR * EN * Qn` holds while both pins are high.\n; With /CLR low both terms vanish and the register clocks in zeros.\n;\n; SEQUENTIAL-PART CLOCK CONVENTION: GALasm's .R outputs are clocked by the\n; GAL22V10's dedicated pin-1 clock, a role played here by CLK (rising\n; edge). CLK therefore appears in no equation; the .R suffix implies it.\nQ0.R = CLR * /EN * D0\n     + CLR *  EN * Q0\nQ1.R = CLR * /EN * D1\n     + CLR *  EN * Q1\nQ2.R = CLR * /EN * D2\n     + CLR *  EN * Q2\nQ3.R = CLR * /EN * D3\n     + CLR *  EN * Q3\nQ4.R = CLR * /EN * D4\n     + CLR *  EN * Q4\nQ5.R = CLR * /EN * D5\n     + CLR *  EN * Q5\nQ6.R = CLR * /EN * D6\n     + CLR *  EN * Q6\nQ7.R = CLR * /EN * D7\n     + CLR *  EN * Q7\n\nQ0.E = /OE\nQ1.E = /OE\nQ2.E = /OE\nQ3.E = /OE\nQ4.E = /OE\nQ5.E = /OE\nQ6.E = /OE\nQ7.E = /OE\n\nAR   = /RST\nSP   = /SET\n",
         "clock": "CLK",
         "gal": "GAL22V10",
         "partnumber": "22V574",
@@ -621,56 +621,56 @@
             "name": "Q7",
             "side": "right",
             "position": 3,
-            "direction": "out",
+            "direction": "tristate",
             "number": 16
           },
           {
             "name": "Q6",
             "side": "right",
             "position": 4,
-            "direction": "out",
+            "direction": "tristate",
             "number": 17
           },
           {
             "name": "Q5",
             "side": "right",
             "position": 5,
-            "direction": "out",
+            "direction": "tristate",
             "number": 18
           },
           {
             "name": "Q4",
             "side": "right",
             "position": 6,
-            "direction": "out",
+            "direction": "tristate",
             "number": 19
           },
           {
             "name": "Q3",
             "side": "right",
             "position": 7,
-            "direction": "out",
+            "direction": "tristate",
             "number": 20
           },
           {
             "name": "Q2",
             "side": "right",
             "position": 8,
-            "direction": "out",
+            "direction": "tristate",
             "number": 21
           },
           {
             "name": "Q1",
             "side": "right",
             "position": 9,
-            "direction": "out",
+            "direction": "tristate",
             "number": 22
           },
           {
             "name": "Q0",
             "side": "right",
             "position": 10,
-            "direction": "out",
+            "direction": "tristate",
             "number": 23
           }
         ],
@@ -702,7 +702,7 @@
             ]
           }
         ],
-        "behavior": "Q0.R = CLR * /EN * D0\n     + CLR *  EN * Q0\nQ1.R = CLR * /EN * D1\n     + CLR *  EN * Q1\nQ2.R = CLR * /EN * D2\n     + CLR *  EN * Q2\nQ3.R = CLR * /EN * D3\n     + CLR *  EN * Q3\nQ4.R = CLR * /EN * D4\n     + CLR *  EN * Q4\nQ5.R = CLR * /EN * D5\n     + CLR *  EN * Q5\nQ6.R = CLR * /EN * D6\n     + CLR *  EN * Q6\nQ7.R = CLR * /EN * D7\n     + CLR *  EN * Q7\n\nQ0.E = /OE\nQ1.E = /OE\nQ2.E = /OE\nQ3.E = /OE\nQ4.E = /OE\nQ5.E = /OE\nQ6.E = /OE\nQ7.E = /OE\n\nAR   = /RST\nSP   = /SET\n",
+        "behavior": "; 22V574 — 8-bit register with synchronous clear, load enable, output\n; enable, and asynchronous set/reset.\n;\n; ALL FIVE CONTROL PINS ARE ACTIVE LOW, which is what their leading '/'\n; records (renamed 2026-07-31; they were CLR/EN/OE/SET/RST, whose names\n; read active-high while the equations below have always been active-low):\n;   /CLR  LOW  clears the register synchronously, at the next clock edge\n;   /EN   LOW  loads D at the clock edge; HIGH holds the current value\n;   /OE   LOW  enables the Q outputs; HIGH floats them\n;   /RST  LOW  clears the register asynchronously (GALasm global AR)\n;   /SET  LOW  presets the register asynchronously (GALasm global SP)\n;\n; Equations are physical-level GALasm (design §7.6): a signal name is the\n; pin name with any leading '/' dropped, so the '/' above is documentation\n; and these equations are unchanged by the rename. A bare signal means\n; \"that pin reads HIGH\", a slashed one \"that pin reads LOW\" — so\n; `CLR * /EN * Dn` loads Dn while /CLR is high (not clearing) and /EN is\n; low (load enabled), and `CLR * EN * Qn` holds while both pins are high.\n; With /CLR low both terms vanish and the register clocks in zeros.\n;\n; SEQUENTIAL-PART CLOCK CONVENTION: GALasm's .R outputs are clocked by the\n; GAL22V10's dedicated pin-1 clock, a role played here by CLK (rising\n; edge). CLK therefore appears in no equation; the .R suffix implies it.\nQ0.R = CLR * /EN * D0\n     + CLR *  EN * Q0\nQ1.R = CLR * /EN * D1\n     + CLR *  EN * Q1\nQ2.R = CLR * /EN * D2\n     + CLR *  EN * Q2\nQ3.R = CLR * /EN * D3\n     + CLR *  EN * Q3\nQ4.R = CLR * /EN * D4\n     + CLR *  EN * Q4\nQ5.R = CLR * /EN * D5\n     + CLR *  EN * Q5\nQ6.R = CLR * /EN * D6\n     + CLR *  EN * Q6\nQ7.R = CLR * /EN * D7\n     + CLR *  EN * Q7\n\nQ0.E = /OE\nQ1.E = /OE\nQ2.E = /OE\nQ3.E = /OE\nQ4.E = /OE\nQ5.E = /OE\nQ6.E = /OE\nQ7.E = /OE\n\nAR   = /RST\nSP   = /SET\n",
         "clock": "CLK",
         "gal": "GAL22V10",
         "partnumber": "22V574",
@@ -839,56 +839,56 @@
             "name": "Q7",
             "side": "right",
             "position": 3,
-            "direction": "out",
+            "direction": "tristate",
             "number": 16
           },
           {
             "name": "Q6",
             "side": "right",
             "position": 4,
-            "direction": "out",
+            "direction": "tristate",
             "number": 17
           },
           {
             "name": "Q5",
             "side": "right",
             "position": 5,
-            "direction": "out",
+            "direction": "tristate",
             "number": 18
           },
           {
             "name": "Q4",
             "side": "right",
             "position": 6,
-            "direction": "out",
+            "direction": "tristate",
             "number": 19
           },
           {
             "name": "Q3",
             "side": "right",
             "position": 7,
-            "direction": "out",
+            "direction": "tristate",
             "number": 20
           },
           {
             "name": "Q2",
             "side": "right",
             "position": 8,
-            "direction": "out",
+            "direction": "tristate",
             "number": 21
           },
           {
             "name": "Q1",
             "side": "right",
             "position": 9,
-            "direction": "out",
+            "direction": "tristate",
             "number": 22
           },
           {
             "name": "Q0",
             "side": "right",
             "position": 10,
-            "direction": "out",
+            "direction": "tristate",
             "number": 23
           }
         ],
@@ -920,7 +920,7 @@
             ]
           }
         ],
-        "behavior": "Q0.R = CLR * /EN * D0\n     + CLR *  EN * Q0\nQ1.R = CLR * /EN * D1\n     + CLR *  EN * Q1\nQ2.R = CLR * /EN * D2\n     + CLR *  EN * Q2\nQ3.R = CLR * /EN * D3\n     + CLR *  EN * Q3\nQ4.R = CLR * /EN * D4\n     + CLR *  EN * Q4\nQ5.R = CLR * /EN * D5\n     + CLR *  EN * Q5\nQ6.R = CLR * /EN * D6\n     + CLR *  EN * Q6\nQ7.R = CLR * /EN * D7\n     + CLR *  EN * Q7\n\nQ0.E = /OE\nQ1.E = /OE\nQ2.E = /OE\nQ3.E = /OE\nQ4.E = /OE\nQ5.E = /OE\nQ6.E = /OE\nQ7.E = /OE\n\nAR   = /RST\nSP   = /SET\n",
+        "behavior": "; 22V574 — 8-bit register with synchronous clear, load enable, output\n; enable, and asynchronous set/reset.\n;\n; ALL FIVE CONTROL PINS ARE ACTIVE LOW, which is what their leading '/'\n; records (renamed 2026-07-31; they were CLR/EN/OE/SET/RST, whose names\n; read active-high while the equations below have always been active-low):\n;   /CLR  LOW  clears the register synchronously, at the next clock edge\n;   /EN   LOW  loads D at the clock edge; HIGH holds the current value\n;   /OE   LOW  enables the Q outputs; HIGH floats them\n;   /RST  LOW  clears the register asynchronously (GALasm global AR)\n;   /SET  LOW  presets the register asynchronously (GALasm global SP)\n;\n; Equations are physical-level GALasm (design §7.6): a signal name is the\n; pin name with any leading '/' dropped, so the '/' above is documentation\n; and these equations are unchanged by the rename. A bare signal means\n; \"that pin reads HIGH\", a slashed one \"that pin reads LOW\" — so\n; `CLR * /EN * Dn` loads Dn while /CLR is high (not clearing) and /EN is\n; low (load enabled), and `CLR * EN * Qn` holds while both pins are high.\n; With /CLR low both terms vanish and the register clocks in zeros.\n;\n; SEQUENTIAL-PART CLOCK CONVENTION: GALasm's .R outputs are clocked by the\n; GAL22V10's dedicated pin-1 clock, a role played here by CLK (rising\n; edge). CLK therefore appears in no equation; the .R suffix implies it.\nQ0.R = CLR * /EN * D0\n     + CLR *  EN * Q0\nQ1.R = CLR * /EN * D1\n     + CLR *  EN * Q1\nQ2.R = CLR * /EN * D2\n     + CLR *  EN * Q2\nQ3.R = CLR * /EN * D3\n     + CLR *  EN * Q3\nQ4.R = CLR * /EN * D4\n     + CLR *  EN * Q4\nQ5.R = CLR * /EN * D5\n     + CLR *  EN * Q5\nQ6.R = CLR * /EN * D6\n     + CLR *  EN * Q6\nQ7.R = CLR * /EN * D7\n     + CLR *  EN * Q7\n\nQ0.E = /OE\nQ1.E = /OE\nQ2.E = /OE\nQ3.E = /OE\nQ4.E = /OE\nQ5.E = /OE\nQ6.E = /OE\nQ7.E = /OE\n\nAR   = /RST\nSP   = /SET\n",
         "clock": "CLK",
         "gal": "GAL22V10",
         "partnumber": "22V574",
@@ -1057,56 +1057,56 @@
             "name": "Q7",
             "side": "right",
             "position": 3,
-            "direction": "out",
+            "direction": "tristate",
             "number": 16
           },
           {
             "name": "Q6",
             "side": "right",
             "position": 4,
-            "direction": "out",
+            "direction": "tristate",
             "number": 17
           },
           {
             "name": "Q5",
             "side": "right",
             "position": 5,
-            "direction": "out",
+            "direction": "tristate",
             "number": 18
           },
           {
             "name": "Q4",
             "side": "right",
             "position": 6,
-            "direction": "out",
+            "direction": "tristate",
             "number": 19
           },
           {
             "name": "Q3",
             "side": "right",
             "position": 7,
-            "direction": "out",
+            "direction": "tristate",
             "number": 20
           },
           {
             "name": "Q2",
             "side": "right",
             "position": 8,
-            "direction": "out",
+            "direction": "tristate",
             "number": 21
           },
           {
             "name": "Q1",
             "side": "right",
             "position": 9,
-            "direction": "out",
+            "direction": "tristate",
             "number": 22
           },
           {
             "name": "Q0",
             "side": "right",
             "position": 10,
-            "direction": "out",
+            "direction": "tristate",
             "number": 23
           }
         ],
@@ -1138,7 +1138,7 @@
             ]
           }
         ],
-        "behavior": "Q0.R = CLR * /EN * D0\n     + CLR *  EN * Q0\nQ1.R = CLR * /EN * D1\n     + CLR *  EN * Q1\nQ2.R = CLR * /EN * D2\n     + CLR *  EN * Q2\nQ3.R = CLR * /EN * D3\n     + CLR *  EN * Q3\nQ4.R = CLR * /EN * D4\n     + CLR *  EN * Q4\nQ5.R = CLR * /EN * D5\n     + CLR *  EN * Q5\nQ6.R = CLR * /EN * D6\n     + CLR *  EN * Q6\nQ7.R = CLR * /EN * D7\n     + CLR *  EN * Q7\n\nQ0.E = /OE\nQ1.E = /OE\nQ2.E = /OE\nQ3.E = /OE\nQ4.E = /OE\nQ5.E = /OE\nQ6.E = /OE\nQ7.E = /OE\n\nAR   = /RST\nSP   = /SET\n",
+        "behavior": "; 22V574 — 8-bit register with synchronous clear, load enable, output\n; enable, and asynchronous set/reset.\n;\n; ALL FIVE CONTROL PINS ARE ACTIVE LOW, which is what their leading '/'\n; records (renamed 2026-07-31; they were CLR/EN/OE/SET/RST, whose names\n; read active-high while the equations below have always been active-low):\n;   /CLR  LOW  clears the register synchronously, at the next clock edge\n;   /EN   LOW  loads D at the clock edge; HIGH holds the current value\n;   /OE   LOW  enables the Q outputs; HIGH floats them\n;   /RST  LOW  clears the register asynchronously (GALasm global AR)\n;   /SET  LOW  presets the register asynchronously (GALasm global SP)\n;\n; Equations are physical-level GALasm (design §7.6): a signal name is the\n; pin name with any leading '/' dropped, so the '/' above is documentation\n; and these equations are unchanged by the rename. A bare signal means\n; \"that pin reads HIGH\", a slashed one \"that pin reads LOW\" — so\n; `CLR * /EN * Dn` loads Dn while /CLR is high (not clearing) and /EN is\n; low (load enabled), and `CLR * EN * Qn` holds while both pins are high.\n; With /CLR low both terms vanish and the register clocks in zeros.\n;\n; SEQUENTIAL-PART CLOCK CONVENTION: GALasm's .R outputs are clocked by the\n; GAL22V10's dedicated pin-1 clock, a role played here by CLK (rising\n; edge). CLK therefore appears in no equation; the .R suffix implies it.\nQ0.R = CLR * /EN * D0\n     + CLR *  EN * Q0\nQ1.R = CLR * /EN * D1\n     + CLR *  EN * Q1\nQ2.R = CLR * /EN * D2\n     + CLR *  EN * Q2\nQ3.R = CLR * /EN * D3\n     + CLR *  EN * Q3\nQ4.R = CLR * /EN * D4\n     + CLR *  EN * Q4\nQ5.R = CLR * /EN * D5\n     + CLR *  EN * Q5\nQ6.R = CLR * /EN * D6\n     + CLR *  EN * Q6\nQ7.R = CLR * /EN * D7\n     + CLR *  EN * Q7\n\nQ0.E = /OE\nQ1.E = /OE\nQ2.E = /OE\nQ3.E = /OE\nQ4.E = /OE\nQ5.E = /OE\nQ6.E = /OE\nQ7.E = /OE\n\nAR   = /RST\nSP   = /SET\n",
         "clock": "CLK",
         "gal": "GAL22V10",
         "partnumber": "22V574",
@@ -1275,56 +1275,56 @@
             "name": "Q7",
             "side": "right",
             "position": 3,
-            "direction": "out",
+            "direction": "tristate",
             "number": 16
           },
           {
             "name": "Q6",
             "side": "right",
             "position": 4,
-            "direction": "out",
+            "direction": "tristate",
             "number": 17
           },
           {
             "name": "Q5",
             "side": "right",
             "position": 5,
-            "direction": "out",
+            "direction": "tristate",
             "number": 18
           },
           {
             "name": "Q4",
             "side": "right",
             "position": 6,
-            "direction": "out",
+            "direction": "tristate",
             "number": 19
           },
           {
             "name": "Q3",
             "side": "right",
             "position": 7,
-            "direction": "out",
+            "direction": "tristate",
             "number": 20
           },
           {
             "name": "Q2",
             "side": "right",
             "position": 8,
-            "direction": "out",
+            "direction": "tristate",
             "number": 21
           },
           {
             "name": "Q1",
             "side": "right",
             "position": 9,
-            "direction": "out",
+            "direction": "tristate",
             "number": 22
           },
           {
             "name": "Q0",
             "side": "right",
             "position": 10,
-            "direction": "out",
+            "direction": "tristate",
             "number": 23
           }
         ],
@@ -1356,7 +1356,7 @@
             ]
           }
         ],
-        "behavior": "Q0.R = CLR * /EN * D0\n     + CLR *  EN * Q0\nQ1.R = CLR * /EN * D1\n     + CLR *  EN * Q1\nQ2.R = CLR * /EN * D2\n     + CLR *  EN * Q2\nQ3.R = CLR * /EN * D3\n     + CLR *  EN * Q3\nQ4.R = CLR * /EN * D4\n     + CLR *  EN * Q4\nQ5.R = CLR * /EN * D5\n     + CLR *  EN * Q5\nQ6.R = CLR * /EN * D6\n     + CLR *  EN * Q6\nQ7.R = CLR * /EN * D7\n     + CLR *  EN * Q7\n\nQ0.E = /OE\nQ1.E = /OE\nQ2.E = /OE\nQ3.E = /OE\nQ4.E = /OE\nQ5.E = /OE\nQ6.E = /OE\nQ7.E = /OE\n\nAR   = /RST\nSP   = /SET\n",
+        "behavior": "; 22V574 — 8-bit register with synchronous clear, load enable, output\n; enable, and asynchronous set/reset.\n;\n; ALL FIVE CONTROL PINS ARE ACTIVE LOW, which is what their leading '/'\n; records (renamed 2026-07-31; they were CLR/EN/OE/SET/RST, whose names\n; read active-high while the equations below have always been active-low):\n;   /CLR  LOW  clears the register synchronously, at the next clock edge\n;   /EN   LOW  loads D at the clock edge; HIGH holds the current value\n;   /OE   LOW  enables the Q outputs; HIGH floats them\n;   /RST  LOW  clears the register asynchronously (GALasm global AR)\n;   /SET  LOW  presets the register asynchronously (GALasm global SP)\n;\n; Equations are physical-level GALasm (design §7.6): a signal name is the\n; pin name with any leading '/' dropped, so the '/' above is documentation\n; and these equations are unchanged by the rename. A bare signal means\n; \"that pin reads HIGH\", a slashed one \"that pin reads LOW\" — so\n; `CLR * /EN * Dn` loads Dn while /CLR is high (not clearing) and /EN is\n; low (load enabled), and `CLR * EN * Qn` holds while both pins are high.\n; With /CLR low both terms vanish and the register clocks in zeros.\n;\n; SEQUENTIAL-PART CLOCK CONVENTION: GALasm's .R outputs are clocked by the\n; GAL22V10's dedicated pin-1 clock, a role played here by CLK (rising\n; edge). CLK therefore appears in no equation; the .R suffix implies it.\nQ0.R = CLR * /EN * D0\n     + CLR *  EN * Q0\nQ1.R = CLR * /EN * D1\n     + CLR *  EN * Q1\nQ2.R = CLR * /EN * D2\n     + CLR *  EN * Q2\nQ3.R = CLR * /EN * D3\n     + CLR *  EN * Q3\nQ4.R = CLR * /EN * D4\n     + CLR *  EN * Q4\nQ5.R = CLR * /EN * D5\n     + CLR *  EN * Q5\nQ6.R = CLR * /EN * D6\n     + CLR *  EN * Q6\nQ7.R = CLR * /EN * D7\n     + CLR *  EN * Q7\n\nQ0.E = /OE\nQ1.E = /OE\nQ2.E = /OE\nQ3.E = /OE\nQ4.E = /OE\nQ5.E = /OE\nQ6.E = /OE\nQ7.E = /OE\n\nAR   = /RST\nSP   = /SET\n",
         "clock": "CLK",
         "gal": "GAL22V10",
         "partnumber": "22V574",
@@ -1873,56 +1873,56 @@
             "name": "Q7",
             "side": "right",
             "position": 3,
-            "direction": "out",
+            "direction": "tristate",
             "number": 16
           },
           {
             "name": "Q6",
             "side": "right",
             "position": 4,
-            "direction": "out",
+            "direction": "tristate",
             "number": 17
           },
           {
             "name": "Q5",
             "side": "right",
             "position": 5,
-            "direction": "out",
+            "direction": "tristate",
             "number": 18
           },
           {
             "name": "Q4",
             "side": "right",
             "position": 6,
-            "direction": "out",
+            "direction": "tristate",
             "number": 19
           },
           {
             "name": "Q3",
             "side": "right",
             "position": 7,
-            "direction": "out",
+            "direction": "tristate",
             "number": 20
           },
           {
             "name": "Q2",
             "side": "right",
             "position": 8,
-            "direction": "out",
+            "direction": "tristate",
             "number": 21
           },
           {
             "name": "Q1",
             "side": "right",
             "position": 9,
-            "direction": "out",
+            "direction": "tristate",
             "number": 22
           },
           {
             "name": "Q0",
             "side": "right",
             "position": 10,
-            "direction": "out",
+            "direction": "tristate",
             "number": 23
           }
         ],
@@ -1954,7 +1954,7 @@
             ]
           }
         ],
-        "behavior": "Q0.R = CLR * /EN * D0\n     + CLR *  EN * Q0\nQ1.R = CLR * /EN * D1\n     + CLR *  EN * Q1\nQ2.R = CLR * /EN * D2\n     + CLR *  EN * Q2\nQ3.R = CLR * /EN * D3\n     + CLR *  EN * Q3\nQ4.R = CLR * /EN * D4\n     + CLR *  EN * Q4\nQ5.R = CLR * /EN * D5\n     + CLR *  EN * Q5\nQ6.R = CLR * /EN * D6\n     + CLR *  EN * Q6\nQ7.R = CLR * /EN * D7\n     + CLR *  EN * Q7\n\nQ0.E = /OE\nQ1.E = /OE\nQ2.E = /OE\nQ3.E = /OE\nQ4.E = /OE\nQ5.E = /OE\nQ6.E = /OE\nQ7.E = /OE\n\nAR   = /RST\nSP   = /SET\n",
+        "behavior": "; 22V574 — 8-bit register with synchronous clear, load enable, output\n; enable, and asynchronous set/reset.\n;\n; ALL FIVE CONTROL PINS ARE ACTIVE LOW, which is what their leading '/'\n; records (renamed 2026-07-31; they were CLR/EN/OE/SET/RST, whose names\n; read active-high while the equations below have always been active-low):\n;   /CLR  LOW  clears the register synchronously, at the next clock edge\n;   /EN   LOW  loads D at the clock edge; HIGH holds the current value\n;   /OE   LOW  enables the Q outputs; HIGH floats them\n;   /RST  LOW  clears the register asynchronously (GALasm global AR)\n;   /SET  LOW  presets the register asynchronously (GALasm global SP)\n;\n; Equations are physical-level GALasm (design §7.6): a signal name is the\n; pin name with any leading '/' dropped, so the '/' above is documentation\n; and these equations are unchanged by the rename. A bare signal means\n; \"that pin reads HIGH\", a slashed one \"that pin reads LOW\" — so\n; `CLR * /EN * Dn` loads Dn while /CLR is high (not clearing) and /EN is\n; low (load enabled), and `CLR * EN * Qn` holds while both pins are high.\n; With /CLR low both terms vanish and the register clocks in zeros.\n;\n; SEQUENTIAL-PART CLOCK CONVENTION: GALasm's .R outputs are clocked by the\n; GAL22V10's dedicated pin-1 clock, a role played here by CLK (rising\n; edge). CLK therefore appears in no equation; the .R suffix implies it.\nQ0.R = CLR * /EN * D0\n     + CLR *  EN * Q0\nQ1.R = CLR * /EN * D1\n     + CLR *  EN * Q1\nQ2.R = CLR * /EN * D2\n     + CLR *  EN * Q2\nQ3.R = CLR * /EN * D3\n     + CLR *  EN * Q3\nQ4.R = CLR * /EN * D4\n     + CLR *  EN * Q4\nQ5.R = CLR * /EN * D5\n     + CLR *  EN * Q5\nQ6.R = CLR * /EN * D6\n     + CLR *  EN * Q6\nQ7.R = CLR * /EN * D7\n     + CLR *  EN * Q7\n\nQ0.E = /OE\nQ1.E = /OE\nQ2.E = /OE\nQ3.E = /OE\nQ4.E = /OE\nQ5.E = /OE\nQ6.E = /OE\nQ7.E = /OE\n\nAR   = /RST\nSP   = /SET\n",
         "clock": "CLK",
         "gal": "GAL22V10",
         "partnumber": "22V574",
@@ -7667,6 +7667,110 @@
         ]
       },
       "overrides": {}
+    },
+    {
+      "refdes": "A-54",
+      "type": "type-pullup",
+      "x": 132,
+      "y": 210,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-pullup",
+        "name": "pullup",
+        "builtin": true,
+        "title": "pull up",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"none\" stroke=\"#000\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"8,13 18,6 28,13\"/><polyline points=\"8,20 18,13 28,20\"/><line x1=\"18\" y1=\"22\" x2=\"18\" y2=\"32\"/></svg>",
+        "renderType": "pullup",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "bottom",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-55",
+      "type": "type-pulldown",
+      "x": 180,
+      "y": 66,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-pulldown",
+        "name": "pulldown",
+        "builtin": true,
+        "title": "pull down",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"none\" stroke=\"#000\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"4\" x2=\"18\" y2=\"28\"/><line x1=\"8\" y1=\"28\" x2=\"28\" y2=\"28\"/></svg>",
+        "renderType": "pulldown",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "top",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-56",
+      "type": "type-pullup",
+      "x": 180,
+      "y": 49,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-pullup",
+        "name": "pullup",
+        "builtin": true,
+        "title": "pull up",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"none\" stroke=\"#000\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"8,13 18,6 28,13\"/><polyline points=\"8,20 18,13 28,20\"/><line x1=\"18\" y1=\"22\" x2=\"18\" y2=\"32\"/></svg>",
+        "renderType": "pullup",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "bottom",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-57",
+      "type": "type-pulldown",
+      "x": 158,
+      "y": 135,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-pulldown",
+        "name": "pulldown",
+        "builtin": true,
+        "title": "pull down",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"none\" stroke=\"#000\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"4\" x2=\"18\" y2=\"28\"/><line x1=\"8\" y1=\"28\" x2=\"28\" y2=\"28\"/></svg>",
+        "renderType": "pulldown",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "top",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {}
     }
   ],
   "wires": [
@@ -7769,9 +7873,17 @@
           "y": 225
         },
         {
+          "t": "node",
+          "v": "v1551"
+        },
+        {
           "t": "bend",
           "x": 158,
           "y": 226
+        },
+        {
+          "t": "node",
+          "v": "v1550"
         },
         {
           "t": "bend",
@@ -7862,6 +7974,14 @@
           "t": "bend",
           "x": 158,
           "y": 230
+        },
+        {
+          "t": "node",
+          "v": "v1549"
+        },
+        {
+          "t": "node",
+          "v": "v1548"
         },
         {
           "t": "bend",
@@ -8316,6 +8436,10 @@
           "t": "bend",
           "x": 163,
           "y": 129
+        },
+        {
+          "t": "node",
+          "v": "v1566"
         },
         {
           "t": "bend",
@@ -10030,19 +10154,6 @@
       ]
     },
     {
-      "id": "w559",
-      "path": [
-        {
-          "t": "node",
-          "v": "v646"
-        },
-        {
-          "t": "node",
-          "v": "v1518"
-        }
-      ]
-    },
-    {
       "id": "w562",
       "path": [
         {
@@ -10123,6 +10234,374 @@
         {
           "t": "node",
           "v": "v1529"
+        }
+      ]
+    },
+    {
+      "id": "w569",
+      "path": [
+        {
+          "t": "node",
+          "v": "v646"
+        },
+        {
+          "t": "bend",
+          "x": 158,
+          "y": 220
+        },
+        {
+          "t": "node",
+          "v": "v1552"
+        },
+        {
+          "t": "bend",
+          "x": 158,
+          "y": 222
+        },
+        {
+          "t": "node",
+          "v": "v1534"
+        }
+      ]
+    },
+    {
+      "id": "w570",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1535"
+        },
+        {
+          "t": "node",
+          "v": "v1541"
+        },
+        {
+          "t": "bend",
+          "x": 133,
+          "y": 218
+        },
+        {
+          "t": "bend",
+          "x": 133,
+          "y": 220
+        },
+        {
+          "t": "node",
+          "v": "v1543"
+        },
+        {
+          "t": "node",
+          "v": "v1536"
+        }
+      ]
+    },
+    {
+      "id": "w571",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1537"
+        },
+        {
+          "t": "node",
+          "v": "v1544"
+        },
+        {
+          "t": "bend",
+          "x": 133,
+          "y": 223
+        },
+        {
+          "t": "bend",
+          "x": 133,
+          "y": 225
+        },
+        {
+          "t": "node",
+          "v": "v1545"
+        },
+        {
+          "t": "node",
+          "v": "v1538"
+        }
+      ]
+    },
+    {
+      "id": "w572",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1539"
+        },
+        {
+          "t": "bend",
+          "x": 133,
+          "y": 228
+        },
+        {
+          "t": "node",
+          "v": "v1546"
+        },
+        {
+          "t": "node",
+          "v": "v1547"
+        },
+        {
+          "t": "bend",
+          "x": 133,
+          "y": 230
+        },
+        {
+          "t": "node",
+          "v": "v1540"
+        }
+      ]
+    },
+    {
+      "id": "w573",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1542"
+        },
+        {
+          "t": "node",
+          "v": "v1541"
+        }
+      ]
+    },
+    {
+      "id": "w574",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1543"
+        },
+        {
+          "t": "node",
+          "v": "v1544"
+        }
+      ]
+    },
+    {
+      "id": "w575",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1545"
+        },
+        {
+          "t": "node",
+          "v": "v1546"
+        }
+      ]
+    },
+    {
+      "id": "w576",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1547"
+        },
+        {
+          "t": "bend",
+          "x": 133,
+          "y": 232
+        },
+        {
+          "t": "node",
+          "v": "v1548"
+        }
+      ]
+    },
+    {
+      "id": "w577",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1549"
+        },
+        {
+          "t": "node",
+          "v": "v1550"
+        }
+      ]
+    },
+    {
+      "id": "w578",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1551"
+        },
+        {
+          "t": "node",
+          "v": "v1552"
+        }
+      ]
+    },
+    {
+      "id": "w579",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1553"
+        },
+        {
+          "t": "bend",
+          "x": 181,
+          "y": 59
+        },
+        {
+          "t": "bend",
+          "x": 181,
+          "y": 60
+        },
+        {
+          "t": "node",
+          "v": "v1554"
+        }
+      ]
+    },
+    {
+      "id": "w580",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1555"
+        },
+        {
+          "t": "bend",
+          "x": 181,
+          "y": 61
+        },
+        {
+          "t": "node",
+          "v": "v1556"
+        },
+        {
+          "t": "bend",
+          "x": 181,
+          "y": 60
+        },
+        {
+          "t": "node",
+          "v": "v1554"
+        }
+      ]
+    },
+    {
+      "id": "w581",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1557"
+        },
+        {
+          "t": "bend",
+          "x": 181,
+          "y": 62
+        },
+        {
+          "t": "node",
+          "v": "v1558"
+        },
+        {
+          "t": "node",
+          "v": "v1556"
+        }
+      ]
+    },
+    {
+      "id": "w582",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1559"
+        },
+        {
+          "t": "bend",
+          "x": 181,
+          "y": 63
+        },
+        {
+          "t": "node",
+          "v": "v1560"
+        },
+        {
+          "t": "node",
+          "v": "v1558"
+        }
+      ]
+    },
+    {
+      "id": "w583",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1561"
+        },
+        {
+          "t": "bend",
+          "x": 181,
+          "y": 64
+        },
+        {
+          "t": "node",
+          "v": "v1562"
+        },
+        {
+          "t": "node",
+          "v": "v1560"
+        }
+      ]
+    },
+    {
+      "id": "w584",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1563"
+        },
+        {
+          "t": "node",
+          "v": "v1562"
+        }
+      ]
+    },
+    {
+      "id": "w585",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1564"
+        },
+        {
+          "t": "bend",
+          "x": 181,
+          "y": 53
+        },
+        {
+          "t": "node",
+          "v": "v1565"
+        }
+      ]
+    },
+    {
+      "id": "w586",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1567"
+        },
+        {
+          "t": "bend",
+          "x": 159,
+          "y": 129
+        },
+        {
+          "t": "node",
+          "v": "v1566"
         }
       ]
     }
@@ -12782,10 +13261,6 @@
         {
           "t": "node",
           "v": "v1532"
-        },
-        {
-          "t": "node",
-          "v": "v1531"
         }
       ],
       "width": 8,
@@ -14934,12 +15409,6 @@
       "y": 56
     },
     {
-      "id": "v1518",
-      "kind": "free",
-      "x": 161,
-      "y": 223
-    },
-    {
       "id": "v1520",
       "kind": "connector",
       "ref": "A-7",
@@ -15008,12 +15477,6 @@
       "y": 80
     },
     {
-      "id": "v1531",
-      "kind": "free",
-      "x": 62,
-      "y": 93
-    },
-    {
       "id": "v1532",
       "kind": "junction",
       "x": 62,
@@ -15025,11 +15488,251 @@
       "kind": "free",
       "x": 118,
       "y": 93
+    },
+    {
+      "id": "v1534",
+      "kind": "pin",
+      "ref": "U23D",
+      "pin": "4B",
+      "x": 159,
+      "y": 222
+    },
+    {
+      "id": "v1535",
+      "kind": "pin",
+      "ref": "U69B",
+      "pin": "2A",
+      "x": 134,
+      "y": 218
+    },
+    {
+      "id": "v1536",
+      "kind": "pin",
+      "ref": "U69B",
+      "pin": "2B",
+      "x": 134,
+      "y": 220
+    },
+    {
+      "id": "v1537",
+      "kind": "pin",
+      "ref": "U69C",
+      "pin": "3A",
+      "x": 134,
+      "y": 223
+    },
+    {
+      "id": "v1538",
+      "kind": "pin",
+      "ref": "U69C",
+      "pin": "3B",
+      "x": 134,
+      "y": 225
+    },
+    {
+      "id": "v1539",
+      "kind": "pin",
+      "ref": "U69D",
+      "pin": "4A",
+      "x": 134,
+      "y": 228
+    },
+    {
+      "id": "v1540",
+      "kind": "pin",
+      "ref": "U69D",
+      "pin": "4B",
+      "x": 134,
+      "y": 230
+    },
+    {
+      "id": "v1541",
+      "kind": "junction",
+      "x": 133,
+      "y": 218
+    },
+    {
+      "id": "v1542",
+      "kind": "pin",
+      "ref": "A-54",
+      "pin": "OUT",
+      "x": 133,
+      "y": 212
+    },
+    {
+      "id": "v1543",
+      "kind": "junction",
+      "x": 133,
+      "y": 220
+    },
+    {
+      "id": "v1544",
+      "kind": "junction",
+      "x": 133,
+      "y": 223
+    },
+    {
+      "id": "v1545",
+      "kind": "junction",
+      "x": 133,
+      "y": 225
+    },
+    {
+      "id": "v1546",
+      "kind": "junction",
+      "x": 133,
+      "y": 228
+    },
+    {
+      "id": "v1547",
+      "kind": "junction",
+      "x": 133,
+      "y": 230
+    },
+    {
+      "id": "v1548",
+      "kind": "junction",
+      "x": 158,
+      "y": 232
+    },
+    {
+      "id": "v1549",
+      "kind": "junction",
+      "x": 158,
+      "y": 230
+    },
+    {
+      "id": "v1550",
+      "kind": "junction",
+      "x": 158,
+      "y": 227
+    },
+    {
+      "id": "v1551",
+      "kind": "junction",
+      "x": 158,
+      "y": 225
+    },
+    {
+      "id": "v1552",
+      "kind": "junction",
+      "x": 158,
+      "y": 222
+    },
+    {
+      "id": "v1553",
+      "kind": "pin",
+      "ref": "U63",
+      "pin": "I7",
+      "x": 183,
+      "y": 59
+    },
+    {
+      "id": "v1554",
+      "kind": "pin",
+      "ref": "U63",
+      "pin": "I8",
+      "x": 183,
+      "y": 60
+    },
+    {
+      "id": "v1555",
+      "kind": "pin",
+      "ref": "U63",
+      "pin": "I9",
+      "x": 183,
+      "y": 61
+    },
+    {
+      "id": "v1556",
+      "kind": "junction",
+      "x": 181,
+      "y": 61
+    },
+    {
+      "id": "v1557",
+      "kind": "pin",
+      "ref": "U63",
+      "pin": "I10",
+      "x": 183,
+      "y": 62
+    },
+    {
+      "id": "v1558",
+      "kind": "junction",
+      "x": 181,
+      "y": 62
+    },
+    {
+      "id": "v1559",
+      "kind": "pin",
+      "ref": "U63",
+      "pin": "I11",
+      "x": 183,
+      "y": 63
+    },
+    {
+      "id": "v1560",
+      "kind": "junction",
+      "x": 181,
+      "y": 63
+    },
+    {
+      "id": "v1561",
+      "kind": "pin",
+      "ref": "U63",
+      "pin": "I13",
+      "x": 183,
+      "y": 64
+    },
+    {
+      "id": "v1562",
+      "kind": "junction",
+      "x": 181,
+      "y": 64
+    },
+    {
+      "id": "v1563",
+      "kind": "pin",
+      "ref": "A-55",
+      "pin": "OUT",
+      "x": 181,
+      "y": 66
+    },
+    {
+      "id": "v1564",
+      "kind": "pin",
+      "ref": "U63",
+      "pin": "NC1",
+      "x": 183,
+      "y": 53
+    },
+    {
+      "id": "v1565",
+      "kind": "pin",
+      "ref": "A-56",
+      "pin": "OUT",
+      "x": 181,
+      "y": 51
+    },
+    {
+      "id": "v1566",
+      "kind": "junction",
+      "x": 163,
+      "y": 129
+    },
+    {
+      "id": "v1567",
+      "kind": "pin",
+      "ref": "A-57",
+      "pin": "OUT",
+      "x": 159,
+      "y": 135
     }
   ],
   "refCounters": {
     "U": 77,
-    "A": 54,
+    "A": 58,
     "N": 11,
     "X": 5
   },
@@ -15076,13 +15779,35 @@
     {
       "pins": [
         "U23B.2A",
-        "U23B.2B"
+        "U23B.2B",
+        "U23C.3A",
+        "U23C.3B",
+        "U23D.4A",
+        "U23D.4B",
+        "U69B.2A",
+        "U69B.2B",
+        "U69C.3A",
+        "U69C.3B",
+        "U69D.4A",
+        "U69D.4B",
+        "A-54.OUT"
       ],
       "members": [
-        "w98"
+        "w98",
+        "w203",
+        "w569",
+        "w570",
+        "w571",
+        "w572",
+        "w573",
+        "w574",
+        "w575",
+        "w576",
+        "w577",
+        "w578"
       ],
       "provenance": [],
-      "name": "2A"
+      "name": "OUT"
     },
     {
       "pins": [
@@ -15104,17 +15829,6 @@
       ],
       "provenance": [],
       "name": "CLK"
-    },
-    {
-      "pins": [
-        "U23C.3A",
-        "U23C.3B"
-      ],
-      "members": [
-        "w203"
-      ],
-      "provenance": [],
-      "name": "3A"
     },
     {
       "pins": [
@@ -15229,13 +15943,15 @@
     {
       "pins": [
         "U2./OE",
-        "U24./OE"
+        "U24./OE",
+        "A-57.OUT"
       ],
       "members": [
-        "w364"
+        "w364",
+        "w586"
       ],
       "provenance": [],
-      "name": "/OE"
+      "name": "OUT"
     },
     {
       "pins": [
@@ -15731,13 +16447,35 @@
     },
     {
       "pins": [
-        "U23D.4A"
+        "U63.I7",
+        "U63.I8",
+        "U63.I9",
+        "U63.I10",
+        "U63.I11",
+        "U63.I13",
+        "A-55.OUT"
       ],
       "members": [
-        "w559"
+        "w579",
+        "w580",
+        "w581",
+        "w582",
+        "w583",
+        "w584"
       ],
       "provenance": [],
-      "name": "4A"
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U63.NC1",
+        "A-56.OUT"
+      ],
+      "members": [
+        "w585"
+      ],
+      "provenance": [],
+      "name": "OUT"
     },
     {
       "pins": [
