@@ -447,6 +447,35 @@ test("R7 reports a free vertex a wire references, as conductorId:vertexId (§6.2
   assert.match(found[0].message, /at \(30, 24\)/);
 });
 
+// A bus end snapped to a pin group keeps kind "free" — planBusEndpoint records
+// the connection in groupConnections and never changes the vertex — so every
+// group-snapped bus end in every design looks free. Counting them made R7 report
+// 71 dangling ends on examples/notL4C381.json, 69 of them ordinary snaps.
+test("R7 does not report a group-snapped bus end, which is connected (FR-124a)", async () => {
+  const d = createDesign("t");
+  addInstance(d, busPart("BT", "tristate"), 10, 20, 0); // U1
+  addInstance(d, busPart("BI", "in"), 60, 20, 0); // U2
+  const bus = addBus(d, { kind: "free", x: 0, y: 0 }, { kind: "free", x: 40, y: 0 }, 4);
+  snap(bus, bus.path[0].v, "U1");
+  snap(bus, bus.path[1].v, "U2");
+  assert.equal(
+    d.vertices.filter((v) => v.kind === "free").length,
+    2, // both ends ARE kind:"free" — that is the trap
+  );
+
+  assert.deepEqual((await runDesignRuleCheck(d)).findings.filter((f) => f.rule === "R7"), []);
+
+  // The same bus with one end left unsnapped: that end IS dangling, and is the
+  // only thing reported.
+  const loose = bus.path[1].v;
+  bus.groupConnections = bus.groupConnections.filter((gc) => gc.vertex !== loose);
+  const found = (await runDesignRuleCheck(d)).findings.filter((f) => f.rule === "R7");
+  assert.deepEqual(
+    found.map((f) => f.refs),
+    [[`${bus.id}:${loose}`]],
+  );
+});
+
 const r8of = (res) => res.findings.filter((f) => f.rule === "R8");
 
 test("R8 reports an instance with no pin on any net (FR-124a)", async () => {

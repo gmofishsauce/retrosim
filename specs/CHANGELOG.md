@@ -19,6 +19,13 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-08-03 — DRC R7: a group-snapped bus end is not a dangling end
+What: R7 excludes every vertex named by a bus's `groupConnections[].vertex`. It reported "every `kind: "free"` vertex a conductor references"; a snapped bus end is one of those.
+Why: reported from a real design. `examples/notL4C381.json` produced **71 R7 findings, 69 of them ordinary bus-to-component connections** — and since the coordinates in the message point at a brace apex that looks perfectly normal on screen, the report was unreadable. `planBusEndpoint` (§6.9) returns `spec: { kind: "free" }` for a component target and records the connection in `groupConnections`; `snapBusGroup` never touches the vertex kind. So *every* group-snapped bus end in *every* design is a `free` vertex, and R7 as implemented fired on all of them. The vertex kind answers "who owns this position" (§7.1a), never "is this end connected" — FR-124a always said **free in space**, which a snapped end is not. Group snap is the only connection that leaves the vertex kind alone, so it is the only exclusion needed. After the fix the design reports the 2 genuinely loose ends it has.
+Touches: FR-124a (R7 note); design §6.21 (R7)
+
+---
+
 ## 2026-08-03 — DRC: every finding message names its own rule
 What: a finding's `message` now ends with `(rule Rn)` — `Undriven input U5C.A: it is connected to nothing (rule R3)`. Appended once in the engine's `finding()` constructor, so it reaches the report rows, the Copy text, and anywhere else a message is read.
 Why: requested by the user for debugging. The report already shows the rule id as its own column (FR-124d), but a message quoted or copied out of that context lost it, leaving no way to tell which of ten rules produced a line. The duplication inside the report is accepted deliberately: the column is for scanning a list, the suffix is for a message that has left the list.

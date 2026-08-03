@@ -422,17 +422,33 @@ function ruleR6(ctx) {
   return findings;
 }
 
-// R7 (dangling conductor end) — a wire or bus endpoint free in space. Like R3's
+// R7 (dangling conductor end) — a wire or bus endpoint free IN SPACE. Like R3's
 // second source this cannot come from the netlist: it is a property of the
 // vertex graph (§7.1a), so it walks `kind === "free"` vertices and keeps those
 // some conductor's path actually references (a free vertex nothing references is
 // not a dangling end; it is nothing at all).
 //
-// Severity is info because FR-018a permits these deliberately — a wire drawn out
-// to be finished later is not an error — and refs use the conductorId:vertexId
-// form, the only rule that does, so the reveal can target the loose END rather
-// than the whole conductor (FR-124f).
+// `kind === "free"` is NOT the same question as "is this end unconnected", and
+// the difference is the whole rule: `planBusEndpoint` (§6.9) returns
+// `spec: { kind: "free" }` for a component target and records the connection in
+// the bus's `groupConnections`, and `snapBusGroup` never touches the vertex kind
+// — so every group-snapped bus end in every design is a `free` vertex sitting at
+// the brace apex, fully connected. Counting those made R7 report 71 dangling ends
+// on examples/notL4C381.json of which 69 were ordinary snaps, and a rule that is
+// 97% noise is not read at all. The vertex kind answers who owns the position, not
+// whether the end is connected; group snap is the one connection that leaves it
+// unchanged, so it is the one exclusion.
+//
+// Severity is info because FR-018a permits real dangling ends deliberately — a
+// wire drawn out to be finished later is not an error — and refs use the
+// conductorId:vertexId form, the only rule that does, so the reveal can target the
+// loose END rather than the whole conductor (FR-124f).
 function ruleR7(ctx) {
+  const snapped = new Set(); // bus ends connected to a pin group (FR-041/FR-042)
+  for (const bus of ctx.design.buses ?? []) {
+    for (const gc of bus.groupConnections ?? []) snapped.add(gc.vertex);
+  }
+
   const byVertex = new Map(); // vertex id → [conductor id, …]
   for (const conductor of [...(ctx.design.wires ?? []), ...(ctx.design.buses ?? [])]) {
     for (const point of conductor.path ?? []) {
@@ -443,7 +459,7 @@ function ruleR7(ctx) {
   }
   const findings = [];
   for (const vertex of ctx.design.vertices ?? []) {
-    if (vertex.kind !== "free") continue;
+    if (vertex.kind !== "free" || snapped.has(vertex.id)) continue;
     const ids = byVertex.get(vertex.id);
     if (!ids) continue;
     const sorted = [...new Set(ids)].sort();

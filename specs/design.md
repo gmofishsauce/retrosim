@@ -3701,9 +3701,18 @@ function plus one table row — nothing dispatches on rule id anywhere else.
   no outputs) and every indicator would be reported vacuously. `refs` lists the
   package's instances.
 - **R7 (dangling conductor end)** — every vertex with `kind === "free"` (§7.1a) that
-  is referenced by some conductor's `path`. FR-018a permits these deliberately, which
-  is exactly why the severity is info. `refs` is the `conductorId:vertexId` form so
-  the reveal can target the endpoint rather than the whole wire.
+  is referenced by some conductor's `path`, **less every vertex named by some bus's
+  `groupConnections[].vertex`**. That exclusion is not a refinement, it is the rule:
+  `planBusEndpoint` (§6.9) returns `spec: { kind: "free" }` for a component target
+  and records the connection in `groupConnections`, and `snapBusGroup` never touches
+  the vertex kind — so **every group-snapped bus end in every design is a `free`
+  vertex**, sitting at the brace apex, fully connected. Without the exclusion R7
+  reports each of them: 71 findings on `examples/notL4C381.json`, 69 of them ordinary
+  snaps (2026-08-03). The vertex kind answers "who owns this position" (§7.1a), not
+  "is this end connected"; group snap is the one connection that does not change it.
+  FR-018a permits real dangling ends deliberately, which is exactly why the severity
+  is info. `refs` is the `conductorId:vertexId` form so the reveal can target the
+  endpoint rather than the whole wire.
 - **R8 (stray component)** — an instance none of whose pins appears on any net.
   **Suppressed** when another instance of the same **package** (the R6 grouping) does
   have a connection: an unwired spare gate in a used 7400 is not a stray component,
