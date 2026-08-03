@@ -437,6 +437,64 @@ reworked.
   emitting each byte to real stdout in both batch modes, fully buffered; generator
   bakes a per-UART device table, runtime owns the latch/emit. Shares stdout with the
   free-run dump / vector transcript (dump trails UART output); parity accounts for it.
+- **FR-124** — On-demand **design rule check**: a user-invoked pass over the design
+  reporting likely human mistakes before any simulation is run. Tools ▸ Design Rule
+  Check (no ellipsis — it opens no dialog), foreground and synchronous, no progress
+  UI (hundreds of components, a scale `buildNets` already handles per run), disabled
+  while simulating or holding a vector run (as Generate C / Export are). Reverses
+  design §4.1's exclusion for the **on-demand** case only; editing-time checking
+  stays out of scope. **Inputs and scope:** the **live in-memory design, unsaved
+  edits included** — no save prompt, no refusal, no write (matching FR-119/FR-116) —
+  and the **open sheet only**: sub-designs are not flattened (FR-102), off-sheet
+  continuations are not followed, so a port is a sheet boundary and never an
+  undriven/load-less finding.
+- **FR-124a** — The **rule catalog**, R1–R10, with permanent rule ids (persisted in
+  waivers, so frozen like FR ids). R1 output fight (out+out, out+tristate,
+  out+bidir; bidir+bidir is **normal**) and R2 same-enable contention (same net,
+  same enable net, same polarity) are **errors**; R3 undriven input (no-conductor
+  and undrivable-net are one class), R4 can-float net (**1-bit only**), R5 opposing
+  pulls, R6 unconnected outputs (**per package**, FR-013a) are **warnings**; R7
+  dangling conductor end, R8 stray component, R9 no-loads net, R10 unresolvable port
+  target are **info**. R2 alone reads compiled GALasm enable terms (§6.13) and is
+  silent where there are none; R10 alone needs a file probe and reports nothing when
+  it cannot probe. R4 replaces the originally-requested wire-vs-bus *drawing* rule
+  with an *electrical* one.
+- **FR-124b** — Three severities (**error/warning/info**) that order and colour the
+  report and do nothing else: no pass/fail verdict, no gating.
+- **FR-124c** — A **finding** = rule id + severity + message + an ordered set of
+  **object references** (`refdes`, `refdes.pin`, or conductor endpoint). One
+  reference set serves both click-to-reveal (FR-124f) and waiver matching (FR-124e).
+  Stable because `refdes` is immutable and never reused (FR-011/FR-011c). **Nets are
+  the exception** — no persistent identity, `pickName` is volatile — so net-scoped
+  findings (R4/R5/R9) identify by their **pin set**.
+- **FR-124d** — The **report**: flat list ordered error→warning→info, then stably by
+  refdes/net, so an unchanged design yields an identical report. Row = severity +
+  rule id + message. Not grouped (waivers, not outlining, control noise). Header
+  names design, time, and unsaved-changes state. One action, **Copy** (plain text to
+  clipboard); no save-to-file. **Zero findings still opens the tab** with a
+  "no findings" result.
+- **FR-124e** — **Waivers**: per-finding, persisted **in the design** (§7.2) as an
+  **additive-optional** field, so **no format bump and no migration**. Matched by
+  rule id + object reference set; optional free-text note. Waived findings move to a
+  collapsed **"Waived (N)"** section with un-waive controls. Waiving **dirties but is
+  not undoable** (the FR-087a switch-click precedent — report bookkeeping is not
+  circuit structure). A waiver matching nothing is **dropped silently, without
+  dirtying** — a pure read must not mark the design modified.
+- **FR-124f** — Clicking a finding **selects every object it names** (replacing the
+  selection, FR-016a) and **reveals** them: pan **and** zoom so their combined bbox
+  fills the canvas, zoom clamped; on every click, on-screen or not.
+- **FR-124g** — The report is a **third tab kind** of the docked panel area (FR-123),
+  labeled "Design Rules", **modeless with no read-only lock** (as FR-115h left the
+  vector tab). Running the check **opens or selects** the tab and never closes it —
+  the menu item is a command, not a panel toggle, the one exception to FR-123's
+  open/select/close rule. The report is **session-only**; waivers are the only
+  durable product of a check.
+- **FR-124h** — **Simulate → Tools** menu rename, label only; keeps Test Vectors…
+  and Generate C…, gains Design Rule Check.
+- **FR-124i** — A report **goes stale and says so**: any design change shows a stale
+  indication while **retaining every finding, still clickable**. Never self-clears
+  (would destroy the work list after the first fix), never self-re-runs. A stale
+  finding points at something or at nothing, never at the wrong thing (FR-124c).
 
 ### 2.2 Non-Functional Requirements
 - **NFR-001** — Server binds exclusively to `127.0.0.1`; no other interface.
@@ -646,14 +704,22 @@ as authoritative and raise it — do not silently diverge.
   (`net/http`, `encoding/json`, `os`, `path/filepath`). No web framework needed.
 - Server binds **only** to `127.0.0.1` (NFR-001). Single local user; **no**
   auth/TLS.
-- Out of scope: **electrical-rule checking** (e.g., output-to-output conflicts,
-  direction validation) as an *editing-time* check. Pin `direction` is captured
-  (FR-062a) so ERC can be added later without a model change; the bus
-  disambiguation dialog (FR-041b) does **not** filter candidates by direction
-  (D2). (The simulator does detect bus conflicts at run time, FR-082.)
+- Out of scope: rule checking as an *editing-time* check — validating as the user
+  draws, refusing or annotating an illegal connection at the moment it is made.
+  The bus disambiguation dialog (FR-041b) still does **not** filter candidates by
+  direction (D2). **On-demand** checking is now *in* scope and implemented: the
+  design rule check (FR-124, §6.21) is a user-invoked pass producing a report,
+  and it is exactly the "later" this bullet used to point at — pin `direction`
+  was captured (FR-062a) so checking could be added without a model change, and
+  that prediction held: every rule in FR-124a is computable from the existing
+  model, and §6.21 adds no field to `ComponentType`, `Vertex`, or the netlist.
+  Run-time contention remains the simulator's (FR-082), a third and distinct
+  thing: FR-082 *observes* a fight that happens, FR-124 *predicts* one that must.
   (Updated 2026-07-08; supersedes the earlier bullet that also listed
   copy/paste, the simulation engine, and the transpiler as out of scope — all
-  three are now implemented: §6.15, §6.13, §6.17.)
+  three are now implemented: §6.15, §6.13, §6.17. Updated 2026-08-02 by FR-124:
+  the blanket exclusion of electrical-rule checking is narrowed to the
+  editing-time case, which is all it ever scoped itself to.)
 - Target browsers: modern desktop **Chrome/Firefox**. No mobile support.
 
 ### 4.2 Assumptions
@@ -733,6 +799,18 @@ as authoritative and raise it — do not silently diverge.
    current project then scopes every file flow (save confinement, embed
    boundary, dialog seeding). The server stays stateless: project-aware
    requests carry the directory as a parameter.
+
+5. **Design rule check (FR-124, §6.21):** a pure, one-shot pull. The menu item calls
+   `runDesignRuleCheck(design)`, which builds the netlist (§6.6) exactly as the
+   simulator and exporters do, runs ten independent rule functions over it, and
+   returns a plain array of findings. Nothing is dispatched, nothing is subscribed,
+   and no rule reads or writes the store: the check is a **function of the design**,
+   which is what makes it re-runnable, testable without a DOM, and safe to run on a
+   design the user is still editing. Only two things flow back the other way, and
+   both are user gestures on the rendered report rather than parts of the check:
+   clicking a finding calls the store's `setSelection` plus the interaction module's
+   reveal (FR-124f), and waiving calls `applyLive` (FR-124e) — the same
+   dirty-but-not-undoable path the input switch uses (FR-087a).
 
 ### 5.3 New vs modified vs unchanged
 The design began **greenfield** (nothing predated it; section retained for the
@@ -1180,9 +1258,33 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   port is a queryable/drivable member (FR-094e) — a labelled net is still named by
   its label, `labelByRoot` winning over `pickName`; cross-file off-sheet
   continuation, FR-101a, is composed at simulation time, not here — §6.14.)
+
+  **`buildNets` is also the design rule check's input** (FR-124, §6.21), which
+  joins the simulator (§6.13), the C generator (§6.17), and the NDL exporter
+  (§6.18) as a consumer. The DRC needs no change here and adds no field — the
+  prediction §4.1 made when it deferred rule checking — but two properties of the
+  contract above are load-bearing for it and are stated here so a future change
+  does not quietly break it:
+  - **Only groups with ≥1 attached pin become nets** (the `for each group with ≥1
+    attached pin` line). A conductor reaching no pin at all is therefore *absent*
+    from the result, not present as an empty net. This is why §6.21's R3 finds its
+    "pin on no conductor" case by subtracting the netlist's pins from the
+    instances' pins rather than by looking for a driverless net, and why R7 reads
+    `kind === "free"` vertices (§7.1a) directly instead.
+  - **`lanes` carry their conductor kind** (`wire:` vs `bus:`), which is what lets
+    R4 ask whether a net is one bit wide. That question is about the **net**, not
+    the conductor: a single lane broken out of a bus (step 4, FR-043a) is a 1-bit
+    net and is checked as one.
+
+  The DRC does **not** consume `provenance` or `name`: `pickName` is derived and
+  volatile (a moved label renames a net), so §6.21 identifies net-scoped findings
+  by their pin set and quotes the name only for readability (FR-124c).
 - **Error handling:** operations validate references (e.g., moving a bend index
   that exists); invalid ops throw and are caught by the Store, which leaves state
-  unchanged and surfaces a non-fatal toast.
+  unchanged and surfaces a non-fatal toast. `buildNets`'s `onWarn` (the invalid
+  bus-join alignment above) is passed through to the DRC's report notice line as a
+  file-level warning, never promoted to a finding (§6.21) — it describes the file,
+  not the circuit.
 - **Dependencies:** none (pure JS).
 
 ### 6.7 JS: geometry & rotation (`web/js/geometry.js`)
@@ -1636,9 +1738,40 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   target is the textarea (as it already does for input fields), so editor
   shortcuts never fire mid-edit. Text-entry mode is unavailable while a simulation
   runs (the editor is locked, above), consistent with other design edits.
+- **Reveal (FR-124f, added 2026-08-02):** `revealRefs(refs)` — exported beside
+  `fitToScreen` — frames a set of objects named by design-rule findings (§6.21).
+  It is the **only** entry point in this module that is not driven by a pointer or
+  key event: the DRC report calls it directly, having already set the selection.
+  ```
+  boxes = []
+  for ref in refs:                       # "U12" | "U5C.A" | "w7:v31"
+      inst  = instance named by the ref's refdes part
+      if ref names a pin        → box = point(pinWorldPos(inst, pin))
+      elif ref names a vertex   → box = point(vertex.x, vertex.y)
+      elif inst exists          → box = instance footprint (pos + rotated w×h)
+      else                      → skip                     # stale finding
+      boxes.push(box)
+  if boxes empty: return                 # no view change at all
+  b = union(boxes) grown to a minimum span so a single point is not degenerate
+  zoom = clamp(min(w*0.9/spanX, h*0.9/spanY), MIN_ZOOM, REVEAL_MAX_ZOOM)
+  renderer.setViewport(centerViewportOn({pan:{x:0,y:0}, zoom}, center(b), w, h))
+  ```
+  This is `fitToScreen`'s arithmetic (FR-022a) against a smaller box, with two
+  additions that exist for this caller: the **minimum span**, without which
+  revealing a single pin divides by zero, and **`REVEAL_MAX_ZOOM`** (2× default),
+  without which revealing a single pin magnifies to absurdity — a fit computed
+  against a one-point box is otherwise unbounded. Refs that resolve to nothing are
+  skipped rather than treated as the origin; a call whose refs *all* fail to
+  resolve moves the view **not at all**, which is the right behavior for a stale
+  finding (FR-124i) and is why the empty check precedes the union rather than
+  falling out of it. `revealRefs` reads the design and the viewport and dispatches
+  **no** command: framing is view state, never design state, exactly as
+  `fitToScreen` and `zoomBy` are.
 - **Error handling:** clicks on empty space in WIRE/BUS state are ignored (no
   partial wire). A gesture that would create a zero-endpoint wire is discarded
   (FR-030). Pressing `Esc` cancels an in-progress gesture, restoring SELECT.
+  `revealRefs` is total over any ref array, including refs naming deleted objects,
+  malformed strings, and the empty array (all no-ops).
 - **Dependencies:** `geometry.js`, `hittest.js`, store, model.
 
 ### 6.9a JS: Manhattan route proposal (`web/js/engine/router.js`)
@@ -1706,10 +1839,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   dirty tracking; pub/sub.
 - **Satisfies:** FR-024, FR-049a, FR-121c (the no-project lock), NFR-006.
 - **State:** `{ design, designRev, tool, selection, hover, viewport, dirty, savePath,
-  designName, simulating, sim, vectorPanelOpen, consolePanelOpen, dockActive, dockOrder,
-  dockMru, dockUnread, vectorHold, probe, project }`. The five `dock*`/panel-open members
-  are the docked panel area's tab bookkeeping (§6.16a, FR-123) — session-only view state
-  that nonetheless notifies, because the toolbar's menu items branch on it.
+  designName, simulating, sim, vectorPanelOpen, consolePanelOpen, drcPanelOpen, dockActive,
+  dockOrder, dockMru, dockUnread, vectorHold, probe, project }`. The six `dock*`/panel-open
+  members are the docked panel area's tab bookkeeping (§6.16a, FR-123) — session-only view
+  state that nonetheless notifies, because the toolbar's menu items branch on it.
+  `drcPanelOpen` (FR-124g) is the third and joins through the same `setTabOpen` helper;
+  unlike `vectorPanelOpen` it feeds **nothing** but the tab bookkeeping — the report
+  imposes no lock and no mutual exclusion, so `isReadonly()` does not test it.
   **`designRev`** is a monotonically increasing counter bumped by every path that
   modifies the design — `dispatch`, `undo`, `redo`, `applyLive`, and `replaceDesign` —
   and by nothing else (added 2026-08-02 with FR-115h's rework). It exists because the
@@ -1718,7 +1854,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   to *design edits specifically*, now that they can happen under it: comparing a
   remembered `designRev` is O(1) and cannot miss an edit or fire on a non-edit. It is
   session-only and never persisted; nothing derives meaning from its value beyond
-  "different from last time".
+  "different from last time". It gained a **second consumer** on 2026-08-02 — the DRC
+  report's stale banner (FR-124i, §6.21), which remembers the value at check time — and
+  that is the whole of what staleness cost: a counter that already existed, for a panel
+  in the same predicament (a modeless view of a design the user can still edit). Two
+  consumers is also the argument for having generalized it here rather than leaving it
+  inside §6.16.
   `project` (FR-121, §6.19) is the client-held **current project**: `null` or
   `{ dir, name, manifestFile, mainDesign }`, set via a notifying
   `setProject(p)`. Transient session state, never persisted (the server holds
@@ -1783,7 +1924,25 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `subscribeLive(fn) → unsubscribe`, which the sim engine subscribes to for the
   duration of a run so it can `wake()` and re-evaluate (§6.13). The channel is the
   general re-evaluation trigger — any `applyLive` wakes the sim, regardless of
-  which interactive built-in caused it.
+  which interactive built-in caused it. **Second caller (FR-124e, 2026-08-02):**
+  waiving and un-waiving a design-rule finding (§6.21). The fit is exact rather than
+  opportunistic — a waiver is a real change to the design that is emphatically *not*
+  an editing action, which is precisely the property `applyLive` was built around, so
+  Ctrl+Z after waiving undoes the user's last wire rather than their last waiver. The
+  live-input channel firing for a waiver is harmless: it can only fire while a
+  simulation runs, and the check is disabled then (FR-124).
+- **The one sanctioned mutation outside every store path (FR-124e, §6.21):** the DRC
+  drops waivers that matched no finding by mutating `store.design.drcWaivers` directly
+  — not through `dispatch`, not through `applyLive`, notifying nobody. This is stated
+  here, in the section that owns the "all mutation flows through Commands" rule, so it
+  is a *documented* exception rather than a discovered violation. It is justified by
+  one requirement the store cannot otherwise meet: every mutator here sets `dirty`, and
+  a pure read of the design must not mark it modified (the property FR-116/FR-119
+  assert for Generate C and Export). It is safe because what it removes is by
+  construction unreachable — an unmatched waiver names objects that no longer exist,
+  so nothing renders it, nothing indexes it, and no undo entry can reference it — and
+  it is bounded: this is the only such mutation, and any second one should be treated
+  as evidence that the store needs a real non-dirtying mutator instead.
 - **Command interface:** every mutating action is an object
   `{ apply(design), revert(design), label }`. The store:
   ```
@@ -1841,13 +2000,20 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   Project…, Duplicate Project… (FR-121b, §6.19), New, Open, Save, Save As,
   Export… (FR-119, §6.18), Refresh Types; **Edit** — Undo, Redo, Copy, Paste
   (FR-111/FR-112, §6.15), Design Properties… (FR-076b, dialog below); **View** — Zoom In, Zoom Out, Fit to Screen (FR-022a,
-  `interaction.fitToScreen`), Console (FR-122c, §6.20); **Simulate** — Test Vectors… (FR-115b, §6.16) and
-  Generate C… (FR-116, §6.17). The Test Vectors and Console items are **not** plain
+  `interaction.fitToScreen`), Console (FR-122c, §6.20); **Tools** (named **Simulate** until the FR-124h rename) — Test Vectors… (FR-115b, §6.16),
+  Generate C… (FR-116, §6.17), Design Rule Check (FR-124, §6.21 — no ellipsis: it
+  opens no dialog). The Test Vectors and Console items are **not** plain
   toggles: each calls `dock.menuInvoke(key)` (§6.16a) — through the
   `onTestVectors`/`onConsole` callbacks `app.js` supplies, so the toolbar depends
   on no panel or dock module — which opens a closed tab,
   selects an open-but-background one, and closes it only when it is already
-  frontmost (FR-123); both render checked while their tab is open. **Buttons:**
+  frontmost (FR-123); both render checked while their tab is open. **Design Rule
+  Check is not a toggle either, but for the opposite reason:** it is a command
+  (`onDesignRuleCheck` → `drcPanel.run()`, §6.21) that opens or selects its report
+  tab and never closes it (FR-124g), and it renders no checkmark — a checkmark
+  would claim the item reflects a panel's state, which it does not. It is disabled
+  by the same predicate as Generate C… and Export… (`simulating || vectorHold`,
+  FR-124). **Buttons:**
   Select, Wire, Bus (modal tools), then **Run/Stop**, then — shown
   only while a run of a sequential design is active — the **pause/step cluster**
   (FR-076a):
@@ -1892,7 +2058,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   - *No-project state (FR-121c)*: while `store.state.project` is `null`,
     `refresh()` additionally disables everything except **New Project…, Open
     Project…, Open, Select, and the View items** — i.e. it also disables Save,
-    Save As, New, Export…, Refresh Types, the Simulate items, Run, the Wire/Bus
+    Save As, New, Export…, Refresh Types, the Tools items, Run, the Wire/Bus
     tool buttons, Undo/Redo/Paste, and Duplicate Project… (nothing to
     duplicate). The FR-004b/FR-004c key bindings honor the same enablement:
     the store's no-project `blocked()` covers every dispatch path, and the
@@ -2373,6 +2539,17 @@ no sequential part could ever leave U.)
   contributes U (pessimistic). `AR` true forces all the instance's registers to
   the reset state each step (async); `AR` U forces them U; `SP` true at a clock
   edge sets them (manual §3.6).
+- **A second, non-evaluating reader of `enable` (FR-124a, §6.21).** The design rule
+  check's R2 reads a compiled output's `enable` term **statically** — it never
+  evaluates it — to decide whether two tri-state drivers on one net must fight. It
+  is the only consumer of the compiled form that does not run the evaluator, and it
+  depends on exactly one property of the shape documented above: `enable` is a
+  **single product term**, an array of `{signal, low}` literals (the parser enforces
+  "exactly one product term" for `.E`). R2 fires only when that array has length 1,
+  and compares the literal's *resolved net* — `signal → refdes.pinName → net`, since
+  the literal names a pin on the instance's own type — together with `low`. Nothing
+  here changes for the DRC; it is recorded so that a future change to the `enable`
+  representation knows it has a reader outside `sim.js`.
 - **Dialect modes (FR-066a/FR-079a/FR-079b).** `compileBehavior` takes the
   dialect from `typeData.gal`: absent → **extended** (default); a device name →
   **strict** for that device. The two modes share **one** evaluator — strictness
@@ -2813,7 +2990,7 @@ no sequential part could ever leave U.)
 ### 6.16 JS: test vectors (`web/js/engine/vectors.js` + `chrome/dialogs.js`/`toolbar.js`/`app.js`)
 
 - **Purpose:** author and run a table of input patterns + expected outputs against the slow simulator — combinational rows independently (FR-115c), sequential (clocked) rows in order with scripted clocks (FR-115e). Implements requirements §3.19a in full.
-- **Satisfies:** FR-115, FR-115a, FR-115b, FR-115c, FR-115d, FR-115e (sequential), FR-115f (port binding), FR-094f (clock-source ports), FR-115i (bidirectional bus columns), FR-115j (duplicate row), FR-115k (grouped hex cells), FR-115l (run through the selected row and hold), FR-115m (the panel edits an associated `.tv` document), FR-115o (cycling cell buttons), FR-115p (inactive-level input defaults); extends FR-004a (new **Simulate** menu). The panel's **tab** (FR-123), the area's **height**, and its draggable top edge (FR-115n) are §6.16a, which owns those rules for every docked tab. (FR-115g, the interim clocked-design guard, is superseded and removed.)
+- **Satisfies:** FR-115, FR-115a, FR-115b, FR-115c, FR-115d, FR-115e (sequential), FR-115f (port binding), FR-094f (clock-source ports), FR-115i (bidirectional bus columns), FR-115j (duplicate row), FR-115k (grouped hex cells), FR-115l (run through the selected row and hold), FR-115m (the panel edits an associated `.tv` document), FR-115o (cycling cell buttons), FR-115p (inactive-level input defaults); extends FR-004a (new **Tools** menu, named **Simulate** until FR-124h). The panel's **tab** (FR-123), the area's **height**, and its draggable top edge (FR-115n) are §6.16a, which owns those rules for every docked tab. (FR-115g, the interim clocked-design guard, is superseded and removed.)
 
 **Pure runner & file model (`engine/vectors.js`, DOM-free, unit-tested in `vectors.test.js`).** A new module, deliberately free of any DOM so it tests like `validateMemSpec`/`memDeviceSpec`:
   - `deriveColumns(design) → { inputs, outputs, io, warnings }`. Enumerates `design.components` (the same iteration the simulator uses, §6.13) filtered by `typeData.renderType`: `"switch"` → one **input** column `{ refdes, pin:"OUT", label }`; `"indicator"` → one **output** column `{ refdes, pin:"IN", label }`; `"indicator8"` → eight output columns `{ refdes, pin:"D0".."D7", label }`; and **ports** (`"port"`/`"portN"`, FR-115f) by their **effective direction** (`effectivePortDir`, §6.14, FR-094c/FR-094d): an effective-`in` port → input column(s), an effective-`out` port → output column(s), an effective-`bidir` port → a **bidirectional column** `{ refdes, pin, label, io:true }` collected into a third **`io`** group (FR-115i, superseding the former skip-with-warning; a 1-wide port yields one io column, a `portN` N per-bit io columns). A 1-wide port contributes one column `{ refdes, pin:"P", label }`; a `portN` of width N expands to **N one-bit columns** `{ refdes, pin:"P"+i, label:label+i }` (uniform per-bit, no whole-bus column). A port column is thus identified by the port's **own** `(refdes, pin)` — the natural, stable identity (FR-115f). `label` is the instance's display label (FR-011b) falling back to `refdes`; columns are sorted by refdes (numeric-aware, then pin) for stable order — port-derived columns **coexist** with any switch/indicator columns. `"clock"` (FR-115e) → one **input** column `{ refdes, pin:"OUT", label, kind:"clock" }` whose cells take `0`/`1`/`C`; `kind` is a live-only marker (the dialog's cell options and `validateVectors`' `C` legality key off it) and is **not** persisted in the `.tv` file — reconciliation stays pure `(refdes,pin)`. A **clock-source port** (FR-094f) takes the *same* marker: in the port branch, an input-bucket 1-wide port satisfying `isClockPort` (§6.14) is pushed as `{ refdes, pin:"P", label, kind:"clock" }` instead of a plain input column. Because `kind` is live-only, **the `.tv` format does not change and no `formatVersion` bump is needed** (§7.7): an existing file's column list and column order are untouched by marking a port, and only the cell alphabet of that one column widens from `0`/`1` to `0`/`1`/`C`. `isClock` set where it cannot be honored — on a `portN`, or on a port whose effective direction is not `in` — is **ignored with a non-fatal warning** into `cols.warnings` (FR-094f), surfacing in the panel's notice line beside the FR-115a reconciliation warnings.
@@ -2876,7 +3053,7 @@ notice(warnings)                                    // "in the design but not th
 
 **`openFileDialog` extension (`chrome/dialogs.js`).** Its save mode hardcodes a `.json` suffix; generalize it to take an optional target extension (e.g. `saveExt`) so the picker lists and names `.tv` files. The server `ListDir`/`exts` filter already accepts arbitrary extensions (the `.bin`/`.hex` ROM precedent, §6.4/FR-114e); no server change.
 
-**Chrome wiring (`chrome/toolbar.js`, `chrome/properties.js`, `app.js`, `store.js`).** `toolbar.js` gains a **Simulate** menu (`createMenu`) with a **Test Vectors…** item (`addItem`) invoking an `onTestVectors` callback; the item stays enabled while the panel is open so it can select and then close the tab (only `store.state.simulating` disables it, FR-115b). `app.js` supplies `onTestVectors`, which calls `dock.menuInvoke("vec")` (§6.16a) against the singleton `testVectorsPanel({ store, dataDir })` — open if closed, select if backgrounded, close if frontmost (FR-123), superseding the plain open/closed toggle it used before 2026-08-02. **No lock (FR-115h, reworked 2026-08-02):** `state.vectorPanelOpen` no longer feeds `isReadonly()`, which collapses back to `simulating` alone, and `blocked(what)`'s two-cause message loses its panel branch. This **supersedes** the lock this section described until 2026-08-02 — `isReadonly() = simulating || vectorPanelOpen`, with `refresh()` ORing `vectorPanelOpen` into the FR-087 disables (Wire/Bus, Undo/Redo, New/Open/Refresh, Copy/Paste, the project items, Export…, Generate C…, Design Properties…) and `properties.js` swapping its `simulating` checks for `isReadonly()`. Every one of those consumers is now simply back to testing the simulation lock; **none of them needed new logic to unlock**, which is the point — the lock was one predicate with many readers, and removing the second term restores them all at once. What `refresh()` keeps is the narrower **mutual exclusion**: while `vectorHold` is set the **Run** button is the **Stop** that releases the hold (FR-115l, above) rather than a start, and with no hold it is an ordinary Run, live with the tab open. `runBtn.disabled` therefore reduces to `noProject` — the `panelOpen && !holding` term is gone. `properties.js` reverts to `store.state.simulating` for its edit locks.
+**Chrome wiring (`chrome/toolbar.js`, `chrome/properties.js`, `app.js`, `store.js`).** `toolbar.js` gains a **Tools** menu (`createMenu`; named **Simulate** until FR-124h renamed the label on 2026-08-02) with a **Test Vectors…** item (`addItem`) invoking an `onTestVectors` callback; the item stays enabled while the panel is open so it can select and then close the tab (only `store.state.simulating` disables it, FR-115b). `app.js` supplies `onTestVectors`, which calls `dock.menuInvoke("vec")` (§6.16a) against the singleton `testVectorsPanel({ store, dataDir })` — open if closed, select if backgrounded, close if frontmost (FR-123), superseding the plain open/closed toggle it used before 2026-08-02. **No lock (FR-115h, reworked 2026-08-02):** `state.vectorPanelOpen` no longer feeds `isReadonly()`, which collapses back to `simulating` alone, and `blocked(what)`'s two-cause message loses its panel branch. This **supersedes** the lock this section described until 2026-08-02 — `isReadonly() = simulating || vectorPanelOpen`, with `refresh()` ORing `vectorPanelOpen` into the FR-087 disables (Wire/Bus, Undo/Redo, New/Open/Refresh, Copy/Paste, the project items, Export…, Generate C…, Design Properties…) and `properties.js` swapping its `simulating` checks for `isReadonly()`. Every one of those consumers is now simply back to testing the simulation lock; **none of them needed new logic to unlock**, which is the point — the lock was one predicate with many readers, and removing the second term restores them all at once. What `refresh()` keeps is the narrower **mutual exclusion**: while `vectorHold` is set the **Run** button is the **Stop** that releases the hold (FR-115l, above) rather than a start, and with no hold it is an ordinary Run, live with the tab open. `runBtn.disabled` therefore reduces to `noProject` — the `panelOpen && !holding` term is gone. `properties.js` reverts to `store.state.simulating` for its edit locks.
 - **Dependencies:** `engine/sim.js` (`buildSimulation` with `stimulus`/`scriptedClocks`, `setStimulus`, settle bound, `loadRomContents`), `engine/galasm.js` (`V0`/`V1`/`VU`/`VZ`), `model/design.js` (instance shape), `model/subdesign.js` (`effectivePortDir` for port-column direction, FR-115f), `store.js` (`state.design`, `state.savePath`, `state.simulating`, `state.vectorPanelOpen`, `isReadonly()`, `setSim()`/`setVectorHold()` for the held display, FR-115l), `chrome/statusbar.js` (`setAppState("held")`, FR-073), `chrome/dialogs.js` (`openFileDialog`, `confirmSaveDialog`), `chrome/fileops.js` (`dirOf`), `api.js` (`loadVectorFile`/`saveVectorFile`, plus `listDir` for the FR-115m auto-load probe), `chrome/toolbar.js`, `chrome/properties.js`, `app.js`. The panel does **not** depend on `chrome/dock.js` (§6.16a): the dock reads the store flag the panel already sets, so neither module knows the other exists.
 
 ---
@@ -2893,22 +3070,30 @@ notice(warnings)                                    // "in the design but not th
 const TABS = [
   { key: "vec",     label: "Test Vectors", host: "#vec-panel",     openFlag: "vectorPanelOpen"  },
   { key: "console", label: "Console",      host: "#console-panel", openFlag: "consolePanelOpen" },
+  { key: "drc",     label: "Design Rules", host: "#drc-panel",     openFlag: "drcPanelOpen"     },
 ];
 ```
 
-A future tab adds a row plus its host element and its store flag. The **strip order is the order opened** (FR-123), not this table's order — the table supplies labels and hosts, `state.dockOrder` supplies position.
+A future tab adds a row plus its host element and its store flag. The `drc` row
+(FR-124g, added 2026-08-02) is the first exercise of that claim, and it cost
+exactly the row, the host, and the flag: no change to `layout`, `dragTo`,
+`render`, the strip builder, the MRU rule, or the drag. The one thing the report
+tab does **not** use is `menuInvoke` — running a check must open or select its tab
+but never close it (FR-124g), so `drcpanel.js` calls `setDrcPanelOpen`/`setDockActive`
+directly (§6.21). That exception lives in the panel, deliberately, so `menuInvoke`
+keeps one behavior for every caller rather than growing a per-tab branch. The **strip order is the order opened** (FR-123), not this table's order — the table supplies labels and hosts, `state.dockOrder` supplies position.
 
 **What lives where.** The split follows the frequency-of-change argument that put the fraction in module state in the first place:
 
 | State | Where | Why |
 |---|---|---|
-| Which tabs are open | `store.state.vectorPanelOpen` / `consolePanelOpen` (unchanged) | Already there; already feeds `isReadonly()` (FR-115h) and the menu checkmarks. Panels keep setting them; nothing about `open()`/`close()` changes. |
-| Which tab is frontmost | `store.state.dockActive` (`"vec"` \| `"console"` \| `null`) | The toolbar reads it — the menu items' open/select/close rule (FR-123) needs to know whether a tab is *frontmost*, not just open — so it must notify. It changes on a click, not 60×/second. |
+| Which tabs are open | `store.state.vectorPanelOpen` / `consolePanelOpen` / `drcPanelOpen` (FR-124g) | Already there; already feeds `isReadonly()` (FR-115h) and the menu checkmarks. Panels keep setting them; nothing about `open()`/`close()` changes. |
+| Which tab is frontmost | `store.state.dockActive` (`"vec"` \| `"console"` \| `"drc"` \| `null`) | The toolbar reads it — the menu items' open/select/close rule (FR-123) needs to know whether a tab is *frontmost*, not just open — so it must notify. It changes on a click, not 60×/second. |
 | Open order + MRU | `store.state.dockOrder` (array, append on open) and `dockMru` (array, most-recent first) | Derived bookkeeping the same setters maintain; keeping them beside the flags means "close the frontmost tab ⇒ select the most recently used remaining one" is one rule in one place. |
 | Unseen-content marks | `store.state.dockUnread` (`{ console: true, … }`) | Read by the dock to paint the dot; set at most once per animation frame (below). |
 | The area's dragged height | module state in `dock.js` (`let frac = 1/3`) | Unchanged decision: a drag would otherwise notify every store subscriber up to 60×/second for a change none of them can act on. One fraction now, shared by every tab (FR-115n as reworked). |
 
-**Store setters (`store.js`).** `setVectorPanelOpen(bool)` and `setConsolePanelOpen(bool)` keep their names and their callers, and each now routes through one shared helper, `setTabOpen(key, open)`:
+**Store setters (`store.js`).** `setVectorPanelOpen(bool)`, `setConsolePanelOpen(bool)`, and `setDrcPanelOpen(bool)` (FR-124g) keep their names and their callers, and each routes through one shared helper, `setTabOpen(key, open)` — a third tab needed a third one-line setter and no change to the helper:
   - **Opening:** set the flag; append `key` to `dockOrder` if absent; make it frontmost (`dockActive = key`, `dockMru` unshifted); clear `dockUnread[key]`.
   - **Closing:** clear the flag; remove `key` from `dockOrder`, `dockMru`, and `dockUnread`; if it was `dockActive`, set `dockActive` to the head of the remaining `dockMru` (**most recently used**, FR-123) or `null` when none remains.
   - `setDockActive(key)` — select an open tab: move it to the head of `dockMru`, set `dockActive`, clear `dockUnread[key]`. A no-op for a tab that is not open or already active (so a stray call cannot desync the strip).
@@ -2954,7 +3139,7 @@ A future tab adds a row plus its host element and its store flag. The **strip or
 
 **Interaction with the canvas `ResizeObserver` (§6.13, FR-115n's re-extend guarantee).** Unchanged, and it now also covers tab switching: changing `#dock`'s `flex-basis`, showing or hiding `#dock`, and hiding one host to show another all change `#canvas-host`'s box (or, for a tab switch, do not change it at all), and `canvas.js`'s observer calls `resize()` + `requestRender()`, which touch **no** view state — no `view.scale`, no pan, no `fitToScreen`. A tab switch keeps the area's height, so the canvas box does not change and the observer does not even fire: selecting a tab is a display change and nothing more (FR-123). A continuous drag costs one backing-store resize plus one redraw per frame, bounded by the rAF coalescing.
 
-**Wiring.** `createDock({ store, area, panels }) → { menuInvoke(key), destroy() }`, constructed once in `app.js` `main()` after the panels exist — `panels` maps tab key to the panel handle (`{ open, requestClose }`), and `area` defaults to `#canvas-area`, so the real call is `createDock({ store, panels: { vec: vectorPanel, console: consolePanel } })`. The pre-FR-123 `panels` argument named the **host elements** (an injection seam no caller used, since the hosts are fixed page furniture); the name now means handles, and `#dock`, `#vec-panel`, and `#console-panel` are always looked up by id. `toolbar.js` calls `dock.menuInvoke("vec")` / `dock.menuInvoke("console")` from the Test Vectors and Console items in place of the former open/close toggles; both items still render checked when their tab is open. The dock consults **no** mode state: not `isReadonly()`, not `simulating`, not `vectorHold`, so the divider drags and tabs switch while a run is held (FR-115l) and while a simulation runs (FR-076/FR-087) — FR-115n's and FR-123's "always available", satisfied by not writing the check. Resizing and tab switching set no dirty flag, release no hold, and clear no results; the dock calls the store only through `subscribe` and `setDockActive`.
+**Wiring.** `createDock({ store, area, panels }) → { menuInvoke(key), destroy() }`, constructed once in `app.js` `main()` after the panels exist — `panels` maps tab key to the panel handle (`{ open, requestClose }`), and `area` defaults to `#canvas-area`, so the real call is `createDock({ store, panels: { vec: vectorPanel, console: consolePanel, drc: drcPanel } })`. The pre-FR-123 `panels` argument named the **host elements** (an injection seam no caller used, since the hosts are fixed page furniture); the name now means handles, and `#dock`, `#vec-panel`, `#console-panel`, and `#drc-panel` are always looked up by id. `toolbar.js` calls `dock.menuInvoke("vec")` / `dock.menuInvoke("console")` from the Test Vectors and Console items in place of the former open/close toggles; both items still render checked when their tab is open. The Design Rule Check item calls **neither** — it runs the check, which opens or selects the report tab itself (§6.21, FR-124g) — and renders no checkmark, being a command rather than a panel toggle. The dock consults **no** mode state: not `isReadonly()`, not `simulating`, not `vectorHold`, so the divider drags and tabs switch while a run is held (FR-115l) and while a simulation runs (FR-076/FR-087) — FR-115n's and FR-123's "always available", satisfied by not writing the check. Resizing and tab switching set no dirty flag, release no hold, and clear no results; the dock calls the store only through `subscribe` and `setDockActive`.
   - **Fallback:** the CSS keeps `flex: 0 0 33.333%` on `#dock`, so if the dock were never constructed the area still has a sane height. Inline `flex-basis` from the dock overrides it.
 - **Unseen-content marks in practice (FR-123).** Only `console.js` raises one, and it does so from **inside its existing rAF repaint** — the frame that flushes buffered bytes to the DOM calls `store.markDockUnread("console")` when it wrote anything. So the cost is at most one store notification per frame during output (and in practice one per burst, since the setter is a no-op once the flag is set and while the tab is frontmost), never one per byte: the "asynchronous, non-blocking, heavily buffered" property of FR-122 is preserved. The test-vector panel never marks anything — its runs are synchronous and started from its own tab.
 - **Error handling:** a missing `#canvas-area`, `#dock`, or a host element (headless/unit context) makes `createDock` return an inert handle whose `menuInvoke` is a no-op rather than throwing, so `app.js` bootstrap order cannot break the page; a pointer capture the browser refuses is ignored; `layout` and `dragTo` are total over any stored fraction, including one outside `[MIN, 1-MIN]`; `menuInvoke` with an unknown key is a no-op; and a `dockActive` naming a closed tab (only reachable by a bug) renders as no visible host rather than throwing.
@@ -2965,7 +3150,7 @@ A future tab adds a row plus its host element and its store flag. The **strip or
 ### 6.17 JS: fast (generated C) simulator (`web/js/engine/cgen.js` + `web/cgen/runtime.{h,c}` + chrome wiring)
 
 - **Purpose:** emit, from the current design, a standalone C program that simulates that one design with bit-for-bit slow-simulator semantics — the "fast" engine of `sim-vision.md`, realized as a code generator per §3.23.
-- **Satisfies:** FR-106, FR-107, FR-108, FR-109, FR-110, FR-116, FR-116a, FR-117, FR-118; extends FR-004a (new Simulate-menu item).
+- **Satisfies:** FR-106, FR-107, FR-108, FR-109, FR-110, FR-116, FR-116a, FR-117, FR-118; extends FR-004a (new Tools-menu item; the menu was named Simulate until FR-124h).
 
 **Architecture — runtime owns control flow, generated code is data + lowered logic (FR-116a).** The emitted program is two translation units. `runtime.c` contains `main()`, flag parsing, the settle/step loops, net resolution, the vector runner, and all reporting; it calls into a small **`gen_` interface** declared in `runtime.h` and implemented by the generated `<design>.c`. The generated file is therefore mostly tables plus straight-line lowered logic, and every subtle semantic lives in the hand-written, auditable runtime.
 
@@ -2985,7 +3170,7 @@ A future tab adds a row plus its host element and its store flag. The **strip or
   - **Built-ins/memory:** instance tables (type, nets, effective properties, switch's persisted state as its baked drive level — overridable by a vector input column); each ROM's **refdes and content-file path** baked for the runtime's startup load (FR-117b; superseded the M3 baked-bytes rule 2026-07-03); a plain RAM starts all-U, while a **persistent RAM** (FR-114g) additionally bakes its **save-file path and load-on-start flag** for the runtime's startup load and write-back (FR-117c).
   - **Preflight/refusals:** same compile errors as `buildSimulation` (parse failure, `.R` without `clock:`); behavior-less types generate U-drivers with a warning (FR-080 analogue). **Switch elements (FR-071g/FR-071h) are refused** (added 2026-07-07): `generateC` fails with "transmission gates / relays are not supported by the fast simulator" naming the offending refdes(es) — FR-083a's dynamic net merging is slow-engine-only for now (FR-116); the Generate C… flow surfaces the refusal via the message tray like a flatten failure. **Persistent RAM (FR-114g) is supported** (refusal withdrawn 2026-07-09, originally refused 2026-07-08): a RAM instance whose `mem.ramFile` is set bakes its save-file path and load-on-start flag into `gen_mems`, and the runtime loads it at start-up and writes it back on normal termination of either batch mode (FR-117c, M7 below); a plain RAM (no save file) bakes a NULL path and generates unchanged. If **switch-element** fast support is added later it will mirror the slow engine's per-root resolution (a union-find in `runtime.c` plus generated contact tables) with FR-107 parity coverage — no `gen_` interface provision is reserved for it now (YAGNI; the runtime pair ships verbatim per generation, so an interface change costs only a regenerate). The former FR-116 deferred-scope refusals of sub-design instances / off-sheet connectors remain **as internal guards** — the caller flattens first (FR-116 hierarchy, reworked 2026-07-04), so tripping one means an unflattened design reached the generator. `SUBUNIT_PKG_RE` is the hierarchical-prefix-tolerant form (§6.14), so a child's subunit packages group within their instance. A clock generator with a hierarchical refdes is baked normally (free-run mode drives it, FR-117a) and the **runtime's vector mode refuses it at startup** — `rt_init`/the vector runner scans `gen_clocks[].refdes` for `/`, reports the refdes with a pointer at `--cycles`, and exits 2 (the FR-115e hidden-clock rule, enforceable only at run time because one program serves both modes).
 
-**Chrome wiring (`chrome/toolbar.js`, `app.js`).** The Simulate menu (§6.16) gains a **Generate C…** item (`onGenerateC`), disabled while `state.simulating` or `state.vectorPanelOpen` (FR-116). `app.js` handles it: fetch `/cgen/runtime.h` + `/cgen/runtime.c` → `flatten(store.design, loadDesign, { rootPath: savePath })` (FR-116 hierarchy; a flatten refusal posts to the tray and aborts) → `generateC(flat, { columnsFrom: store.design })` (no ROM preload — the program reads ROM contents itself at startup, FR-117b; the `loadRomContents` preload this section originally specified was discovered at M5 never to have been wired in — a latent all-U-ROM bug in app-generated programs, mooted by FR-117b) → `openFileDialog` in save mode with a `.c` extension (the `saveExt` generalization of §6.16) seeded at the project root (`store.state.project.dir`, FR-121h — same directory as the former `dirOf(savePath)` under the flat layout) with default `<base>.c` → write all three files through `POST /api/v1/file/save` (§6.4), the verbatim-text endpoint added for this purpose (the design-save endpoint requires a valid-JSON body — `json.Indent` — so C source cannot ride it; corrected 2026-07-02 from the original "reuse `/design/save`" plan). Failures/warnings post via the message tray (FR-074).
+**Chrome wiring (`chrome/toolbar.js`, `app.js`).** The Tools menu (§6.16) gains a **Generate C…** item (`onGenerateC`), disabled while `state.simulating` or `state.vectorPanelOpen` (FR-116). `app.js` handles it: fetch `/cgen/runtime.h` + `/cgen/runtime.c` → `flatten(store.design, loadDesign, { rootPath: savePath })` (FR-116 hierarchy; a flatten refusal posts to the tray and aborts) → `generateC(flat, { columnsFrom: store.design })` (no ROM preload — the program reads ROM contents itself at startup, FR-117b; the `loadRomContents` preload this section originally specified was discovered at M5 never to have been wired in — a latent all-U-ROM bug in app-generated programs, mooted by FR-117b) → `openFileDialog` in save mode with a `.c` extension (the `saveExt` generalization of §6.16) seeded at the project root (`store.state.project.dir`, FR-121h — same directory as the former `dirOf(savePath)` under the flat layout) with default `<base>.c` → write all three files through `POST /api/v1/file/save` (§6.4), the verbatim-text endpoint added for this purpose (the design-save endpoint requires a valid-JSON body — `json.Indent` — so C source cannot ride it; corrected 2026-07-02 from the original "reuse `/design/save`" plan). Failures/warnings post via the message tray (FR-074).
 
 **Milestones.** (Sequencing per the 2026-07-02 discussion recorded in `gen-open.md`.)
   1. **M1 — runtime + minimal generator, combinational:** runtime pair, `cgen.js` for GALasm parts + switch/indicator/pulls, Generate-C menu flow; settle-and-stop; conflict reports. No compiler is invoked by any tool — the user compiles by hand (`cc <design>.c runtime.c`).
@@ -3382,6 +3567,277 @@ in both batch modes.
   builder; `console.js` ← `store.js` + DOM; `cgen.js` `netOf`/`cstr`; `runtime.c`
   `mem_rd` + libc `stdio`.
 
+### 6.21 JS: design rule check (`web/js/engine/drc.js` + `chrome/drcpanel.js` + dock/toolbar/app/interaction wiring)
+
+- **Purpose:** run the on-demand design rule check and present its findings — a
+  pure rule engine over the netlist, plus a report tab that turns a finding into a
+  selection on the canvas and, optionally, into a persisted waiver.
+- **Satisfies:** FR-124, FR-124a (rule catalog), FR-124b (severity), FR-124c
+  (findings and object refs), FR-124d (report), FR-124e (waivers), FR-124f
+  (select + reveal), FR-124g (report tab), FR-124h (menu rename), FR-124i
+  (staleness); extends FR-123 (a third tab kind) and reverses §4.1's blanket
+  exclusion for the on-demand case.
+- **Shape:** the split that matters is **`engine/drc.js` is DOM-free and
+  store-free**. It exports one entry point taking a design and returning findings,
+  and every rule is a pure function of the netlist. All state, all DOM, and every
+  store call live in `chrome/drcpanel.js`. This is what makes the whole rule
+  catalog unit-testable against hand-built designs with no browser (§11.1) — the
+  same division `vectors.js`/`ndl.js` already use against their chrome.
+
+**The engine (`engine/drc.js`).**
+
+```js
+runDesignRuleCheck(design, { fileExists = null } = {}) → {
+  findings: [ Finding, … ],        // ordered per FR-124d
+  warnings: [ String, … ],         // buildNets onWarn passthrough
+}
+```
+
+A `Finding` is `{ rule, severity, message, refs }` (FR-124c). `rule` is one of the
+frozen ids `"R1"`…`"R10"`; `severity` is `"error" | "warning" | "info"`; `refs` is a
+**sorted** array of object references, each a string in one of three forms:
+
+| Form | Example | Means |
+|---|---|---|
+| `refdes` | `"U12"` | a component instance |
+| `refdes.pin` | `"U5C.A"` | one pin of an instance |
+| `conductorId:vertexId` | `"w7:v31"` | a conductor endpoint (R7) |
+
+`refs` is sorted so that a finding's identity is order-independent: two runs, and a
+run before and after an unrelated edit, produce byte-identical ref arrays, which is
+what lets a waiver match by set equality (FR-124e) without any canonicalization at
+match time.
+
+**Ordering (FR-124d).** Findings sort by `(severityRank, rule, refs.join())` —
+severity first, then rule id, then the ref string. Sorting by ref last is what makes
+a report **stable**: it depends only on refdes strings, which are immutable
+(FR-011c), never on net names (volatile, FR-037b) or array positions (which any edit
+perturbs).
+
+**Driver classification — the one thing easy to get wrong.** Pin `direction`
+(FR-062a) is *not* sufficient, because the **pull-up and pull-down built-ins declare
+`direction: "out"`** (`builtins.js`). A rule that trusted direction alone would
+report R1 output-fight on every pulled-up open-collector net in every design — the
+single most common idiom in the target circuits — and would never report R5 at all.
+The engine therefore classifies each pin on a net into exactly one of four
+categories before any rule runs, and the rules consume the categories, never
+`direction`:
+
+| Category | Test | Used by |
+|---|---|---|
+| `weak` | host instance's `typeData.renderType` is `"pullup"` or `"pulldown"` (FR-083) | R4, R5 |
+| `port` | host instance's `renderType` is `"port"` (FR-094) | suppresses R3, R4, R9 |
+| `strong` | `direction` is `out`, `tristate`, or `bidir`, and not `weak`/`port` | R1, R2, R4, R9 |
+| `load` | `direction` is `in` or `bidir` | R3, R9 |
+
+`bidir` is deliberately in **two** categories — it both drives and loads, which is
+what makes `bidir + bidir` normal in R1 and what stops a bidirectional bus from
+being reported as load-less by R9.
+
+**Rule implementations.** Each is a small pure function `(ctx) → Finding[]`, where
+`ctx` carries the design, the nets from `buildNets`, and the derived indices below;
+`runDesignRuleCheck` calls them in id order and concatenates. Adding a rule is one
+function plus one table row — nothing dispatches on rule id anywhere else.
+
+- **R1 (output fight)** — for each net, take its `strong` pins and test every
+  unordered pair against the FR-124a table: `out+out`, `out+tristate`, and
+  `out+bidir` fight; `tristate+tristate`, `tristate+bidir`, and `bidir+bidir` do
+  not. One finding **per net**, not per pair, listing every participating pin in
+  `refs` — a net with three plain outputs is one problem, and three findings for it
+  would be three copies of the same fix.
+- **R2 (same-enable contention)** — only for nets carrying ≥2 `tristate` strong
+  pins. For each such pin, fetch its type's compiled GALasm output (§6.13,
+  `galasm.js` `compile`) and read that output's `enable` term. The term is a
+  **single product term** — an array of `{signal, low}` literals. The rule fires
+  only when the term is **exactly one literal** (`length === 1`), and then compares
+  the *resolved net* of that literal's signal, not the signal name: the literal's
+  signal names a pin **on that instance's own type**, so two instances of the same
+  part have textually identical enables while being wired to different nets.
+  Resolution is `signal → refdes.pinName → netOfPin`, the same mapping `sim.js`
+  builds. Two drivers contend iff their enable literals resolve to the **same net
+  index** and carry the **same `low` flag**. Deliberately **not** compared:
+  multi-literal enable terms (`/OE * /CS`), even when identical — the FR draws the
+  line at a single net with a single polarity, and while identical multi-literal
+  terms are just as decidable, every step past that line is one step down the slope
+  to theorem-proving. A driver whose type has no compiled behavior, no `.T` output,
+  or no `.E` term contributes nothing and silences no one.
+- **R3 (undriven input)** — two sources, one finding class (FR-124a). First: every
+  `load` pin on a net whose pin categories include no `strong`, no `weak`, and no
+  `port`. Second: **pins on no net at all**, which `buildNets` cannot report because
+  it returns only nets with ≥1 connected pin — these are found by walking every
+  instance's `typeData.pins` and subtracting the set of pins appearing in any net.
+  One finding per pin.
+- **R4 (can-float)** — a net that is **1 bit wide**, has ≥1 `strong` pin, has
+  **every** `strong` pin `tristate`, and has no `weak` and no `port` pin. Width
+  comes from the net's `lanes`: a net whose lanes are all `wire:` keys is 1-bit; a
+  net with any `bus:` lane belongs to a bus and is exempt (FR-124a — a floating
+  multi-bit bus is normal practice). Note the rule needs the **net's** width, not
+  the conductor's: a single lane broken out of a bus (FR-043a) is a 1-bit net and is
+  correctly checked.
+- **R5 (opposing pulls)** — a net whose `weak` pins include both a `pullup` and a
+  `pulldown` host. `refs` lists both instances.
+- **R6 (unconnected outputs)** — group instances by **package**: the refdes with any
+  trailing subunit letter stripped (`U5A`…`U5D` → `U5`, FR-013a), which is exactly
+  the grouping `REF_SERIES.U`'s scan pattern already recognizes. A package is
+  reported iff it has **≥1 output-capable pin** and **none** of them appears on any
+  net. The `≥1` guard is essential: without it every magic UART (FR-122, all inputs,
+  no outputs) and every indicator would be reported vacuously. `refs` lists the
+  package's instances.
+- **R7 (dangling conductor end)** — every vertex with `kind === "free"` (§7.1a) that
+  is referenced by some conductor's `path`. FR-018a permits these deliberately, which
+  is exactly why the severity is info. `refs` is the `conductorId:vertexId` form so
+  the reveal can target the endpoint rather than the whole wire.
+- **R8 (stray component)** — an instance none of whose pins appears on any net.
+  **Suppressed** when another instance of the same **package** (the R6 grouping) does
+  have a connection: an unwired spare gate in a used 7400 is not a stray component,
+  and its real defect — floating inputs — is already R3 (FR-124a). Also skipped for
+  instances with no pins at all (the text note, FR-071f).
+- **R9 (no loads)** — a net with ≥1 `strong` or `weak` pin, no `load` pin, and no
+  `port` pin.
+- **R10 (unresolvable port target)** — for each port instance carrying
+  `inst.target.file`, resolve it against the project root and probe. The probe is the
+  injected `fileExists(path) → Promise<bool>|bool` callback; when it is `null` (no
+  project, unit test, or offline) R10 **reports nothing at all** rather than guessing
+  — an unanswerable probe must never become a finding (FR-124a). This is the only
+  rule that is not a pure function of the design, and the only reason
+  `runDesignRuleCheck` is `async`.
+
+**Waiver matching (FR-124e), in the engine.** `applyWaivers(findings, waivers) → {
+  active, waived, unmatched }` — a pure function, so its behavior is testable
+without a design file. A waiver `{ rule, refs, note? }` matches a finding iff
+`rule` is equal and `refs` are set-equal (both sorted, so a string compare of the
+joined arrays suffices). `active` and `waived` partition the findings; `unmatched`
+is the waivers that matched nothing, which the caller drops (FR-124e).
+
+**The report tab (`chrome/drcpanel.js`).** `createDrcPanel({ store, interaction })
+→ { open(), requestClose(), isOpen(), run() }` — the handle shape `dock.js` already
+expects (§6.16a). It mounts into `#drc-panel` inside `#dock`'s `.dock-body`, sets
+**no** `hidden` on its host (the dock owns host visibility, §6.16a), and binds no
+Escape. `requestClose()` is **unguarded** — unlike the test-vector tab there is
+nothing to lose, since a report regenerates in milliseconds and waivers are already
+in the design (FR-124g). It keeps its findings while hidden behind another tab, like
+every other tab, and needs no hidden/shown hook.
+
+`run()` is the whole command: read `store.design`, call `runDesignRuleCheck`, record
+`store.state.designRev` as `checkedRev`, apply waivers, drop the unmatched ones, open
+or select the tab, and render. **Opening or selecting, never closing** — `run()` calls
+`store.setDrcPanelOpen(true)` when closed and `store.setDockActive("drc")` when open
+but backgrounded, and deliberately does **not** route through `dock.menuInvoke("drc")`,
+whose third branch would close a frontmost tab (FR-123/FR-124g). This is the one place
+the dock's uniform menu rule is bypassed, and it is bypassed in the panel rather than
+patched into the dock, so `menuInvoke` keeps exactly one behavior.
+
+**Rendering.** Header: design name, check time, `unsaved changes` when
+`store.state.dirty`, a **Copy** button, and — when `store.state.designRev !==
+checkedRev` — the **stale banner** (FR-124i). Body: the flat severity-ordered list,
+one row per active finding, each row a button carrying its finding. Footer: the
+collapsed `Waived (N)` `<details>`, rendered only when N > 0, holding the waived
+rows greyed with their notes and an **Un-waive** control each. A run with no active
+findings renders "No findings" in place of the list. **Per FR-124d the clean case
+shows no waived section**, which is the one deliberate roughness in this design: a
+report can read "No findings" when findings exist but are all waived. Recorded as
+such rather than silently softened — see §12.
+
+**Staleness is a subscription, not a poll.** The panel subscribes to the store and
+compares `store.state.designRev` (which already exists — `store.js` bumps it on
+dispatch/undo/redo/`applyLive`/`replaceDesign`, §6.10, added for FR-115h) against
+`checkedRev`. Nothing new is added to the store for staleness. To keep an unrelated
+edit from rebuilding the list, the subscriber **only toggles the banner's `hidden`
+attribute** — the finding rows are never re-rendered outside `run()`, so the report
+cannot lose scroll position or focus while the user edits the design behind it.
+
+**Click → select + reveal (FR-124f).** A finding row's handler maps `refs` to
+selection refs — a `refdes.pin` and a `conductorId:vertexId` ref both reduce to their
+owning object for selection purposes — calls `store.setSelection(refs)`, then
+`interaction.revealRefs(refs)`. Rows are plain buttons and the handler is on the
+list container (one delegated listener, not one per finding), so a thousand-finding
+report costs one listener.
+
+**Waive / un-waive (FR-124e).** The waive control prompts for the optional note
+(a plain `prompt()`-style single-field dialog reusing the `dialogs.js` primitives;
+an empty note is stored as absent, not as `""`), then calls
+`store.applyLive((d) => { (d.drcWaivers ??= []).push({ rule, refs, note }) })` —
+dirtying, not undoable, exactly the FR-087a path (FR-124e). Un-waive splices the
+matching entry out the same way. Both then re-partition the **existing** findings
+and re-render; **neither re-runs the check**, because waiving changes what is
+displayed, not what is true, and re-running would be the one thing guaranteed to
+scroll the report out from under the user. Note that `applyLive` bumps `designRev`,
+so waiving marks the report stale by the mechanism above — correct and intended:
+the design did change, and the honest banner costs nothing since the findings stay.
+
+**Dropping unmatched waivers (FR-124e) does not dirty.** `run()` removes them by
+mutating `store.design.drcWaivers` **directly**, bypassing `applyLive` and every
+other store path, and notifies nothing. This is the one deliberate direct mutation of
+the design outside the command pipeline in the whole client, and it is justified
+narrowly: the alternative paths all set `dirty` (§6.10 has no non-dirtying mutator,
+by design), and a pure read of the design must not mark it modified — the property
+FR-116 and FR-119 assert for Generate C and Export. The mutation is **safe** because
+what it removes is by construction unreachable: an unmatched waiver refers to objects
+that no longer exist, so nothing renders it, nothing indexes it, and no undo entry can
+reference it. It reaches disk at the next save for any other reason.
+
+**Reveal (`engine/interaction.js`).** New export `revealRefs(refs)`: resolve each ref
+to a world-space box (an instance's footprint via its position and type dimensions; a
+pin or connector vertex via `pinWorldPos`; a free vertex via its own `x,y`), union
+them, then `setViewport(centerViewportOn(…))` with a zoom of
+`clamp(min(w·0.9/spanX, h·0.9/spanY), MIN_ZOOM, REVEAL_MAX_ZOOM)`. This is
+`fitToScreen`'s arithmetic (FR-022a) against a smaller box plus one extra clamp:
+`REVEAL_MAX_ZOOM` (2× default) is what stops revealing a single pin from magnifying
+to absurdity, and a zero-span box (one pin) is given a small fixed span so the
+division is never by zero. Refs that resolve to nothing are skipped; a call whose refs
+all fail to resolve moves the view not at all, which is the correct behavior for a
+stale finding (FR-124i).
+
+**Dock, toolbar, and app wiring.** `dock.js` gains one `TABS` row —
+`{ key: "drc", label: "Design Rules", host: "#drc-panel", openFlag: "drcPanelOpen" }`
+— and nothing else in that module changes (§6.16a): the strip, the order-opened
+placement, the MRU close rule, the divider, and the single height fraction all apply
+to the new tab with no new code. `store.js` gains `setDrcPanelOpen(bool)` routing
+through the existing shared `setTabOpen("drc", …)` helper, and `state.drcPanelOpen`
+initialized `false`. `isReadonly()` is **not** touched — the report imposes no lock
+(FR-124g). `index.html` gains `<section id="drc-panel" hidden>` beside `#vec-panel`
+and `#console-panel`. `toolbar.js` renames `createMenu("Simulate")` to
+`createMenu("Tools")` (FR-124h — a label change; the menu object, its items, and
+their enablement are untouched) and adds a **Design Rule Check** item invoking
+`onDesignRuleCheck`, disabled by the same predicate that disables Generate C…
+(`simulating || vectorHold`, FR-116/FR-124). `app.js` constructs the panel once and
+supplies `onDesignRuleCheck: () => drcPanel.run()`, and passes `drc: drcPanel` in
+`createDock`'s `panels` map so the tab's ✕ can close it.
+
+- **Error handling:**
+  - A rule function that **throws** does not lose the report: `runDesignRuleCheck`
+    wraps each rule in try/catch, drops that rule's findings, and appends a
+    `warnings` entry naming the rule. Ten independent rules should not be an
+    all-or-nothing pass, and a rule bug must not make the checker useless.
+  - `buildNets`'s `onWarn` (an unequal-width bus join in a hand-edited file, §6.6) is
+    collected into `warnings` and shown in the report's notice line — never
+    swallowed, and never promoted to a finding, since it describes the file rather
+    than the circuit.
+  - A design with **no components** yields zero findings and the clean result, not an
+    error.
+  - `fileExists` rejecting or throwing (server down, FR-089) makes R10 report nothing
+    and adds one `warnings` line; the other nine rules are unaffected, so a check is
+    still useful with no server.
+  - A **malformed waiver** in a hand-edited design file (missing `rule`, `refs` not an
+    array) matches nothing and is therefore dropped by the ordinary unmatched-waiver
+    path — no validation pass, no error, no crash.
+  - A finding whose `refs` no longer resolve (a stale report, FR-124i) selects
+    nothing and reveals nothing rather than throwing; see `revealRefs` above.
+  - Missing `#drc-panel` (headless/unit context) makes `createDrcPanel` return an
+    inert handle whose `run()` is a no-op, matching `createDock`'s posture (§6.16a),
+    so bootstrap order cannot break the page.
+- **Dependencies:** `model/netlist.js` (`buildNets`, and the `lanes`/`pins` shape),
+  `model/design.js` (instance shape, `REF_SERIES` for the package grouping),
+  `engine/galasm.js` (`compile`, for R2's `enable` term only), `builtins.js`
+  (`renderType` values `pullup`/`pulldown`/`port`), `store.js` (`design`, `dirty`,
+  `designRev`, `setSelection`, `applyLive`, `setDrcPanelOpen`, `setDockActive`),
+  `engine/interaction.js` (`revealRefs`), `chrome/dialogs.js` (the note prompt),
+  `chrome/dock.js` (tab registry only — the panel and the dock do not import each
+  other; `app.js` introduces them), `api.js` (`listDir`, for R10's probe).
+  Notably **not** a dependency: `engine/sim.js`. The check shares the netlist with the
+  simulator but none of its evaluation machinery, which is what keeps it runnable on a
+  design the simulator would refuse.
+
 ---
 
 ## 7. Data Model
@@ -3496,6 +3952,7 @@ branch wire that meet at it share one position and cannot drift apart (A1).
   "defaultRender": "ic",               // FR-096: render style when THIS design is embedded (ic|connector)
   "primaryClock": "A-7",               // FR-076b: refdes of the primary clock generator (Step-cycle target, FR-076a); additive-optional — absent when the design has never had a clock, no formatVersion bump
   "refCounters": { "U": 29, "A": 19, "N": 4, "X": 5 },  // FR-011c: per-series high-water refdes counters — the next number each series may allocate; monotonic, so a retired designator is never reused
+  "drcWaivers": [ DrcWaiver, … ],      // FR-124e: suppressed design-rule findings; additive-optional — absent/empty when nothing is waived, no formatVersion bump
   "components": [ ComponentInstance, … ],   // (a) FR-056 (includes built-in ports and sub-design instances)
   "wires":      [ Wire, … ],                // (b) FR-056
   "buses":      [ Bus,  … ],                // (c) FR-056
@@ -3580,6 +4037,32 @@ keys `valueOfLane` needs, FR-087c), which `serializeDesign` **strips**: it is a
 simulation-time index, derivable from the design and ignored on load, so it stays
 out of the save file rather than enlarging every design on disk.
 
+**`DrcWaiver`** (FR-124e, added 2026-08-02) — one suppressed design-rule finding:
+```jsonc
+{
+  "rule": "R3",                              // frozen rule id (FR-124a)
+  "refs": ["U5C.A"],                         // the finding's object refs, SORTED (FR-124c)
+  "note": "spare gate, inputs tied on the board"   // optional free text; absent, not "", when unset
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `rule` | string | one of `"R1"`…`"R10"`. Rule ids are **frozen** exactly as FR ids are — never renumbered, never reused, a superseded rule's id retired — *because* they are persisted here. A renumbering would silently re-point every waiver in every design file at a different rule |
+| `refs` | string[] | the waived finding's object references (§6.21): `refdes`, `refdes.pin`, or `conductorId:vertexId`. **Stored sorted**, so matching is set equality by joined-string compare with no canonicalization at match time |
+| `note` | string? | optional free-text reason (FR-124e); omitted rather than empty when the user supplies none |
+
+This is the **only** persisted state in the save file that describes the *editor's
+opinion of* the design rather than the design itself, which is why it earns a
+paragraph: it is **additive-optional** (absent means none — the `primaryClock`
+pattern), so it costs **no `formatVersion` bump and no migration** (§7.4), and it
+is written only when non-empty, so a design that never used the checker is
+byte-identical to one saved before the feature existed. Waiver *identity* rests
+entirely on `refdes` being immutable and never reused (FR-011/FR-011c) — the same
+guarantee the `.tv` file's column binding rests on (§7.7). Nets, having no
+persistent identity, are never named here: a net-scoped waiver stores the net's
+**pin set** in `refs`.
+
 ### 7.3 Data lifecycle (CRUD)
 - **Create:** instances by placement (FR-008/009/011) — each pin a wire later
   binds to becomes a `pin` vertex on demand; wires/buses by the Wire/Bus tools
@@ -3637,6 +4120,22 @@ in place from version 1 so future format changes slot in without touching caller
   chain is exercised before a real version 2 exists.
 - `deserializeDesign` calls `migrate` first, so every load path — Open (fileops),
   backup recovery (§6.10), tests — sees one normalized shape.
+- **`drcWaivers` (FR-124e) adds no step and no version.** It is written by
+  `serializeDesign` only when non-empty and read as `obj.drcWaivers ?? []` — the
+  **additive-optional** pattern `primaryClock` and `defaultRender` already use, in
+  which "absent" is a valid and meaningful state rather than a missing field. So
+  `FORMAT_VERSION` stays at 3, `MIGRATIONS` gains no entry, and every design file
+  written before 2026-08-02 loads unchanged and correct. This is worth stating
+  because the instinct on adding a persisted field is to bump the version: a bump
+  is required only when an **existing** field changes meaning or an absent one
+  cannot be defaulted, and neither is true here. A waiver list is also, uniquely
+  among persisted state, **safe to lose** — dropping every waiver costs the user a
+  noisier report and nothing else — which is why it needs no repair pass either.
+- **`repairStructure` deliberately does not validate waivers** (below). A waiver
+  naming objects that no longer exist is not corruption; it is the ordinary,
+  expected result of deleting a waived object, and the checker drops it silently on
+  the next run (FR-124e, §6.21). Validating it here would turn a normal edit into a
+  load-time warning.
 
 Forward-compat (newer than understood) is **not** a migrate concern: `migrate`
 passes such a file through untouched and the load flow (`fileops.loadIntoStore`)
@@ -4017,6 +4516,13 @@ A JSON file at the project root:
 | Where the FR-115p active-low rule is evaluated | Test the label at each use (panel, `reconcileVectors`, `tv2txt`); bake the base label into the generated program; recover the base in `tv2txt` by stripping the bit index | **Evaluate `isActiveLowName` once in `deriveColumns` and stamp `activeLow` on the column; bake that flag as `rt_incol.active_low` for `--columns` consumers** | The rule reads a `portN`'s *instance* base label, which no consumer downstream of the label can recover — the per-bit label appends the bit index and hides a trailing slash, and inverting that formatting elsewhere is what §6.16 already warns against. Baking the base instead would put two free-text fields on one `--columns` line, which cannot be parsed positionally; baking the derived flag keeps the predicate written once (FR-109), costs one fixed-width token, and lets `tv2txt` reach the panel's answer with no rule of its own |
 | Magic UART: debug-sim "stdout" (FR-122c) | Reuse the message tray; a modal log window; **a docked Console panel** | **Docked, modeless Console panel (View ▸ Console)** | The browser has no OS stdout; a persistent scrollable monospace panel matches "console" semantics and reuses the docked-panel idiom (FR-115b), while staying modeless (no design lock) because it is output-only. Buffered append + rAF repaint delivers "asynchronous, heavily buffered, no overrun" without backpressure into the engine |
 | Magic UART: fast-C output channel (FR-122d) | A separate file/fd; stderr; **real stdout, fully buffered** | **stdout (`setvbuf _IOFBF`)** | The prompt specifies "standard output"; full stdio buffering is the "heavily buffered" requirement. Interleaving with the trailing free-run dump/vector transcript is acceptable (dump trails all UART output) and handled by the parity harness's ordering |
+| DRC report surface (FR-124g) | A modal **dialog box** (as originally asked for); a floating non-modal window; the message tray | **A tab of the docked panel area (FR-123)** | The fix loop is read → fix → re-run, and a modal dialog forbids the middle step: every finding would cost a dismiss and every re-run would rebuild the report from nothing. The tab is modeless, so it can also be *clicked into* — FR-124f's select-and-reveal needs a visible canvas to reveal into, which a modal dialog by definition does not have. Cost was a `TABS` row, a host, and a flag; the strip, height, divider, MRU, and unread marking came free, which is precisely the claim FR-123 was written to make |
+| Where DRC waivers live (FR-124e) | A `<base>.drc` **sidecar** on the `.tv` precedent; a project-level waiver file; nothing (no waiver mechanism) | **In the design file, additive-optional** | Waivers travel with the design through copy, rename, and Duplicate Project (FR-121f) with no association logic of the kind `.tv` needed (FR-115a/FR-115m). A sidecar means a second file every path must carry; a project-level file needs a design-name qualifier on every key, since `refdes` is unique only *within* a design. The feared cost — a format change — evaporated: additive-optional means no bump and no migration (§7.4). What it does buy is that waiving mutates the design, which forced the next two decisions |
+| Waiving and the undo stack (FR-124e) | A real `WaiveFinding`/`UnwaiveFinding` Command through `dispatch`, consistent with "every design mutation is undoable" | **`applyLive`: dirties, does not enter undo** | A waiver is report bookkeeping, not circuit structure. Ctrl+Z immediately after waiving should undo the user's last *wire*; interleaving waivers into one history means undoing back past a waive replays waivers en route. `applyLive` already exists for exactly this shape (the FR-087a switch click) — a real change to the design that is emphatically not an editing action. Un-waive is the inverse control, and it is in the report where the user is looking |
+| Dropping waivers that match nothing (FR-124e) | Dirty the design when any is dropped; keep them forever; surface a count with a manual purge control | **Drop silently, direct mutation, no dirty flag** | A pure read of the design must not mark it modified — the property FR-116/FR-119 assert for Generate C and Export — and running a check twice in a row must not leave the design showing unsaved changes. Every store mutator sets `dirty` (§6.10 has no non-dirtying path, by design), so this is the one documented exception, safe because an unmatched waiver names objects that no longer exist and is therefore unreachable by anything. The dead entries leave the file at the next save for any other reason |
+| Must the design be **saved** before a check runs (FR-124) | Prompt to save, cancelling the check if declined (the original decision); a soft prompt that runs anyway when declined; silent auto-save | **No save requirement — check the live in-memory design** | Reversed during the interview. Export (FR-119) exports "the live in-memory design (unsaved edits included)" and Generate C (FR-116) is read-only with respect to it; save-first would have made the DRC the only artifact-producing item in the menu demanding a save. It also broke down under its own feature set: a modeless report means every fix dirties the design, so every re-run would prompt — and waivers dirty it too, so the checker would prompt because of itself. `designRev` (FR-124i) anchors the report to an exact revision, which is a stronger claim than "some file existed on disk", since that file can be overwritten a minute later |
+| How the DRC classifies drivers (FR-124a) | Trust pin `direction` (FR-062a) directly, as the netlist consumers do | **Classify into weak/port/strong/load first, by `renderType` *and* direction** | Forced by a fact easy to miss: the pull-up and pull-down built-ins declare `direction: "out"` (`builtins.js`). A direction-only R1 reports an output fight on every pulled-up open-collector net — the most common idiom in the target circuits — and R5 could never fire at all. Making the categories an explicit pre-pass, consumed by every rule, means the trap is disarmed once rather than in each of ten rules. `bidir` sits in *two* categories deliberately, which is what makes `bidir + bidir` normal in R1 and keeps a bidirectional bus from being called load-less by R9 |
+| Where R2 draws its decidability line (FR-124a) | Flag any two drivers sharing an enable *signal*; flag identical multi-literal enable terms too; full satisfiability over enable expressions | **Only single-literal enables, compared by resolved net + polarity** | Flagging a shared enable signal regardless of net would flag one-hot decoder enables — the normal way to build a bus — and a '245 pair sharing `/OE` on different nets is correct design. Past a single literal the problem grades smoothly into theorem-proving, and a checker that is *sometimes* right about contention is worse than one that is narrowly and always right. Identical multi-literal terms are conceded to be equally decidable and are still excluded: the line has to be somewhere defensible, and "one net, one polarity" is a line a user can hold in their head |
 
 ---
 
@@ -4037,7 +4543,7 @@ srv/                        Go module (module path retains the historical name
   components/*.yaml         the component library (74138.yaml, 74165.yaml, …; §7.6)
 web/
   index.html                SPA shell + <canvas> + module entry
-  css/style.css             layout for toolbar/palette/canvas/dialogs/vector panel
+  css/style.css             layout for toolbar/palette/canvas/dialogs/vector+report panels
   js/app.js                 bootstrap + palette rendering (§6.11/§6.12; there is no palette.js)
   js/api.js                 REST client (§6.12)
   js/store.js               store + undo/redo + locks (§6.10)
@@ -4063,6 +4569,7 @@ web/
   js/engine/vectors.js      test-vector runner + .tv file model (§6.16)
   js/engine/cgen.js         fast-engine C code generator (§6.17)
   js/engine/ndl.js          NDL netlist exporter (§6.18)
+  js/engine/drc.js          design rule check engine — rules R1–R10, pure (§6.21, FR-124)  [CREATE]
   js/chrome/toolbar.js      menu/tool bar (§6.11)
   js/chrome/dialogs.js      dialogs + test-vector panel (§6.11, §6.16)
   js/chrome/fileops.js      save/open/navigation flows (§6.11, §6.14, §6.19)
@@ -4072,6 +4579,7 @@ web/
   js/chrome/statusbar.js    bottom status bar trays (§6.11)
   js/chrome/console.js      docked debug-sim Console panel (§6.20, FR-122c)  [CREATE]
   js/chrome/dock.js         docked panel area: tabs, height, divider (§6.16a, FR-123/FR-115n)
+  js/chrome/drcpanel.js     design-rule report tab (§6.21, FR-124g)  [CREATE]
   cgen/runtime.h            fast-engine C runtime API, documented (§6.17)
   cgen/runtime.c            fast-engine C runtime implementation (§6.17)
   tools/tv2txt.js           .tv → generated-program stdin rows (§6.17 M2)
@@ -4085,6 +4593,17 @@ Unit tests sit beside their modules (`*.test.js` / `*_test.go`) and run via
 `./runtests.sh` (repo root). (Updated 2026-07-08 to the actual tree; supersedes
 the original greenfield plan, whose `sim/` root and never-created
 `js/chrome/palette.js` no longer described the repository.)
+
+**Modified for the design rule check (FR-124, §6.21; 2026-08-02):**
+`js/chrome/dock.js` (one `TABS` row), `js/store.js` (`drcPanelOpen` +
+`setDrcPanelOpen`; `isReadonly()` untouched), `js/engine/interaction.js`
+(`revealRefs`, §6.9), `js/chrome/toolbar.js` (Simulate→**Tools** rename, FR-124h,
+plus the Design Rule Check item), `js/app.js` (panel construction, the
+`onDesignRuleCheck` callback, the `drc` entry in `createDock`'s panels map),
+`js/model/persist.js` (`drcWaivers`, additive-optional, §7.4), `index.html`
+(`#drc-panel` host inside `.dock-body`), `css/style.css` (`drc-*` classes reusing
+the existing panel primitives). New tests: `js/engine/drc.test.js` and
+`js/chrome/drcpanel.test.js`.
 
 ---
 
@@ -4217,6 +4736,16 @@ the original greenfield plan, whose `sim/` root and never-created
 | FR-122, FR-122a, FR-122b | §6.20 | `builtins.js`, `engine/uart.js`, `engine/sim.js`, `engine/canvas.js`, `engine/symbols.js` |
 | FR-122c | §6.20 | `chrome/console.js`, `chrome/toolbar.js`, `store.js`, `app.js`, `index.html`, `style.css` |
 | FR-122d | §6.20 | `engine/cgen.js`, `cgen/runtime.h`, `cgen/runtime.c`, `tools/parity.js` |
+| FR-124 | §6.21, §4.1, §5.2, §6.6, §6.11, §8 | `engine/drc.js`, `engine/drc.test.js`, `chrome/drcpanel.js`, `chrome/toolbar.js`, `app.js` |
+| FR-124a | §6.21, §6.6, §6.13, §8 | `engine/drc.js`, `engine/drc.test.js` |
+| FR-124b | §6.21 | `engine/drc.js`, `engine/drc.test.js`, `chrome/drcpanel.js`, `css/style.css` |
+| FR-124c | §6.21, §7.2 | `engine/drc.js`, `engine/drc.test.js` |
+| FR-124d | §6.21 | `engine/drc.js`, `chrome/drcpanel.js`, `chrome/drcpanel.test.js`, `css/style.css` |
+| FR-124e | §6.21, §6.10, §7.2, §7.4, §8 | `engine/drc.js`, `engine/drc.test.js`, `chrome/drcpanel.js`, `chrome/drcpanel.test.js`, `model/persist.js`, `model/persist.test.js`, `store.js` |
+| FR-124f | §6.21, §6.9 | `engine/interaction.js`, `chrome/drcpanel.js`, `store.js` |
+| FR-124g | §6.21, §6.16a, §6.10, §8 | `chrome/drcpanel.js`, `chrome/dock.js`, `chrome/dock.test.js`, `store.js`, `store.test.js`, `app.js`, `index.html`, `css/style.css` |
+| FR-124h | §6.11, §6.16, §6.17 | `chrome/toolbar.js` |
+| FR-124i | §6.21, §6.10 | `chrome/drcpanel.js`, `chrome/drcpanel.test.js`, `store.js` |
 | NFR-001 | §6.1 | `main.go` |
 | NFR-002 | §6.12 | `api.js` |
 | NFR-003 | all | server `*.go`, `web/js/*` |
@@ -4464,6 +4993,63 @@ tests beside them per §9).
   followed by the same `LABEL=v` dump the generic free-run leg synthesizes. UART
   designs route to this leg and are excluded from the generic free-run leg (as
   ram-persist designs are), so the two never double-count.
+- **DRC engine (`engine/drc.test.js`, §6.21, FR-124a):** the whole catalog, against
+  designs built in memory — no DOM, no store, no server. The engine is pure, so
+  every rule is directly testable, and the **negative** cases matter more than the
+  positive ones: for a checker, a false positive is the failure that makes the
+  feature worthless. Per rule:
+  - **R1** — each row of the combination table, including `bidir + bidir`
+    producing **no** finding; three plain outputs on one net produce **one**
+    finding naming all three, not three findings.
+  - **R1 vs pulls (the trap, §6.21)** — one `out` driver plus a pull-up on a net
+    yields **nothing**. This test exists to fail loudly if a future change makes a
+    rule trust pin `direction` again, since the pull built-ins declare
+    `direction: "out"`.
+  - **R2** — fires for two `.T` outputs on one net with the same enable net and
+    polarity; does **not** fire when the enable *signal names* match but resolve to
+    different nets (two instances of one part), when polarity differs, when either
+    enable is multi-literal, or when a driver has no compiled behavior — and a
+    behavior-less driver silences nothing for the others.
+  - **R3** — both sources in one class: a pin on an undrivable net, and a pin on no
+    conductor at all (which cannot come from `buildNets`, §6.6). A net driven only
+    by a pull-up is **driven**; a net reaching a port is **driven**.
+  - **R4** — a 1-bit tri-state-only net with no pull fires; with a pull-up does
+    not; a multi-bit bus net does not; **a single lane broken out of a bus (FR-043a)
+    does** — it is a 1-bit net, which is the distinction between net width and
+    conductor width.
+  - **R5** — pull-up and pull-down on one net.
+  - **R6** — a 7400 with one gate wired is silent for the three spares; with no
+    gate wired it fires **once for the package**; a partially used counter is
+    silent; **a magic UART (all inputs, no outputs) is silent** — the vacuous-fire
+    guard, without which every UART and indicator is reported.
+  - **R7** — a `kind === "free"` vertex referenced by a wire.
+  - **R8** — an unconnected instance fires; an unconnected spare unit in a *used*
+    package does not (R3 covers it); a text note (no pins) does not.
+  - **R9** — a driven net with no input pins fires; the same net also reaching a
+    port does not; a `bidir`-only net does not.
+  - **R10** — `fileExists` false fires; `fileExists === null` reports **nothing**;
+    `fileExists` throwing reports nothing, adds one warning, and leaves the other
+    nine rules unaffected.
+  - **Ordering (FR-124d)** — two runs over one design produce byte-identical
+    output; the sort is severity, then rule, then refs.
+  - **Waivers (FR-124e)** — `applyWaivers` matches by rule + ref set regardless of
+    the order refs were constructed in; unmatched waivers land in `unmatched`; a
+    malformed waiver (missing `rule`, non-array `refs`) matches nothing and does
+    not throw.
+  - **Robustness** — a rule that throws costs only its own findings and adds a
+    warning naming it; an empty design yields zero findings rather than an error.
+- **DRC panel (`chrome/drcpanel.test.js`, §6.21):** the DOM-free parts — the
+  staleness predicate against a moving `designRev` (FR-124i), the active/waived
+  partition and its re-render trigger, and that waiving calls `applyLive` while the
+  unmatched-waiver drop does **not** (assert `dirty` is untouched by a check that
+  drops one — the property FR-124e turns on).
+- **Persistence (`model/persist.test.js`, FR-124e/§7.4):** a design with waivers
+  round-trips; a design with **no** waivers serializes **without** the key at all;
+  a pre-2026-08-02 file loads with `drcWaivers` defaulting to `[]` and
+  `FORMAT_VERSION` unchanged at 3.
+- **Dock (`chrome/dock.test.js`, FR-124g):** the third tab participates in the
+  order-opened strip, the MRU close rule, and the single height fraction with no
+  new geometry — i.e. the existing tests extended to three tabs, not new ones.
 
 ### 11.2 Integration / end-to-end (Chrome + Firefox, manual or Playwright)
 - Startup blocks canvas until palette loads (FR-003); empty design named
@@ -4489,7 +5075,7 @@ tests beside them per §9).
   via navigation; round-trip equality of the model, including `bitNames`,
   breakout taps, and `nets` provenance (FR-044–FR-060a).
 - Project-first startup (FR-121c): before any project the canvas is inert
-  (place/wire/undo refused with a tray message), Save/New/Run and the Simulate
+  (place/wire/undo refused with a tray message), Save/New/Run and the Tools
   items disabled, only New Project / Open Project / Open live; New Project
   creates the folder + `<name>-manifest.json` and enables editing; the top bar
   shows the project's display name (FR-121b), falling back to the folder name
@@ -4549,11 +5135,11 @@ tests beside them per §9).
   simulation runs. Finally, do all of this with the **Console tab in front**: the
   columns still track, and nothing about the design's editability changes.
 - **Tabbed panel area (FR-123).** With nothing open the schematic fills the canvas
-  area and there is no strip. Simulate ▸ Test Vectors: the area appears with a
+  area and there is no strip. Tools ▸ Test Vectors: the area appears with a
   single "Test Vectors" tab, frontmost. View ▸ Console: a second tab appears at
   the right and takes the front; the test-vector table is hidden but the design is
   **still read-only** (try to drag a component — the read-only notice appears) and
-  a held run's values are still on the schematic. Invoke Simulate ▸ Test Vectors
+  a held run's values are still on the schematic. Invoke Tools ▸ Test Vectors
   once: the tab comes forward with its rows, results, row selection, and scroll
   position exactly as left. Invoke it again: it closes (with the Save/Discard/
   Cancel prompt if the `.tv` file is modified — Cancel leaves the tab open and
@@ -4582,6 +5168,20 @@ tests beside them per §9).
   Nothing marks an active-low column in the header. Then run
   `node web/tools/tv2txt.js ./prog design.tv` for the same design and confirm the
   emitted rows carry the same defaults the panel shows.
+- **Design rule check (§6.21, FR-124).** On a real design: Tools ▸ Design Rule
+  Check opens the **Design Rules** tab beside any tab already open, at the area's
+  existing height, and lists findings errors-first. Click a finding: the named
+  objects become the selection and the view pans **and zooms** to frame them, from
+  anywhere in the schematic. Edit the design with the report open — the design is
+  **editable** (no lock) and the **stale banner** appears while every finding stays
+  listed and clickable; re-run and the banner clears. Waive a finding: it moves to
+  **Waived (N)**, the note is shown, the design is marked modified, and **Ctrl+Z
+  undoes the previous wire edit, not the waiver**. Save, reload the page, re-open
+  and re-run: the waiver is still in effect. Delete a waived object, re-run, and
+  confirm the waiver is gone **and the design is not marked modified by the check
+  itself**. Start a simulation and confirm the menu item is disabled. Check a clean
+  design and confirm the tab opens with "No findings". Close the tab with its ✕ and
+  confirm no save prompt (unlike the vector tab) and no lost waivers.
 
 ### 11.3 Edge / boundary cases
 - Delete a component → connected wires keep one dangling end (FR-029); wires with
@@ -4607,10 +5207,24 @@ machine. (Confirm the target numbers in §12 if different.)
 
 ## 12. Open Questions
 
-Every item below is **resolved** except **OQ-002**, which is a question raised by
-FR-115h's 2026-08-02 rework and does not gate the work already done; the rest are
-retained as decision records. (Intro re-scoped 2026-07-08; it formerly gated
-implementation slices that have long since shipped.)
+Every item below is **resolved** except **OQ-002** and **OQ-014**, neither of which
+gates the work already done; the rest are retained as decision records. (Intro
+re-scoped 2026-07-08; it formerly gated implementation slices that have long since
+shipped. OQ-014 added 2026-08-02 with FR-124.)
+
+- **OQ-014 — Should a clean DRC report disclose that findings were waived? —
+  OPEN (raised 2026-08-02).** FR-124d specifies that a run with no *active*
+  findings shows "No findings", and the stakeholder explicitly declined the variant
+  that would also render the collapsed `Waived (N)` section on a clean run. Taken
+  literally — which is how §6.21 implements it — a report can read "No findings"
+  while waived findings exist, with nothing on screen saying so. That is a mild
+  trap of exactly the kind waivers are supposed to avoid creating: the user who
+  waived ten findings a month ago sees a clean bill of health today. The
+  alternatives are to render the waived section unconditionally whenever N > 0, or
+  to append a count to the clean message ("No findings (3 waived)"), which is the
+  same disclosure at a fraction of the visual weight and was not among the options
+  put to the stakeholder. Deciding this needs them, since the current behavior is
+  what they chose and the objection only became visible once it was written down.
 
 - **OQ-002 — What should an open test-vector panel do when the whole DESIGN is
   replaced? — OPEN (raised 2026-08-02).** Removing the read-only lock (FR-115h)
