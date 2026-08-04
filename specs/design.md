@@ -1697,13 +1697,21 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `setTool("probe")` automatically un-highlights Select (FR-087c's "supplants
   Select"); `PROBE_CURSOR` is an inline SVG data-URI beside `WIRE_CURSOR`, its
   hotspot at the **image centre** with the arrow tip drawn there (the FR-025
-  scaling rationale, which FR-087c adopts). The lock branch of `onPointerDown`
-  checks the interactive-built-in exception **first** — a switch click still
-  toggles (FR-087c: switches are never probe targets) — and only then, when the
-  tool is `probe`, resolves a target with `probeTargetAt(world)` over the ordinary
-  hit-test precedence (`hitPin` → `hitJunction` → `hitSegment`/`hitBusSegment` →
-  `hitComponent`) and calls `store.setProbe(target)`; a miss clears it. Nothing is
-  dispatched and the selection is never touched. `setTool("probe")` is reachable
+  scaling rationale, which FR-087c adopts). A probe click is routed by
+  `probeClaimsClick(store.state)` — `tool === "probe" && (simulating ||
+  vectorHold)` — which `onPointerDown` tests **independently of the lock**, at two
+  sites: inside the lock branch, after the interactive-built-in exception so a
+  switch click still toggles (FR-087c: switches are never probe targets), and
+  again on the unlocked path, which is the one a **held** vector run takes since
+  a hold stopped locking the design (FR-115h, 2026-08-02). Both call
+  `probeTargetAt(world)` over the ordinary hit-test precedence (`hitPin` →
+  `hitJunction` → `hitSegment`/`hitBusSegment` → `hitComponent`) and
+  `store.setProbe(target)`; a miss clears it. Nothing is dispatched and the
+  selection is never touched. (Corrected 2026-08-04: this paragraph described the
+  probe click as living in the **lock branch alone**, which is what the code did
+  and is why a probe click under a hold fell through to selection and showed the
+  component's property sheet instead of a reading — FR-087c has required the
+  probe to work under a hold since it was written.) `setTool("probe")` is reachable
   only while `simulating || vectorHold`; `Esc`, the toolbar toggle, and the end of
   the run or hold all call `setTool("select")`, which restores the default cursor.
   The resolved target is a small descriptor — `{kind:"pin",refdes,pin}`,

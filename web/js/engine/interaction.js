@@ -168,6 +168,15 @@ export function probeTarget(design, world, { pin: pinT, seg: segT }) {
   return null;
 }
 
+// probeClaimsClick reports whether a canvas click is a probe reading (FR-087c)
+// rather than a selection or a lock report. Live values are the condition, and
+// they come from EITHER a running simulation or a held vector run (FR-115l) —
+// deliberately not from isReadonly(), which a hold does not set since FR-115h.
+// Pure, so it is exported for testing.
+export function probeClaimsClick(state) {
+  return state.tool === "probe" && (state.simulating || state.vectorHold);
+}
+
 // conductorTarget describes a wire or bus for the probe. A bus carries its width
 // so the panel can read every bit's lane (FR-087c).
 function conductorTarget(design, cond) {
@@ -1111,7 +1120,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       // the interactive-input one above, so a switch click still toggles — a
       // switch draws its own state and is never a probe target. A click on
       // nothing clears the probe. The selection is not touched either way.
-      if (store.state.tool === "probe") {
+      if (probeClaimsClick(store.state)) {
         store.setProbe(probeTargetAt(world));
         return;
       }
@@ -1122,6 +1131,15 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
         hitSegment(store.design, world, segTol()) ||
         hitBusSegment(store.design, world, segTol());
       if (onItem) postMessage(LOCKED_MSG);
+      return;
+    }
+
+    // Probe mode outside the lock (FR-087c): a HELD vector run shows live values
+    // but locks nothing (FR-115h), so its probe clicks arrive here rather than in
+    // the branch above. Without this they fall through to ordinary selection and
+    // the properties panel shows the component's sheet instead of a reading.
+    if (probeClaimsClick(store.state)) {
+      store.setProbe(probeTargetAt(worldOf(e)));
       return;
     }
 

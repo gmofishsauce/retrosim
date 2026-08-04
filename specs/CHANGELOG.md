@@ -19,6 +19,13 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-08-04 — Probe: a click under a held vector run reads, it does not select
+What: the probe click is routed by a new pure `probeClaimsClick(state)` (`tool === "probe" && (simulating || vectorHold)`), tested independently of the read-only lock and called from both the locked and the unlocked click paths.
+Why: reported from use. Under a held vector run the Probe button appeared and the probe cursor came up, but a click showed the component's property sheet instead of a reading. `onPointerDown` handled the probe only inside its `isReadonly()` branch, and FR-115h (2026-08-02) collapsed `isReadonly()` to `simulating` alone — so a hold, which is not a locked state, never reached it and fell through to ordinary selection. FR-087c has required the probe under a hold since it was written; only design §6.9's description (and the code) said "the lock branch".
+Touches: FR-087c (no change — code drifted from it); design §6.9 (probe mode)
+
+---
+
 ## 2026-08-03 — DRC R7: a group-snapped bus end is not a dangling end
 What: R7 excludes every vertex named by a bus's `groupConnections[].vertex`. It reported "every `kind: "free"` vertex a conductor references"; a snapped bus end is one of those.
 Why: reported from a real design. `examples/notL4C381.json` produced **71 R7 findings, 69 of them ordinary bus-to-component connections** — and since the coordinates in the message point at a brace apex that looks perfectly normal on screen, the report was unreadable. `planBusEndpoint` (§6.9) returns `spec: { kind: "free" }` for a component target and records the connection in `groupConnections`; `snapBusGroup` never touches the vertex kind. So *every* group-snapped bus end in *every* design is a `free` vertex, and R7 as implemented fired on all of them. The vertex kind answers "who owns this position" (§7.1a), never "is this end connected" — FR-124a always said **free in space**, which a snapped end is not. Group snap is the only connection that leaves the vertex kind alone, so it is the only exclusion needed. After the fix the design reports the 2 genuinely loose ends it has.

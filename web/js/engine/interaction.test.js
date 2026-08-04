@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { planBusEndpoint, probeTarget } from "./interaction.js";
+import { planBusEndpoint, probeClaimsClick, probeTarget } from "./interaction.js";
 
 // A type with a single 3-bit group "A".
 const typeA = {
@@ -165,4 +165,29 @@ test("probeTarget: a pin outranks the body it sits on (FR-087c precedence)", () 
 
 test("probeTarget: empty canvas resolves to null, which clears the probe (FR-087c)", () => {
   assert.equal(probeTarget(probeDesign(), { x: 100, y: 100 }, TOLS), null);
+});
+
+// --- probe click routing (FR-087c availability) ---
+// The probe is offered exactly while values are live: a running simulation OR a
+// held vector run (FR-115l). A hold is NOT a locked state since FR-115h, so the
+// routing must not be nested inside the read-only lock — the regression that put
+// the component's property sheet on screen instead of a reading.
+test("probeClaimsClick: a probe click under a HELD vector run is a reading (FR-087c/FR-115l)", () => {
+  assert.equal(
+    probeClaimsClick({ tool: "probe", simulating: false, vectorHold: true }),
+    true,
+  );
+});
+
+test("probeClaimsClick: a probe click during a running simulation is a reading (FR-087c)", () => {
+  assert.equal(
+    probeClaimsClick({ tool: "probe", simulating: true, vectorHold: false }),
+    true,
+  );
+});
+
+test("probeClaimsClick: no live values, or another tool, is not a probe click (FR-087c)", () => {
+  assert.equal(probeClaimsClick({ tool: "probe", simulating: false, vectorHold: false }), false);
+  assert.equal(probeClaimsClick({ tool: "select", simulating: true, vectorHold: false }), false);
+  assert.equal(probeClaimsClick({ tool: "select", simulating: false, vectorHold: true }), false);
 });
