@@ -382,9 +382,11 @@ export function initProperties({ container, store, renderer = null }) {
     }
 
     // Input switch state (FR-020c): a 1 / 0 selector for the switch's
-    // per-instance state (inst.switchState), not an override. While simulating
-    // the state is changed by clicking the switch instead (FR-087a), so the
-    // control is disabled (locked).
+    // per-instance state (inst.switchState), not an override. This is the
+    // design's SPECIFIED setting — the initial condition every run starts from
+    // — and is deliberately what the panel shows even when a run has clicked
+    // the switch elsewhere (that is run-time state, FR-087a); while simulating
+    // the design is locked, so the control is disabled.
     if (td.renderType === "switch") {
       container.appendChild(el("div", "prop-section", "State"));
       const row = el("div", "prop-row");

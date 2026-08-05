@@ -601,7 +601,7 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
   } else if (td.renderType === "reset") {
     drawLabelBox(ctx, inst, vp, selected, "RST");
   } else if (td.renderType === "switch") {
-    drawSwitch(ctx, inst, vp, selected);
+    drawSwitch(ctx, inst, vp, selected, sim);
   } else if (td.renderType === "indicator8") {
     drawIndicator8(ctx, inst, vp, selected, sim);
   } else if (td.renderType === "portN") {
@@ -1148,9 +1148,14 @@ function drawPort(ctx, inst, vp, selected) {
 // switchFace maps the input switch's state to its value-bubble colors and glyph
 // (FR-071c), mirroring the state indicator's driven look (indicatorState): a
 // white bubble with a black "1", or a black bubble with a white "0". A legacy
-// "U" (older saved design) and any unset value read as 0.
-function switchFace(inst) {
-  if (inst.switchState === "1") return { bg: "#ffffff", fg: "#000", glyph: "1" };
+// "U" (older saved design) and any unset value read as 0. The state drawn is
+// the EFFECTIVE one (FR-087a): the run-time copy a sim-time click produced
+// (§6.10) when the sim view holds one, else the design's specified setting —
+// which is why a clicked switch keeps its run position for as long as the
+// retained indicator values beside it, and reverts with them.
+function switchFace(inst, sim) {
+  const state = (sim?.inputs?.[inst.refdes] ?? inst).switchState;
+  if (state === "1") return { bg: "#ffffff", fg: "#000", glyph: "1" };
   return { bg: "#000000", fg: "#fff", glyph: "0" };
 }
 
@@ -1160,19 +1165,19 @@ function switchFace(inst) {
 const SWITCH_RADIUS = 0.7;
 
 // drawSwitch renders the input switch (FR-071c): the same value bubble as the
-// state indicator showing inst.switchState (white 1 / black 0), plus a small
+// state indicator showing its effective state (white 1 / black 0), plus a small
 // arrow off the bubble toward the OUT pin marking it a signal source. The
 // glyph is drawn upright (FR-015); the arrow is built in the unrotated local
 // grid frame and rotated with the instance, so it always points along the
 // output pin (right when unrotated).
-function drawSwitch(ctx, inst, vp, selected) {
+function drawSwitch(ctx, inst, vp, selected, sim) {
   const cr = rotateOffset(1, 1, inst.rotation); // 2×2 center
   const center = worldToScreen({ x: inst.x + cr.x, y: inst.y + cr.y }, vp);
   const r = SWITCH_RADIUS * scaleFor(vp);
   const stroke = selected ? "#4a90d9" : "#333";
 
   // Value bubble (same look as the indicator).
-  const face = switchFace(inst);
+  const face = switchFace(inst, sim);
   ctx.beginPath();
   ctx.arc(center.x, center.y, r, 0, Math.PI * 2);
   ctx.fillStyle = face.bg;

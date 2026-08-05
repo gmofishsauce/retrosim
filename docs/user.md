@@ -720,13 +720,13 @@ no behavior, and no designator — see below.)
 
 | Object | Pins | Behavior |
 |---|---|---|
-| **State indicator** | one input (`IN`, bottom) | Display only — drives nothing. Shows the value of the connected net (0 / 1 / U / Z); a gray "?" bubble when undriven or at rest. Use it to watch a signal during a run. |
+| **State indicator** | one input (`IN`, bottom) | Display only — drives nothing. Shows the value of the connected net (0 / 1 / U / Z); a gray "?" bubble when undriven or at rest. Use it to watch a signal during a run; when the run stops it goes back to "?" — a run's values are not kept on screen afterwards. |
 | **Pull-up** | one output (`OUT`, bottom) | A **weak** driver of logic **1**: sets the net to 1 only when no enabled strong driver is present; any strong driver overrides it silently. |
 | **Pull-down** | one output (`OUT`, top) | A **weak** driver of logic **0**, symmetric to the pull-up. A pull-up and pull-down on the same net with no strong driver is a conflict. |
 | **Clock** | one output (`OUT`, right) | A square wave, 50% duty cycle: low from t = 0 with the first rising edge half a period in. Properties: `period` (ns, default 100) and `speed` (Hz, default 1). A design with a clock is *sequential* and runs continuously; see [Simulation](#13-simulation). |
 | **Power-on reset** | two outputs (`R` active-high, `/R` active-low, right) | Asserts reset (`R`=1, `/R`=0) for the first `cycles` clock periods of a run, then releases (inverse afterward). Property: `cycles` (default 3). |
-| **Input switch** | one output (`OUT`, right) | A user-set logic source with two states, **1** and **0**, drawn like the state indicator — a round value bubble (white **1** / black **0**) — with a small arrow toward its output pin. A **strong** driver: it overrides pull-ups/pull-downs on its net. Set its state in the properties panel while editing, or **click it during a simulation** to toggle **0 ↔ 1**. The state is saved with the design (a new switch starts at **0**). |
-| **State indicator (8-wide)** | eight inputs (`D0`–`D7`, left) | An 8-bit display, drawn as an LED **bar-graph** (eight stripes). Display only — drives nothing. The eight pins form one pin group, so an 8-wide bus snap-connects to all bits at once (see [Buses](#7-buses)); each stripe shows its bit's value (white **1** / black **0** / gray **?**) during and after a run. |
+| **Input switch** | one output (`OUT`, right) | A user-set logic source with two states, **1** and **0**, drawn like the state indicator — a round value bubble (white **1** / black **0**) — with a small arrow toward its output pin. A **strong** driver: it overrides pull-ups/pull-downs on its net. The state saved with the design is its **setting** — the position every run starts from (a new switch starts at **0**), changed in the properties panel while editing. **Clicking it during a simulation** toggles **0 ↔ 1** for that run only: it does not change the setting, does not modify the design, and is undone when the run stops. |
+| **State indicator (8-wide)** | eight inputs (`D0`–`D7`, left) | An 8-bit display, drawn as an LED **bar-graph** (eight stripes). Display only — drives nothing. The eight pins form one pin group, so an 8-wide bus snap-connects to all bits at once (see [Buses](#7-buses)); each stripe shows its bit's value (white **1** / black **0** / gray **?**) during a run, and all eight go gray when it stops. |
 | **Port / off-sheet connector (multi-bit)** | N pins (`P0`–`P(N-1)`, left) | A multi-bit interface port. When you drop it, a dialog asks for its **bit width** (2–16); that width is fixed for the life of the instance (to change it, delete and re-place). It is drawn as N narrow pentagons — one roughly aligned with each pin, each pointing off-sheet away from the pins. The N pins form one pin group so a matching-width bus snap-connects to all bits at once (see [Buses](#7-buses)). Like the 1-wide [port](#12-sub-designs-and-ports) it is part of the design's interface (it contributes a pin **group** when the design is embedded), with a direction derived from its wiring; it does not yet join to same-label or cross-file ports. |
 | **Port / off-sheet connector** (1-bit) | one pin (flat back edge) | The pentagon "flag" that marks its net as part of the design's external interface for embedding. See [Sub-designs and ports](#12-sub-designs-and-ports). |
 | **Transmission gate** | `A` (left), `B` (right), `EN` (top) | An ideal **bidirectional switch**: `A` and `B` are interchangeable contact terminals — neither is an input or an output, and drivers on either side may come and go. While `EN` reads **1** the two sides are electrically **joined** (they resolve as one net); while it reads **0** they are isolated. An `EN` of U (or Z) means the switch position is unknown: both sides are forced to **U**. Drives nothing, stores nothing, no properties; see the switch-element notes in [Simulation](#13-simulation). |
@@ -741,8 +741,12 @@ select it and choose its state (`1` / `0`) in the properties panel.
 **Interactive inputs.** The input switch is an *interactive input* — a built-in
 you can change by hand **while a simulation is running**: click its body and the
 simulation immediately re-evaluates from the new value (see
-[Simulation](#13-simulation)). This is the one kind of design change allowed
-during a run.
+[Simulation](#13-simulation)). The click is not an edit. It sets the switch for
+the duration of the run and leaves the design alone: the design stays unmodified
+(nothing to save), and when you press Stop the switch snaps back to the setting
+you gave it in the properties panel. So the settings you save *are* the starting
+conditions — running a design and flipping switches to exercise it can never
+rewrite them.
 
 ### Text notes
 
@@ -916,6 +920,16 @@ directly on the editing canvas.
 
 - **Run / Stop:** click **Run** to start; the button becomes **Stop** and the state
   tray reads "simulating". A run continues until you click **Stop**.
+- **Stop clears the run from the screen.** Everything a run put on the canvas goes
+  away together the moment you stop: indicators return to **?**, switches you
+  clicked revert to their saved settings, red conflict strokes clear, and a probe
+  reading is dropped. The schematic looks exactly as it did before you pressed
+  Run. Nothing from a finished run lingers — so what you see can never be values
+  from one set of inputs shown beside a different set of switch positions. **Read
+  results while the run is still live:** pause or single-step it
+  ([below](#pausing-and-single-stepping)), let a combinational design settle and
+  read it at leisure (the run stays active and idle), or hold a test-vector run at
+  a row (see [Holding a run to inspect it](#holding-a-run-to-inspect-it)).
 - **Values:** every net carries one of four values — **0**, **1**, **U**
   (undefined), **Z** (high-impedance / no enabled driver). A component reading Z
   treats it as U. Logic is selectively pessimistic (e.g. `0 AND U = 0`,
@@ -930,7 +944,9 @@ directly on the editing canvas.
   which makes the circuit re-settle. They no longer stop on their own. If a
   settling pass doesn't reach a stable state within 10,000 units (a likely
   oscillation) that is reported in the message tray and evaluation pauses; press
-  Stop to end. Final indicator values stay on screen until you next edit the design.
+  Stop to end. Because an idle run is still a *live* run, a settled combinational
+  design is the natural place to read results: take as long as you like, then Stop
+  when you're done looking (Stop clears the display, as above).
 - **Sequential designs** (at least one clock) run continuously, paced at
   `period × speed` simulated nanoseconds per real second, until you press Stop.
   They can also be paused and stepped by the clock cycle or the unit — see
@@ -1042,8 +1058,9 @@ Notes:
   and being able to change an input mid-inspection is more useful than reading
   back what you can already see.
 - **Leaving probe mode:** click **Probe** again, press **Esc**, or just stop the
-  run (or release the hold). The tool returns to Select. After a Stop the last
-  values stay frozen in the panel until you select something or edit the design.
+  run (or release the hold). The tool returns to Select. Stopping the run also
+  clears the reading — there is no simulation behind it any more — and the panel
+  goes back to showing whatever is selected. Read the value before you stop.
 - The probe changes nothing: it never edits, never marks the design modified, and
   is not saved. Probing an embedded sub-design shows its interface pins only —
   its internals are not on this sheet. Registers a part keeps internally but

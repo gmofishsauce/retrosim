@@ -126,9 +126,10 @@ reworked.
 - **FR-068** — State indicator: 2×2 footprint, one bottom-center input pin; a round
   bubble showing wire state — gray `?` (undriven/U/Z), white `1`, black `0`. Not
   independently stateful: during a run it displays its net's live simulated value,
-  and after a run the last values persist until the design is next modified
-  (FR-085). Same bubble for palette icon and placed object. (Reworked 2026-06-11;
-  supersedes "displays `?` until the simulator exists".)
+  and returns to gray `?` the moment the run stops — Stop drops the display view
+  whole (FR-085). Same bubble for palette icon and placed object. (Reworked
+  2026-06-11; supersedes "displays `?` until the simulator exists". Reworked
+  2026-08-05; supersedes retaining the last values until the next design edit.)
 - **FR-069** — Pull-up: 2×2, one bottom-center pin; a two-headed up-arrow (two
   stacked up-chevrons + a vertical shaft from the pin to just below them). Tooltip
   "pull up".
@@ -142,11 +143,13 @@ reworked.
   state indicator (FR-068) — a round bubble showing its value (white bubble /
   black `1`, or black bubble / white `0`) — with a small arrow off the bubble
   toward the output pin marking it a source. Two states only, `1` and `0`. A
-  strong driver of its value (FR-087a). State is persisted per-instance
-  (`switchState`, default `0`), set via the properties panel while editing
-  (FR-020c) or by clicking it while simulating, which toggles 0↔1 (FR-087a).
-  Tooltip "input switch". (Reworked 2026-06-17; supersedes the 1/0/? rotary dial
-  with a U state.)
+  strong driver of its value (FR-087a). The **specified setting** is persisted
+  per-instance (`switchState`, default `0`) and is set only via the properties
+  panel while editing (FR-020c); clicking the switch while simulating toggles
+  its **run-time** state 0↔1 without touching the setting or dirtying the design
+  (FR-087a, §6.10 `setLiveInput`). Tooltip "input switch". (Reworked 2026-06-17;
+  supersedes the 1/0/? rotary dial with a U state. Setting/run-time split
+  2026-08-05.)
 - **FR-071f** — Text note: a `NOTE`-labeled palette tile; on the canvas, free-form
   text with a **blue-dotted outline box shown only when selected or editing** (at
   rest just the text). A **pure annotation** — no pins, not
@@ -477,8 +480,8 @@ reworked.
   **additive-optional** field, so **no format bump and no migration**. Matched by
   rule id + object reference set; optional free-text note. Waived findings move to a
   collapsed **"Waived (N)"** section with un-waive controls. Waiving **dirties but is
-  not undoable** (the FR-087a switch-click precedent — report bookkeeping is not
-  circuit structure). A waiver matching nothing is **dropped silently, without
+  not undoable** (report bookkeeping is not circuit structure; formerly the
+  FR-087a switch-click precedent, which since 2026-08-05 dirties nothing). A waiver matching nothing is **dropped silently, without
   dirtying** — a pure read must not mark the design modified.
 - **FR-124f** — Clicking a finding **selects every object it names** (replacing the
   selection, FR-016a) and **reveals** them: pan **and** zoom so their combined bbox
@@ -809,8 +812,9 @@ as authoritative and raise it — do not silently diverge.
    design the user is still editing. Only two things flow back the other way, and
    both are user gestures on the rendered report rather than parts of the check:
    clicking a finding calls the store's `setSelection` plus the interaction module's
-   reveal (FR-124f), and waiving calls `applyLive` (FR-124e) — the same
-   dirty-but-not-undoable path the input switch uses (FR-087a).
+   reveal (FR-124f), and waiving calls `applyLive` (FR-124e) — the
+   dirty-but-not-undoable path (once shared with the input switch, which since
+   2026-08-05 mutates run-time state only, FR-087a).
 
 ### 5.3 New vs modified vs unchanged
 The design began **greenfield** (nothing predated it; section retained for the
@@ -1433,9 +1437,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   the indicator render branch draws its glyph from `sim.valueOfPin(refdes, "IN")`
   — `1` → white bubble/black "1", `0` → black bubble/white "0", U or Z → the gray
   "?" (FR-068) — and any wire/bus whose conductor is in `sim.conflictedConductors`
-  strokes red instead of black/blue (FR-082). The view is retained after a run
-  terminates, so final values stay visible until the store clears `state.sim` on
-  the next design edit (FR-085).
+  strokes red instead of black/blue (FR-082). When `state.sim` is null the whole
+  scene draws design-time: `?` bubbles, gray bar graphs, no conflict strokes, and
+  switches at their specified settings. The engine drops the view at Stop (FR-085),
+  so that is exactly the post-run appearance — the renderer needs no notion of
+  "a run just ended", which is what keeps the values and the switch positions that
+  produced them from ever disagreeing.
 - **Error handling:** rendering is read-only over the model; a malformed instance
   (e.g., unknown type) is drawn as a red placeholder box with the type name, never
   throwing out of the loop.
@@ -1687,10 +1694,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   a bare-canvas click is ignored silently (no marquee, no message). The sole
   exception is a click on an **interactive built-in** (FR-087b): if the hit
   component's type has an `INTERACTIONS` handler (§6.11), the FSM applies it via
-  `store.applyLive(() => INTERACTIONS[type](inst))` — a non-undoable live change
-  that marks the design modified and wakes the simulator (§6.10) — instead of
-  reporting the lock. The switch's handler toggles `switchState` 0↔1 (FR-087a).
-  (Reworked 2026-06-17; supersedes selection remaining available during a run.)
+  `store.setLiveInput(inst, INTERACTIONS[type])` — a non-undoable, **non-dirtying**
+  change to the instance's run-time copy that wakes the simulator (§6.10) — instead
+  of reporting the lock. The switch's handler toggles `switchState` 0↔1 on that copy
+  (FR-087a). (Reworked 2026-06-17; supersedes selection remaining available during a
+  run. Reworked 2026-08-05; supersedes `store.applyLive(() => INTERACTIONS[type](inst))`,
+  which wrote the saved instance and dirtied the design.)
 - **Probe mode (FR-087c):** a second exception to the lock, and the only other
   way a click under it does anything. Probe is realized as a **tool value**,
   `store.state.tool === "probe"`, so it rides the existing tool FSM and
@@ -1891,8 +1900,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `simulating` (bool) and `sim` (the simulator's display view, §6.13) are likewise
   transient and non-persisted: set via notifying setters by the sim engine. While
   `simulating`, `dispatch`/`undo`/`redo` refuse with a message-tray report instead
-  of mutating (FR-087). `sim` is retained after a run ends (FR-085) and cleared by
-  the first design-modifying `dispatch` afterward. The **test-vector panel** is the
+  of mutating (FR-087). `sim` is dropped by the engine at Stop (FR-085) — with it go
+  the run-time interactive inputs and the probe target, which is what makes the
+  schematic revert to its design-time appearance in one move. `clearSimView()` on
+  the first design-modifying `dispatch` remains, and is now reached only by the
+  other producer below: a **held** vector run publishes a view but does not lock
+  the design (FR-115h), so an edit during a hold is what clears it. The **test-vector panel** is the
   other producer of a `sim` view: a vector run publishes the simulation it held at
   its final or selected row (FR-115l, §6.16), which is why `sim` and `simulating`
   are independent — a held vector run displays values with `simulating` false, and
@@ -1903,9 +1916,10 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   tray (FR-073) and the toolbar's release-Stop (§6.16).
   `probe` (the probe target descriptor or `null`, `setProbe`, FR-087c, §6.9) is
   transient in the same way — never persisted, never on the undo stack, never
-  dirtying. It is cleared by `setSelection` (so the first selection after a Stop
-  hands the properties panel back to the selection sheet) and by `clearSimView`
-  (the next design modification), the two moments FR-087c names.
+  dirtying. It is cleared at every moment FR-087c names: by `setSim(null)` — Stop,
+  and releasing a vector hold — by `setSelection` (a selection during a live run or
+  hold hands the properties panel back to the selection sheet), and by
+  `clearSimView` (a design modification during a hold).
 - **Atomic command failure (FR-024a):** before `cmd.apply`, `dispatch` captures
   an in-store snapshot of the design's connectivity collections (`components`,
   `wires`, `buses`, `vertices`) and id counters (`nextWireId`/`nextBusId`/
@@ -1922,23 +1936,41 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   burns its number rather than making it reusable. Previously the failure was
   caught and reported but the partial mutation stood: invisible to undo,
   `dirty` unset.
-- **Live inputs during a run (FR-087b):** `applyLive(mutate)` is a second
-  mutation path used only while simulating — the interactive-input change behind
-  a switch click (FR-087a). Unlike `dispatch` it bypasses the sim lock and the
-  undo/redo stacks (the change is transient interaction, not an editing action),
-  but still sets `dirty` and `notify()`s (so the backup snapshot, FR-092, and the
-  properties panel reflect it) and, deliberately, does **not** clear the live
-  `sim` view. After mutating it fires the store's **live-input channel**:
-  `subscribeLive(fn) → unsubscribe`, which the sim engine subscribes to for the
-  duration of a run so it can `wake()` and re-evaluate (§6.13). The channel is the
-  general re-evaluation trigger — any `applyLive` wakes the sim, regardless of
-  which interactive built-in caused it. **Second caller (FR-124e, 2026-08-02):**
-  waiving and un-waiving a design-rule finding (§6.21). The fit is exact rather than
-  opportunistic — a waiver is a real change to the design that is emphatically *not*
-  an editing action, which is precisely the property `applyLive` was built around, so
-  Ctrl+Z after waiving undoes the user's last wire rather than their last waiver. The
-  live-input channel firing for a waiver is harmless: it can only fire while a
-  simulation runs, and the check is disabled then (FR-124).
+- **Live inputs during a run (FR-087a/FR-087b, reworked 2026-08-05):** an interactive
+  input is **not a design change at all** — it is run-time state, held beside the
+  design and keyed by refdes in the transient sim view: `state.sim.inputs[refdes]` is a
+  shallow **run-time copy** of the instance carrying whatever the interaction handler
+  mutated (for the switch, `switchState`). `setLiveInput(inst, mutate)` is its one
+  mutator: it seeds a draft from the existing copy (else the saved instance), runs
+  `mutate(draft)`, stores it, `notify()`s, and fires the **live-input channel**
+  (`subscribeLive(fn) → unsubscribe`), which the sim engine subscribes to for the
+  duration of a run so it can `wake()` and re-evaluate (§6.13). It does **not** set
+  `dirty`, does **not** bump `designRev`, and does **not** touch the undo stacks — the
+  design is genuinely read-only during a run (FR-087), so Run → click switches → Stop
+  leaves it clean and saveable as authored. Copying the whole instance rather than one
+  named field keeps the mechanism generic (FR-087b): any handler mutating any field
+  works, and nothing here knows what a switch is. It is safe because the design cannot
+  be edited during a run and the copies are dropped with the view, so a copy can never
+  drift from its instance. **Readers take the copy in preference to the instance:** the
+  renderer's switch branch (§6.8) and the switch behavior's `state` (§6.13). Lifetime is
+  exactly the sim view's, and the engine drops that view at Stop (§6.13, FR-085) — which
+  is what gives FR-087a its post-Stop behavior for free: indicators return to `?` and
+  clicked switches to their specified settings in the same notify, because they are the
+  same object going away. `setSim(null)` clears `state.probe` with it for the same
+  reason (FR-087c): a reading with no simulation behind it is the one stale value that
+  would otherwise survive.
+- **`applyLive(mutate)`** remains a distinct path: a real, non-undoable design change
+  permitted during a run. Unlike `dispatch` it bypasses the sim lock and the undo/redo
+  stacks, but sets `dirty`, bumps `designRev`, `notify()`s (so the backup snapshot,
+  FR-092, sees it), fires the live-input channel, and deliberately does **not** clear
+  the live `sim` view. Its **sole caller** is waiving/un-waiving a design-rule finding
+  (FR-124e, §6.21) — a real change to the design that is emphatically *not* an editing
+  action, so Ctrl+Z after waiving undoes the user's last wire rather than their last
+  waiver. (Before 2026-08-05 the switch click was the first caller; it now uses
+  `setLiveInput` above, and the two concerns — "dirties but is not undoable" and "not a
+  design change at all" — are no longer conflated in one path.) The channel firing for a
+  waiver is harmless: it can only fire while a simulation runs, and the check is
+  disabled then (FR-124).
 - **The one sanctioned mutation outside every store path (FR-124e, §6.21):** the DRC
   drops waivers that matched no finding by mutating `store.design.drcWaivers` directly
   — not through `dispatch`, not through `applyLive`, notifying nobody. This is stated
@@ -2174,8 +2206,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   live sim view, §6.8), the
   pull-up two-headed arrow, the pull-down upside-down `T`, the clock and
   reset boxes, and the switch (the same value bubble as the indicator — white
-  `1`/black `0` from `inst.switchState` — plus a small arrow off the bubble
-  toward the output pin marking it a source, FR-071c). The two 8-wide built-ins
+  `1`/black `0` from the **effective** switch state, `sim.inputs[refdes]` when the
+  run-time copy exists else `inst.switchState` (§6.10, FR-087a) — plus a small arrow
+  off the bubble toward the output pin marking it a source, FR-071c). The two 8-wide built-ins
   add branches: `drawIndicator8` draws the LED bar-graph (eight horizontal
   stripes, each filled by its bit's value via `sim.valueOfPin(refdes,"D"+i)` with
   the same white/black/gray mapping as the 1-wide indicator, FR-071d), and
@@ -2220,23 +2253,28 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 - **Switch interactive state (FR-071c)** — the input switch carries one
   per-instance field, `inst.switchState` (`"0"` | `"1"`, default `"0"`),
   set on the instance directly rather than through `overrides`. It round-trips
-  through save/load for free (the whole instance is serialized, §7.2). It is
-  changed while editing by the properties panel control (§6.12, FR-020c) and
-  while simulating by a click routed through the interaction FSM (§6.9,
-  FR-087a). `drawComponent` reads it to draw the value bubble; the switch behavior
-  (§6.13) reads it to drive its output. (A legacy `"U"` from an older saved
-  design reads as `0`.)
+  through save/load for free (the whole instance is serialized, §7.2). It is the
+  **specified setting**, changed only while editing, by the properties panel control
+  (§6.12, FR-020c). A sim-time click does not write it: the FSM (§6.9) toggles the
+  field on the instance's run-time copy in `state.sim.inputs` instead (§6.10,
+  FR-087a). `drawComponent` and the switch behavior (§6.13) therefore read the
+  **effective** state — the run-time copy when one exists, else the instance — while
+  `cgen` (§6.17) and the vector runner (§6.16) read the instance, since a generated
+  program and a vector row both start from the design as authored. (A legacy `"U"`
+  from an older saved design reads as `0`.)
 - **Interactive-input registry (`INTERACTIONS`, FR-087b)** — a second registry
   exported beside `BEHAVIORS`, mapping built-in type name → an interaction
   handler `(inst) => void` that mutates the instance's interactive state in
   place. It is the input-side analogue of `BEHAVIORS` (output side): a type with
   an entry is *interactive* and accepts a sim-time click. The **switch** entry
-  toggles `inst.switchState` 0↔1 (FR-087a). The interaction FSM (§6.9)
-  routes a simulating-mode click on any interactive built-in through
-  `store.applyLive(() => INTERACTIONS[type](inst))` — no per-type special case —
-  and `applyLive` wakes the simulator (§6.10, §6.13). Adding a new interactive
-  input is therefore: an `INTERACTIONS` handler + a render branch, nothing in the
-  scheduler or the FSM.
+  toggles `inst.switchState` 0↔1 (FR-087a). The handler is unchanged by the
+  2026-08-05 rework — it still just mutates the object it is handed; what changed is
+  *which* object: the FSM (§6.9) routes a simulating-mode click through
+  `store.setLiveInput(inst, INTERACTIONS[type])`, which hands it a run-time copy
+  rather than the saved instance (§6.10) and wakes the simulator (§6.13) — no
+  per-type special case. Adding a new interactive input is therefore still: an
+  `INTERACTIONS` handler + a render branch that reads the effective state, nothing in
+  the scheduler or the FSM.
 - **Dialogs (`dialogs.js`)** — Satisfies FR-046–FR-049, FR-052–FR-054, plus the
   project-aware dialog machinery of FR-121 (§6.19). Modal DOM
   dialogs:
@@ -2792,9 +2830,15 @@ no sequential part could ever leave U.)
   the inverse afterward; **input switch** (FR-087a) strong-drives `OUT` to the
   logic value of `state` (`"1"`→V1, else V0). `props` carries
   effective values: `overrides.props` else the declared default (FR-020b).
-  `state` is the live `inst.switchState` (§6.11), supplied so a click during
-  a run takes effect the next step; the simulator entity therefore retains its
-  source `inst` reference for built-ins. `clockPeriod` is resolved once at Run:
+  `state` is the **effective** switch state (§6.11): `buildSimulation` takes an
+  optional `liveInputs(refdes) → instLike | undefined` accessor and each step reads
+  `(liveInputs?.(refdes) ?? e.inst).switchState`, so a click during a run takes effect
+  the next step without writing the design (FR-087a). `createSim` passes
+  `(refdes) => store.state.sim?.inputs?.[refdes]` (§6.10); the vector runner and the
+  parity harness pass nothing and read the instance. The simulator entity still
+  retains its source `inst` reference for built-ins — the accessor is a lookup layered
+  over it, keyed by refdes, which is unambiguous because flatten prefixes child
+  refdes (`X1/U3`, §6.14) and only top-sheet objects are clickable. `clockPeriod` is resolved once at Run:
   the effective `period` of the design's clock instance when exactly one is
   placed, else the 100 ns FR-071a default (no clock, or several — FR-071b).
 - **Memory entities (FR-114d):** a generated RAM/ROM (`inst.typeData.mem`, §6.11)
@@ -2895,13 +2939,13 @@ no sequential part could ever leave U.)
   most 10,000 units — well inside a frame). `stop()` while paused is the
   ordinary Stop path (FR-076, including the RAM write-back hook, FR-114g).
 - **Interactive inputs (FR-087b):** the engine subscribes to the store's
-  live-input channel (§6.10) for the duration of a run. `applyLive` (the
-  non-undoable sim-time mutation behind a switch click, FR-087a) fires that
-  channel; the engine's listener calls `wake()`. For a combinational run `wake()`
+  live-input channel (§6.10) for the duration of a run. `setLiveInput` (the
+  non-dirtying sim-time run-time-state change behind a switch click, FR-087a) fires
+  that channel; the engine's listener calls `wake()`. For a combinational run `wake()`
   re-runs a settling episode if idle (no-op if an episode is already in flight);
-  for a paced run it is a no-op (the rAF loop already re-reads instance state
+  for a paced run it is a no-op (the rAF loop already re-reads the effective state
   each step) — including while **paused** (FR-076a): the click's mutation sits
-  in the instance state until the next unit step (a Step or Continue) reads
+  in `state.sim.inputs` until the next unit step (a Step or Continue) reads
   it, which is exactly the queued semantics FR-087b specifies, with no
   scheduler change. This is the general re-evaluation path — not switch-specific — so a
   new interactive built-in (an `INTERACTIONS` handler, §6.11) needs no scheduler
@@ -2909,9 +2953,14 @@ no sequential part could ever leave U.)
 - **Display view:** the engine publishes `state.sim = { valueOfPin(refdes,
   pinName), valueOfLane(lane), conflictedConductors }` (transient, §6.10) consumed
   by the renderer (§6.8) for indicator glyphs and red conflict strokes, and by the
-  properties panel's probe sheet (§6.11, FR-087c). `stop()` retains the
-  view so final values stay visible (FR-085); the store clears it on the next
-  design-modifying dispatch. **`valueOfLane(lane)`** (FR-087c) is the conductor
+  properties panel's probe sheet (§6.11, FR-087c). The store wraps what the engine
+  publishes, carrying alongside it the `inputs` map of run-time interactive state
+  (§6.10, FR-087a) — so the view holds both directions, the values the sim computed
+  and the inputs the user set. That is why **`stop()` calls `store.setSim(null)`**
+  (FR-085): one call blanks the indicators, reverts the clicked switches, drops the
+  conflict strokes, and clears the probe, atomically and in step. There is no
+  post-run display state to reason about — a run's results exist only while the run
+  does. **`valueOfLane(lane)`** (FR-087c) is the conductor
   analogue of `valueOfPin`: `buildSimulation` already receives lane-keyed nets
   from `buildNets` (§6.6 — `wire:<id>`, `bus:<id>:<bit>`), so it builds a
   `netOfLane` map from each net's **`lanes`** exactly as it builds `netOfPin` from
@@ -2962,7 +3011,7 @@ no sequential part could ever leave U.)
   - **Interface stitching (attachment rewrite).** For each interface signal, the child's owning port (the first port carrying the label, matching `designInterface`) defines a target connection pin — the 1-wide port's single pin, or the portN's `Pk` for bit `k`. Every parent attachment on the instance — a `pin`/`connector` vertex with `ref === "X1"`, and a bus `groupConnections` entry with `instance === "X1"` — is rewritten in place to the prefixed target (`ref:"X1/A1", pin:<port pin>`; `gc.instance = "X1/A5"` with `bitMap` renamed to `Pk`). `buildNets`' shared-pin union (step 5) and the connector's FR-094e pin attachment (step 6) then merge the parent lane with the child's port net — no new netlist machinery, and no geometry (a FlatDesign is never drawn, so vertex positions are irrelevant).
   - **Off-sheet connectors (FR-101/103).** After embedding, follow every port `target` transitively (each `target.file` is a bare filename in the **same folder** as the referencing sheet, FR-101, so it resolves within that sheet's directory), de-duplicating loaded files by absolute path; each distinct peer sheet is merged under a per-sheet tag prefix (file base name, numeric suffix on a collision; the root sheet unprefixed) applied to refdes/ids/labels exactly as above. Each declared link then becomes a **synthetic two-node wire** between the two ports' connector vertices — the ordinary wire-lane union implements the cross-file net (FR-101a). Mutual peering (A↔B) is legal (FR-102a): de-dup bounds it.
   - **Cycles (FR-102a).** A visited-set of absolute file paths along the current expansion path detects an embed of an already-open ancestor — including via a `target` that leads back into one — and `flatten` throws; the sim run and the vector runner refuse with a message-tray report. The ADD dialog refuses via a `wouldCycle(childAbsPath, parentAbsPath, loadChild)` helper that walks the candidate child's transitive embeds (FR-097a).
-  - **Consumers (§6.13/§6.16).** `createSim.run()` awaits `flatten` first and feeds the FlatDesign to `loadRomContents` + `buildSimulation`, so child ROMs preload (their `mem.romFile` paths are stored absolute, §6.14 persistence) and child built-ins (clock, POR, pulls, switches) participate; child switches/indicators have no top-sheet UI presence — their effect is electrical only. The FlatDesign **shares the root's component objects** (cloning only what flatten rewrites: wires/buses/vertices, plus shallow copies of the sub-design entries it replaces), because the running sim reads mutable interactive state off the retained instances — top-sheet switch clicks (FR-087b) must stay live during a run. Vector runs flatten at the caller: the panel's Run/Capture (`dialogs.js`) flatten before `loadRomContents` + `runVectors`/`captureVectors`, keeping the runner itself synchronous and design-agnostic; the runner refuses a **hidden clock** — a clock generator whose refdes is hierarchical (inside a child/peer) — since scripted-clock mode (FR-115e) drives clocks by top-sheet columns only. The FR-107 parity harness flattens its slow leg the same way (cgen milestone), so hierarchical parity pairs depend on this. `SUBUNIT_PKG_RE` (§6.13, and its `cgen.js` twin) becomes hierarchical-prefix-tolerant — the package key is the full prefixed stem (`X1/U3`), so a child's subunits group within their own instance and never across instances.
+  - **Consumers (§6.13/§6.16).** `createSim.run()` awaits `flatten` first and feeds the FlatDesign to `loadRomContents` + `buildSimulation`, so child ROMs preload (their `mem.romFile` paths are stored absolute, §6.14 persistence) and child built-ins (clock, POR, pulls, switches) participate; child switches/indicators have no top-sheet UI presence — their effect is electrical only. The FlatDesign **shares the root's component objects** (cloning only what flatten rewrites: wires/buses/vertices, plus shallow copies of the sub-design entries it replaces) — a cost-free choice now that interactive state no longer rides on the instances: since 2026-08-05 a top-sheet switch click writes `state.sim.inputs[refdes]` (§6.10, FR-087a), which the sim consults by refdes ahead of `e.inst`, so top-sheet clicks stay live whether the FlatDesign shares the root's component objects or copies them. (Before that rework the sharing was load-bearing: the click mutated the retained instance, so a copy would have made a hierarchical design's switches dead.) Vector runs flatten at the caller: the panel's Run/Capture (`dialogs.js`) flatten before `loadRomContents` + `runVectors`/`captureVectors`, keeping the runner itself synchronous and design-agnostic; the runner refuses a **hidden clock** — a clock generator whose refdes is hierarchical (inside a child/peer) — since scripted-clock mode (FR-115e) drives clocks by top-sheet columns only. The FR-107 parity harness flattens its slow leg the same way (cgen milestone), so hierarchical parity pairs depend on this. `SUBUNIT_PKG_RE` (§6.13, and its `cgen.js` twin) becomes hierarchical-prefix-tolerant — the package key is the full prefixed stem (`X1/U3`), so a child's subunits group within their own instance and never across instances.
 - **Loading (FR-098/099a):** on opening a design, `fileops` (`loadIntoStore`) converts each sub-design's stored **relative** `childPath` to **absolute** against the opened file's directory — and likewise absolutizes relative **mem data paths** (`typeData.mem.romFile`/`ramFile`) via `absolutizeDataPaths` (FR-121g, §6.19/§7.4) — then `resolveSubDesigns` loads each child (by its now-absolute path) far enough to resolve the interface for rendering; failures yield broken-link placeholders, never aborting the open. A child reference that resolves **outside the project directory** (a legacy design, FR-121d) still loads and renders normally but is reported once per offending path via the message tray (FR-074); after any successful load the containing-folder rule may switch the current project (§3.1 A10, §6.19). After load the model holds absolute paths. Deep child contents load lazily — only `flatten` (at Run) needs them. As its final step `loadIntoStore` invokes an `onLoaded` callback (wired in `app.js` to `interaction.fitToScreen`, FR-022a) so every completed load — Open and hierarchy navigation alike — frames the design in the viewport; the callback runs after `replaceDesign`, once the new geometry exists.
 - **Interface-change re-route (FR-099c):** each instance carries `iface` — the `designInterface` array it was placed/last saved with (`addSubDesignInstance` sets it; §7.2 persists it; the comparison record FR-099c allows, never used for rendering or simulation). `resolveSubDesigns` deep-compares the freshly resolved interface against it: on a difference it updates `iface`, reports the instance, and returns the changed refdes list (`{ changed }`). `loadIntoStore` then calls `rerouteAttachedWires(design, changed)` (`engine/router.js`): for every **simple** wire — a two-point path whose ends are both `node` refs and which passes through no junction vertex — with an endpoint `pin`/`connector` vertex on a changed instance, propose a fresh route between the endpoints' derived world positions (escape vectors from the pins' rotated sides, as interaction's `routerEndpoint` does) and replace the wire's interior points, keeping the endpoint node refs; a null route keeps the old bends. Runs before `store.replaceDesign`, so like the FR-099b dangling rewrite it is load-time normalization — no command, no undo, no dirty mark. An instance with no stored `iface` (a pre-FR-099c file) skips the comparison and gains the field at the next save.
 - **Persistence:** no Go change is needed — the server already stores designs as an opaque `json.RawMessage` (§6.5), so the new instance fields (`kind`/`childPath`/`render`/`iface`/`label`/`portDir`/`dirOverride`/`width`/`target`), the design-level `defaultRender`, and the `connector` vertex kind round-trip untouched (`iface` is additive-optional like `defaultRender`/`target` were — no `formatVersion` bump). Only the client model (`model/design.js`, `model/persist.js`) is typed; `persist.js`'s structural sanity pass (§7.4) validates a `connector` vertex's `ref`/`pin` exactly as it does a `pin` vertex. The in-memory `childPath` is absolute (FR-098); **`fileops.save` relativizes** each sub-design's `childPath` against the chosen save dir just before writing — and, by the same absolute-in-memory / relative-on-disk rule, each **in-project** mem data path via `relativizeDataPaths` (FR-121g, copy-on-write like the portDir stamping, so the live model keeps its absolute paths) — and **`loadIntoStore` absolutizes** on open — so the on-disk file stays relative/portable while the live model is absolute. `serializeDesign` itself round-trips `childPath` verbatim (a backup snapshot, §7.4, thus stores the absolute path, correct for same-session recovery). Child files are read through the existing `/api/v1/design/load` with client-resolved absolute paths.
@@ -3038,7 +3087,7 @@ There is deliberately **no** horizontal freeze: the row-number column scrolls wi
 
 **Run to Row and the held display (FR-115l).** The panel keeps two new pieces of transient state: `selRow` (the selected row index, or `null`) and `held` (whether *this panel* is the publisher of the current `store.state.sim`). Clicking a row's number cell (`vec-rownum`, already rendered) sets `selRow` and repaints the row highlight (`vec-rowsel`); `renderBody` clamps or clears `selRow` when rows are removed, and the **Run to Row** button is disabled while `selRow` is `null`. Both run actions funnel through one `runThrough(through)` helper — the existing `onRun` becomes `runThrough(null)` — which validates, flattens, preloads ROM, calls `runVectors(flat, doc, { romContent, through })`, paints results, writes the summary (adding "— held at row X of Y" when `through` is not the last row), and finally `store.setSim({ valueOfPin: res.sim.valueOfPin, conflictedConductors: res.sim.conflictedConductors })` — the identical view shape `createSim.run()` publishes (§6.13), so the canvas needs no change at all: it already draws indicator values and conflict-red from `store.state.sim` alone, without consulting `state.simulating`. Clearing is `store.setSim(null)`, called from `clearResults()` (so every cell edit, row add/dup/delete, and Load drops the held display along with the stale pass/fail painting), from `onCapture`, and from `close()`. A failed run (`showError`) also clears, so a stale display never outlives the run that produced it. `hold`/`clearHeld` live at **panel** scope, not inside `build()`, because `close()` must be able to release; `build()` registers a `holdListener` hook so its **Stop** button's enabled state tracks `held` across rebuilds. `clearHeld` is a no-op unless `held` — a view left behind by a **stopped interactive run** (FR-085) belongs to the simulator, and the panel must not wipe it.
 
-**Held is an application state (FR-115l/FR-073/FR-115h).** Holding sets a store flag **`vectorHold`** (notifying setter `setVectorHold`, transient and non-persisted like `simulating`), which three consumers read. (1) `chrome/statusbar.js` `setAppState("held")` — driven from the panel's `hold`/`clearHeld`, the same way `sim.js` drives "simulating"/"paused"; releasing restores `"editing"`, and the interactive simulator can never contend for the tray here because it cannot run while the panel is open (FR-115h). (2) `chrome/toolbar.js` `refresh()`: `runBtn.disabled = (panelOpen && !vectorHold) || noProject` and the label/`title` key on `simming || vectorHold`, so the button is a live **Stop** during a hold and returns to its disabled **Run** form on release; its click handler routes to a new `onReleaseHold` callback when `vectorHold` is set, ahead of the existing `sim.run()`/`sim.stop()` branch — the toolbar never calls `sim.stop()` for a hold, since no interactive simulation exists to stop. (3) `app.js` supplies `onReleaseHold: () => vectorPanel.releaseHold()`, the panel's newly exported release entry point (`{ open, close, isOpen, releaseHold }`). Deliberately **not** derived from `state.sim`: a stopped interactive run also leaves a view, and only an explicit flag distinguishes "the vector panel is holding" from "values are lingering after Stop".
+**Held is an application state (FR-115l/FR-073/FR-115h).** Holding sets a store flag **`vectorHold`** (notifying setter `setVectorHold`, transient and non-persisted like `simulating`), which three consumers read. (1) `chrome/statusbar.js` `setAppState("held")` — driven from the panel's `hold`/`clearHeld`, the same way `sim.js` drives "simulating"/"paused"; releasing restores `"editing"`, and the interactive simulator can never contend for the tray here because it cannot run while the panel is open (FR-115h). (2) `chrome/toolbar.js` `refresh()`: `runBtn.disabled = (panelOpen && !vectorHold) || noProject` and the label/`title` key on `simming || vectorHold`, so the button is a live **Stop** during a hold and returns to its disabled **Run** form on release; its click handler routes to a new `onReleaseHold` callback when `vectorHold` is set, ahead of the existing `sim.run()`/`sim.stop()` branch — the toolbar never calls `sim.stop()` for a hold, since no interactive simulation exists to stop. (3) `app.js` supplies `onReleaseHold: () => vectorPanel.releaseHold()`, the panel's newly exported release entry point (`{ open, close, isOpen, releaseHold }`). Deliberately **not** derived from `state.sim`: the flag says *who* published the view and what the toolbar's Stop should do, which a non-null `sim` cannot say on its own. (Its original reason — telling a hold apart from values lingering after an interactive Stop — lapsed on 2026-08-05, when Stop began dropping the view outright, FR-085; the flag stays because the state tray and the release-Stop routing still need the distinction.)
 
 **The `.tv` document (FR-115m).** The panel owns three **panel-scope** (not `build()`-scope) pieces of state — `docPath`, the associated file; `docDirty`; and `ops`, the handle `build()` publishes to its document operations (`loadFrom(path)`, `saveTo(path)`, `save()`) — so `open()` and `close()` can drive a load or a save without reaching into the table's closure, the same reason `hold`/`clearHeld` live out there (FR-115l). `tvPathFor({ project, savePath, designName, dataDir })` is the **pure, exported** name rule (unit-tested in `dialogs.test.js`, DOM-free): the project root — else the design's own directory, else `dataDir` — joined to the design's save-path base name (else its display name, else `vectors`) plus `.tv`. It is the former `defaultDir()`/`defaultName()` pair promoted to one function and, per FR-115m, now *binds* the name rather than merely seeding a dialog. `open()` becomes **async**: it builds the table, sets `docPath`, then probes for the file with `listDir(dir, ["tv"])` and calls `ops.loadFrom(docPath)` only if the name is listed — an existence test rather than letting `/design/load` 404, so a design with no vectors yet opens clean while a genuinely broken file still reports through the panel's error line. Edits funnel through `touch()` = `markDirty()` + `clearResults()`: every `clearResults()` call on an **edit** path (cell `change`, hex commit, io role change, +Row/+Dup/row ✕, Capture) becomes `touch()`, while `onLoad`'s and the auto-load's stay `clearResults()` so loading never dirties, and the radix toggle and row selection call neither (presentational, FR-115m). `close()` becomes **async and returns a boolean**: while `docDirty` it first runs `confirmSaveDialog(name)` — a three-button Save/Discard/Cancel modal beside the other `dialog-overlay` primitives, Escape = Cancel — and abandons the close (returning `false`) on Cancel or on a save that failed, so a write error can never silently discard a table. `Save` writes `docPath` through `saveVectorFile` with no dialog; `Save As` and `Load` re-point `docPath` at the chosen path and clear the flag. A panel-scope `refreshTitle()` rewrites the header (`Test Vectors — <name>` plus ` *` while modified) on every association and flag change. `app.js` awaits the toggle's `close()` and ORs `vecPanel.isDirty()` into its `beforeunload` guard (FR-049a) via a `let` hoisted above the listener, the panel being constructed later in `main()`.
 

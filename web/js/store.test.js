@@ -201,17 +201,98 @@ test("setProject records the project and notifies", () => {
   assert.equal(calls, 1);
 });
 
-test("sim view is retained at stop and cleared on the next modification (FR-085)", () => {
+test("dropping the sim view is what Stop does; nothing outlives the run (FR-085)", () => {
   const store = newStore();
   const view = { valueOfPin: () => 0 };
 
   store.setSimulating(true);
   store.setSim(view);
-  store.setSimulating(false); // stop: view deliberately retained
   assert.equal(store.state.sim, view);
 
-  store.dispatch(addCmd(1)); // first design modification clears it
+  // The engine's stop() drops the view explicitly (setSim(null)) — indicators,
+  // switch positions, conflict strokes and probe all go with it. setSimulating
+  // alone does not, since the store cannot know a run ended.
+  store.setSimulating(false);
+  store.setSim(null);
   assert.equal(store.state.sim, null);
+});
+
+test("a held vector run's view is cleared by the next design modification (FR-085/FR-115h)", () => {
+  const store = newStore();
+  const view = { valueOfPin: () => 0 };
+
+  // A hold publishes a view but locks nothing, so an edit can land under it —
+  // the one remaining path to clearSimView now that Stop drops the view itself.
+  store.setSim(view);
+  store.setVectorHold(true);
+  assert.equal(store.state.sim, view);
+
+  store.dispatch(addCmd(1));
+  assert.equal(store.state.sim, null);
+});
+
+// A store whose design holds one switch instance, for the run-time input tests.
+function switchStore() {
+  const inst = { refdes: "A-1", switchState: "0" };
+  const store = createStore({ design: { v: 0, components: [inst] }, project: TEST_PROJECT });
+  return { store, inst };
+}
+
+// The switch's INTERACTIONS handler, inlined so the store test stays free of
+// the built-in registry: it toggles whatever object it is handed.
+const toggle = (o) => (o.switchState = o.switchState === "1" ? "0" : "1");
+
+test("setLiveInput toggles a run-time copy and leaves the design clean (FR-087a)", () => {
+  const { store, inst } = switchStore();
+  let notes = 0;
+  let wakes = 0;
+  store.subscribe(() => notes++);
+  store.subscribeLive(() => wakes++);
+  store.setSimulating(true);
+  store.setSim({ valueOfPin: () => 0 });
+  const rev = store.state.designRev;
+
+  store.setLiveInput(inst, toggle);
+  assert.equal(store.state.sim.inputs["A-1"].switchState, "1");
+  // The point of the whole mechanism: the design is untouched, so Run → flip
+  // switches → Stop leaves nothing to save (FR-087a, 2026-08-05).
+  assert.equal(inst.switchState, "0");
+  assert.equal(store.state.dirty, false);
+  assert.equal(store.state.designRev, rev); // not a design edit
+  assert.equal(wakes, 1); // the running sim re-evaluates
+  assert.ok(notes > 0); // the canvas redraws the bubble
+
+  store.setLiveInput(inst, toggle); // a second click builds on the first
+  assert.equal(store.state.sim.inputs["A-1"].switchState, "0");
+});
+
+test("run-time inputs die with the sim view at Stop (FR-087a/FR-085)", () => {
+  const { store, inst } = switchStore();
+  store.setSimulating(true);
+  store.setSim({ valueOfPin: () => 0 });
+  store.setLiveInput(inst, toggle);
+  store.setProbe({ kind: "pin", refdes: "A-1", pin: "OUT" });
+
+  // Stop, as the engine performs it. The clicked switch position and the values
+  // it produced go away together — that simultaneity is the whole point: the
+  // canvas must never show indicator values the on-screen switches don't explain.
+  store.setSimulating(false);
+  store.setSim(null);
+  assert.equal(store.state.sim, null);
+  assert.equal(store.state.probe, null);
+  assert.equal(inst.switchState, "0"); // reverted, because it was never written
+
+  // A fresh run starts from the design's specified setting, never from what the
+  // last run was clicked to.
+  store.setSim({ valueOfPin: () => 0 });
+  assert.equal(store.state.sim.inputs, undefined);
+});
+
+test("setLiveInput outside a run changes nothing (FR-087a)", () => {
+  const { store, inst } = switchStore();
+  store.setLiveInput(inst, toggle); // no sim view to hold it
+  assert.equal(inst.switchState, "0");
+  assert.equal(store.state.dirty, false);
 });
 
 test("setProbe records a probe target and notifies (FR-087c)", () => {
@@ -231,24 +312,28 @@ test("setProbe records a probe target and notifies (FR-087c)", () => {
 test("a selection change clears the probe target (FR-087c)", () => {
   const store = newStore();
   store.setProbe({ kind: "wire", id: "w1" });
-  // After a Stop, the first click that selects something must hand the
-  // properties panel back from the frozen probe reading to that selection.
+  // Under a held vector run the design stays selectable, so a click that selects
+  // something must hand the properties panel back from the probe reading.
   store.setSelection([{ kind: "component", refdes: "U1" }]);
   assert.equal(store.state.probe, null);
 });
 
-test("the first design modification clears the probe with the sim view (FR-087c/FR-085)", () => {
-  const store = newStore();
-  store.setSimulating(true);
-  store.setSim({ valueOfPin: () => 0 });
-  store.setProbe({ kind: "pin", refdes: "U1", pin: "Y" });
-  store.setSimulating(false); // stop: both deliberately retained
-  assert.notEqual(store.state.probe, null);
-  assert.notEqual(store.state.sim, null);
+test("the probe target is cleared with the sim view, however it is dropped (FR-087c/FR-085)", () => {
+  // Stop (setSim(null), the engine's teardown).
+  const stopped = newStore();
+  stopped.setSimulating(true);
+  stopped.setSim({ valueOfPin: () => 0 });
+  stopped.setProbe({ kind: "pin", refdes: "U1", pin: "Y" });
+  stopped.setSim(null);
+  assert.equal(stopped.state.probe, null); // the values it was reading are gone
 
-  store.dispatch(addCmd(1));
-  assert.equal(store.state.sim, null);
-  assert.equal(store.state.probe, null); // the values it was reading are gone
+  // An edit under a held vector run (clearSimView) — the other way a view ends.
+  const held = newStore();
+  held.setSim({ valueOfPin: () => 0 });
+  held.setProbe({ kind: "pin", refdes: "U1", pin: "Y" });
+  held.dispatch(addCmd(1));
+  assert.equal(held.state.sim, null);
+  assert.equal(held.state.probe, null);
 });
 
 test("vectorHold marks a held vector run and notifies (FR-115l)", () => {

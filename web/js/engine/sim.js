@@ -63,9 +63,17 @@ function effectiveProps(inst) {
 // (FR-071b) — so the caller (the sequential vector runner, §6.16) owns those
 // nets, driving them through the stimulus mechanism as scripted levels. The
 // live editor run never passes it.
+//
+// `liveInputs(refdes) → instLike | undefined` (FR-087a) resolves an interactive
+// built-in's RUN-TIME state: a click during a run records a copy of the instance
+// in the store's sim view instead of writing the design (§6.10 setLiveInput), so
+// each step reads the copy when there is one and the saved instance otherwise.
+// Only the live editor run passes it; the vector runner and the parity harness
+// read the instances, since a vector row and a generated program both start from
+// the design as authored.
 export function buildSimulation(
   design,
-  { onMessage = () => {}, onConsole = () => {}, romContent = null, ramContent = null, stimulus = [], scriptedClocks = false } = {},
+  { onMessage = () => {}, onConsole = () => {}, romContent = null, ramContent = null, stimulus = [], scriptedClocks = false, liveInputs = null } = {},
 ) {
   const nets = buildNets(design, onMessage);
 
@@ -439,7 +447,10 @@ export function buildSimulation(
         // based behaviors are suppressed; the caller drives their nets via the
         // stimulus list instead.
         if (scriptedClocks && (e.renderType === "clock" || e.renderType === "reset")) continue;
-        const ctx = { props: e.props, simTime, clockPeriod, state: e.inst.switchState };
+        // `state` is the EFFECTIVE interactive state (FR-087a): the run-time
+        // copy a sim-time click produced, else the instance's saved setting.
+        const src = liveInputs?.(e.refdes) ?? e.inst;
+        const ctx = { props: e.props, simTime, clockPeriod, state: src.switchState };
         for (const c of e.behave(ctx)) {
           add(`${e.refdes}.${c.pin}`, c.value, !!c.weak, `${e.refdes}.${c.pin}`);
         }
@@ -782,7 +793,16 @@ export function createSim({ store, renderer, consolePanel = null }) {
     consolePanel?.clear();
     const onConsole = consolePanel ? (b) => consolePanel.write(b) : undefined;
     try {
-      sim = buildSimulation(design, { onMessage: postMessage, onConsole, romContent, ramContent });
+      sim = buildSimulation(design, {
+        onMessage: postMessage,
+        onConsole,
+        romContent,
+        ramContent,
+        // Sim-time switch clicks land in the store's sim view, not the design
+        // (FR-087a). Resolved per step, so the view published just below (and
+        // replaced on the next Run) is always the one read.
+        liveInputs: (refdes) => store.state.sim?.inputs?.[refdes],
+      });
     } catch (err) {
       postMessage(`cannot simulate: ${err.message}`);
       return;
@@ -819,8 +839,13 @@ export function createSim({ store, renderer, consolePanel = null }) {
       unsubLive();
       unsubLive = null;
     }
-    // state.sim is deliberately retained: final values stay displayed until
-    // the next design modification (FR-085).
+    // Drop the display view (FR-085): the schematic returns to its design-time
+    // appearance in one move — indicators back to "?", clicked switches back to
+    // their specified settings (their run-time state rides on this view,
+    // FR-087a), conflict strokes gone, probe reading cleared. A run's results do
+    // not outlive the run, precisely so nothing is left showing values the
+    // on-screen inputs no longer explain.
+    store.setSim(null);
     setAppState("editing");
     store.setSimulating(false);
     clearMessage(); // drop any leftover run-time message, e.g. the lock notice (FR-074)

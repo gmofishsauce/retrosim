@@ -732,6 +732,28 @@ function placeSwitch(d, refdes, state) {
   return d.components.at(-1);
 }
 
+test("liveInputs overrides the instance's switch setting, which stays put (FR-087a)", () => {
+  const d = mkDesign();
+  const sw = placeSwitch(d, "A-1", "0"); // the design's specified setting
+  place(d, "A-2", builtin("indicator"));
+  connect(d, ["A-1", "OUT"], ["A-2", "IN"]);
+
+  // The store's run-time copy stands in for a sim-time click (§6.10).
+  const inputs = {};
+  const sim = buildSimulation(d, { liveInputs: (refdes) => inputs[refdes] });
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-2", "IN"), V0); // starts from the setting
+
+  inputs["A-1"] = { ...sw, switchState: "1" }; // click
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-2", "IN"), V1); // read live, next step
+  assert.equal(sw.switchState, "0"); // and the design is not written
+
+  delete inputs["A-1"]; // view dropped (Stop → first edit, FR-085)
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-2", "IN"), V0);
+});
+
 test("transmission gate: closed passes a driver across; open isolates the far side (FR-071g/FR-083a)", () => {
   const d = mkDesign();
   place(d, "A-1", builtin("tgate"));

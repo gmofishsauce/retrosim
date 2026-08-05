@@ -55,7 +55,7 @@
         ]
       },
       "overrides": {},
-      "switchState": "1",
+      "switchState": "0",
       "label": "A1"
     },
     {
@@ -223,7 +223,7 @@
         ]
       },
       "overrides": {},
-      "switchState": "0",
+      "switchState": "1",
       "label": "B3"
     },
     {
@@ -251,7 +251,7 @@
         ]
       },
       "overrides": {},
-      "switchState": "1",
+      "switchState": "0",
       "label": "Cin"
     },
     {
@@ -469,14 +469,14 @@
       "overrides": {}
     },
     {
-      "refdes": "U1",
-      "type": "type-74F381",
-      "x": 81,
+      "refdes": "U2",
+      "type": "type-74V581",
+      "x": 78,
       "y": 90,
       "rotation": 0,
       "typeData": {
-        "id": "type-74F381",
-        "name": "74F381",
+        "id": "type-74V581",
+        "name": "74V581",
         "renderType": "unit",
         "width": 6,
         "height": 17,
@@ -510,7 +510,7 @@
             "side": "left",
             "position": 5,
             "direction": "in",
-            "number": 18,
+            "number": 17,
             "desc": "operand A bit 3 (MSB)"
           },
           {
@@ -534,7 +534,7 @@
             "side": "left",
             "position": 9,
             "direction": "in",
-            "number": 17,
+            "number": 18,
             "desc": "operand B bit 2"
           },
           {
@@ -570,14 +570,6 @@
             "desc": "function select bit 2"
           },
           {
-            "name": "Cn",
-            "side": "left",
-            "position": 16,
-            "direction": "in",
-            "number": 15,
-            "desc": "carry input (active high)"
-          },
-          {
             "name": "F0",
             "side": "right",
             "position": 2,
@@ -610,12 +602,28 @@
             "desc": "function output bit 3 (MSB)"
           },
           {
+            "name": "Ovfl",
+            "side": "right",
+            "position": 14,
+            "direction": "out",
+            "number": 13,
+            "desc": "signed overflow of the selected arithmetic op (variant; 0 in the logic/clear/preset modes)"
+          },
+          {
             "name": "Cout",
             "side": "right",
             "position": 12,
             "direction": "out",
             "number": 14,
             "desc": "ripple carry output (variant; bit-4 arithmetic carry)"
+          },
+          {
+            "name": "Cn",
+            "side": "left",
+            "position": 16,
+            "direction": "in",
+            "number": 15,
+            "desc": "carry input (active high)"
           }
         ],
         "pinGroups": [
@@ -658,15 +666,17 @@
         "delays": {
           "tpd_ab_cout": 10,
           "tpd_ab_f": 10,
+          "tpd_ab_ovfl": 10,
           "tpd_cn_cout": 8,
           "tpd_cn_f": 8,
+          "tpd_cn_ovfl": 8,
           "tpd_s_f": 8
         },
-        "behavior": "; 74F381 — 4-bit ALU, A0/B0/F0 = LSB. Combinational (no clock).\n;\n; Physical-level GALasm: '/' is the complement operator and a signal name is\n; this file's pin name (all pins active-high here, so no '/' prefixes). ':+:'\n; is the extended-dialect XOR operator (FR-079a); this part models a 74-series\n; chip, so it declares no `gal:` and uses the extended dialect.\n;\n; Function select (S0 S1 S2), from the datasheet Function Select Table:\n;   L L L  Clear   (F = 0000)\n;   H L L  B minus A     (B + /A + Cn)\n;   L H L  A minus B     (A + /B + Cn)\n;   H H L  A plus B      (A + B + Cn)\n;   L L H  A XOR B\n;   H L H  A OR B\n;   L H H  A AND B\n;   H H H  Preset  (F = 1111)\n; The two subtract modes need Cn=1 (a forced carry) to make a true 2's-complement\n; difference, per the datasheet note.\n;\n; Each output bit is written  Fn = <half-sum SOP> :+: <carry-in SOP>  so the\n; mode-selected half-sum stays a tiny sum-of-products and only the ripple carry\n; grows (cf. 74283). The half-sum is Xn XOR Yn for add/xor, its complement for\n; the subtracts (Xn XOR /Yn), An+Bn for OR, An*Bn for AND, 1 for preset, and 0\n; for clear; the carry-in term is gated to the three arithmetic modes only, so\n; it is 0 (and Fn = half-sum) in the logic/clear/preset modes. Cout is the\n; bit-4 carry of the selected arithmetic operation and 0 in the non-arithmetic\n; modes (this variant's ripple-carry output; the real 74F381 has /G and /P\n; instead). Equations were machine-generated and verified against the ALU\n; reference for all 4096 (A, B, S0..S2, Cn) input combinations.\nF0 = S0*S1*/S2*A0*/B0 + S0*S1*/S2*/A0*B0 + /S0*/S1*S2*A0*/B0 + /S0*/S1*S2*/A0*B0 + /S0*S1*/S2*A0*B0 + /S0*S1*/S2*/A0*/B0 + S0*/S1*/S2*A0*B0 + S0*/S1*/S2*/A0*/B0 + S0*/S1*S2*A0 + S0*/S1*S2*B0 + /S0*S1*S2*A0*B0 + S0*S1*S2 :+: S0*S1*/S2*Cn + /S0*S1*/S2*Cn + S0*/S1*/S2*Cn\nF1 = S0*S1*/S2*A1*/B1 + S0*S1*/S2*/A1*B1 + /S0*/S1*S2*A1*/B1 + /S0*/S1*S2*/A1*B1 + /S0*S1*/S2*A1*B1 + /S0*S1*/S2*/A1*/B1 + S0*/S1*/S2*A1*B1 + S0*/S1*/S2*/A1*/B1 + S0*/S1*S2*A1 + S0*/S1*S2*B1 + /S0*S1*S2*A1*B1 + S0*S1*S2 :+: S0*S1*/S2*A0*B0 + S0*S1*/S2*A0*Cn + S0*S1*/S2*B0*Cn + /S0*S1*/S2*A0*/B0 + /S0*S1*/S2*A0*Cn + /S0*S1*/S2*/B0*Cn + S0*/S1*/S2*B0*/A0 + S0*/S1*/S2*B0*Cn + S0*/S1*/S2*/A0*Cn\nF2 = S0*S1*/S2*A2*/B2 + S0*S1*/S2*/A2*B2 + /S0*/S1*S2*A2*/B2 + /S0*/S1*S2*/A2*B2 + /S0*S1*/S2*A2*B2 + /S0*S1*/S2*/A2*/B2 + S0*/S1*/S2*A2*B2 + S0*/S1*/S2*/A2*/B2 + S0*/S1*S2*A2 + S0*/S1*S2*B2 + /S0*S1*S2*A2*B2 + S0*S1*S2 :+: S0*S1*/S2*A1*B1 + S0*S1*/S2*A1*A0*B0 + S0*S1*/S2*B1*A0*B0 + S0*S1*/S2*A0*A1*Cn + S0*S1*/S2*A0*B1*Cn + S0*S1*/S2*B0*A1*Cn + S0*S1*/S2*B0*B1*Cn + /S0*S1*/S2*A1*/B1 + /S0*S1*/S2*A1*A0*/B0 + /S0*S1*/S2*/B1*A0*/B0 + /S0*S1*/S2*A0*A1*Cn + /S0*S1*/S2*A0*/B1*Cn + /S0*S1*/S2*/B0*A1*Cn + /S0*S1*/S2*/B0*/B1*Cn + S0*/S1*/S2*B1*/A1 + S0*/S1*/S2*B1*B0*/A0 + S0*/S1*/S2*/A1*B0*/A0 + S0*/S1*/S2*B0*B1*Cn + S0*/S1*/S2*B0*/A1*Cn + S0*/S1*/S2*/A0*B1*Cn + S0*/S1*/S2*/A0*/A1*Cn\nF3 = S0*S1*/S2*A3*/B3 + S0*S1*/S2*/A3*B3 + /S0*/S1*S2*A3*/B3 + /S0*/S1*S2*/A3*B3 + /S0*S1*/S2*A3*B3 + /S0*S1*/S2*/A3*/B3 + S0*/S1*/S2*A3*B3 + S0*/S1*/S2*/A3*/B3 + S0*/S1*S2*A3 + S0*/S1*S2*B3 + /S0*S1*S2*A3*B3 + S0*S1*S2 :+: S0*S1*/S2*A2*B2 + S0*S1*/S2*A2*A1*B1 + S0*S1*/S2*B2*A1*B1 + S0*S1*/S2*A1*A2*A0*B0 + S0*S1*/S2*A1*B2*A0*B0 + S0*S1*/S2*B1*A2*A0*B0 + S0*S1*/S2*B1*B2*A0*B0 + S0*S1*/S2*A0*A1*A2*Cn + S0*S1*/S2*A0*A1*B2*Cn + S0*S1*/S2*A0*B1*A2*Cn + S0*S1*/S2*A0*B1*B2*Cn + S0*S1*/S2*B0*A1*A2*Cn + S0*S1*/S2*B0*A1*B2*Cn + S0*S1*/S2*B0*B1*A2*Cn + S0*S1*/S2*B0*B1*B2*Cn + /S0*S1*/S2*A2*/B2 + /S0*S1*/S2*A2*A1*/B1 + /S0*S1*/S2*/B2*A1*/B1 + /S0*S1*/S2*A1*A2*A0*/B0 + /S0*S1*/S2*A1*/B2*A0*/B0 + /S0*S1*/S2*/B1*A2*A0*/B0 + /S0*S1*/S2*/B1*/B2*A0*/B0 + /S0*S1*/S2*A0*A1*A2*Cn + /S0*S1*/S2*A0*A1*/B2*Cn + /S0*S1*/S2*A0*/B1*A2*Cn + /S0*S1*/S2*A0*/B1*/B2*Cn + /S0*S1*/S2*/B0*A1*A2*Cn + /S0*S1*/S2*/B0*A1*/B2*Cn + /S0*S1*/S2*/B0*/B1*A2*Cn + /S0*S1*/S2*/B0*/B1*/B2*Cn + S0*/S1*/S2*B2*/A2 + S0*/S1*/S2*B2*B1*/A1 + S0*/S1*/S2*/A2*B1*/A1 + S0*/S1*/S2*B1*B2*B0*/A0 + S0*/S1*/S2*B1*/A2*B0*/A0 + S0*/S1*/S2*/A1*B2*B0*/A0 + S0*/S1*/S2*/A1*/A2*B0*/A0 + S0*/S1*/S2*B0*B1*B2*Cn + S0*/S1*/S2*B0*B1*/A2*Cn + S0*/S1*/S2*B0*/A1*B2*Cn + S0*/S1*/S2*B0*/A1*/A2*Cn + S0*/S1*/S2*/A0*B1*B2*Cn + S0*/S1*/S2*/A0*B1*/A2*Cn + S0*/S1*/S2*/A0*/A1*B2*Cn + S0*/S1*/S2*/A0*/A1*/A2*Cn\nCout = S0*S1*/S2*A3*B3 + S0*S1*/S2*A3*A2*B2 + S0*S1*/S2*B3*A2*B2 + S0*S1*/S2*A2*A3*A1*B1 + S0*S1*/S2*A2*B3*A1*B1 + S0*S1*/S2*B2*A3*A1*B1 + S0*S1*/S2*B2*B3*A1*B1 + S0*S1*/S2*A1*A2*A3*A0*B0 + S0*S1*/S2*A1*A2*B3*A0*B0 + S0*S1*/S2*A1*B2*A3*A0*B0 + S0*S1*/S2*A1*B2*B3*A0*B0 + S0*S1*/S2*B1*A2*A3*A0*B0 + S0*S1*/S2*B1*A2*B3*A0*B0 + S0*S1*/S2*B1*B2*A3*A0*B0 + S0*S1*/S2*B1*B2*B3*A0*B0 + S0*S1*/S2*A0*A1*A2*A3*Cn + S0*S1*/S2*A0*A1*A2*B3*Cn + S0*S1*/S2*A0*A1*B2*A3*Cn + S0*S1*/S2*A0*A1*B2*B3*Cn + S0*S1*/S2*A0*B1*A2*A3*Cn + S0*S1*/S2*A0*B1*A2*B3*Cn + S0*S1*/S2*A0*B1*B2*A3*Cn + S0*S1*/S2*A0*B1*B2*B3*Cn + S0*S1*/S2*B0*A1*A2*A3*Cn + S0*S1*/S2*B0*A1*A2*B3*Cn + S0*S1*/S2*B0*A1*B2*A3*Cn + S0*S1*/S2*B0*A1*B2*B3*Cn + S0*S1*/S2*B0*B1*A2*A3*Cn + S0*S1*/S2*B0*B1*A2*B3*Cn + S0*S1*/S2*B0*B1*B2*A3*Cn + S0*S1*/S2*B0*B1*B2*B3*Cn + /S0*S1*/S2*A3*/B3 + /S0*S1*/S2*A3*A2*/B2 + /S0*S1*/S2*/B3*A2*/B2 + /S0*S1*/S2*A2*A3*A1*/B1 + /S0*S1*/S2*A2*/B3*A1*/B1 + /S0*S1*/S2*/B2*A3*A1*/B1 + /S0*S1*/S2*/B2*/B3*A1*/B1 + /S0*S1*/S2*A1*A2*A3*A0*/B0 + /S0*S1*/S2*A1*A2*/B3*A0*/B0 + /S0*S1*/S2*A1*/B2*A3*A0*/B0 + /S0*S1*/S2*A1*/B2*/B3*A0*/B0 + /S0*S1*/S2*/B1*A2*A3*A0*/B0 + /S0*S1*/S2*/B1*A2*/B3*A0*/B0 + /S0*S1*/S2*/B1*/B2*A3*A0*/B0 + /S0*S1*/S2*/B1*/B2*/B3*A0*/B0 + /S0*S1*/S2*A0*A1*A2*A3*Cn + /S0*S1*/S2*A0*A1*A2*/B3*Cn + /S0*S1*/S2*A0*A1*/B2*A3*Cn + /S0*S1*/S2*A0*A1*/B2*/B3*Cn + /S0*S1*/S2*A0*/B1*A2*A3*Cn + /S0*S1*/S2*A0*/B1*A2*/B3*Cn + /S0*S1*/S2*A0*/B1*/B2*A3*Cn + /S0*S1*/S2*A0*/B1*/B2*/B3*Cn + /S0*S1*/S2*/B0*A1*A2*A3*Cn + /S0*S1*/S2*/B0*A1*A2*/B3*Cn + /S0*S1*/S2*/B0*A1*/B2*A3*Cn + /S0*S1*/S2*/B0*A1*/B2*/B3*Cn + /S0*S1*/S2*/B0*/B1*A2*A3*Cn + /S0*S1*/S2*/B0*/B1*A2*/B3*Cn + /S0*S1*/S2*/B0*/B1*/B2*A3*Cn + /S0*S1*/S2*/B0*/B1*/B2*/B3*Cn + S0*/S1*/S2*B3*/A3 + S0*/S1*/S2*B3*B2*/A2 + S0*/S1*/S2*/A3*B2*/A2 + S0*/S1*/S2*B2*B3*B1*/A1 + S0*/S1*/S2*B2*/A3*B1*/A1 + S0*/S1*/S2*/A2*B3*B1*/A1 + S0*/S1*/S2*/A2*/A3*B1*/A1 + S0*/S1*/S2*B1*B2*B3*B0*/A0 + S0*/S1*/S2*B1*B2*/A3*B0*/A0 + S0*/S1*/S2*B1*/A2*B3*B0*/A0 + S0*/S1*/S2*B1*/A2*/A3*B0*/A0 + S0*/S1*/S2*/A1*B2*B3*B0*/A0 + S0*/S1*/S2*/A1*B2*/A3*B0*/A0 + S0*/S1*/S2*/A1*/A2*B3*B0*/A0 + S0*/S1*/S2*/A1*/A2*/A3*B0*/A0 + S0*/S1*/S2*B0*B1*B2*B3*Cn + S0*/S1*/S2*B0*B1*B2*/A3*Cn + S0*/S1*/S2*B0*B1*/A2*B3*Cn + S0*/S1*/S2*B0*B1*/A2*/A3*Cn + S0*/S1*/S2*B0*/A1*B2*B3*Cn + S0*/S1*/S2*B0*/A1*B2*/A3*Cn + S0*/S1*/S2*B0*/A1*/A2*B3*Cn + S0*/S1*/S2*B0*/A1*/A2*/A3*Cn + S0*/S1*/S2*/A0*B1*B2*B3*Cn + S0*/S1*/S2*/A0*B1*B2*/A3*Cn + S0*/S1*/S2*/A0*B1*/A2*B3*Cn + S0*/S1*/S2*/A0*B1*/A2*/A3*Cn + S0*/S1*/S2*/A0*/A1*B2*B3*Cn + S0*/S1*/S2*/A0*/A1*B2*/A3*Cn + S0*/S1*/S2*/A0*/A1*/A2*B3*Cn + S0*/S1*/S2*/A0*/A1*/A2*/A3*Cn\n",
-        "description": "4-bit ALU / function generator (74F381 function set) with ripple carry-out",
+        "behavior": "; 74F381 — 4-bit ALU, A0/B0/F0 = LSB. Combinational (no clock).\n;\n; Physical-level GALasm: '/' is the complement operator and a signal name is\n; this file's pin name (all pins active-high here, so no '/' prefixes). ':+:'\n; is the extended-dialect XOR operator (FR-079a); this part models a 74-series\n; chip, so it declares no `gal:` and uses the extended dialect.\n;\n; Function select (S0 S1 S2), from the datasheet Function Select Table:\n;   L L L  Clear   (F = 0000)\n;   H L L  B minus A     (B + /A + Cn)\n;   L H L  A minus B     (A + /B + Cn)\n;   H H L  A plus B      (A + B + Cn)\n;   L L H  A XOR B\n;   H L H  A OR B\n;   L H H  A AND B\n;   H H H  Preset  (F = 1111)\n; The two subtract modes need Cn=1 (a forced carry) to make a true 2's-complement\n; difference, per the datasheet note.\n;\n; Each output bit is written  Fn = <half-sum SOP> :+: <carry-in SOP>  so the\n; mode-selected half-sum stays a tiny sum-of-products and only the ripple carry\n; grows (cf. 74283). The half-sum is Xn XOR Yn for add/xor, its complement for\n; the subtracts (Xn XOR /Yn), An+Bn for OR, An*Bn for AND, 1 for preset, and 0\n; for clear; the carry-in term is gated to the three arithmetic modes only, so\n; it is 0 (and Fn = half-sum) in the logic/clear/preset modes. Cout is the\n; bit-4 carry of the selected arithmetic operation and 0 in the non-arithmetic\n; modes (this variant's ripple-carry output; the real 74F381 has /G and /P\n; instead). Equations were machine-generated and verified against the ALU\n; reference for all 4096 (A, B, S0..S2, Cn) input combinations.\n;\n; Ovfl (this variant's second added output, on /G's pin) is the signed\n; overflow of the selected arithmetic operation: the operands' sign bits agree\n; and the result's disagrees with them. Equivalently it is C4 XOR C3 — the\n; carry out of the MSB XOR the carry into it — so its equation is literally\n; the Cout sum (which is C4) XORed with the :+: group of F3 (which is C3), and\n; no new derivation was needed. Both of those are already gated to the three\n; arithmetic modes, including the two subtracts, where the effective operand\n; is /A or /B; that gating is what makes Ovfl read 0 in the clear/logic/preset\n; modes rather than undefined. Verified 4096/4096 against a signed-arithmetic\n; reference (128 genuine overflow cases in each arithmetic mode).\n;\n; In a ripple cascade only the most significant slice's Ovfl is meaningful;\n; the lower slices assert their own and the design must ignore them.\nF0 = S0*S1*/S2*A0*/B0 + S0*S1*/S2*/A0*B0 + /S0*/S1*S2*A0*/B0 + /S0*/S1*S2*/A0*B0 + /S0*S1*/S2*A0*B0 + /S0*S1*/S2*/A0*/B0 + S0*/S1*/S2*A0*B0 + S0*/S1*/S2*/A0*/B0 + S0*/S1*S2*A0 + S0*/S1*S2*B0 + /S0*S1*S2*A0*B0 + S0*S1*S2 :+: S0*S1*/S2*Cn + /S0*S1*/S2*Cn + S0*/S1*/S2*Cn\nF1 = S0*S1*/S2*A1*/B1 + S0*S1*/S2*/A1*B1 + /S0*/S1*S2*A1*/B1 + /S0*/S1*S2*/A1*B1 + /S0*S1*/S2*A1*B1 + /S0*S1*/S2*/A1*/B1 + S0*/S1*/S2*A1*B1 + S0*/S1*/S2*/A1*/B1 + S0*/S1*S2*A1 + S0*/S1*S2*B1 + /S0*S1*S2*A1*B1 + S0*S1*S2 :+: S0*S1*/S2*A0*B0 + S0*S1*/S2*A0*Cn + S0*S1*/S2*B0*Cn + /S0*S1*/S2*A0*/B0 + /S0*S1*/S2*A0*Cn + /S0*S1*/S2*/B0*Cn + S0*/S1*/S2*B0*/A0 + S0*/S1*/S2*B0*Cn + S0*/S1*/S2*/A0*Cn\nF2 = S0*S1*/S2*A2*/B2 + S0*S1*/S2*/A2*B2 + /S0*/S1*S2*A2*/B2 + /S0*/S1*S2*/A2*B2 + /S0*S1*/S2*A2*B2 + /S0*S1*/S2*/A2*/B2 + S0*/S1*/S2*A2*B2 + S0*/S1*/S2*/A2*/B2 + S0*/S1*S2*A2 + S0*/S1*S2*B2 + /S0*S1*S2*A2*B2 + S0*S1*S2 :+: S0*S1*/S2*A1*B1 + S0*S1*/S2*A1*A0*B0 + S0*S1*/S2*B1*A0*B0 + S0*S1*/S2*A0*A1*Cn + S0*S1*/S2*A0*B1*Cn + S0*S1*/S2*B0*A1*Cn + S0*S1*/S2*B0*B1*Cn + /S0*S1*/S2*A1*/B1 + /S0*S1*/S2*A1*A0*/B0 + /S0*S1*/S2*/B1*A0*/B0 + /S0*S1*/S2*A0*A1*Cn + /S0*S1*/S2*A0*/B1*Cn + /S0*S1*/S2*/B0*A1*Cn + /S0*S1*/S2*/B0*/B1*Cn + S0*/S1*/S2*B1*/A1 + S0*/S1*/S2*B1*B0*/A0 + S0*/S1*/S2*/A1*B0*/A0 + S0*/S1*/S2*B0*B1*Cn + S0*/S1*/S2*B0*/A1*Cn + S0*/S1*/S2*/A0*B1*Cn + S0*/S1*/S2*/A0*/A1*Cn\nF3 = S0*S1*/S2*A3*/B3 + S0*S1*/S2*/A3*B3 + /S0*/S1*S2*A3*/B3 + /S0*/S1*S2*/A3*B3 + /S0*S1*/S2*A3*B3 + /S0*S1*/S2*/A3*/B3 + S0*/S1*/S2*A3*B3 + S0*/S1*/S2*/A3*/B3 + S0*/S1*S2*A3 + S0*/S1*S2*B3 + /S0*S1*S2*A3*B3 + S0*S1*S2 :+: S0*S1*/S2*A2*B2 + S0*S1*/S2*A2*A1*B1 + S0*S1*/S2*B2*A1*B1 + S0*S1*/S2*A1*A2*A0*B0 + S0*S1*/S2*A1*B2*A0*B0 + S0*S1*/S2*B1*A2*A0*B0 + S0*S1*/S2*B1*B2*A0*B0 + S0*S1*/S2*A0*A1*A2*Cn + S0*S1*/S2*A0*A1*B2*Cn + S0*S1*/S2*A0*B1*A2*Cn + S0*S1*/S2*A0*B1*B2*Cn + S0*S1*/S2*B0*A1*A2*Cn + S0*S1*/S2*B0*A1*B2*Cn + S0*S1*/S2*B0*B1*A2*Cn + S0*S1*/S2*B0*B1*B2*Cn + /S0*S1*/S2*A2*/B2 + /S0*S1*/S2*A2*A1*/B1 + /S0*S1*/S2*/B2*A1*/B1 + /S0*S1*/S2*A1*A2*A0*/B0 + /S0*S1*/S2*A1*/B2*A0*/B0 + /S0*S1*/S2*/B1*A2*A0*/B0 + /S0*S1*/S2*/B1*/B2*A0*/B0 + /S0*S1*/S2*A0*A1*A2*Cn + /S0*S1*/S2*A0*A1*/B2*Cn + /S0*S1*/S2*A0*/B1*A2*Cn + /S0*S1*/S2*A0*/B1*/B2*Cn + /S0*S1*/S2*/B0*A1*A2*Cn + /S0*S1*/S2*/B0*A1*/B2*Cn + /S0*S1*/S2*/B0*/B1*A2*Cn + /S0*S1*/S2*/B0*/B1*/B2*Cn + S0*/S1*/S2*B2*/A2 + S0*/S1*/S2*B2*B1*/A1 + S0*/S1*/S2*/A2*B1*/A1 + S0*/S1*/S2*B1*B2*B0*/A0 + S0*/S1*/S2*B1*/A2*B0*/A0 + S0*/S1*/S2*/A1*B2*B0*/A0 + S0*/S1*/S2*/A1*/A2*B0*/A0 + S0*/S1*/S2*B0*B1*B2*Cn + S0*/S1*/S2*B0*B1*/A2*Cn + S0*/S1*/S2*B0*/A1*B2*Cn + S0*/S1*/S2*B0*/A1*/A2*Cn + S0*/S1*/S2*/A0*B1*B2*Cn + S0*/S1*/S2*/A0*B1*/A2*Cn + S0*/S1*/S2*/A0*/A1*B2*Cn + S0*/S1*/S2*/A0*/A1*/A2*Cn\nCout = S0*S1*/S2*A3*B3 + S0*S1*/S2*A3*A2*B2 + S0*S1*/S2*B3*A2*B2 + S0*S1*/S2*A2*A3*A1*B1 + S0*S1*/S2*A2*B3*A1*B1 + S0*S1*/S2*B2*A3*A1*B1 + S0*S1*/S2*B2*B3*A1*B1 + S0*S1*/S2*A1*A2*A3*A0*B0 + S0*S1*/S2*A1*A2*B3*A0*B0 + S0*S1*/S2*A1*B2*A3*A0*B0 + S0*S1*/S2*A1*B2*B3*A0*B0 + S0*S1*/S2*B1*A2*A3*A0*B0 + S0*S1*/S2*B1*A2*B3*A0*B0 + S0*S1*/S2*B1*B2*A3*A0*B0 + S0*S1*/S2*B1*B2*B3*A0*B0 + S0*S1*/S2*A0*A1*A2*A3*Cn + S0*S1*/S2*A0*A1*A2*B3*Cn + S0*S1*/S2*A0*A1*B2*A3*Cn + S0*S1*/S2*A0*A1*B2*B3*Cn + S0*S1*/S2*A0*B1*A2*A3*Cn + S0*S1*/S2*A0*B1*A2*B3*Cn + S0*S1*/S2*A0*B1*B2*A3*Cn + S0*S1*/S2*A0*B1*B2*B3*Cn + S0*S1*/S2*B0*A1*A2*A3*Cn + S0*S1*/S2*B0*A1*A2*B3*Cn + S0*S1*/S2*B0*A1*B2*A3*Cn + S0*S1*/S2*B0*A1*B2*B3*Cn + S0*S1*/S2*B0*B1*A2*A3*Cn + S0*S1*/S2*B0*B1*A2*B3*Cn + S0*S1*/S2*B0*B1*B2*A3*Cn + S0*S1*/S2*B0*B1*B2*B3*Cn + /S0*S1*/S2*A3*/B3 + /S0*S1*/S2*A3*A2*/B2 + /S0*S1*/S2*/B3*A2*/B2 + /S0*S1*/S2*A2*A3*A1*/B1 + /S0*S1*/S2*A2*/B3*A1*/B1 + /S0*S1*/S2*/B2*A3*A1*/B1 + /S0*S1*/S2*/B2*/B3*A1*/B1 + /S0*S1*/S2*A1*A2*A3*A0*/B0 + /S0*S1*/S2*A1*A2*/B3*A0*/B0 + /S0*S1*/S2*A1*/B2*A3*A0*/B0 + /S0*S1*/S2*A1*/B2*/B3*A0*/B0 + /S0*S1*/S2*/B1*A2*A3*A0*/B0 + /S0*S1*/S2*/B1*A2*/B3*A0*/B0 + /S0*S1*/S2*/B1*/B2*A3*A0*/B0 + /S0*S1*/S2*/B1*/B2*/B3*A0*/B0 + /S0*S1*/S2*A0*A1*A2*A3*Cn + /S0*S1*/S2*A0*A1*A2*/B3*Cn + /S0*S1*/S2*A0*A1*/B2*A3*Cn + /S0*S1*/S2*A0*A1*/B2*/B3*Cn + /S0*S1*/S2*A0*/B1*A2*A3*Cn + /S0*S1*/S2*A0*/B1*A2*/B3*Cn + /S0*S1*/S2*A0*/B1*/B2*A3*Cn + /S0*S1*/S2*A0*/B1*/B2*/B3*Cn + /S0*S1*/S2*/B0*A1*A2*A3*Cn + /S0*S1*/S2*/B0*A1*A2*/B3*Cn + /S0*S1*/S2*/B0*A1*/B2*A3*Cn + /S0*S1*/S2*/B0*A1*/B2*/B3*Cn + /S0*S1*/S2*/B0*/B1*A2*A3*Cn + /S0*S1*/S2*/B0*/B1*A2*/B3*Cn + /S0*S1*/S2*/B0*/B1*/B2*A3*Cn + /S0*S1*/S2*/B0*/B1*/B2*/B3*Cn + S0*/S1*/S2*B3*/A3 + S0*/S1*/S2*B3*B2*/A2 + S0*/S1*/S2*/A3*B2*/A2 + S0*/S1*/S2*B2*B3*B1*/A1 + S0*/S1*/S2*B2*/A3*B1*/A1 + S0*/S1*/S2*/A2*B3*B1*/A1 + S0*/S1*/S2*/A2*/A3*B1*/A1 + S0*/S1*/S2*B1*B2*B3*B0*/A0 + S0*/S1*/S2*B1*B2*/A3*B0*/A0 + S0*/S1*/S2*B1*/A2*B3*B0*/A0 + S0*/S1*/S2*B1*/A2*/A3*B0*/A0 + S0*/S1*/S2*/A1*B2*B3*B0*/A0 + S0*/S1*/S2*/A1*B2*/A3*B0*/A0 + S0*/S1*/S2*/A1*/A2*B3*B0*/A0 + S0*/S1*/S2*/A1*/A2*/A3*B0*/A0 + S0*/S1*/S2*B0*B1*B2*B3*Cn + S0*/S1*/S2*B0*B1*B2*/A3*Cn + S0*/S1*/S2*B0*B1*/A2*B3*Cn + S0*/S1*/S2*B0*B1*/A2*/A3*Cn + S0*/S1*/S2*B0*/A1*B2*B3*Cn + S0*/S1*/S2*B0*/A1*B2*/A3*Cn + S0*/S1*/S2*B0*/A1*/A2*B3*Cn + S0*/S1*/S2*B0*/A1*/A2*/A3*Cn + S0*/S1*/S2*/A0*B1*B2*B3*Cn + S0*/S1*/S2*/A0*B1*B2*/A3*Cn + S0*/S1*/S2*/A0*B1*/A2*B3*Cn + S0*/S1*/S2*/A0*B1*/A2*/A3*Cn + S0*/S1*/S2*/A0*/A1*B2*B3*Cn + S0*/S1*/S2*/A0*/A1*B2*/A3*Cn + S0*/S1*/S2*/A0*/A1*/A2*B3*Cn + S0*/S1*/S2*/A0*/A1*/A2*/A3*Cn\nOvfl = S0*S1*/S2*A3*B3 + S0*S1*/S2*A3*A2*B2 + S0*S1*/S2*B3*A2*B2 + S0*S1*/S2*A2*A3*A1*B1 + S0*S1*/S2*A2*B3*A1*B1 + S0*S1*/S2*B2*A3*A1*B1 + S0*S1*/S2*B2*B3*A1*B1 + S0*S1*/S2*A1*A2*A3*A0*B0 + S0*S1*/S2*A1*A2*B3*A0*B0 + S0*S1*/S2*A1*B2*A3*A0*B0 + S0*S1*/S2*A1*B2*B3*A0*B0 + S0*S1*/S2*B1*A2*A3*A0*B0 + S0*S1*/S2*B1*A2*B3*A0*B0 + S0*S1*/S2*B1*B2*A3*A0*B0 + S0*S1*/S2*B1*B2*B3*A0*B0 + S0*S1*/S2*A0*A1*A2*A3*Cn + S0*S1*/S2*A0*A1*A2*B3*Cn + S0*S1*/S2*A0*A1*B2*A3*Cn + S0*S1*/S2*A0*A1*B2*B3*Cn + S0*S1*/S2*A0*B1*A2*A3*Cn + S0*S1*/S2*A0*B1*A2*B3*Cn + S0*S1*/S2*A0*B1*B2*A3*Cn + S0*S1*/S2*A0*B1*B2*B3*Cn + S0*S1*/S2*B0*A1*A2*A3*Cn + S0*S1*/S2*B0*A1*A2*B3*Cn + S0*S1*/S2*B0*A1*B2*A3*Cn + S0*S1*/S2*B0*A1*B2*B3*Cn + S0*S1*/S2*B0*B1*A2*A3*Cn + S0*S1*/S2*B0*B1*A2*B3*Cn + S0*S1*/S2*B0*B1*B2*A3*Cn + S0*S1*/S2*B0*B1*B2*B3*Cn + /S0*S1*/S2*A3*/B3 + /S0*S1*/S2*A3*A2*/B2 + /S0*S1*/S2*/B3*A2*/B2 + /S0*S1*/S2*A2*A3*A1*/B1 + /S0*S1*/S2*A2*/B3*A1*/B1 + /S0*S1*/S2*/B2*A3*A1*/B1 + /S0*S1*/S2*/B2*/B3*A1*/B1 + /S0*S1*/S2*A1*A2*A3*A0*/B0 + /S0*S1*/S2*A1*A2*/B3*A0*/B0 + /S0*S1*/S2*A1*/B2*A3*A0*/B0 + /S0*S1*/S2*A1*/B2*/B3*A0*/B0 + /S0*S1*/S2*/B1*A2*A3*A0*/B0 + /S0*S1*/S2*/B1*A2*/B3*A0*/B0 + /S0*S1*/S2*/B1*/B2*A3*A0*/B0 + /S0*S1*/S2*/B1*/B2*/B3*A0*/B0 + /S0*S1*/S2*A0*A1*A2*A3*Cn + /S0*S1*/S2*A0*A1*A2*/B3*Cn + /S0*S1*/S2*A0*A1*/B2*A3*Cn + /S0*S1*/S2*A0*A1*/B2*/B3*Cn + /S0*S1*/S2*A0*/B1*A2*A3*Cn + /S0*S1*/S2*A0*/B1*A2*/B3*Cn + /S0*S1*/S2*A0*/B1*/B2*A3*Cn + /S0*S1*/S2*A0*/B1*/B2*/B3*Cn + /S0*S1*/S2*/B0*A1*A2*A3*Cn + /S0*S1*/S2*/B0*A1*A2*/B3*Cn + /S0*S1*/S2*/B0*A1*/B2*A3*Cn + /S0*S1*/S2*/B0*A1*/B2*/B3*Cn + /S0*S1*/S2*/B0*/B1*A2*A3*Cn + /S0*S1*/S2*/B0*/B1*A2*/B3*Cn + /S0*S1*/S2*/B0*/B1*/B2*A3*Cn + /S0*S1*/S2*/B0*/B1*/B2*/B3*Cn + S0*/S1*/S2*B3*/A3 + S0*/S1*/S2*B3*B2*/A2 + S0*/S1*/S2*/A3*B2*/A2 + S0*/S1*/S2*B2*B3*B1*/A1 + S0*/S1*/S2*B2*/A3*B1*/A1 + S0*/S1*/S2*/A2*B3*B1*/A1 + S0*/S1*/S2*/A2*/A3*B1*/A1 + S0*/S1*/S2*B1*B2*B3*B0*/A0 + S0*/S1*/S2*B1*B2*/A3*B0*/A0 + S0*/S1*/S2*B1*/A2*B3*B0*/A0 + S0*/S1*/S2*B1*/A2*/A3*B0*/A0 + S0*/S1*/S2*/A1*B2*B3*B0*/A0 + S0*/S1*/S2*/A1*B2*/A3*B0*/A0 + S0*/S1*/S2*/A1*/A2*B3*B0*/A0 + S0*/S1*/S2*/A1*/A2*/A3*B0*/A0 + S0*/S1*/S2*B0*B1*B2*B3*Cn + S0*/S1*/S2*B0*B1*B2*/A3*Cn + S0*/S1*/S2*B0*B1*/A2*B3*Cn + S0*/S1*/S2*B0*B1*/A2*/A3*Cn + S0*/S1*/S2*B0*/A1*B2*B3*Cn + S0*/S1*/S2*B0*/A1*B2*/A3*Cn + S0*/S1*/S2*B0*/A1*/A2*B3*Cn + S0*/S1*/S2*B0*/A1*/A2*/A3*Cn + S0*/S1*/S2*/A0*B1*B2*B3*Cn + S0*/S1*/S2*/A0*B1*B2*/A3*Cn + S0*/S1*/S2*/A0*B1*/A2*B3*Cn + S0*/S1*/S2*/A0*B1*/A2*/A3*Cn + S0*/S1*/S2*/A0*/A1*B2*B3*Cn + S0*/S1*/S2*/A0*/A1*B2*/A3*Cn + S0*/S1*/S2*/A0*/A1*/A2*B3*Cn + S0*/S1*/S2*/A0*/A1*/A2*/A3*Cn :+: S0*S1*/S2*A2*B2 + S0*S1*/S2*A2*A1*B1 + S0*S1*/S2*B2*A1*B1 + S0*S1*/S2*A1*A2*A0*B0 + S0*S1*/S2*A1*B2*A0*B0 + S0*S1*/S2*B1*A2*A0*B0 + S0*S1*/S2*B1*B2*A0*B0 + S0*S1*/S2*A0*A1*A2*Cn + S0*S1*/S2*A0*A1*B2*Cn + S0*S1*/S2*A0*B1*A2*Cn + S0*S1*/S2*A0*B1*B2*Cn + S0*S1*/S2*B0*A1*A2*Cn + S0*S1*/S2*B0*A1*B2*Cn + S0*S1*/S2*B0*B1*A2*Cn + S0*S1*/S2*B0*B1*B2*Cn + /S0*S1*/S2*A2*/B2 + /S0*S1*/S2*A2*A1*/B1 + /S0*S1*/S2*/B2*A1*/B1 + /S0*S1*/S2*A1*A2*A0*/B0 + /S0*S1*/S2*A1*/B2*A0*/B0 + /S0*S1*/S2*/B1*A2*A0*/B0 + /S0*S1*/S2*/B1*/B2*A0*/B0 + /S0*S1*/S2*A0*A1*A2*Cn + /S0*S1*/S2*A0*A1*/B2*Cn + /S0*S1*/S2*A0*/B1*A2*Cn + /S0*S1*/S2*A0*/B1*/B2*Cn + /S0*S1*/S2*/B0*A1*A2*Cn + /S0*S1*/S2*/B0*A1*/B2*Cn + /S0*S1*/S2*/B0*/B1*A2*Cn + /S0*S1*/S2*/B0*/B1*/B2*Cn + S0*/S1*/S2*B2*/A2 + S0*/S1*/S2*B2*B1*/A1 + S0*/S1*/S2*/A2*B1*/A1 + S0*/S1*/S2*B1*B2*B0*/A0 + S0*/S1*/S2*B1*/A2*B0*/A0 + S0*/S1*/S2*/A1*B2*B0*/A0 + S0*/S1*/S2*/A1*/A2*B0*/A0 + S0*/S1*/S2*B0*B1*B2*Cn + S0*/S1*/S2*B0*B1*/A2*Cn + S0*/S1*/S2*B0*/A1*B2*Cn + S0*/S1*/S2*B0*/A1*/A2*Cn + S0*/S1*/S2*/A0*B1*B2*Cn + S0*/S1*/S2*/A0*B1*/A2*Cn + S0*/S1*/S2*/A0*/A1*B2*Cn + S0*/S1*/S2*/A0*/A1*/A2*Cn\n",
+        "description": "4-bit ALU / function generator (74F381 function set) with ripple carry-out and signed-overflow flag",
         "datasheet": {
           "vendor": "Fairchild Semiconductor",
-          "title": "74F381 4-Bit Arithmetic Logic Unit",
+          "title": "74V581 4-Bit Arithmetic Logic Unit",
           "rev": "DS009528, May 1988 (revised August 1999)",
           "url": "https://media.digikey.com/pdf/Data%20Sheets/Fairchild%20PDFs/74F381.pdf"
         },
@@ -682,236 +692,64 @@
               "name": "GND",
               "number": 10
             }
-          ],
-          "nc": [
-            13
           ]
         }
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-19",
+      "type": "type-indicator",
+      "x": 88,
+      "y": 89,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
       },
       "overrides": {}
     }
   ],
   "wires": [
     {
-      "id": "w18",
+      "id": "w35",
       "path": [
         {
           "t": "node",
-          "v": "v35"
-        },
-        {
-          "t": "bend",
-          "x": 91,
-          "y": 102
-        },
-        {
-          "t": "node",
-          "v": "v36"
-        }
-      ]
-    },
-    {
-      "id": "w19",
-      "path": [
-        {
-          "t": "node",
-          "v": "v37"
-        },
-        {
-          "t": "bend",
-          "x": 93,
-          "y": 98
-        },
-        {
-          "t": "node",
-          "v": "v38"
-        }
-      ]
-    },
-    {
-      "id": "w20",
-      "path": [
-        {
-          "t": "node",
-          "v": "v39"
-        },
-        {
-          "t": "bend",
-          "x": 95,
-          "y": 96
-        },
-        {
-          "t": "node",
-          "v": "v40"
-        }
-      ]
-    },
-    {
-      "id": "w21",
-      "path": [
-        {
-          "t": "node",
-          "v": "v41"
-        },
-        {
-          "t": "bend",
-          "x": 97,
-          "y": 94
-        },
-        {
-          "t": "node",
-          "v": "v42"
-        }
-      ]
-    },
-    {
-      "id": "w22",
-      "path": [
-        {
-          "t": "node",
-          "v": "v43"
-        },
-        {
-          "t": "bend",
-          "x": 99,
-          "y": 92
-        },
-        {
-          "t": "node",
-          "v": "v44"
-        }
-      ]
-    },
-    {
-      "id": "w23",
-      "path": [
-        {
-          "t": "node",
-          "v": "v45"
-        },
-        {
-          "t": "bend",
-          "x": 73,
-          "y": 89
-        },
-        {
-          "t": "bend",
-          "x": 73,
-          "y": 92
-        },
-        {
-          "t": "node",
-          "v": "v46"
-        }
-      ]
-    },
-    {
-      "id": "w24",
-      "path": [
-        {
-          "t": "node",
-          "v": "v47"
-        },
-        {
-          "t": "bend",
-          "x": 72,
-          "y": 91
-        },
-        {
-          "t": "bend",
-          "x": 72,
-          "y": 93
-        },
-        {
-          "t": "node",
-          "v": "v48"
-        }
-      ]
-    },
-    {
-      "id": "w25",
-      "path": [
-        {
-          "t": "node",
-          "v": "v49"
+          "v": "v59"
         },
         {
           "t": "bend",
           "x": 71,
-          "y": 93
+          "y": 99
         },
         {
           "t": "bend",
           "x": 71,
-          "y": 94
+          "y": 100
         },
         {
           "t": "node",
-          "v": "v50"
+          "v": "v90"
         }
       ]
     },
     {
-      "id": "w26",
-      "path": [
-        {
-          "t": "node",
-          "v": "v51"
-        },
-        {
-          "t": "node",
-          "v": "v52"
-        }
-      ]
-    },
-    {
-      "id": "w27",
-      "path": [
-        {
-          "t": "node",
-          "v": "v53"
-        },
-        {
-          "t": "bend",
-          "x": 74,
-          "y": 96
-        },
-        {
-          "t": "bend",
-          "x": 74,
-          "y": 97
-        },
-        {
-          "t": "node",
-          "v": "v54"
-        }
-      ]
-    },
-    {
-      "id": "w28",
-      "path": [
-        {
-          "t": "node",
-          "v": "v55"
-        },
-        {
-          "t": "bend",
-          "x": 73,
-          "y": 97
-        },
-        {
-          "t": "bend",
-          "x": 73,
-          "y": 98
-        },
-        {
-          "t": "node",
-          "v": "v56"
-        }
-      ]
-    },
-    {
-      "id": "w29",
+      "id": "w37",
       "path": [
         {
           "t": "node",
@@ -929,87 +767,308 @@
         },
         {
           "t": "node",
-          "v": "v58"
+          "v": "v89"
         }
       ]
     },
     {
-      "id": "w30",
+      "id": "w38",
       "path": [
         {
           "t": "node",
-          "v": "v59"
+          "v": "v55"
+        },
+        {
+          "t": "bend",
+          "x": 73,
+          "y": 97
+        },
+        {
+          "t": "bend",
+          "x": 73,
+          "y": 98
+        },
+        {
+          "t": "node",
+          "v": "v88"
+        }
+      ]
+    },
+    {
+      "id": "w39",
+      "path": [
+        {
+          "t": "node",
+          "v": "v53"
+        },
+        {
+          "t": "bend",
+          "x": 74,
+          "y": 96
+        },
+        {
+          "t": "bend",
+          "x": 74,
+          "y": 97
+        },
+        {
+          "t": "node",
+          "v": "v87"
+        }
+      ]
+    },
+    {
+      "id": "w41",
+      "path": [
+        {
+          "t": "node",
+          "v": "v47"
+        },
+        {
+          "t": "bend",
+          "x": 72,
+          "y": 91
+        },
+        {
+          "t": "bend",
+          "x": 72,
+          "y": 93
+        },
+        {
+          "t": "node",
+          "v": "v83"
+        }
+      ]
+    },
+    {
+      "id": "w42",
+      "path": [
+        {
+          "t": "node",
+          "v": "v45"
+        },
+        {
+          "t": "bend",
+          "x": 73,
+          "y": 89
+        },
+        {
+          "t": "bend",
+          "x": 73,
+          "y": 92
+        },
+        {
+          "t": "node",
+          "v": "v82"
+        }
+      ]
+    },
+    {
+      "id": "w43",
+      "path": [
+        {
+          "t": "node",
+          "v": "v36"
+        },
+        {
+          "t": "bend",
+          "x": 91,
+          "y": 102
+        },
+        {
+          "t": "node",
+          "v": "v99"
+        }
+      ]
+    },
+    {
+      "id": "w44",
+      "path": [
+        {
+          "t": "node",
+          "v": "v38"
+        },
+        {
+          "t": "bend",
+          "x": 93,
+          "y": 98
+        },
+        {
+          "t": "node",
+          "v": "v100"
+        }
+      ]
+    },
+    {
+      "id": "w45",
+      "path": [
+        {
+          "t": "node",
+          "v": "v40"
+        },
+        {
+          "t": "bend",
+          "x": 95,
+          "y": 96
+        },
+        {
+          "t": "node",
+          "v": "v101"
+        }
+      ]
+    },
+    {
+      "id": "w46",
+      "path": [
+        {
+          "t": "node",
+          "v": "v42"
+        },
+        {
+          "t": "bend",
+          "x": 97,
+          "y": 94
+        },
+        {
+          "t": "node",
+          "v": "v102"
+        }
+      ]
+    },
+    {
+      "id": "w47",
+      "path": [
+        {
+          "t": "node",
+          "v": "v81"
+        },
+        {
+          "t": "node",
+          "v": "v44"
+        }
+      ]
+    },
+    {
+      "id": "w51",
+      "path": [
+        {
+          "t": "node",
+          "v": "v85"
+        },
+        {
+          "t": "node",
+          "v": "v86"
+        }
+      ]
+    },
+    {
+      "id": "w56",
+      "path": [
+        {
+          "t": "node",
+          "v": "v91"
+        },
+        {
+          "t": "node",
+          "v": "v92"
+        }
+      ]
+    },
+    {
+      "id": "w57",
+      "path": [
+        {
+          "t": "node",
+          "v": "v93"
+        },
+        {
+          "t": "node",
+          "v": "v94"
+        }
+      ]
+    },
+    {
+      "id": "w58",
+      "path": [
+        {
+          "t": "node",
+          "v": "v95"
+        },
+        {
+          "t": "node",
+          "v": "v96"
+        }
+      ]
+    },
+    {
+      "id": "w59",
+      "path": [
+        {
+          "t": "node",
+          "v": "v97"
+        },
+        {
+          "t": "node",
+          "v": "v98"
+        }
+      ]
+    },
+    {
+      "id": "w64",
+      "path": [
+        {
+          "t": "node",
+          "v": "v103"
+        },
+        {
+          "t": "bend",
+          "x": 99,
+          "y": 92
+        },
+        {
+          "t": "node",
+          "v": "v44"
+        }
+      ]
+    },
+    {
+      "id": "w66",
+      "path": [
+        {
+          "t": "node",
+          "v": "v105"
+        },
+        {
+          "t": "bend",
+          "x": 89,
+          "y": 104
+        },
+        {
+          "t": "node",
+          "v": "v107"
+        }
+      ]
+    },
+    {
+      "id": "w68",
+      "path": [
+        {
+          "t": "node",
+          "v": "v49"
         },
         {
           "t": "bend",
           "x": 71,
-          "y": 99
+          "y": 93
         },
         {
           "t": "bend",
           "x": 71,
-          "y": 100
-        },
-        {
-          "t": "bend",
-          "x": 80,
-          "y": 100
+          "y": 94
         },
         {
           "t": "node",
-          "v": "v60"
-        }
-      ]
-    },
-    {
-      "id": "w31",
-      "path": [
-        {
-          "t": "node",
-          "v": "v61"
-        },
-        {
-          "t": "node",
-          "v": "v62"
-        }
-      ]
-    },
-    {
-      "id": "w32",
-      "path": [
-        {
-          "t": "node",
-          "v": "v63"
-        },
-        {
-          "t": "node",
-          "v": "v64"
-        }
-      ]
-    },
-    {
-      "id": "w33",
-      "path": [
-        {
-          "t": "node",
-          "v": "v65"
-        },
-        {
-          "t": "node",
-          "v": "v66"
-        }
-      ]
-    },
-    {
-      "id": "w34",
-      "path": [
-        {
-          "t": "node",
-          "v": "v67"
-        },
-        {
-          "t": "node",
-          "v": "v68"
+          "v": "v109"
         }
       ]
     }
@@ -1017,28 +1076,12 @@
   "buses": [],
   "vertices": [
     {
-      "id": "v35",
-      "kind": "pin",
-      "ref": "U1",
-      "pin": "Cout",
-      "x": 87,
-      "y": 102
-    },
-    {
       "id": "v36",
       "kind": "pin",
       "ref": "A-14",
       "pin": "IN",
       "x": 91,
       "y": 91
-    },
-    {
-      "id": "v37",
-      "kind": "pin",
-      "ref": "U1",
-      "pin": "F3",
-      "x": 87,
-      "y": 98
     },
     {
       "id": "v38",
@@ -1049,14 +1092,6 @@
       "y": 91
     },
     {
-      "id": "v39",
-      "kind": "pin",
-      "ref": "U1",
-      "pin": "F2",
-      "x": 87,
-      "y": 96
-    },
-    {
       "id": "v40",
       "kind": "pin",
       "ref": "A-16",
@@ -1065,28 +1100,12 @@
       "y": 91
     },
     {
-      "id": "v41",
-      "kind": "pin",
-      "ref": "U1",
-      "pin": "F1",
-      "x": 87,
-      "y": 94
-    },
-    {
       "id": "v42",
       "kind": "pin",
       "ref": "A-17",
       "pin": "IN",
       "x": 97,
       "y": 91
-    },
-    {
-      "id": "v43",
-      "kind": "pin",
-      "ref": "U1",
-      "pin": "F0",
-      "x": 87,
-      "y": 92
     },
     {
       "id": "v44",
@@ -1105,28 +1124,12 @@
       "y": 89
     },
     {
-      "id": "v46",
-      "kind": "pin",
-      "ref": "U1",
-      "pin": "A0",
-      "x": 81,
-      "y": 92
-    },
-    {
       "id": "v47",
       "kind": "pin",
       "ref": "A-2",
       "pin": "OUT",
       "x": 68,
       "y": 91
-    },
-    {
-      "id": "v48",
-      "kind": "pin",
-      "ref": "U1",
-      "pin": "A1",
-      "x": 81,
-      "y": 93
     },
     {
       "id": "v49",
@@ -1137,44 +1140,12 @@
       "y": 93
     },
     {
-      "id": "v50",
-      "kind": "pin",
-      "ref": "U1",
-      "pin": "A2",
-      "x": 81,
-      "y": 94
-    },
-    {
-      "id": "v51",
-      "kind": "pin",
-      "ref": "A-4",
-      "pin": "OUT",
-      "x": 68,
-      "y": 95
-    },
-    {
-      "id": "v52",
-      "kind": "pin",
-      "ref": "U1",
-      "pin": "A3",
-      "x": 81,
-      "y": 95
-    },
-    {
       "id": "v53",
       "kind": "pin",
       "ref": "A-5",
       "pin": "OUT",
       "x": 63,
       "y": 96
-    },
-    {
-      "id": "v54",
-      "kind": "pin",
-      "ref": "U1",
-      "pin": "B0",
-      "x": 81,
-      "y": 97
     },
     {
       "id": "v55",
@@ -1185,28 +1156,12 @@
       "y": 97
     },
     {
-      "id": "v56",
-      "kind": "pin",
-      "ref": "U1",
-      "pin": "B1",
-      "x": 81,
-      "y": 98
-    },
-    {
       "id": "v57",
       "kind": "pin",
       "ref": "A-8",
       "pin": "OUT",
       "x": 63,
       "y": 98
-    },
-    {
-      "id": "v58",
-      "kind": "pin",
-      "ref": "U1",
-      "pin": "B2",
-      "x": 81,
-      "y": 99
     },
     {
       "id": "v59",
@@ -1217,63 +1172,85 @@
       "y": 99
     },
     {
-      "id": "v60",
+      "id": "v81",
+      "kind": "free",
+      "x": 99,
+      "y": 92
+    },
+    {
+      "id": "v82",
       "kind": "pin",
-      "ref": "U1",
+      "ref": "U2",
+      "pin": "A0",
+      "x": 78,
+      "y": 92
+    },
+    {
+      "id": "v83",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "A1",
+      "x": 78,
+      "y": 93
+    },
+    {
+      "id": "v85",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "A3",
+      "x": 78,
+      "y": 95
+    },
+    {
+      "id": "v86",
+      "kind": "pin",
+      "ref": "A-4",
+      "pin": "OUT",
+      "x": 68,
+      "y": 95
+    },
+    {
+      "id": "v87",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "B0",
+      "x": 78,
+      "y": 97
+    },
+    {
+      "id": "v88",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "B1",
+      "x": 78,
+      "y": 98
+    },
+    {
+      "id": "v89",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "B2",
+      "x": 78,
+      "y": 99
+    },
+    {
+      "id": "v90",
+      "kind": "pin",
+      "ref": "U2",
       "pin": "B3",
-      "x": 81,
+      "x": 78,
       "y": 100
     },
     {
-      "id": "v61",
+      "id": "v91",
       "kind": "pin",
-      "ref": "A-10",
-      "pin": "OUT",
-      "x": 70,
-      "y": 106
+      "ref": "U2",
+      "pin": "S0",
+      "x": 78,
+      "y": 102
     },
     {
-      "id": "v62",
-      "kind": "pin",
-      "ref": "U1",
-      "pin": "Cn",
-      "x": 81,
-      "y": 106
-    },
-    {
-      "id": "v63",
-      "kind": "pin",
-      "ref": "A-13",
-      "pin": "OUT",
-      "x": 63,
-      "y": 104
-    },
-    {
-      "id": "v64",
-      "kind": "pin",
-      "ref": "U1",
-      "pin": "S2",
-      "x": 81,
-      "y": 104
-    },
-    {
-      "id": "v65",
-      "kind": "pin",
-      "ref": "A-12",
-      "pin": "OUT",
-      "x": 65,
-      "y": 103
-    },
-    {
-      "id": "v66",
-      "kind": "pin",
-      "ref": "U1",
-      "pin": "S1",
-      "x": 81,
-      "y": 103
-    },
-    {
-      "id": "v67",
+      "id": "v92",
       "kind": "pin",
       "ref": "A-11",
       "pin": "OUT",
@@ -1281,138 +1258,132 @@
       "y": 102
     },
     {
-      "id": "v68",
+      "id": "v93",
       "kind": "pin",
-      "ref": "U1",
-      "pin": "S0",
-      "x": 81,
+      "ref": "U2",
+      "pin": "S1",
+      "x": 78,
+      "y": 103
+    },
+    {
+      "id": "v94",
+      "kind": "pin",
+      "ref": "A-12",
+      "pin": "OUT",
+      "x": 65,
+      "y": 103
+    },
+    {
+      "id": "v95",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "S2",
+      "x": 78,
+      "y": 104
+    },
+    {
+      "id": "v96",
+      "kind": "pin",
+      "ref": "A-13",
+      "pin": "OUT",
+      "x": 63,
+      "y": 104
+    },
+    {
+      "id": "v97",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "Cn",
+      "x": 78,
+      "y": 106
+    },
+    {
+      "id": "v98",
+      "kind": "pin",
+      "ref": "A-10",
+      "pin": "OUT",
+      "x": 70,
+      "y": 106
+    },
+    {
+      "id": "v99",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "Cout",
+      "x": 84,
       "y": 102
+    },
+    {
+      "id": "v100",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "F3",
+      "x": 84,
+      "y": 98
+    },
+    {
+      "id": "v101",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "F2",
+      "x": 84,
+      "y": 96
+    },
+    {
+      "id": "v102",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "F1",
+      "x": 84,
+      "y": 94
+    },
+    {
+      "id": "v103",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "F0",
+      "x": 84,
+      "y": 92
+    },
+    {
+      "id": "v105",
+      "kind": "pin",
+      "ref": "A-19",
+      "pin": "IN",
+      "x": 89,
+      "y": 91
+    },
+    {
+      "id": "v107",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "Ovfl",
+      "x": 84,
+      "y": 104
+    },
+    {
+      "id": "v109",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "A2",
+      "x": 78,
+      "y": 94
     }
   ],
   "refCounters": {
-    "U": 2,
-    "A": 19,
+    "U": 3,
+    "A": 20,
     "N": 1,
     "X": 2
   },
   "nets": [
     {
       "pins": [
-        "U1.Cout",
-        "A-14.IN"
+        "A-9.OUT",
+        "U2.B3"
       ],
       "members": [
-        "w18"
-      ],
-      "provenance": [],
-      "name": "IN"
-    },
-    {
-      "pins": [
-        "U1.F3",
-        "A-15.IN"
-      ],
-      "members": [
-        "w19"
-      ],
-      "provenance": [],
-      "name": "IN"
-    },
-    {
-      "pins": [
-        "U1.F2",
-        "A-16.IN"
-      ],
-      "members": [
-        "w20"
-      ],
-      "provenance": [],
-      "name": "IN"
-    },
-    {
-      "pins": [
-        "U1.F1",
-        "A-17.IN"
-      ],
-      "members": [
-        "w21"
-      ],
-      "provenance": [],
-      "name": "IN"
-    },
-    {
-      "pins": [
-        "U1.F0",
-        "A-18.IN"
-      ],
-      "members": [
-        "w22"
-      ],
-      "provenance": [],
-      "name": "IN"
-    },
-    {
-      "pins": [
-        "A-1.OUT",
-        "U1.A0"
-      ],
-      "members": [
-        "w23"
-      ],
-      "provenance": [],
-      "name": "OUT"
-    },
-    {
-      "pins": [
-        "A-2.OUT",
-        "U1.A1"
-      ],
-      "members": [
-        "w24"
-      ],
-      "provenance": [],
-      "name": "OUT"
-    },
-    {
-      "pins": [
-        "A-3.OUT",
-        "U1.A2"
-      ],
-      "members": [
-        "w25"
-      ],
-      "provenance": [],
-      "name": "OUT"
-    },
-    {
-      "pins": [
-        "A-4.OUT",
-        "U1.A3"
-      ],
-      "members": [
-        "w26"
-      ],
-      "provenance": [],
-      "name": "OUT"
-    },
-    {
-      "pins": [
-        "A-5.OUT",
-        "U1.B0"
-      ],
-      "members": [
-        "w27"
-      ],
-      "provenance": [],
-      "name": "OUT"
-    },
-    {
-      "pins": [
-        "A-7.OUT",
-        "U1.B1"
-      ],
-      "members": [
-        "w28"
+        "w35"
       ],
       "provenance": [],
       "name": "OUT"
@@ -1420,65 +1391,187 @@
     {
       "pins": [
         "A-8.OUT",
-        "U1.B2"
+        "U2.B2"
       ],
       "members": [
-        "w29"
+        "w37"
       ],
       "provenance": [],
       "name": "OUT"
     },
     {
       "pins": [
-        "A-9.OUT",
-        "U1.B3"
+        "A-7.OUT",
+        "U2.B1"
       ],
       "members": [
-        "w30"
+        "w38"
       ],
       "provenance": [],
       "name": "OUT"
     },
     {
       "pins": [
-        "A-10.OUT",
-        "U1.Cn"
+        "A-5.OUT",
+        "U2.B0"
       ],
       "members": [
-        "w31"
+        "w39"
       ],
       "provenance": [],
       "name": "OUT"
     },
     {
       "pins": [
-        "A-13.OUT",
-        "U1.S2"
+        "A-2.OUT",
+        "U2.A1"
       ],
       "members": [
-        "w32"
+        "w41"
       ],
       "provenance": [],
       "name": "OUT"
     },
     {
       "pins": [
-        "A-12.OUT",
-        "U1.S1"
+        "A-1.OUT",
+        "U2.A0"
       ],
       "members": [
-        "w33"
+        "w42"
       ],
       "provenance": [],
       "name": "OUT"
     },
     {
       "pins": [
-        "A-11.OUT",
-        "U1.S0"
+        "A-14.IN",
+        "U2.Cout"
       ],
       "members": [
-        "w34"
+        "w43"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "A-15.IN",
+        "U2.F3"
+      ],
+      "members": [
+        "w44"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "A-16.IN",
+        "U2.F2"
+      ],
+      "members": [
+        "w45"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "A-17.IN",
+        "U2.F1"
+      ],
+      "members": [
+        "w46"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "A-18.IN",
+        "U2.F0"
+      ],
+      "members": [
+        "w47",
+        "w64"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "U2.A3",
+        "A-4.OUT"
+      ],
+      "members": [
+        "w51"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U2.S0",
+        "A-11.OUT"
+      ],
+      "members": [
+        "w56"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U2.S1",
+        "A-12.OUT"
+      ],
+      "members": [
+        "w57"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U2.S2",
+        "A-13.OUT"
+      ],
+      "members": [
+        "w58"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U2.Cn",
+        "A-10.OUT"
+      ],
+      "members": [
+        "w59"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-19.IN",
+        "U2.Ovfl"
+      ],
+      "members": [
+        "w66"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "A-3.OUT",
+        "U2.A2"
+      ],
+      "members": [
+        "w68"
       ],
       "provenance": [],
       "name": "OUT"

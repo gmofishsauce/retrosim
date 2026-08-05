@@ -454,12 +454,14 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
   }
 
   // interactDuringSim applies an interactive built-in's input action on a
-  // sim-time click (FR-087b): a non-undoable live mutation (store.applyLive)
-  // that wakes the simulator to re-evaluate (§6.10/§6.13). The handler — e.g.
-  // the switch's 0↔1 toggle (FR-087a) — comes from the INTERACTIONS registry,
-  // so the FSM stays generic with no per-type special case.
+  // sim-time click (FR-087b): store.setLiveInput hands the handler a run-time
+  // copy of the instance and wakes the simulator to re-evaluate (§6.10/§6.13).
+  // The design is not touched and not dirtied — the click sets the input for
+  // *this run*, while the instance keeps the setting the design specifies
+  // (FR-087a). The handler — e.g. the switch's 0↔1 toggle — comes from the
+  // INTERACTIONS registry, so the FSM stays generic with no per-type case.
   function interactDuringSim(inst, interact) {
-    store.applyLive(() => interact(inst));
+    store.setLiveInput(inst, interact);
   }
 
   // probeTargetAt resolves a probe click at the current zoom's tolerances

@@ -90,7 +90,9 @@ export function createStore(initial = {}) {
     // Transient simulation state (§6.10, §6.13), never persisted: while
     // `simulating` the design is read-only (FR-087); `sim` is the engine's
     // display view, retained after a run ends (FR-085) and cleared on the
-    // next design modification.
+    // next design modification. `sim.inputs` rides along on that view (attached
+    // on first use): the run-time interactive state a switch click sets, keyed
+    // by refdes and dropped with the view (FR-087a, setLiveInput).
     simulating: false,
     sim: null,
     // While `vectorPanelOpen` the design is read-only too (FR-115h), sharing the
@@ -316,13 +318,38 @@ export function createStore(initial = {}) {
       notify();
     },
 
-    // applyLive runs a non-undoable mutation that is permitted during a run —
-    // an interactive input such as the switch click (FR-087a/FR-087b).
-    // Unlike dispatch it bypasses both the simulation lock and the undo/redo
-    // stacks, but still marks the design dirty and notifies so the backup
-    // snapshot (FR-092) and the properties panel observe the change. The live
-    // sim view is intentionally not cleared. After notifying it fires the
-    // live-input channel so the running simulator re-evaluates (§6.13).
+    // setLiveInput applies an interactive built-in's handler to the instance's
+    // RUN-TIME COPY rather than to the design (FR-087a/FR-087b): the copy lives
+    // in the transient sim view, keyed by refdes, and readers (the renderer's
+    // switch branch §6.8, the switch behavior §6.13) take it in preference to
+    // the saved instance. So a click during a run changes nothing persisted —
+    // no dirty, no designRev bump, no undo entry — and the design's switch
+    // settings are the initial condition every run starts from. The whole
+    // instance is copied, not one named field, so any handler mutating any
+    // field works with no per-type knowledge here; that is safe because the
+    // design is read-only during a run (FR-087) and the copies die with the
+    // view, so a copy can never drift from its instance. Notifies (canvas +
+    // properties panel) and then fires the live-input channel so the running
+    // simulator re-evaluates (§6.13).
+    setLiveInput(inst, mutate) {
+      if (!state.sim) return; // no run view to hold it: not simulating
+      const inputs = (state.sim.inputs ??= Object.create(null));
+      const draft = { ...(inputs[inst.refdes] ?? inst) };
+      mutate(draft);
+      inputs[inst.refdes] = draft;
+      notify();
+      for (const fn of liveListeners) fn();
+    },
+
+    // applyLive runs a non-undoable DESIGN change that is permitted during a
+    // run — waiving a design-rule finding (FR-124e), its only caller. Unlike
+    // dispatch it bypasses both the simulation lock and the undo/redo stacks,
+    // but still marks the design dirty and notifies so the backup snapshot
+    // (FR-092) and the properties panel observe the change. The live sim view
+    // is intentionally not cleared. After notifying it fires the live-input
+    // channel so a running simulator re-evaluates (§6.13). Interactive inputs
+    // no longer come through here — they are not design changes at all
+    // (setLiveInput above, FR-087a, 2026-08-05).
     applyLive(mutate) {
       mutate(state.design);
       state.dirty = true;
@@ -354,8 +381,10 @@ export function createStore(initial = {}) {
     setSelection(sel) {
       state.selection = sel;
       // A selection change hands the properties panel back from the probe sheet
-      // (FR-087c): after a Stop the first click that selects something should
-      // show that thing, not the frozen probe reading.
+      // (FR-087c): during a held vector run (FR-115l) the design stays
+      // selectable, so a click that selects something should show that thing
+      // rather than the probe reading. (Stop clears the target itself, with the
+      // view — setSim above.)
       state.probe = null;
       notify();
     },
@@ -481,9 +510,17 @@ export function createStore(initial = {}) {
     isReadonly,
 
     // setSim publishes (or clears) the simulator's display view (§6.13); the
-    // view survives a stop (FR-085) until the next design modification.
+    // view is dropped at Stop (FR-085) — the engine calls setSim(null) — and by
+    // clearSimView when a design edit lands under a held vector run (FR-115h).
+    // The view also carries this run's interactive state — `sim.inputs`,
+    // attached on demand by setLiveInput (FR-087a) — so publishing a view is
+    // what resets it: each run gets a fresh object and starts from the design's
+    // own switch settings. Dropping it clears the probe target too (FR-087c):
+    // the reading came from this view, and a reading with no simulation behind
+    // it is exactly the stale display FR-085 exists to prevent.
     setSim(view) {
       state.sim = view;
+      if (!view) state.probe = null;
       notify();
     },
 
