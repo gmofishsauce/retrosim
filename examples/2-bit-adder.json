@@ -1,5 +1,5 @@
 {
-  "formatVersion": 2,
+  "formatVersion": 3,
   "name": "2-bit-adder",
   "components": [
     {
@@ -996,5 +996,11 @@
       "provenance": [],
       "name": "OUT"
     }
-  ]
+  ],
+  "refCounters": {
+    "U": 1,
+    "A": 16,
+    "N": 1,
+    "X": 3
+  }
 }

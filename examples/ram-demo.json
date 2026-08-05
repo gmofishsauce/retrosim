@@ -1,5 +1,5 @@
 {
-  "formatVersion": 2,
+  "formatVersion": 3,
   "name": "ram-demo",
   "components": [
     {
@@ -774,5 +774,11 @@
       "provenance": [],
       "name": "OUT"
     }
-  ]
+  ],
+  "refCounters": {
+    "U": 3,
+    "A": 11,
+    "N": 1,
+    "X": 1
+  }
 }

@@ -1,5 +1,5 @@
 {
-  "formatVersion": 2,
+  "formatVersion": 3,
   "name": "rom-demo",
   "components": [
     {
@@ -996,5 +996,11 @@
       "provenance": [],
       "name": "IN"
     }
-  ]
+  ],
+  "refCounters": {
+    "U": 2,
+    "A": 14,
+    "N": 1,
+    "X": 1
+  }
 }

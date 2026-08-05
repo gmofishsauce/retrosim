@@ -1,5 +1,5 @@
 {
-  "formatVersion": 2,
+  "formatVersion": 3,
   "name": "full-adder",
   "components": [
     {
@@ -2634,5 +2634,11 @@
       "provenance": [],
       "name": "OUT"
     }
-  ]
+  ],
+  "refCounters": {
+    "U": 4,
+    "A": 18,
+    "N": 1,
+    "X": 1
+  }
 }

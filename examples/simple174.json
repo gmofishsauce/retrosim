@@ -1,5 +1,5 @@
 {
-  "formatVersion": 2,
+  "formatVersion": 3,
   "name": "simple174",
   "components": [
     {
@@ -1364,5 +1364,11 @@
       "provenance": [],
       "name": "IN"
     }
-  ]
+  ],
+  "refCounters": {
+    "U": 2,
+    "A": 18,
+    "N": 1,
+    "X": 1
+  }
 }

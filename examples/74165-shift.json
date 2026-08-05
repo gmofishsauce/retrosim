@@ -1,5 +1,5 @@
 {
-  "formatVersion": 2,
+  "formatVersion": 3,
   "name": "74165-shift",
   "components": [
     {
@@ -1218,5 +1218,11 @@
       "provenance": [],
       "name": "IN"
     }
-  ]
+  ],
+  "refCounters": {
+    "U": 2,
+    "A": 16,
+    "N": 1,
+    "X": 1
+  }
 }
