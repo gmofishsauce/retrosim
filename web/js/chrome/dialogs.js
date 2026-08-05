@@ -1895,8 +1895,6 @@ export function testVectorsPanel({ store, dataDir }) {
       }
       return items;
     }
-    const itemSpan = (it) => (it.group ? (it.hex ? 1 : it.group.width) : 1);
-    const bucketSpan = (kind) => planFor(kind).reduce((n, it) => n + itemSpan(it), 0);
 
     // --- table ---
     const table = el("table", "vec-table");
@@ -1944,26 +1942,12 @@ export function testVectorsPanel({ store, dataDir }) {
       return b;
     }
 
-    // renderHead draws both header rows from the plans, so a radix toggle keeps
-    // the group spans, the labels, and the body in step.
+    // renderHead draws the single header row from the plans, so a radix toggle
+    // keeps the labels and the body in step. There is no IN/OUT/IO band above it
+    // (FR-115q): the bucket tints on the labels themselves carry that boundary,
+    // and the row it cost is worth more in a panel this short.
     function renderHead() {
       thead.replaceChildren();
-      // Group header: IN spanning inputs, OUT outputs, IO the bidirectional
-      // three-state bus columns (FR-115i).
-      const grpRow = el("tr");
-      grpRow.appendChild(el("th", "vec-corner"));
-      const grpTh = (kind, cls, text) => {
-        if (!BUCKETS[kind].length) return;
-        const th = el("th", cls, text);
-        th.colSpan = bucketSpan(kind);
-        grpRow.appendChild(th);
-      };
-      grpTh("in", "vec-group", "IN");
-      grpTh("out", "vec-group vec-group-out", "OUT");
-      grpTh("io", "vec-group vec-group-io", "IO");
-      grpRow.appendChild(el("th", "vec-corner"));
-      thead.appendChild(grpRow);
-
       // Column labels: a collapsed group reads base[msb:0]; an expanded one keeps
       // its per-bit labels and carries the toggle on its first bit.
       const labRow = el("tr");

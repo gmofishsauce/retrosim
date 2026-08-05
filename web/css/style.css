@@ -781,13 +781,22 @@ body.dock-dragging .dock-grip { background: rgba(74, 144, 217, 0.35); }
   padding: 0.15rem 0.3rem;
   text-align: center;
 }
-.vec-group {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #555;
+/* The column-label row stays put while the rows scroll under it (FR-115q). It is
+   the only header row now — the IN/OUT/IO band above it is gone — so sticking it
+   costs nothing and the labels are readable at any scroll position. Two details
+   this needs: an OPAQUE background (the default #f3f3f3 is what the untinted
+   cells already showed against the panel, so the look is unchanged, but a
+   transparent header would let the scrolling rows show through), and the bottom
+   rule drawn as an inset shadow — with `border-collapse: collapse` the table,
+   not the cell, paints the border, and it scrolls away from a sticky cell.
+   The .vec-out/.vec-io tints below outrank this one and still win. */
+.vec-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   background: #f3f3f3;
+  box-shadow: inset 0 -1px 0 #e2e2e2;
 }
-.vec-group-out { background: #eef3f8; }
 .vec-collabel { font-size: 0.75rem; color: #555; white-space: nowrap; }
 /* The row number doubles as the Run to Row selection handle (FR-115l). */
 .vec-rownum { font-size: 0.75rem; color: #999; cursor: pointer; user-select: none; }
@@ -803,7 +812,6 @@ body.dock-dragging .dock-grip { background: rgba(74, 144, 217, 0.35); }
    headers never carry result colors, so a header must not resemble one. The
    former warm beige (#f5efe6) sat close enough to the fail pink (#fde7e9) that
    an io header read as a stuck failure beside a passing green cell. */
-.vec-group-io { background: #ece9f7; }
 .vec-cell.vec-io { background: #fdfcff; }
 .vec-table th.vec-io { background: #ece9f7; }
 /* io cell role tints: driving (0/1), expected (H/L), inert (X). pass/fail below win. */

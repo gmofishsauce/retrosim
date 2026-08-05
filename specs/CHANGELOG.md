@@ -19,6 +19,13 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-08-04 — Test-vector panel: drop the IN/OUT/IO band, stick the label row
+What: the table's second header row (the `IN`/`OUT`/`IO` spanning band) is removed, and the surviving column-label row is `position: sticky` at the top of the scrolling table so it stays readable as the vector rows scroll under it. `bucketSpan`/`itemSpan` go with the band — it was their only caller — and the table now sets no `colSpan` at all.
+Why: requested by the user. The panel is a tab in the docked area whose height trades against the schematic (FR-115n), so a header row that only repeats what the column tints already say is the wrong use of two of the ~dozen visible rows; and past the first screenful of vectors the column names had scrolled away entirely, leaving a grid of bare `0`/`1`/`H`/`L` cells. The bucket boundary survives on the label cells' own tints, which are now its sole signal.
+Touches: FR-115q (new); design §6.16 (Satisfies, the colour rule, grouped-hex plan, new "One sticky header row")
+
+---
+
 ## 2026-08-04 — Probe: a click under a held vector run reads, it does not select
 What: the probe click is routed by a new pure `probeClaimsClick(state)` (`tool === "probe" && (simulating || vectorHold)`), tested independently of the read-only lock and called from both the locked and the unlocked click paths.
 Why: reported from use. Under a held vector run the Probe button appeared and the probe cursor came up, but a click showed the component's property sheet instead of a reading. `onPointerDown` handled the probe only inside its `isReadonly()` branch, and FR-115h (2026-08-02) collapsed `isReadonly()` to `simulating` alone — so a hold, which is not a locked state, never reached it and fell through to ordinary selection. FR-087c has required the probe under a hold since it was written; only design §6.9's description (and the code) said "the lock branch".
