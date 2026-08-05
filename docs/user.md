@@ -1171,6 +1171,13 @@ The table's columns come from your design automatically:
   holding the value you expect: **H** (logic 1), **L** (logic 0), or **X**
   (don't-test, i.e. ignore this output on this row).
 
+The table has a single **header row** naming the columns, and it **stays put at
+the top of the panel** while the vector rows scroll beneath it — so the hundredth
+row of a long table still reads against its column names. Which kind a column is
+shows in the tint of its name: output columns are pale blue, IO columns lavender,
+input columns plain. (Pass/fail green and red are only ever painted on the cells
+below, never on a column name, so a colour in the header is never a result.)
+
 A design containing [sub-designs](#12-sub-designs-and-ports) runs **flattened**,
 exactly as the interactive simulator does; the columns still come only from the
 top sheet's own switches, clocks, indicators, and ports. One restriction: a
@@ -1303,8 +1310,8 @@ output columns don't assert.
 
 A **bidirectional** (three-state) port — a bus that can be driven from more than
 one side, such as a net fed through tristate buffers — becomes an **IO** column,
-shown in its own **IO** group. Each IO cell chooses, per row, whether the vector
-runner **drives** the bus or **observes** it:
+marked by the lavender tint on its column name. Each IO cell chooses, per row,
+whether the vector runner **drives** the bus or **observes** it:
 
 - **`0` / `1`** — *drive* the bus to that value on this row (like an input);
 - **`H` / `L`** — *release* the bus and *check* that it reads 1 / 0 (like an output);
