@@ -9,6 +9,9 @@ import {
   symbolFootprint,
   pinSlotOffset,
 } from "../engine/symbols.js";
+// The save-format version lives with the save code (§7.4); a fresh design
+// mirrors the current shape, so it carries that constant rather than a literal.
+import { FORMAT_VERSION } from "./persist.js";
 
 // Text-note layout (FR-071f), in grid units. NOTE_PAD/NOTE_LINE/NOTE_FONT are
 // shared with the renderer (canvas.js) so the auto-sized box matches the drawn
@@ -38,7 +41,7 @@ export function noteSize(text) {
 // shape (§7.2) plus non-persisted id counters.
 export function createDesign(name) {
   return {
-    formatVersion: 1,
+    formatVersion: FORMAT_VERSION,
     name,
     components: [],
     wires: [],
