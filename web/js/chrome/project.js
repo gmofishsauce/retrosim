@@ -146,11 +146,28 @@ export function makeProjectOps(
     freshCanvas();
   }
 
+  // hasDesigns reports whether a project directory holds at least one
+  // root-level design file (§6.19). Subdirectories do not count: the project
+  // layout is flat (FR-121). A listing failure answers true, which keeps the
+  // caller on the picker path — the pre-2026-08-06 behavior (§3.1 A9).
+  async function hasDesigns(dir) {
+    try {
+      const listing = await listDir(dir); // .json, manifests excluded
+      return listing.entries.some((e) => !e.isDir);
+    } catch {
+      return true;
+    }
+  }
+
   // openProject opens a project picked as a folder, a manifest file, or a
   // design file (FR-121b). A picked design, or the manifest's main design,
-  // opens immediately; otherwise the open-design dialog is presented rooted
-  // at the project — and a cancel there cancels the whole action: no project
-  // change, no canvas change (§3.1 A9).
+  // opens immediately; otherwise, if the project holds any design, the
+  // open-design dialog is presented rooted at the project — and a cancel there
+  // cancels the whole action: no project change, no canvas change (§3.1 A9).
+  // An empty project skips the picker and is entered with a fresh canvas, the
+  // way New Project ends (§3.1 A9 as amended 2026-08-06): its picker would
+  // have nothing to offer, and cancelling it left the project unreachable —
+  // New Project cannot re-enter an existing directory either.
   async function openProject() {
     if (!dirtyGuard()) return;
     const res = await openFileDialog({
@@ -171,9 +188,15 @@ export function makeProjectOps(
     }
     let designPath = picked ?? (info.mainDesign ? dir + "/" + info.mainDesign : null);
     if (!designPath) {
+      if (!(await hasDesigns(dir))) {
+        // Empty project: enter it with a fresh design named after it, exactly
+        // as newProject ends (§3.1 A9 as amended).
+        await setCurrentProject(dir, info);
+        freshCanvas();
+        return;
+      }
       // No design named: pick one, rooted at the project (ignoreLastDir,
-      // §3.1 A11). A projectless empty folder cannot be entered this way
-      // (§3.1 A9); New Project is the flow that creates-and-enters one.
+      // §3.1 A11).
       const pick = await openFileDialog({
         mode: "open",
         startPath: dir,

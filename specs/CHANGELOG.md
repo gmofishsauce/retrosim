@@ -19,6 +19,13 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-08-06 — Open Project can reopen an empty project
+What: `openProject`'s no-main-design path now lists the project root before deciding what to show. If the project holds at least one root-level design file, the rooted open-design picker appears as before (cancel still cancels the whole action). If it holds none, no dialog appears at all: the project becomes current and the canvas is replaced with a fresh design named after it — the same ending `newProject` has. A `listDir` failure falls back to presenting the picker.
+Why: reported by the user, who created a project, exited before saving any design, and then could not reopen it. §3.1 A9 had recorded "a project with no designs cannot be made current via Open Project" as an accepted consequence of the cancel semantics, naming New Project as the flow for empty projects — but `CreateProject` refuses an existing directory, so New Project could not re-enter one either, making the state permanent and escapable only by deleting the folder or hand-dropping a design into it. Fixing the dialog away rather than making its cancel commit keeps cancel meaningful where it still appears (the user picked the wrong project); the empty picker had no meaningful cancel to preserve.
+Touches: FR-121b (in-place rework of the Open Project sentence); design §3.1 A9 (2026-08-06 amendment to the 2026-07-12 resolution), §6.19 (`openProject`), §11 (unit and manual test plans).
+
+---
+
 ## 2026-08-05 — Example designs brought up to formatVersion 3
 What: `node web/tools/refresh-types.js examples/` run across the whole directory, taking the eleven designs still on `formatVersion` 2 up to 3 — the `migrate()` bump plus the appended `refCounters` block — and rewriting `hier-nand.json`, `hier-nand-demo.json`, and `uart-demo.json` from 1-space to 2-space indent (the server's design-write format, §6.5), which is why those three churn whole-file. All eighteen examples are now v3.
 Why: requested by the user as its own commit, having surfaced as incidental churn while refreshing the two 74V581 designs above — the tool rewrites every design under `examples/`, so the pending migrations came along uninvited and were reverted there. Purely mechanical: the designs are semantically identical, with `components`, `wires`, `buses`, `vertices`, and `nets` deep-equal before and after and only `formatVersion` and `refCounters` differing. Connectivity is untouched by construction (FR-088 refreshes `typeData` and `overrides` only). Full suite green, 27/27 parity.

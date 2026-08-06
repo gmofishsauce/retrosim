@@ -605,12 +605,28 @@ this document adopts. **None block implementation** except where noted in §12.
   When the chosen project names no main design, the open-design dialog is
   presented rooted at the project; the requirement does not say what a cancel
   does. **Resolution (stakeholder-chosen 2026-07-12):** cancel cancels the
-  **whole action** — no project change, no canvas change. Recorded consequence:
-  a project directory containing **no designs** cannot be made current via Open
-  Project (there is nothing to pick); New Project is the flow that
-  creates-and-enters an empty project. **Duplicate Project differs by
-  necessity** (§6.19): its copy has already happened when the picker appears,
-  so a cancel there leaves the duplicate current with a fresh empty design.
+  **whole action** — no project change, no canvas change. **Duplicate Project
+  differs by necessity** (§6.19): its copy has already happened when the picker
+  appears, so a cancel there leaves the duplicate current with a fresh empty
+  design.
+
+  **Amended 2026-08-06 (stakeholder-approved):** the 2026-07-12 resolution also
+  recorded, as an accepted consequence, that a project containing **no designs**
+  could not be made current via Open Project — there was nothing to pick — with
+  New Project named as the flow that creates-and-enters an empty project. That
+  consequence was a trap: `CreateProject` refuses an existing directory
+  (`ErrProjectExists`, §6.5a), so New Project could not re-enter such a project
+  either, and a project created but exited before its first save was
+  unreachable from inside the app for good. The picker is therefore now
+  presented **only when the project actually holds a design**: `openProject`
+  lists the project root first (root-level design files only — the flat-layout
+  rule, FR-121), and on an empty project skips the picker and finishes exactly
+  as `newProject` does (enter the project, fresh canvas named after it). Cancel
+  semantics are unchanged where the picker still appears — there a cancel is a
+  meaningful choice (the wrong project was picked), which is why the fix is to
+  remove the empty dialog rather than to make its cancel commit. A listing
+  failure falls back to presenting the picker, i.e. to the pre-amendment
+  behavior.
 
 - **A10 — Which navigations switch the current project (FR-121b vs
   FR-100/FR-101).** FR-121b names Open Project and plain File ▸ Open as
@@ -3402,11 +3418,23 @@ factory whose ops `app.js` wires into the File menu:
   null)`. If `designPath` is set → `fileops.loadIntoStore(designPath,
   { projectInfo: info })` — success establishes the project (containing-folder
   rule below) with the prefetched info, including the FR-022a auto-fit; a load
-  failure aborts the whole action with a tray report. If no `designPath` → the
-  open-design dialog rooted at the project
-  (`openFileDialog({ mode:"open", startPath: dir, ignoreLastDir: true })`,
-  §3.1 A11); **cancel cancels the whole action** — no project change, no
-  canvas change (§3.1 A9).
+  failure aborts the whole action with a tray report. If no `designPath` →
+  `api.listDir(dir)` (defaults: `.json`, manifests excluded) decides between
+  two endings (§3.1 A9, amended 2026-08-06):
+  - **the project holds at least one root-level design file** → the open-design
+    dialog rooted at the project
+    (`openFileDialog({ mode:"open", startPath: dir, ignoreLastDir: true })`,
+    §3.1 A11); **cancel cancels the whole action** — no project change, no
+    canvas change;
+  - **the project holds none** (the empty project just created, or one whose
+    designs were removed outside the app) → no dialog: `setCurrentProject(dir,
+    info)` then the same fresh canvas `newProject` ends with (named after the
+    project, `savePath` null, nav stack cleared), so the first save prefills
+    `<project>.json` and the first-save rule records it as `mainDesign`
+    (FR-121a).
+
+  A `listDir` failure is non-fatal and falls back to presenting the picker.
+  Subdirectory contents do not count as designs: the layout is flat (FR-121).
 - `duplicateProject()` (FR-121f) — requires a current project; FR-049a dirty
   guard **first** (duplication copies files on disk, not the unsaved canvas) →
   destination prompt (the New Project prompt, seeded at the data dir) →
@@ -4915,7 +4943,10 @@ tests beside them per §9).
   `ramFile` values, ignores relative ones and non-mem components. Lifecycle
   ops with stubbed api/fileops (the `connection.js` injection pattern):
   `openProject` cancel → no state change (§3.1 A9); a manifest naming a main
-  design loads it directly; `duplicateProject` posts one warning per shared
+  design loads it directly; a project with designs but no main design presents
+  the rooted picker, while an **empty** project (no root-level design files)
+  skips the picker and is entered with a fresh canvas named after it (§3.1 A9
+  as amended), and a `listDir` failure there still presents the picker; `duplicateProject` posts one warning per shared
   absolute data path and reports a copy failure as partial-left.
 - **JS `persist` data paths (FR-121g):** `relativizeDataPaths` — an in-project
   absolute `romFile`/`ramFile` becomes design-dir-relative, an outside-project
@@ -5179,7 +5210,10 @@ tests beside them per §9).
   same project (FR-121b); a manifest carrying `mainDesign` opens that design
   immediately (with the FR-022a auto-fit); cancelling the no-main-design picker
   changes nothing (§3.1 A9); plain File ▸ Open switches the current project to
-  the opened design's folder.
+  the opened design's folder. Round-trip an **empty** project: New Project,
+  quit without saving, relaunch, Open Project on the same folder (by folder and
+  by manifest) → it becomes current with an editable fresh canvas named after
+  it and no picker appears (FR-121b, §3.1 A9 as amended).
 - Save confinement (FR-121a/FR-121e): Save As navigated outside the project is
   rejected with the dialog open; a design named `x-manifest.json` is refused;
   the first save into a manifest-carrying project records `mainDesign`, and a

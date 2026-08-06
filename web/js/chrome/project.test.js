@@ -90,7 +90,10 @@ function harness({ dialogResults = [], api = {}, loadResult = true } = {}) {
       projectInfo: api.projectInfo ?? (async (dir) => ({ dir, name: "p", manifestFile: "", mainDesign: "", warnings: [] })),
       projectCreate: api.projectCreate ?? (async () => { throw new Error("unexpected create"); }),
       projectDuplicate: api.projectDuplicate ?? (async () => { throw new Error("unexpected duplicate"); }),
-      listDir: api.listDir ?? (async () => ({ entries: [] })),
+      // Default: a project that already holds a design, so openProject's
+      // no-main-design path reaches the rooted picker (§3.1 A9). Tests of the
+      // empty-project path override this.
+      listDir: api.listDir ?? (async () => ({ entries: [{ name: "existing.json", isDir: false }] })),
       loadDesign: api.loadDesign ?? (async () => ({ components: [] })),
     },
   );
@@ -219,6 +222,45 @@ test("openProject with no main design picks via the rooted dialog", async () => 
   });
   await h.ops.openProject();
   assert.equal(h.loads[0].path, "/data/proj/alu.json");
+});
+
+test("openProject enters an empty project with a fresh canvas, no picker (§3.1 A9)", async () => {
+  // Only the project pick is scripted: a second dialog would consume `null`
+  // and cancel, so reaching the fresh canvas proves no picker was shown.
+  const h = harness({
+    dialogResults: [{ path: "/data/empty", isDir: true }],
+    api: {
+      projectInfo: async (dir) => ({
+        dir,
+        name: "empty",
+        manifestFile: "empty-manifest.json",
+        mainDesign: "",
+        warnings: [],
+      }),
+      // A subdirectory alone is not a design: the layout is flat (FR-121).
+      listDir: async () => ({ entries: [{ name: "components", isDir: true }] }),
+    },
+  });
+  await h.ops.openProject();
+  assert.equal(h.store.state.project.dir, "/data/empty");
+  assert.equal(h.loads.length, 0);
+  // Same ending as newProject: named after the project, unsaved, fresh chain.
+  assert.equal(h.store.state.design.name, "empty");
+  assert.equal(h.store.state.designName, "empty");
+  assert.equal(h.store.state.savePath, null);
+  assert.equal(h.navCleared(), 1);
+});
+
+test("openProject falls back to the picker when the listing fails (§3.1 A9)", async () => {
+  const h = harness({
+    dialogResults: [{ path: "/data/proj", isDir: true }, null],
+    api: { listDir: async () => { throw new Error("permission denied"); } },
+  });
+  await h.ops.openProject();
+  // The picker appeared and was cancelled: pre-amendment behavior, nothing changes.
+  assert.equal(h.store.state.project, null);
+  assert.equal(h.store.state.design.name, "d0");
+  assert.equal(h.loads.length, 0);
 });
 
 test("duplicateProject warns once per shared absolute data path (FR-121f)", async () => {

@@ -638,9 +638,12 @@ cannot be saved under a name matching the pattern.
 - **Open Project…** — pick **a folder, a manifest file, or a design file**; each
   resolves to its containing folder as the project (KiCad users: opening "the
   project file" works). If the manifest names a main design it opens
-  immediately; otherwise you're shown the open-design dialog rooted at the
-  project — cancelling it cancels the whole action, changing nothing. (A folder
-  containing no designs can therefore only be entered via New Project.)
+  immediately; if the project holds designs but names no main one, you're shown
+  the open-design dialog rooted at the project — cancelling it cancels the whole
+  action, changing nothing. Opening an **empty** project — one you created but
+  quit before saving any design into — shows no dialog at all: it simply becomes
+  current with a fresh empty design named after it, just as New Project leaves
+  it.
 - **Duplicate Project…** — copies the **entire current project folder** to a new
   location chosen through the New Project prompt (the manifest is renamed and
   its display name updated), then makes the copy current. This is how you fork a
