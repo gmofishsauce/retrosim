@@ -7,12 +7,14 @@ import {
   projectInfo as apiProjectInfo,
   projectCreate as apiProjectCreate,
   projectDuplicate as apiProjectDuplicate,
+  projectImport as apiProjectImport,
   listDir as apiListDir,
   loadDesign as apiLoadDesign,
 } from "../api.js";
 import { openFileDialog as fileDialog } from "./dialogs.js";
 import { postMessage } from "./statusbar.js";
-import { dirOf, baseOf } from "../model/persist.js";
+import { dirOf, baseOf, relPath, resolveRel, inDir } from "../model/persist.js";
+import { designInterface } from "../model/subdesign.js";
 
 // isManifestName reports whether a file name matches the project-manifest
 // pattern `*-manifest.json` (FR-121a), case-insensitively — mirroring the
@@ -54,6 +56,120 @@ export function absoluteDataPaths(designObj) {
   return hits;
 }
 
+// blockClosure computes the dependency closure of the design at `rootPath` —
+// everything Import Block must copy for the block to work in another project
+// (FR-121j, §6.19). It walks the *saved* form of each design with an injected
+// `loadDesign(absPath)` (the `wouldCycle` pattern, §6.14), following both
+// reference kinds: sub-design `childPath`s (stored relative to each parent,
+// FR-098) and off-sheet `target.file`s (bare same-folder names, FR-101), which
+// is exactly what `flatten` pulls in at Run (FR-102/FR-103).
+//
+// Returns:
+//   designs    absolute paths, root first, each once, in discovery order
+//   data       [{ src, rel }] for relative — hence in-project (FR-121g) — ROM
+//              content / RAM save files; `rel` is preserved so the copied
+//              design's reference still resolves
+//   typeIds    every non-sub-design instance's typeData.id (the server decides
+//              which are project-local and need copying — the merged palette
+//              hides the tier here, FR-121i)
+//   sharedData [{ design, refdes, path }] for absolute data paths, which stay
+//              shared with the source project (the FR-121f warning)
+//   warnings   non-fatal reports; the import proceeds
+//   errors     fatal: the caller must not import
+export async function blockClosure(rootPath, { loadDesign }) {
+  const srcDir = dirOf(rootPath);
+  const designs = [];
+  const data = new Map(); // rel → absolute source
+  const typeIds = new Set();
+  const sharedData = [];
+  const warnings = [];
+  const errors = [];
+  const seen = new Set();
+  const queue = [{ path: rootPath, from: null }];
+
+  while (queue.length) {
+    const { path, from } = queue.shift();
+    if (seen.has(path)) continue;
+    seen.add(path);
+    // Flat-source rule (FR-121j): every closure member must sit in the source
+    // project root, since a copy to the destination root preserves only
+    // same-folder references. The root satisfies this by definition.
+    if (from && dirOf(path) !== srcDir) {
+      errors.push(
+        `${from} references ${path}, which is not a root-level file of ${srcDir} — ` +
+          `move it beside ${from} (the project layout is flat) and import again`,
+      );
+      continue;
+    }
+    let obj;
+    try {
+      obj = await loadDesign(path);
+    } catch (e) {
+      if (from) {
+        warnings.push(
+          `${from} references ${baseOf(path)}, which cannot be read (${e.message}) — ` +
+            `the link is already broken in the source and the copy keeps it that way`,
+        );
+      } else {
+        errors.push(`cannot read ${path}: ${e.message}`);
+      }
+      continue;
+    }
+    if (!Array.isArray(obj?.components)) {
+      const what = `${baseOf(path)} is not a design file`;
+      if (from) warnings.push(`${from} references ${what} — not copied`);
+      else errors.push(what);
+      continue;
+    }
+    designs.push(path);
+    // A port-less design has no interface, so it cannot be embedded (FR-095);
+    // worth saying once, about the design the user actually picked.
+    if (!from && designInterface(obj).length === 0) {
+      warnings.push(`${baseOf(path)} has no ports, so it cannot be embedded as a sub-component`);
+    }
+
+    const here = baseOf(path);
+    const dir = dirOf(path);
+    for (const c of obj.components) {
+      if (c.kind === "subdesign") {
+        if (c.childPath) queue.push({ path: resolveRel(dir, c.childPath), from: here });
+        continue; // a sub-design's typeData is synthetic and never saved (FR-098)
+      }
+      if (c.typeData?.id) typeIds.add(c.typeData.id);
+      if (c.typeData?.renderType === "port" && c.target?.file) {
+        queue.push({ path: resolveRel(dir, c.target.file), from: here });
+      }
+      const mem = c.typeData?.mem;
+      if (!mem) continue;
+      for (const key of ["romFile", "ramFile"]) {
+        const p = mem[key];
+        if (typeof p !== "string" || p === "") continue;
+        if (p.startsWith("/")) {
+          sharedData.push({ design: here, refdes: c.refdes, path: p });
+          continue;
+        }
+        const abs = resolveRel(dir, p);
+        if (!inDir(abs, srcDir)) {
+          warnings.push(
+            `${here}: ${c.refdes}'s data file ${p} resolves outside the source project — not copied`,
+          );
+          continue;
+        }
+        data.set(relPath(srcDir, abs), abs);
+      }
+    }
+  }
+
+  return {
+    designs,
+    data: [...data].map(([rel, src]) => ({ src, rel })),
+    typeIds: [...typeIds],
+    sharedData,
+    warnings,
+    errors,
+  };
+}
+
 // makeProjectOps builds the project lifecycle ops (§6.19). `freshDesign` is a
 // factory for an FR-004-style empty design (app.js supplies it); deps are
 // injectable for tests (the connection.js pattern).
@@ -63,6 +179,7 @@ export function makeProjectOps(
     projectInfo = apiProjectInfo,
     projectCreate = apiProjectCreate,
     projectDuplicate = apiProjectDuplicate,
+    projectImport = apiProjectImport,
     listDir = apiListDir,
     loadDesign = apiLoadDesign,
     openFileDialog = fileDialog,
@@ -275,5 +392,57 @@ export function makeProjectOps(
     }
   }
 
-  return { setCurrentProject, newProject, openProject, duplicateProject };
+  // importBlock copies a design from another project into this one together
+  // with its dependency closure (FR-121j): the client walks the closure (it
+  // owns the save format), the server preflights collisions and copies
+  // byte-verbatim (it owns the library and the filesystem, §8). No dirty guard
+  // — the canvas, the current design, and the current project are untouched.
+  async function importBlock() {
+    const dst = store.state.project;
+    if (!dst) return;
+    const res = await openFileDialog({
+      mode: "open",
+      title: "Import Block",
+      startPath: dataDir,
+    });
+    if (!res) return;
+    if (inDir(res.path, dst.dir)) {
+      post(`Import Block: ${baseOf(res.path)} is already in this project`);
+      return;
+    }
+    const closure = await blockClosure(res.path, { loadDesign });
+    for (const w of closure.warnings) post("Import Block: " + w);
+    if (closure.errors.length) {
+      for (const e of closure.errors) post("Import Block failed: " + e);
+      return;
+    }
+    let out;
+    try {
+      out = await projectImport({
+        srcProject: dirOf(res.path),
+        dst: dst.dir,
+        designs: closure.designs,
+        data: closure.data,
+        typeIds: closure.typeIds,
+      });
+    } catch (e) {
+      post("Import Block failed: " + e.message);
+      return;
+    }
+    for (const w of out.warnings ?? []) post("Import Block: " + w);
+    const copied = [...(out.designs ?? []), ...(out.data ?? []), ...(out.components ?? [])];
+    post(
+      `Imported ${baseOf(res.path)} into ${dst.name}: ` +
+        `${copied.length} file${copied.length === 1 ? "" : "s"} — ${copied.join(", ")}`,
+    );
+    // Absolute data paths came along by reference only, exactly as Duplicate
+    // Project reports (FR-121f/FR-121j).
+    for (const { design, refdes, path } of closure.sharedData) {
+      post(`${design}: ${refdes}'s data file ${path} is still shared with the source project`);
+    }
+    // Imported components/ types reach the palette without a Refresh Types.
+    await reloadLibrary(dst.dir);
+  }
+
+  return { setCurrentProject, newProject, openProject, duplicateProject, importBlock };
 }

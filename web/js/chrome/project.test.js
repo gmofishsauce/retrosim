@@ -6,6 +6,7 @@ import {
   isManifestName,
   resolveProjectPick,
   absoluteDataPaths,
+  blockClosure,
   makeProjectOps,
 } from "./project.js";
 
@@ -90,6 +91,7 @@ function harness({ dialogResults = [], api = {}, loadResult = true } = {}) {
       projectInfo: api.projectInfo ?? (async (dir) => ({ dir, name: "p", manifestFile: "", mainDesign: "", warnings: [] })),
       projectCreate: api.projectCreate ?? (async () => { throw new Error("unexpected create"); }),
       projectDuplicate: api.projectDuplicate ?? (async () => { throw new Error("unexpected duplicate"); }),
+      projectImport: api.projectImport ?? (async () => { throw new Error("unexpected import"); }),
       // Default: a project that already holds a design, so openProject's
       // no-main-design path reaches the rooted picker (§3.1 A9). Tests of the
       // empty-project path override this.
@@ -332,4 +334,217 @@ test("duplicateProject without a current project is a no-op", async () => {
   await h.ops.duplicateProject();
   assert.equal(h.loads.length, 0);
   assert.equal(h.posts.length, 0);
+});
+
+// --- block import: the closure walk (FR-121j, §6.19) ---
+
+// port builds a saved 1-wide port instance, optionally with an off-sheet target.
+const port = (refdes, label, target = null) => ({
+  refdes,
+  label,
+  typeData: { id: "type-port", renderType: "port", pins: [{ name: "P" }] },
+  ...(target ? { target } : {}),
+});
+
+// SRC is a source project whose root block embeds two children (one of which
+// embeds a grandchild the other also embeds — a diamond) and reaches a peer
+// sheet through an off-sheet target.
+const SRC = {
+  "/a/alu/alu.json": {
+    components: [
+      { refdes: "X1", kind: "subdesign", childPath: "adder.json" },
+      { refdes: "X2", kind: "subdesign", childPath: "mul.json" },
+      { refdes: "U1", typeData: { id: "type-7400", mem: { kind: "rom", romFile: "rom.bin" } } },
+      { refdes: "U2", typeData: { id: "type-GAL-A", mem: { kind: "ram", ramFile: "/shared/ram.bin" } } },
+      port("P1", "CLK", { file: "sheet2.json", label: "CLK" }),
+    ],
+  },
+  "/a/alu/adder.json": {
+    components: [
+      { refdes: "X1", kind: "subdesign", childPath: "gate.json" },
+      { refdes: "U1", typeData: { id: "type-7400" } },
+      port("P1", "A"),
+    ],
+  },
+  "/a/alu/mul.json": {
+    components: [{ refdes: "X1", kind: "subdesign", childPath: "gate.json" }, port("P1", "B")],
+  },
+  "/a/alu/gate.json": { components: [{ refdes: "U1", typeData: { id: "type-7402" } }, port("P1", "G")] },
+  "/a/alu/sheet2.json": { components: [port("P1", "CLK")] },
+};
+
+const loaderFor = (files) => async (path) => {
+  if (!(path in files)) throw new Error("no such file");
+  return files[path];
+};
+
+test("blockClosure follows embeds and off-sheet targets, once each (FR-121j)", async () => {
+  const c = await blockClosure("/a/alu/alu.json", { loadDesign: loaderFor(SRC) });
+  assert.deepEqual(c.errors, []);
+  assert.deepEqual(c.warnings, []);
+  assert.deepEqual(c.designs, [
+    "/a/alu/alu.json",
+    "/a/alu/adder.json",
+    "/a/alu/mul.json",
+    "/a/alu/sheet2.json",
+    "/a/alu/gate.json", // the diamond's shared grandchild, collected once
+  ]);
+  // Type ids de-duplicate across designs; sub-design instances contribute none
+  // (their typeData is synthetic and unsaved, FR-098).
+  assert.deepEqual(c.typeIds.sort(), ["type-7400", "type-7402", "type-GAL-A", "type-port"]);
+});
+
+test("blockClosure separates relative data files from shared absolute ones (FR-121g/FR-121f)", async () => {
+  const c = await blockClosure("/a/alu/alu.json", { loadDesign: loaderFor(SRC) });
+  assert.deepEqual(c.data, [{ src: "/a/alu/rom.bin", rel: "rom.bin" }]);
+  assert.deepEqual(c.sharedData, [
+    { design: "alu.json", refdes: "U2", path: "/shared/ram.bin" },
+  ]);
+});
+
+test("blockClosure keeps a data file's relative sub-path (FR-121g)", async () => {
+  const files = {
+    "/a/alu/alu.json": {
+      components: [
+        port("P1", "A"),
+        { refdes: "U1", typeData: { id: "type-ROM", mem: { romFile: "roms/prog.bin" } } },
+        { refdes: "U2", typeData: { id: "type-ROM2", mem: { romFile: "../outside.bin" } } },
+      ],
+    },
+  };
+  const c = await blockClosure("/a/alu/alu.json", { loadDesign: loaderFor(files) });
+  assert.deepEqual(c.data, [{ src: "/a/alu/roms/prog.bin", rel: "roms/prog.bin" }]);
+  assert.deepEqual(c.errors, []);
+  assert.equal(c.warnings.length, 1);
+  assert.match(c.warnings[0], /outside the source project/);
+});
+
+test("blockClosure warns about a broken child link but still imports (FR-099a)", async () => {
+  const files = {
+    "/a/alu/alu.json": {
+      components: [port("P1", "A"), { refdes: "X1", kind: "subdesign", childPath: "gone.json" }],
+    },
+  };
+  const c = await blockClosure("/a/alu/alu.json", { loadDesign: loaderFor(files) });
+  assert.deepEqual(c.errors, []);
+  assert.deepEqual(c.designs, ["/a/alu/alu.json"]);
+  assert.equal(c.warnings.length, 1);
+  assert.match(c.warnings[0], /gone\.json/);
+});
+
+test("blockClosure errors on an unreadable or non-design root (FR-121j)", async () => {
+  const missing = await blockClosure("/a/alu/gone.json", { loadDesign: loaderFor(SRC) });
+  assert.equal(missing.designs.length, 0);
+  assert.equal(missing.errors.length, 1);
+  const notDesign = await blockClosure("/a/alu/x.json", {
+    loadDesign: async () => ({ formatVersion: 1, rows: [] }),
+  });
+  assert.equal(notDesign.errors.length, 1);
+  assert.match(notDesign.errors[0], /not a design file/);
+});
+
+test("blockClosure errors on a child outside the source project root (FR-121/FR-121j)", async () => {
+  const files = {
+    "/a/alu/alu.json": {
+      components: [
+        port("P1", "A"),
+        { refdes: "X1", kind: "subdesign", childPath: "../other/lib.json" },
+        { refdes: "X2", kind: "subdesign", childPath: "sub/deep.json" },
+      ],
+    },
+    "/a/other/lib.json": { components: [] },
+    "/a/alu/sub/deep.json": { components: [] },
+  };
+  const c = await blockClosure("/a/alu/alu.json", { loadDesign: loaderFor(files) });
+  assert.equal(c.errors.length, 2);
+  for (const e of c.errors) assert.match(e, /alu\.json references/);
+});
+
+test("blockClosure warns when the picked design has no ports (FR-095)", async () => {
+  const files = { "/a/alu/alu.json": { components: [{ refdes: "U1", typeData: { id: "type-7400" } }] } };
+  const c = await blockClosure("/a/alu/alu.json", { loadDesign: loaderFor(files) });
+  assert.deepEqual(c.errors, []);
+  assert.equal(c.warnings.length, 1);
+  assert.match(c.warnings[0], /no ports/);
+});
+
+// --- importBlock, the op (FR-121j) ---
+
+// importHarness sets a current project and records the plan sent to the server.
+function importHarness({ pick = { path: "/a/alu/alu.json" }, files = SRC, projectImport } = {}) {
+  const plans = [];
+  const h = harness({
+    dialogResults: [pick],
+    api: {
+      loadDesign: loaderFor(files),
+      projectImport:
+        projectImport ??
+        (async (plan) => {
+          plans.push(plan);
+          return { designs: ["alu.json"], data: ["rom.bin"], components: [], warnings: [] };
+        }),
+    },
+  });
+  h.store.setProject({ dir: "/data/cpu", name: "cpu", manifestFile: "", mainDesign: "" });
+  return { ...h, plans };
+}
+
+test("importBlock sends the closure as a copy plan and reloads the library (FR-121j)", async () => {
+  const h = importHarness();
+  await h.ops.importBlock();
+  assert.equal(h.plans.length, 1);
+  assert.equal(h.plans[0].srcProject, "/a/alu");
+  assert.equal(h.plans[0].dst, "/data/cpu");
+  assert.equal(h.plans[0].designs.length, 5);
+  assert.deepEqual(h.plans[0].data, [{ src: "/a/alu/rom.bin", rel: "rom.bin" }]);
+  assert.deepEqual(h.reloads, ["/data/cpu"]); // imported types reach the palette
+  assert.ok(h.posts.some((m) => /Imported alu\.json into cpu/.test(m)));
+  // The absolute RAM path is reported as still shared with the source.
+  assert.ok(h.posts.some((m) => /\/shared\/ram\.bin.*shared with the source/.test(m)));
+  // The canvas and the current project are untouched.
+  assert.equal(h.store.state.project.dir, "/data/cpu");
+  assert.equal(h.loads.length, 0);
+});
+
+test("importBlock refuses a design already in the current project (FR-121j)", async () => {
+  const h = importHarness({ pick: { path: "/data/cpu/alu.json" } });
+  await h.ops.importBlock();
+  assert.equal(h.plans.length, 0);
+  assert.match(h.posts[0], /already in this project/);
+});
+
+test("importBlock aborts on a closure error before calling the server (FR-121j)", async () => {
+  const h = importHarness({
+    files: {
+      "/a/alu/alu.json": {
+        components: [port("P1", "A"), { refdes: "X1", kind: "subdesign", childPath: "../other/x.json" }],
+      },
+    },
+  });
+  await h.ops.importBlock();
+  assert.equal(h.plans.length, 0);
+  assert.equal(h.reloads.length, 0);
+  assert.match(h.posts.at(-1), /Import Block failed/);
+});
+
+test("importBlock reports a server collision and copies nothing (FR-121j)", async () => {
+  const h = importHarness({
+    projectImport: async () => {
+      throw new Error("import refused: alu.json already exists in this project");
+    },
+  });
+  await h.ops.importBlock();
+  assert.equal(h.reloads.length, 0);
+  assert.match(h.posts.at(-1), /Import Block failed: import refused: alu\.json already exists/);
+});
+
+test("importBlock does nothing when the pick is cancelled or no project is current", async () => {
+  const cancelled = importHarness({ pick: null });
+  await cancelled.ops.importBlock();
+  assert.equal(cancelled.plans.length, 0);
+  assert.equal(cancelled.posts.length, 0);
+
+  const noProject = harness({ dialogResults: [{ path: "/a/alu/alu.json" }] });
+  await noProject.ops.importBlock();
+  assert.equal(noProject.posts.length, 0);
 });

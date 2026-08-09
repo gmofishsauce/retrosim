@@ -185,15 +185,40 @@ func LoadLibrary(dir string) (*Library, error) {
 // project state, so the API re-invokes this per request (FR-121) and merges the
 // result over the shared library (MergedList).
 func ScanProjectComponents(projectDir string) ([]ComponentType, []string) {
+	types, _, warnings := scanComponentDir(projectDir)
+	out := make([]ComponentType, 0, len(types))
+	for _, t := range types {
+		out = append(out, t)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key() < out[j].Key() })
+	return out, warnings
+}
+
+// ProjectComponentFiles is ScanProjectComponents keyed the other way (FR-121j,
+// §6.2): the project-local component ids mapped to the file that defines each,
+// plus the same per-file warnings. Block import needs the **file** behind a
+// referenced type id, which ComponentType does not carry.
+func ProjectComponentFiles(projectDir string) (map[string]string, []string) {
+	_, files, warnings := scanComponentDir(projectDir)
+	return files, warnings
+}
+
+// scanComponentDir walks <projectDir>/components/ once for both public scans
+// above (§6.2): it parses every top-level *.yaml, returning the types keyed by
+// library key, the defining file name per key, and a warning per skipped file
+// (parse failure, or a duplicate id — last wins). A missing directory yields
+// nothing and no warning (FR-121i).
+func scanComponentDir(projectDir string) (map[string]ComponentType, map[string]string, []string) {
 	dir := filepath.Join(projectDir, "components")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, nil, nil
 		}
-		return nil, []string{fmt.Sprintf("cannot read %s: %v", dir, err)}
+		return nil, nil, []string{fmt.Sprintf("cannot read %s: %v", dir, err)}
 	}
 	types := map[string]ComponentType{}
+	files := map[string]string{}
 	var warnings []string
 	for _, e := range entries {
 		if e.IsDir() || filepath.Ext(e.Name()) != ".yaml" {
@@ -208,13 +233,9 @@ func ScanProjectComponents(projectDir string) ([]ComponentType, []string) {
 			warnings = append(warnings, fmt.Sprintf("%s: duplicate id %q (last wins)", e.Name(), t.ID))
 		}
 		types[t.Key()] = t
+		files[t.Key()] = e.Name()
 	}
-	out := make([]ComponentType, 0, len(types))
-	for _, t := range types {
-		out = append(out, t)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Key() < out[j].Key() })
-	return out, warnings
+	return types, files, warnings
 }
 
 // MergedList composes the shared library with the given project-local types —

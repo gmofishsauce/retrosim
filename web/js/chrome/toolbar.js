@@ -75,6 +75,11 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     "Open a project by folder, manifest, or design file", () => projectops?.openProject());
   const dupProjectItem = addItem(fileMenu.panel, "Duplicate Project…",
     "Copy the current project to a new folder", () => projectops?.duplicateProject());
+  // Import Block copies a design from another project into this one with its
+  // dependency closure (FR-121j, §6.19); same disable rule as Duplicate.
+  const importBlockItem = addItem(fileMenu.panel, "Import Block…",
+    "Copy a design from another project into this one, with everything it depends on",
+    () => projectops?.importBlock());
   const newItem = addItem(fileMenu.panel, "New", "New design", () =>
     fileops.newDesign());
   const openItem = addItem(fileMenu.panel, "Open", "Open design", () =>
@@ -354,6 +359,9 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     newProjectItem.disabled = locked;
     openProjectItem.disabled = locked;
     dupProjectItem.disabled = locked || noProject;
+    // Import Block copies into the current project, so it needs one too
+    // (FR-121j).
+    importBlockItem.disabled = locked || noProject;
     // The Test Vectors item opens, selects, or closes its tab (FR-123), so it
     // stays enabled while the panel is open — one invocation to bring the tab
     // forward, another to close it; only a running simulation disables it

@@ -38,7 +38,8 @@ export function resolveRel(baseDir, rel) {
 }
 
 // inDir reports whether absolute path p lies inside (or is) directory dir.
-function inDir(p, dir) {
+// Exported for the project-boundary checks in chrome/project.js (§6.19).
+export function inDir(p, dir) {
   const d = dir.replace(/\/+$/, "");
   return p === d || p.startsWith(d + "/");
 }

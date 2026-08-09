@@ -26,6 +26,7 @@ func NewRouter(lib *Library, dataDir, componentsDir, webDir string) http.Handler
 	api.HandleFunc("/api/v1/project/info", handleProjectInfo())
 	api.HandleFunc("/api/v1/project/create", handleProjectCreate())
 	api.HandleFunc("/api/v1/project/duplicate", handleProjectDuplicate())
+	api.HandleFunc("/api/v1/project/import", handleProjectImport(lib))
 	api.HandleFunc("/api/v1/romfile", handleRomFile())
 	api.HandleFunc("/api/v1/ramfile", handleRamFile())
 	api.HandleFunc("/api/v1/design/load", handleDesignLoad())
@@ -238,6 +239,30 @@ func handleProjectDuplicate() http.HandlerFunc {
 	}
 }
 
+// handleProjectImport executes a block-import copy plan (FR-121j, §6.5a) and
+// returns what was written plus any non-fatal reports. The shared library is
+// needed for the id-collision check — an imported project-local type may not
+// shadow a shared one (FR-121i) — which is why this handler, alone among the
+// project endpoints, is closed over it.
+func handleProjectImport(lib *Library) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !requireMethod(w, r, http.MethodPost) {
+			return
+		}
+		var spec ImportSpec
+		if err := json.NewDecoder(r.Body).Decode(&spec); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		res, err := ImportBlock(lib, spec)
+		if err != nil {
+			writeStorageError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, res)
+	}
+}
+
 // handleRomFile serves a ROM content file's raw bytes for the simulator's
 // Run-time loader (FR-114e). The path must be absolute and end in .bin or .hex;
 // the client parses the bytes per the extension. Capped at MaxRomBytes by
@@ -396,7 +421,7 @@ func writeStorageError(w http.ResponseWriter, err error) {
 		status = http.StatusBadRequest
 	case errors.Is(err, ErrTooLarge):
 		status = http.StatusRequestEntityTooLarge
-	case errors.Is(err, ErrProjectExists):
+	case errors.Is(err, ErrProjectExists), errors.Is(err, ErrImportCollision):
 		status = http.StatusConflict
 	default:
 		status = http.StatusInternalServerError

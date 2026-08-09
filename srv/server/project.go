@@ -20,6 +20,13 @@ import (
 // already exists (FR-121b/FR-121f). The API layer maps it to 409 (§6.4).
 var ErrProjectExists = errors.New("path already exists")
 
+// ErrImportCollision is returned when a block import would overwrite something
+// (FR-121j): a destination file that already exists, or an imported component
+// type whose id is already in the destination project or the shared library.
+// The error message lists every collision found, since the whole plan is
+// preflighted before anything is written. The API layer maps it to 409 (§6.4).
+var ErrImportCollision = errors.New("import refused")
+
 // manifestSuffix is the project-manifest filename pattern (FR-121a): any file
 // at the project root ending in this suffix is a manifest, regardless of
 // prefix, so renaming the folder outside the app never orphans it.
@@ -243,6 +250,220 @@ func DuplicateProject(src, dst string) (Info, error) {
 		info.Warnings = append(info.Warnings, warn)
 	}
 	return info, nil
+}
+
+// ImportData names one data file (a ROM's content, a RAM's save file) to copy:
+// its absolute source path and the destination path relative to the destination
+// project root, preserved verbatim so the copied design's relative reference
+// still resolves (FR-121g/FR-121j).
+type ImportData struct {
+	Src string `json:"src"`
+	Rel string `json:"rel"`
+}
+
+// ImportSpec is the copy plan a block import executes (FR-121j, §6.5a). The
+// client's closure walk (§6.19) produces it: this server never parses a design.
+// Designs are absolute paths, each a root-level file of SrcProject; TypeIDs are
+// the component type ids the closure's instances reference, of which only those
+// defined by SrcProject's own components/ are copied.
+type ImportSpec struct {
+	SrcProject string       `json:"srcProject"`
+	Dst        string       `json:"dst"`
+	Designs    []string     `json:"designs"`
+	Data       []ImportData `json:"data"`
+	TypeIDs    []string     `json:"typeIds"`
+}
+
+// ImportResult names what an import wrote, destination-relative, plus the
+// non-fatal reports the client posts to the message tray (FR-074).
+type ImportResult struct {
+	Designs    []string `json:"designs"`
+	Data       []string `json:"data"`
+	Components []string `json:"components"`
+	Warnings   []string `json:"warnings"`
+}
+
+// copyPlanItem is one preflighted copy: an absolute source and a destination
+// path relative to the destination project root.
+type copyPlanItem struct {
+	src string
+	rel string
+}
+
+// ImportBlock copies a design and its dependency closure from one project into
+// another (FR-121j, §6.5a). The plan arrives fully resolved — the client owns
+// the save format and computed which files the block depends on — so this
+// function's job is the half the client cannot do: resolving referenced type
+// ids to the source project's component files, preflighting every collision,
+// and copying byte-verbatim.
+//
+// Nothing is written until the whole plan validates: every destination must be
+// free, and no imported type id may already exist in the destination project or
+// the shared library (the create-endpoint collision scope, FR-007a/FR-121i).
+// All collisions are reported together in one ErrImportCollision, so a single
+// retry can address them all. A failure *during* the copy leaves what was
+// written, the DuplicateProject precedent (FR-121f) — the client reports it.
+func ImportBlock(lib *Library, spec ImportSpec) (ImportResult, error) {
+	res := ImportResult{Designs: []string{}, Data: []string{}, Components: []string{}, Warnings: []string{}}
+
+	src, err := existingDir(spec.SrcProject)
+	if err != nil {
+		return res, err
+	}
+	dst, err := existingDir(spec.Dst)
+	if err != nil {
+		return res, err
+	}
+	if src == dst {
+		return res, fmt.Errorf("%s: source and destination are the same project: %w", dst, ErrInvalidPath)
+	}
+	if len(spec.Designs) == 0 {
+		return res, fmt.Errorf("nothing to import: %w", ErrInvalidPath)
+	}
+
+	// Designs: each must be an existing regular file sitting directly in the
+	// source project root (the flat-layout rule, FR-121/FR-121j — re-checked
+	// here because a copy to the destination root only preserves same-folder
+	// references).
+	var designs []copyPlanItem
+	for _, p := range spec.Designs {
+		if !filepath.IsAbs(p) {
+			return res, fmt.Errorf("%q: design path must be absolute: %w", p, ErrInvalidPath)
+		}
+		p = filepath.Clean(p)
+		if filepath.Dir(p) != src {
+			return res, fmt.Errorf("%s: not a root-level file of %s: %w", p, src, ErrInvalidPath)
+		}
+		if err := statRegular(p); err != nil {
+			return res, err
+		}
+		designs = append(designs, copyPlanItem{src: p, rel: filepath.Base(p)})
+	}
+
+	// Data files keep their project-relative destination path (FR-121g), so a
+	// relative path that escapes the project is refused rather than flattened.
+	var data []copyPlanItem
+	for _, d := range spec.Data {
+		rel := filepath.Clean(d.Rel)
+		if d.Rel == "" || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return res, fmt.Errorf("%q: data destination must be a path inside the project: %w", d.Rel, ErrInvalidPath)
+		}
+		if !filepath.IsAbs(d.Src) {
+			return res, fmt.Errorf("%q: data source must be absolute: %w", d.Src, ErrInvalidPath)
+		}
+		if err := statRegular(d.Src); err != nil {
+			return res, err
+		}
+		data = append(data, copyPlanItem{src: filepath.Clean(d.Src), rel: rel})
+	}
+
+	// Component types: only ids defined by the source project's own components/
+	// need copying — a shared-library id is available in every project already
+	// (FR-002/FR-121i). An id in neither tier is a warning, not an error: the
+	// design file carries its own typeData copy (FR-057), so the import works
+	// regardless; only the palette tile is missing.
+	srcFiles, scanWarn := ProjectComponentFiles(src)
+	for _, w := range scanWarn {
+		res.Warnings = append(res.Warnings, "source project components/: "+w)
+	}
+	dstTypes, _ := ScanProjectComponents(dst)
+	dstIDs := map[string]bool{}
+	for _, t := range dstTypes {
+		dstIDs[t.Key()] = true
+	}
+	var comps []copyPlanItem
+	var collisions []string
+	seenID := map[string]bool{}
+	for _, id := range spec.TypeIDs {
+		if seenID[id] {
+			continue
+		}
+		seenID[id] = true
+		fname, local := srcFiles[id]
+		switch {
+		case !local && lib.has(id):
+			// Shared type: present here too, nothing to copy.
+		case !local:
+			res.Warnings = append(res.Warnings, fmt.Sprintf(
+				"component type %q is in neither the shared library nor the source project's components/; the copied design carries its embedded type data", id))
+		case lib.has(id):
+			collisions = append(collisions, fmt.Sprintf("component id %q is already in the shared library", id))
+		case dstIDs[id]:
+			collisions = append(collisions, fmt.Sprintf("component id %q is already in this project", id))
+		default:
+			comps = append(comps, copyPlanItem{
+				src: filepath.Join(src, "components", fname),
+				rel: filepath.Join("components", fname),
+			})
+		}
+	}
+
+	// Destination preflight: nothing may be overwritten, and no destination may
+	// be claimed twice by one plan.
+	plan := append(append(append([]copyPlanItem{}, designs...), data...), comps...)
+	claimed := map[string]bool{}
+	for _, it := range plan {
+		if claimed[it.rel] {
+			collisions = append(collisions, fmt.Sprintf("%s: named twice in one import", it.rel))
+			continue
+		}
+		claimed[it.rel] = true
+		switch _, err := os.Stat(filepath.Join(dst, it.rel)); {
+		case err == nil:
+			collisions = append(collisions, fmt.Sprintf("%s already exists in this project", it.rel))
+		case !os.IsNotExist(err):
+			return res, err
+		}
+	}
+	if len(collisions) > 0 {
+		return res, fmt.Errorf("%w: %s", ErrImportCollision, strings.Join(collisions, "; "))
+	}
+
+	for _, group := range []struct {
+		items []copyPlanItem
+		out   *[]string
+	}{{designs, &res.Designs}, {data, &res.Data}, {comps, &res.Components}} {
+		for _, it := range group.items {
+			target := filepath.Join(dst, it.rel)
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return res, err
+			}
+			if err := copyFile(it.src, target); err != nil {
+				return res, err // partial destination left, per FR-121j/FR-121f
+			}
+			*group.out = append(*group.out, it.rel)
+		}
+	}
+	return res, nil
+}
+
+// existingDir validates an absolute path that must name an existing directory,
+// returning it cleaned (the shared entry check of the import endpoint).
+func existingDir(path string) (string, error) {
+	if path == "" || !filepath.IsAbs(path) {
+		return "", fmt.Errorf("%q: %w", path, ErrInvalidPath)
+	}
+	path = filepath.Clean(path)
+	st, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	if !st.IsDir() {
+		return "", fmt.Errorf("%s: %w", path, ErrNotDir)
+	}
+	return path, nil
+}
+
+// statRegular reports whether path names an existing non-directory file.
+func statRegular(path string) error {
+	st, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if st.IsDir() {
+		return fmt.Errorf("%s: is a directory: %w", path, ErrInvalidPath)
+	}
+	return nil
 }
 
 // copyFile copies one regular file byte-verbatim (symlinks followed as files —

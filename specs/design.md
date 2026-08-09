@@ -869,7 +869,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 ### 6.2 Go: component library loader (`srv/server/components.go`)
 - **Purpose:** load and hold the parsed **shared** component library, and scan a
   project's local `components/` types on request; expose both as JSON.
-- **Satisfies:** FR-002, FR-005, FR-007, FR-065, FR-121i.
+- **Satisfies:** FR-002, FR-005, FR-007, FR-065, FR-121i, FR-121j (the id→file
+  map).
 - **Types:** see §7.1 (`ComponentType`, `Pin`, `PinGroup`).
 - **Interface:**
   - `LoadLibrary(dir string) (*Library, error)` — read every `*.yaml` in `dir`
@@ -879,10 +880,17 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     (FR-121i), which is re-invoked per request since the server holds no project
     state (FR-121).
   - `ScanProjectComponents(projectDir string) ([]ComponentType, []string)` —
-    when `<projectDir>/components/` exists, `LoadLibrary` it and return the parsed
-    types plus any per-file warnings (missing dir → empty, no error, FR-121i);
-    the API layer merges these over the shared library and posts warnings to the
-    tray (FR-074).
+    when `<projectDir>/components/` exists, walk it and return the parsed
+    types (sorted by `id`) plus any per-file warnings (missing dir → empty, no
+    error, FR-121i); the API layer merges these over the shared library and
+    posts warnings to the tray (FR-074).
+  - `ProjectComponentFiles(projectDir string) (map[string]string, []string)` —
+    the same walk keyed the other way: `id → file name` within
+    `<projectDir>/components/`, plus the same warnings. Block import (FR-121j,
+    §6.5a) needs the **file** behind a referenced type id, which
+    `ComponentType` does not carry. Both functions share one private
+    `scanComponentDir` so the walk, the skip rules, and the warning wording
+    exist once.
   - `(*Library) List() []ComponentType` — stable, deterministic order (sorted by
     `id`) for the palette.
 - **Behavior:** for each file, call `ParseComponent`. Duplicate `id`s →
@@ -1000,6 +1008,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | `GET /api/v1/project/info?dir=<d>` | query `dir` (abs project directory) | `{"dir","name","manifestFile","mainDesign","warnings":[…]}` — `manifestFile`/`mainDesign` are `""` when absent; `name` falls back to the folder base name; `warnings` carries the extra-manifest, unparseable-manifest, and dangling-`mainDesign` reports (FR-121a) | 400 bad path, 404 missing, 403 not a dir |
   | `POST /api/v1/project/create` | `{"path":"<abs new project dir>"}` | the created project's info (shape above; fresh manifest, no main design) — FR-121b | 400 bad path / missing parent, 409 path already exists, 500 mkdir/write failure |
   | `POST /api/v1/project/duplicate` | `{"src":"<abs>","dst":"<abs new dir>"}` | the duplicate's info (shape above) — FR-121f | 400 bad paths, 404 `src` missing, 409 `dst` exists, 500 copy failure (partial destination left; the client reports it, FR-121f) |
+  | `POST /api/v1/project/import` | `{"srcProject":"<abs>","dst":"<abs project dir>","designs":["<abs>",…],"data":[{"src":"<abs>","rel":"<dst-relative>"},…],"typeIds":["<id>",…]}` — the **copy plan** the client's closure walk produced (FR-121j, §6.19) | `{"designs":[…],"data":[…],"components":[…],"warnings":[…]}` — the destination-relative names actually written, plus tray reports | 400 bad paths / empty plan / a design not directly inside `srcProject` / a `rel` escaping `dst`, 404 a source file missing, 409 **any** collision (existing destination file, or an imported type `id` already in `dst` or the shared library) — reported together, **nothing copied**, 500 copy failure (partial destination left, as with duplicate) |
   | `GET /api/v1/romfile?path=<p>` | query `path` (abs, `.bin`/`.hex`) | raw bytes (`application/octet-stream`), capped at `MaxRomBytes` 64 MiB | 400 bad/!bin·hex, 404 missing, 500 too large |
   | `POST /api/v1/ramfile?path=<p>` | query `path` (abs, `.bin`/`.hex`); raw request body = the file bytes the client formatted (FR-114g), capped at `MaxRomBytes` | `{"path":"<abs>"}` | 400 bad/!bin·hex, 413 too large, 500 write failure |
   | `GET /api/v1/design/load?path=<p>` | query `path` | `{"design":Design}` | 400, 404, 422 malformed JSON |
@@ -1019,7 +1028,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   delegates to `project.go` (§6.5a). `project/create` makes the directory and
   writes `<base>-manifest.json` (`{"formatVersion":1,"name":"<base>"}`);
   `project/duplicate` copies the source directory recursively, rewriting the
-  recognized manifest under the destination's name (§6.5a).
+  recognized manifest under the destination's name (§6.5a);
+  `project/import` executes a client-supplied copy plan (`ImportBlock`, §6.5a)
+  after a whole-plan collision preflight — the one place the server needs the
+  shared `Library`, since an imported type's `id` must not shadow a shared one
+  (FR-121j/FR-121i), which is why `handleProjectImport` is closed over `lib`.
 
   `POST /api/v1/file/save` writes **verbatim text** — the same absolute-path
   validation and `atomicWrite` as a design save, but no JSON interpretation or
@@ -1079,10 +1092,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
 ### 6.5a Go: projects (`srv/server/project.go`)
 - **Purpose:** server side of the FR-121 project group: manifest discovery and
-  tolerant parsing, project info resolution, project creation, and project
-  duplication. Stateless — every function takes the project directory.
+  tolerant parsing, project info resolution, project creation, project
+  duplication, and block import. Stateless — every function takes the project
+  directory.
 - **Satisfies:** FR-121, FR-121a, FR-121b (server side), FR-121f (server side),
-  FR-053 (manifest exclusion helper).
+  FR-121j (server side), FR-053 (manifest exclusion helper).
 - **Interface:**
   - `IsManifestName(name string) bool` — true when `name` ends in
     `-manifest.json`, case-insensitively (consistent with `ListDir`'s
@@ -1126,8 +1140,42 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     (already a reported anomaly, FR-121a). A mid-copy failure returns the
     error and leaves the partial destination — **no rollback**, per FR-121f;
     the client reports it for manual cleanup.
+  - `ImportBlock(lib *Library, spec ImportSpec) (ImportResult, error)`
+    (FR-121j) — executes the **copy plan** the client's closure walk produced
+    (§6.19). `ImportSpec{SrcProject, Dst string; Designs []string; Data
+    []ImportData{Src, Rel string}; TypeIDs []string}`;
+    `ImportResult{Designs, Data, Components, Warnings []string}` naming what
+    was written, destination-relative. The server deliberately parses **no
+    design JSON** — it is handed paths, not designs (§8) — but it does own the
+    component-library half of the job:
+    - *Validate.* `SrcProject` and `Dst` absolute, existing, distinct
+      directories; at least one design; every design an existing regular file
+      whose `filepath.Dir` **is** `SrcProject` (the flat-source rule
+      re-checked server-side); every `Data.Rel` relative, `Clean`-stable, and
+      non-escaping; every `Data.Src` an existing regular file.
+    - *Resolve types.* `ProjectComponentFiles(SrcProject)` (§6.2) maps
+      `id → filename`; a `TypeID` found there becomes a `components/` copy. An
+      id in neither that map nor `lib` yields a **warning** (the design's
+      embedded `typeData` still carries it, FR-057), never an error; an id
+      satisfied by the shared library is silently skipped (nothing to copy).
+    - *Collision preflight — the whole plan, before any write.* Every planned
+      destination must not exist and must be unique within the plan; every
+      imported type's `id` must be absent from `lib` **and** from
+      `ScanProjectComponents(Dst)`. All collisions are collected and returned
+      as one `ErrImportCollision` (→ 409) listing them; **nothing is copied**
+      (FR-121j). Only the destination `components/` filename is checked, not
+      the shared directory's — unlike `Library.Create` (§6.2), whose filename
+      is *derived* from the id, an imported file's name is arbitrary and lands
+      in a different directory, so the id check alone carries the
+      no-shadowing guarantee.
+    - *Copy.* Designs → `Dst/<base>`; data → `Dst/<rel>`; component YAML →
+      `Dst/components/<file>` — each byte-verbatim through the same `copyFile`
+      as duplicate (`O_EXCL`, a second guard against the race the preflight
+      cannot close), parents `MkdirAll`ed. A mid-copy failure returns the
+      error and leaves what was written, the FR-121f precedent.
 - **Error handling:** new sentinel `ErrProjectExists` mapped to 409 by
-  `writeStorageError` (§6.4); everything else wraps the attempted path and maps
+  `writeStorageError` (§6.4), joined by `ErrImportCollision` → 409 (FR-121j);
+  everything else wraps the attempted path and maps
   through the existing table. All manifest-content problems are warnings, never
   failures — a project must stay usable with a broken manifest (FR-121a).
 - **Dependencies:** std `os`, `io`, `path/filepath`, `encoding/json`, `sort`,
@@ -2050,10 +2098,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 ### 6.11 JS: chrome widgets (`web/js/chrome/*.js`)
 - **Menu/tool bar (`toolbar.js`)** — Satisfies FR-004a, FR-004b, FR-026, FR-035, FR-022, FR-022a,
   FR-023, FR-024, FR-044, FR-046, FR-049, FR-052, FR-076, FR-087, FR-088,
-  FR-121b/FR-121c (chrome side). A
+  FR-121b/FR-121c (chrome side), FR-121j. A
   single horizontal bar with pull-down menus on the left and always-visible
   buttons on the right (FR-004a). **Menus:** **File** — New Project…, Open
-  Project…, Duplicate Project… (FR-121b, §6.19), New, Open, Save, Save As,
+  Project…, Duplicate Project… (FR-121b, §6.19), Import Block… (FR-121j,
+  §6.19 — disabled by `locked || noProject`, exactly Duplicate's predicate),
+  New, Open, Save, Save As,
   Export… (FR-119, §6.18), Refresh Types; **Edit** — Undo, Redo, Copy, Paste
   (FR-111/FR-112, §6.15), Design Properties… (FR-076b, dialog below); **View** — Zoom In, Zoom Out, Fit to Screen (FR-022a,
   `interaction.fitToScreen`), Console (FR-122c, §6.20); **Tools** (named **Simulate** until the FR-124h rename) — Test Vectors… (FR-115b, §6.16),
@@ -3362,7 +3412,7 @@ keeps one behavior for every caller rather than growing a per-tab branch. The **
   design/data boundary rules, and project-relative data paths. This section
   names the concrete reworks the group makes to §6.10–§6.12, §6.14, and
   §6.16–§6.18.
-- **Satisfies:** FR-121, FR-121a–FR-121i; the FR-121-driven reworks of
+- **Satisfies:** FR-121, FR-121a–FR-121j; the FR-121-driven reworks of
   FR-004a, FR-044, FR-047, FR-049, FR-050, FR-052, FR-053, FR-097a, FR-114e,
   FR-114g; and the Phase 2 reworks of FR-002, FR-007, FR-007a, FR-088.
 - **Background (why this shape):** the FR-120 per-project component-scope
@@ -3477,6 +3527,53 @@ factory whose ops `app.js` wires into the File menu:
   overwritten by running the duplicate, FR-114g). Scan failures are non-fatal
   (tray).
 
+**Block import (FR-121j).** Two pieces: a pure-ish closure walk and the op that
+drives it. The split of labor with the server is the §8 decision row — the
+client owns **design-format** knowledge (what references what), the server owns
+**library and filesystem** knowledge (which id lives in which file, what
+collides, byte-verbatim copying).
+
+- `blockClosure(rootPath, { loadDesign })` — an `async` walk, injectable
+  loader (the `wouldCycle` pattern, §6.14), returning
+  `{ designs, data, typeIds, sharedData, warnings, errors }`:
+  - `designs` — absolute paths, root first, de-duplicated, in discovery order:
+    the root, its transitive sub-design `childPath`s (resolved against **each
+    file's own** directory, since they are stored parent-relative, FR-098) and
+    its transitive off-sheet `target.file`s (bare same-folder names, FR-101).
+    One queue serves both kinds — a peer sheet's embeds and an embedded child's
+    peers are reached alike, matching what `flatten` pulls in at Run (FR-102/
+    FR-103).
+  - `data` — `[{ src, rel }]` for each **relative** `typeData.mem.romFile`/
+    `ramFile` (in-project by construction, FR-121g), `rel` preserved verbatim so
+    the copied design's reference still resolves; de-duplicated by `rel`.
+  - `typeIds` — every non-sub-design instance's `typeData.id`, de-duplicated.
+    The client cannot tell a shared type from a source-project-local one (the
+    merged palette hides the tier, FR-121i), and does not try: it sends the
+    whole set and the server keeps what it can resolve to a source file.
+  - `sharedData` — `[{ design, refdes, path }]` for each **absolute** mem path,
+    i.e. `absoluteDataPaths` per design, reported post-copy in Duplicate's
+    words (FR-121f/FR-121j).
+  - `errors` (abort, nothing sent) — the root fails to load or is not a design
+    (no `components` array); any closure member is not a root-level file of the
+    source project (`dirOf(member) !== dirOf(rootPath)`) — the flat-source rule,
+    named with its referrer so the message is actionable.
+  - `warnings` (proceed) — a **child** that fails to load (a broken link is
+    already the source's condition, FR-099a; the copy is faithful to it), a
+    relative data path escaping the source project, and a root with no ports
+    (`designInterface(rootObj)` empty — it cannot be embedded, FR-095/FR-097a).
+- `importBlock()` — requires a current project; **no dirty guard** (the canvas
+  is untouched, FR-121j). Pick via
+  `openFileDialog({ mode:"open", title:"Import Block", startPath: dataDir })`
+  (remembered directory, FR-052a) → refuse a pick inside the current project →
+  `blockClosure` → post warnings, abort on errors → one
+  `api.projectImport({ srcProject: dirOf(pick), dst: project.dir, designs,
+  data, typeIds })` → post the server's warnings, then a single summary line
+  naming the counts and the copied file names → post the `sharedData` lines →
+  `reloadLibrary(project.dir)` so imported `components/` types reach the palette
+  without a Refresh Types (FR-121i). Every failure — closure error, 409
+  collision list, copy failure — is a tray report that leaves the project
+  exactly as it was (nothing copied, except the noted mid-copy case).
+
 **fileops rework (`chrome/fileops.js`).**
 - `save` — the first-save / Save As prompt is `startPath:
   store.state.project.dir` (FR-047/FR-049/FR-121h) with the `validate` hook
@@ -3537,9 +3634,9 @@ relative `romFile` via its basename-in-the-design's-directory candidate
 flat layout.
 
 **API client (`api.js`).** `projectInfo(dir)`, `projectCreate(path)`,
-`projectDuplicate(src, dst)` (thin wrappers over §6.4's endpoints);
-`listDir(path, exts, { includeManifests } = {})` grows the `manifests=1`
-query.
+`projectDuplicate(src, dst)`, `projectImport(plan)` (thin wrappers over §6.4's
+endpoints); `listDir(path, exts, { includeManifests } = {})` grows the
+`manifests=1` query.
 
 **Dialog-seeding summary (FR-121h).** Save-mode dialogs seed at the current
 project root: design first-save/Save As (§6.11), `.tv` save (§6.16),
@@ -3551,14 +3648,17 @@ may navigate anywhere (FR-121d, §6.14). Open-mode dialogs keep the
 remembered-directory rule (FR-052a) unchanged, except the FR-121b main-design
 picker (`ignoreLastDir`, §3.1 A11).
 
-- **Error handling:** every project-op failure (create/duplicate/info fetch,
-  manifest read-modify-write, shared-data scan) posts to the message tray and
+- **Error handling:** every project-op failure (create/duplicate/import/info
+  fetch, manifest read-modify-write, shared-data scan) posts to the message tray
+  and
   leaves the store consistent — a failed Open Project changes nothing (§3.1
   A9); a failed Duplicate leaves the previous project current and names the
-  partial destination. Manifest problems are never fatal (FR-121a).
+  partial destination; a refused Import copies nothing and changes nothing
+  (FR-121j). Manifest problems are never fatal (FR-121a).
 - **Dependencies:** `store.js`, `api.js`, `chrome/dialogs.js`
   (`openFileDialog`), `chrome/fileops.js`, `chrome/statusbar.js`
-  (`postMessage`), `model/persist.js`.
+  (`postMessage`), `model/persist.js` (path helpers, `inDir`),
+  `model/subdesign.js` (`designInterface`, for the no-ports import warning).
 
 ### 6.20 JS/C: magic UART + Console panel (`web/js/engine/uart.js`, `chrome/console.js` + builtins/sim/canvas/cgen/runtime/store/toolbar/app wiring)
 
@@ -4648,6 +4748,8 @@ A JSON file at the project root:
 | Project identity (FR-121/FR-121a) | A required project file (KiCad-style — breaks every existing design folder); an app-side project registry/config; keep the implicit "the design's directory" conventions (the reverted FR-120 approach) | **A project *is* a directory; an optional, pattern-recognized `*-manifest.json` adds display name + main design** | Five features had already converged on the design's directory as an anonymous grouping (FR-098, FR-101, FR-115a, FR-116, reverted FR-120); naming it dissolves the reverted complexity (scope-follows-file plumbing, save-first refusals, Save As copy semantics). No required marker → zero migration for existing folders; pattern recognition rather than a fixed filename survives folder renames (KiCad-conventions review, `divergences.md`) |
 | Where "current project" lives (FR-121) | Server-side open-project session state; inferring the project from each design path per request | **Client-only store value; every project-aware request carries the directory as a parameter** | Preserves the server's total statelessness, which the resilience story depends on (§6.12a: reconnection needs no session transfer); the client already owns `savePath`/`designName` the same way |
 | Duplicate Project mechanism (FR-121f) | Client-orchestrated copy (list + per-file load/save round trips, client-side manifest rewrite); server-side copy with rollback on failure | **One `POST /project/duplicate` doing a recursive server-side copy + manifest rename; no rollback — partial destination left and reported** | One round trip and byte-verbatim fidelity (no client staging or JSON re-encode of design files); the manifest rename needs server-side tolerant JSON handling anyway (§6.5a); rollback machinery is disproportionate for a localhost tool — the report-and-manual-cleanup rule is FR-121f's stated behavior |
+| Reuse of a composite across projects (FR-121j) | (a) do nothing — reuse stays a manual file copy; (b) **closure-aware import**: copy the block and its dependency closure into the current project; (c) a flat shared **block library** resolved by id (`lib:<id>` beside the relative child path), with the invariant that a library block may reference only other library blocks; (d) make component YAML itself composable from child type ids | **(b) Import Block — a copy, with its closure** | The regress that made composite components look impossible ("children need a nested `components/`") comes from references being **paths**, not from composition: ids resolve against a flat namespace, so nesting was never required. What is actually missing is *reuse outside the defining project*. (b) buys that with **no new reference kind** — the save format, FR-121d, flatten, and the C generator are all untouched — and forces the closure computation any later option needs. (c) is the principled end state but threads a second reference kind through the save format (+migration), the embed dialog, the boundary rule, cycle detection, flatten, DRC, and cgen; it should wait until copies are *observed* to drift, which is (b)'s one real cost (a copy is a fork, FR-121j). (d) is rejected outright: a second composition mechanism beside sub-designs, whose authoring surface is a hand-written netlist in YAML — strictly worse than the schematic that already exists — and it walks back the FR-094–FR-103 decision to prefer a live reference over an embedded copy. Nesting `components/` is rejected permanently. (Analysed in a scratch note, 2026-08-06, since removed — this row is the surviving record; option B chosen 2026-08-09) |
+| Where the import closure is computed (FR-121j) | Entirely server-side (Go walks the design JSON); entirely client-side (load + re-save every file through `/design/save`) | **Client walks, server copies: the client sends a copy plan of paths; the server preflights collisions and copies byte-verbatim** | The alternatives each duplicate knowledge in the wrong place. A Go walk would re-implement the save format — `kind:"subdesign"` `childPath`s, port `target`s, `typeData.id`, `mem` data paths — in a second language, where it would silently rot behind `persist.js`; the server today parses **no** design content and this keeps it that way. A pure client copy would re-encode every design through the JSON save endpoint, losing the byte-verbatim fidelity the Duplicate Project row above was chosen for, and could not perform the id-collision check at all (the merged palette hides which tier a type came from). The plan-and-execute split gives each side exactly what it already knows, and makes the all-or-nothing preflight possible in one place |
 | Data-path storage form (FR-121g) | Always absolute (status quo — breaks Duplicate self-containment); always relative (breaks FR-121d's anywhere-on-disk exemption) | **Absolute in memory; relative on disk iff inside the project** | Exactly the proven `childPath` boundary conversion (FR-098) — one pattern, two field families; consumers (sim run-time, cgen bake) never see a relative path; Duplicate's shared-data warning scan falls out for free — any absolute mem path in a saved design is by construction outside its project |
 | Project-boundary enforcement point (FR-121d/FR-121e) | Server-side path validation on save/load/embed | **Client-side checks (embed dialog refusal, save-dialog validator); server unchanged** | The server deliberately does not sandbox paths (§4.2: trusted single-user local FS); the boundary is a project-hygiene UX rule, not a security control — and server enforcement would break the legacy outside-project references FR-121d explicitly requires to keep loading |
 | Magic UART: built-in vs. metatype (FR-122) | Server-persisted generated metatype with a New-UART dialog (the memory path, FR-114); a fixed built-in in `BUILTIN_DEFS` | **Fixed built-in** | The device is byte-fixed with no configurable parameters, so the FR-114 machinery (dialog, `mem`-block YAML, Go server parsing) buys nothing (YAGNI). A built-in needs no server change, no dialog, no library file — much less surface. A future width-configurable variant would migrate toward the FR-114 generator |
@@ -4685,7 +4787,7 @@ srv/                        Go module (module path retains the historical name
   server/components.go      library load/hold/List (§6.2)
   server/yamlparse.go       ParseComponent: YAML → ComponentType (§6.3, §7.6)
   server/storage.go         ListDir/LoadDesign/SaveDesign (§6.5)
-  server/project.go         manifest discovery/parse, project create/duplicate (§6.5a, FR-121)
+  server/project.go         manifest discovery/parse, project create/duplicate/import (§6.5a, FR-121)
   server/paths.go           DesignsDir per-OS documents folder (§6.5, FR-050)
   server/types.go           ComponentType/Pin/PinGroup/Design/Vertex/Wire/Bus/PathPoint Go structs (§7)
   components/*.yaml         the component library (74138.yaml, 74165.yaml, …; §7.6)
@@ -4721,7 +4823,7 @@ web/
   js/chrome/toolbar.js      menu/tool bar (§6.11)
   js/chrome/dialogs.js      dialogs + test-vector panel (§6.11, §6.16)
   js/chrome/fileops.js      save/open/navigation flows (§6.11, §6.14, §6.19)
-  js/chrome/project.js      project lifecycle ops + manifest helpers (§6.19, FR-121)
+  js/chrome/project.js      project lifecycle ops + manifest helpers + block-import closure (§6.19, FR-121)
   js/chrome/properties.js   per-instance properties panel (§6.11)
   js/chrome/contextmenu.js  right-click menu (§6.11)
   js/chrome/statusbar.js    bottom status bar trays (§6.11)
@@ -4878,6 +4980,8 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-094f | §6.14, §6.16, §6.17, §7.2, §7.7 | `subdesign.js`, `properties.js`, `commands.js`, `engine/vectors.js`, `chrome/dialogs.js`, `engine/cgen.js`, `cgen/runtime.h`, `cgen/runtime.c` |
 | FR-099c | §6.9a, §6.14 | `subdesign.js`, `router.js`, `fileops.js` |
 | FR-121, FR-121a, FR-121b, FR-121c, FR-121d, FR-121e, FR-121f, FR-121g, FR-121h | §6.19, §6.4, §6.5a, §6.10, §6.11, §6.12, §6.14, §7.8, §8, §3.1 A8–A11 | `project.go`, `api.go`, `storage.go`, `chrome/project.js`, `chrome/fileops.js`, `chrome/dialogs.js`, `chrome/toolbar.js`, `store.js`, `app.js`, `api.js`, `model/persist.js`, `index.html`, `style.css` |
+| FR-121i | §6.19, §6.4, §6.5a, §6.2, §6.12 | `components.go`, `components_test.go`, `api.go`, `chrome/project.js`, `chrome/toolbar.js`, `api.js`, `app.js` |
+| FR-121j | §6.19, §6.4, §6.5a, §6.2, §6.11, §8 | `project.go`, `project_test.go`, `components.go`, `api.go`, `api_project_test.go`, `chrome/project.js`, `chrome/project.test.js`, `chrome/toolbar.js`, `api.js`, `model/persist.js` |
 | FR-115n | §6.16a, §6.16, §6.20, §8 | `chrome/dock.js`, `chrome/dock.test.js`, `app.js`, `css/style.css` |
 | FR-123 | §6.16a, §6.16, §6.20, §6.11, §8 | `chrome/dock.js`, `chrome/dock.test.js`, `chrome/dialogs.js`, `chrome/console.js`, `chrome/toolbar.js`, `store.js`, `store.test.js`, `app.js`, `index.html`, `css/style.css` |
 | FR-115o | §6.16, §8 | `chrome/dialogs.js`, `chrome/dialogs.test.js`, `css/style.css` |
@@ -4947,6 +5051,19 @@ tests beside them per §9).
   404, existing `dst` → 409, mid-copy failure leaves the partial destination.
   `handleFiles` (§6.4): `*-manifest.json` excluded from `.json` listings by
   default, included under `manifests=1`.
+- **Go `ImportBlock` (§6.5a, FR-121j):** a plan of two designs, one data file,
+  and one project-local type copies all four byte-verbatim (designs at the
+  destination root, data at its `rel`, YAML under `components/`, created if
+  absent) and reports them destination-relative; a type id satisfied by the
+  **shared** library copies nothing and warns nothing, one in neither tier
+  warns; **collisions refuse the whole plan with nothing written** — an
+  existing destination design, an existing `components/` file, an id already in
+  the destination project, an id in the shared library, and a plan naming one
+  destination twice, each surfacing in a single `ErrImportCollision` (409)
+  listing every hit; a design not directly inside `srcProject`, a `rel`
+  escaping `dst` (`../x`), a missing source file, and `src == dst` are all
+  rejected. `ProjectComponentFiles` (§6.2) maps id → file name and carries the
+  same skip warnings as `ScanProjectComponents`.
 - **Go `paths`:** `DesignsDir` returns the documents-folder path per `GOOS`
   (FR-050): darwin/linux `~/Documents/retrosim`, windows
   `%USERPROFILE%\Documents\retrosim`, unset `USERPROFILE` → error.
@@ -4974,6 +5091,21 @@ tests beside them per §9).
   skips the picker and is entered with a fresh canvas named after it (§3.1 A9
   as amended), and a `listDir` failure there still presents the picker; `duplicateProject` posts one warning per shared
   absolute data path and reports a copy failure as partial-left.
+- **JS `blockClosure`/`importBlock` (§6.19, FR-121j):** with a stubbed loader,
+  the closure of a root that embeds two children (one embedding a
+  grandchild) and reaches a peer sheet by off-sheet target collects all five
+  designs once each, root first, through both reference kinds and across a
+  diamond; a relative `romFile` becomes a `data` entry with its `rel`
+  preserved while an absolute `ramFile` becomes a `sharedData` report;
+  `typeIds` de-duplicates across designs and skips sub-design instances; a
+  child that fails to load **warns** and the walk continues, a root that fails
+  (or carries no `components` array) **errors**; a child outside the source
+  project's directory — or in a subdirectory of it — errors naming its
+  referrer; a port-less root warns. `importBlock` with stubbed api/dialog:
+  cancel does nothing; a pick inside the current project is refused without a
+  server call; a closure error aborts before the call; a 409 posts the
+  server's collision list and reloads no library; success posts the summary
+  plus every shared-data line and reloads the library for the current project.
 - **JS `persist` data paths (FR-121g):** `relativizeDataPaths` — an in-project
   absolute `romFile`/`ramFile` becomes design-dir-relative, an outside-project
   path stays absolute, and the **live objects are untouched** (copy-on-write);
@@ -5260,6 +5392,16 @@ tests beside them per §9).
   save file is warned as shared with the original; an in-project ROM content
   path saves project-relative, and the duplicate's copy loads its **own** ROM
   file at Run (self-containment).
+- Import Block (FR-121j): in project B, File ▸ Import Block… on a block in
+  project A that embeds a child, references a project-local GAL part, and reads
+  an in-project ROM → the block, its child, the `components/*.yaml`, and the
+  `.bin` all appear in B; the imported part is on the palette immediately (no
+  Refresh Types); opening the block in B and Running it works with **B's** copy
+  of the ROM. Repeat the same import → refused, listing the collisions, with B
+  unchanged. Import a block whose part id already exists in B under a different
+  file name → refused. Picking a design already in B is refused; picking one
+  whose child sits outside A's folder is refused, naming the child. Edit the
+  original in A afterwards → B's copy is unaffected (a copy is a fork).
 - Select a documented part (74138): properties panel shows the description, a
   datasheet link that opens the PDF in a new tab, and a "Pin roles" disclosure
   listing each pin's role; select a built-in with no docs → no documentation

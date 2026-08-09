@@ -321,3 +321,143 @@ func TestProjectInfoErrors(t *testing.T) {
 		t.Errorf("file err = %v, want ErrNotDir", err)
 	}
 }
+
+// --- Block import (FR-121j) ---
+
+// importFixture builds a source project holding two designs, a ROM file, and a
+// project-local component type, plus an empty destination project.
+func importFixture(t *testing.T) (src, dst string) {
+	t.Helper()
+	parent := t.TempDir()
+	src = filepath.Join(parent, "alu-project")
+	dst = filepath.Join(parent, "cpu-project")
+	for _, d := range []string{src, dst} {
+		if err := os.Mkdir(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeFile(t, src, "alu.json", `{"name":"alu"}`)
+	writeFile(t, src, "adder.json", `{"name":"adder"}`)
+	writeFile(t, src, "rom.bin", "\x00\x01\x02")
+	writeProjectComponent(t, src, "decode.yaml", galPartYAML)
+	return src, dst
+}
+
+// planFor is the copy plan importFixture's source supports.
+func planFor(src, dst string, typeIDs ...string) ImportSpec {
+	return ImportSpec{
+		SrcProject: src,
+		Dst:        dst,
+		Designs:    []string{filepath.Join(src, "alu.json"), filepath.Join(src, "adder.json")},
+		Data:       []ImportData{{Src: filepath.Join(src, "rom.bin"), Rel: "rom.bin"}},
+		TypeIDs:    typeIDs,
+	}
+}
+
+// The whole plan copies byte-verbatim: designs at the destination root, data at
+// its rel, the project-local YAML under components/ (created on demand). A
+// shared-library id copies nothing silently; an id in neither tier warns
+// (FR-121j).
+func TestImportBlockCopies(t *testing.T) {
+	src, dst := importFixture(t)
+	res, err := ImportBlock(testLibrary(), planFor(src, dst, "type-PC-DECODE-A", "type-7400", "type-NOWHERE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"alu.json":               `{"name":"alu"}`,
+		"adder.json":             `{"name":"adder"}`,
+		"rom.bin":                "\x00\x01\x02",
+		"components/decode.yaml": galPartYAML,
+	}
+	for rel, content := range want {
+		got, err := os.ReadFile(filepath.Join(dst, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("%s: %v", rel, err)
+		}
+		if string(got) != content {
+			t.Errorf("%s content = %q, want %q", rel, got, content)
+		}
+	}
+	if len(res.Designs) != 2 || len(res.Data) != 1 || len(res.Components) != 1 {
+		t.Errorf("result = %+v", res)
+	}
+	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "type-NOWHERE") {
+		t.Errorf("warnings = %v, want exactly one naming type-NOWHERE", res.Warnings)
+	}
+}
+
+// Every collision is reported together and nothing is written (FR-121j).
+func TestImportBlockCollisionsRefuseWholePlan(t *testing.T) {
+	src, dst := importFixture(t)
+	writeFile(t, dst, "alu.json", "pre-existing")
+	writeProjectComponent(t, dst, "already-here.yaml", galPartYAML) // same id, other name
+
+	spec := planFor(src, dst, "type-PC-DECODE-A")
+	spec.Designs = append(spec.Designs, filepath.Join(src, "adder.json")) // named twice
+	_, err := ImportBlock(testLibrary(), spec)
+	if !errors.Is(err, ErrImportCollision) {
+		t.Fatalf("err = %v, want ErrImportCollision", err)
+	}
+	for _, want := range []string{"alu.json already exists", "type-PC-DECODE-A", "named twice"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q missing %q", err, want)
+		}
+	}
+	// Nothing copied: the untouched files are still absent and the collided one
+	// keeps its content.
+	for _, rel := range []string{"adder.json", "rom.bin"} {
+		if _, err := os.Stat(filepath.Join(dst, rel)); !os.IsNotExist(err) {
+			t.Errorf("%s: got %v, want not to exist", rel, err)
+		}
+	}
+	if b, _ := os.ReadFile(filepath.Join(dst, "alu.json")); string(b) != "pre-existing" {
+		t.Errorf("alu.json = %q, want the destination's own content", b)
+	}
+}
+
+// An imported project-local type may not shadow a shared-library one — the
+// create-endpoint collision scope (FR-007a/FR-121i/FR-121j).
+func TestImportBlockRefusesSharedLibraryShadow(t *testing.T) {
+	src, dst := importFixture(t)
+	writeProjectComponent(t, src, "shadow.yaml", `id: "type-7400"
+type: "7400"
+pins:
+  - { name: A, side: left, pos: 1, dir: in }
+`)
+	_, err := ImportBlock(testLibrary(), planFor(src, dst, "type-7400"))
+	if !errors.Is(err, ErrImportCollision) || !strings.Contains(err.Error(), "shared library") {
+		t.Fatalf("err = %v, want an ErrImportCollision naming the shared library", err)
+	}
+}
+
+// Malformed plans are rejected before anything is written (FR-121j).
+func TestImportBlockRejectsBadPlans(t *testing.T) {
+	src, dst := importFixture(t)
+	sub := filepath.Join(src, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, sub, "deep.json", "{}")
+
+	cases := map[string]ImportSpec{
+		"no designs":       {SrcProject: src, Dst: dst},
+		"src == dst":       {SrcProject: src, Dst: src, Designs: []string{filepath.Join(src, "alu.json")}},
+		"missing src dir":  {SrcProject: filepath.Join(src, "gone"), Dst: dst, Designs: []string{filepath.Join(src, "alu.json")}},
+		"design in subdir": {SrcProject: src, Dst: dst, Designs: []string{filepath.Join(sub, "deep.json")}},
+		"missing design":   {SrcProject: src, Dst: dst, Designs: []string{filepath.Join(src, "gone.json")}},
+		"relative design":  {SrcProject: src, Dst: dst, Designs: []string{"alu.json"}},
+		"escaping data": {SrcProject: src, Dst: dst, Designs: []string{filepath.Join(src, "alu.json")},
+			Data: []ImportData{{Src: filepath.Join(src, "rom.bin"), Rel: "../rom.bin"}}},
+		"absolute data rel": {SrcProject: src, Dst: dst, Designs: []string{filepath.Join(src, "alu.json")},
+			Data: []ImportData{{Src: filepath.Join(src, "rom.bin"), Rel: filepath.Join(dst, "rom.bin")}}},
+	}
+	for name, spec := range cases {
+		if _, err := ImportBlock(testLibrary(), spec); err == nil {
+			t.Errorf("%s: err = nil, want a rejection", name)
+		}
+	}
+	if entries, _ := os.ReadDir(dst); len(entries) != 0 {
+		t.Errorf("destination = %v, want nothing written", entries)
+	}
+}

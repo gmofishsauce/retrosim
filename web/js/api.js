@@ -90,6 +90,19 @@ export async function projectDuplicate(src, dst) {
   });
 }
 
+// projectImport executes a block-import copy plan (FR-121j): `plan` is
+// { srcProject, dst, designs, data:[{src,rel}], typeIds } as computed by
+// blockClosure (§6.19). Resolves to { designs, data, components, warnings } —
+// the destination-relative names written. Rejects with the server's message on
+// a collision (409, nothing copied) or a bad plan.
+export async function projectImport(plan) {
+  return request("/project/import", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(plan),
+  });
+}
+
 // readRomFile fetches a ROM content file's raw bytes (FR-114e), as a Uint8Array.
 // Used by the simulator's Run-time ROM loader. Rejects with the server's message
 // (e.g. a missing file or a non-.bin/.hex path).

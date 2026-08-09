@@ -129,3 +129,37 @@ func TestProjectDuplicateEndpoint(t *testing.T) {
 		`{"src":`+jsonString(filepath.Join(dataDir, "gone"))+`,"dst":`+jsonString(filepath.Join(dataDir, "d2"))+`}`,
 		http.StatusNotFound)
 }
+
+// POST /api/v1/project/import executes a copy plan (201) and answers a
+// collision with 409, having copied nothing (FR-121j).
+func TestProjectImportEndpoint(t *testing.T) {
+	dataDir := t.TempDir()
+	src := filepath.Join(dataDir, "alu-project")
+	dst := filepath.Join(dataDir, "cpu-project")
+	for _, d := range []string{src, dst} {
+		if err := os.Mkdir(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustWrite(t, filepath.Join(src, "alu.json"), `{"name":"alu"}`)
+	srv := newTestServer(t, dataDir)
+
+	body := `{"srcProject":` + jsonString(src) + `,"dst":` + jsonString(dst) +
+		`,"designs":[` + jsonString(filepath.Join(src, "alu.json")) + `],"typeIds":["type-7400"]}`
+
+	var res ImportResult
+	postJSON(t, srv.URL+"/api/v1/project/import", body, http.StatusCreated, &res)
+	if len(res.Designs) != 1 || res.Designs[0] != "alu.json" {
+		t.Errorf("result = %+v", res)
+	}
+	if _, err := os.Stat(filepath.Join(dst, "alu.json")); err != nil {
+		t.Errorf("alu.json not copied: %v", err)
+	}
+	// Re-importing collides → 409.
+	postStatus(t, srv.URL+"/api/v1/project/import", body, http.StatusConflict)
+	// A missing source project → 404.
+	postStatus(t, srv.URL+"/api/v1/project/import",
+		`{"srcProject":`+jsonString(filepath.Join(dataDir, "gone"))+`,"dst":`+jsonString(dst)+
+			`,"designs":[`+jsonString(filepath.Join(dataDir, "gone", "x.json"))+`]}`,
+		http.StatusNotFound)
+}

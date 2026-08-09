@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -185,4 +186,25 @@ func names(types []ComponentType) []string {
 		out[i] = t.Name
 	}
 	return out
+}
+
+// ProjectComponentFiles is the same scan keyed by id → defining file, with the
+// same skip warnings (FR-121j, §6.2).
+func TestProjectComponentFiles(t *testing.T) {
+	proj := t.TempDir()
+	writeProjectComponent(t, proj, "decode.yaml", galPartYAML)
+	writeProjectComponent(t, proj, "ram.yaml", memDeviceYAML)
+	writeProjectComponent(t, proj, "bad.yaml", "type: \"X\"\npins: not-a-list\n")
+
+	files, warnings := ProjectComponentFiles(proj)
+	want := map[string]string{"type-PC-DECODE-A": "decode.yaml", "type-PROGRAM_RAM": "ram.yaml"}
+	if !reflect.DeepEqual(files, want) {
+		t.Errorf("files = %v, want %v", files, want)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "bad.yaml") {
+		t.Errorf("warnings = %v, want one naming bad.yaml", warnings)
+	}
+	if files, warnings := ProjectComponentFiles(t.TempDir()); len(files) != 0 || len(warnings) != 0 {
+		t.Errorf("missing dir: files=%v warnings=%v, want empty", files, warnings)
+	}
 }
