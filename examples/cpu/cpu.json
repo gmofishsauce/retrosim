@@ -113,22 +113,3268 @@
         "title": "text note",
         "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"3\" y=\"11\" width=\"30\" height=\"14\" fill=\"#fff\" stroke=\"#1565c0\" stroke-dasharray=\"3 2\"/><text x=\"18\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">NOTE</text></svg>",
         "renderType": "note",
-        "width": 15,
+        "width": 4,
         "height": 2,
         "pins": []
       },
       "overrides": {},
       "text": "This is the main CPU design."
+    },
+    {
+      "refdes": "X1",
+      "type": "L4C381",
+      "kind": "subdesign",
+      "childPath": "components/L4C381.json",
+      "render": "ic",
+      "iface": [
+        {
+          "label": "/ENA",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "/ENB",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "Ain-high",
+          "dir": "in",
+          "width": 8
+        },
+        {
+          "label": "Ain-low",
+          "dir": "in",
+          "width": 8
+        },
+        {
+          "label": "Bin-high",
+          "dir": "in",
+          "width": 8
+        },
+        {
+          "label": "Bin-low",
+          "dir": "in",
+          "width": 8
+        },
+        {
+          "label": "CLK",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "Cin",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "Cout",
+          "dir": "out",
+          "width": 1
+        },
+        {
+          "label": "ENF/",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "FTAB",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "FTF",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "OE/",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "OSA",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "OSB",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "OVF",
+          "dir": "out",
+          "width": 1
+        },
+        {
+          "label": "Out0-7",
+          "dir": "out",
+          "width": 8
+        },
+        {
+          "label": "Out8-15",
+          "dir": "out",
+          "width": 8
+        },
+        {
+          "label": "S",
+          "dir": "in",
+          "width": 3
+        },
+        {
+          "label": "Z",
+          "dir": "out",
+          "width": 1
+        }
+      ],
+      "x": 28,
+      "y": 5,
+      "rotation": 0
+    },
+    {
+      "refdes": "U1",
+      "type": "type-74541",
+      "x": 7,
+      "y": 33,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-74541",
+        "name": "74541",
+        "renderType": "unit",
+        "width": 8,
+        "height": 14,
+        "pins": [
+          {
+            "name": "D0",
+            "side": "left",
+            "position": 2,
+            "direction": "in",
+            "number": 2,
+            "desc": "data input 1"
+          },
+          {
+            "name": "D1",
+            "side": "left",
+            "position": 3,
+            "direction": "in",
+            "number": 3,
+            "desc": "data input 2"
+          },
+          {
+            "name": "D2",
+            "side": "left",
+            "position": 4,
+            "direction": "in",
+            "number": 4,
+            "desc": "data input 3"
+          },
+          {
+            "name": "D3",
+            "side": "left",
+            "position": 5,
+            "direction": "in",
+            "number": 5,
+            "desc": "data input 4"
+          },
+          {
+            "name": "D4",
+            "side": "left",
+            "position": 6,
+            "direction": "in",
+            "number": 6,
+            "desc": "data input 5"
+          },
+          {
+            "name": "D5",
+            "side": "left",
+            "position": 7,
+            "direction": "in",
+            "number": 7,
+            "desc": "data input 6"
+          },
+          {
+            "name": "D6",
+            "side": "left",
+            "position": 8,
+            "direction": "in",
+            "number": 8,
+            "desc": "data input 7"
+          },
+          {
+            "name": "D7",
+            "side": "left",
+            "position": 9,
+            "direction": "in",
+            "number": 9,
+            "desc": "data input 8"
+          },
+          {
+            "name": "Q0",
+            "side": "right",
+            "position": 2,
+            "direction": "tristate",
+            "number": 18,
+            "desc": "3-state output 1"
+          },
+          {
+            "name": "Q1",
+            "side": "right",
+            "position": 3,
+            "direction": "tristate",
+            "number": 17,
+            "desc": "3-state output 2"
+          },
+          {
+            "name": "Q2",
+            "side": "right",
+            "position": 4,
+            "direction": "tristate",
+            "number": 16,
+            "desc": "3-state output 3"
+          },
+          {
+            "name": "Q3",
+            "side": "right",
+            "position": 5,
+            "direction": "tristate",
+            "number": 15,
+            "desc": "3-state output 4"
+          },
+          {
+            "name": "Q4",
+            "side": "right",
+            "position": 6,
+            "direction": "tristate",
+            "number": 14,
+            "desc": "3-state output 5"
+          },
+          {
+            "name": "Q5",
+            "side": "right",
+            "position": 7,
+            "direction": "tristate",
+            "number": 13,
+            "desc": "3-state output 6"
+          },
+          {
+            "name": "Q6",
+            "side": "right",
+            "position": 8,
+            "direction": "tristate",
+            "number": 12,
+            "desc": "3-state output 7"
+          },
+          {
+            "name": "Q7",
+            "side": "right",
+            "position": 9,
+            "direction": "tristate",
+            "number": 11,
+            "desc": "3-state output 8"
+          },
+          {
+            "name": "/OE1",
+            "side": "left",
+            "position": 11,
+            "direction": "in",
+            "number": 1,
+            "desc": "active-low output enable 1"
+          },
+          {
+            "name": "/OE2",
+            "side": "left",
+            "position": 12,
+            "direction": "in",
+            "number": 19,
+            "desc": "active-low output enable 2"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "D",
+            "pins": [
+              "D0",
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5",
+              "D6",
+              "D7"
+            ]
+          },
+          {
+            "name": "Q",
+            "pins": [
+              "Q0",
+              "Q1",
+              "Q2",
+              "Q3",
+              "Q4",
+              "Q5",
+              "Q6",
+              "Q7"
+            ]
+          }
+        ],
+        "delays": {
+          "tdis": 15,
+          "ten": 15,
+          "tpd": 11
+        },
+        "behavior": "; 74541 — octal non-inverting 3-state buffer.\n; Both active-low enables must be LOW for the outputs to drive.\n; Otherwise all outputs are high impedance.\n\nQ0.T = D0\nQ0.E = /OE1 * /OE2\nQ1.T = D1\nQ1.E = /OE1 * /OE2\nQ2.T = D2\nQ2.E = /OE1 * /OE2\nQ3.T = D3\nQ3.E = /OE1 * /OE2\nQ4.T = D4\nQ4.E = /OE1 * /OE2\nQ5.T = D5\nQ5.E = /OE1 * /OE2\nQ6.T = D6\nQ6.E = /OE1 * /OE2\nQ7.T = D7\nQ7.E = /OE1 * /OE2\n",
+        "description": "Octal non-inverting buffer/line driver, 3-state, dual active-low enables",
+        "datasheet": {
+          "vendor": "Nexperia",
+          "title": "74HC540; 74HCT540 Octal buffer/line driver; 3-state; inverting",
+          "rev": "Rev. 6",
+          "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT540.pdf"
+        },
+        "physical": {
+          "package": "DIP-20",
+          "pincount": 20,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 20
+            },
+            {
+              "name": "GND",
+              "number": 10
+            }
+          ]
+        }
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "U2",
+      "type": "type-74541",
+      "x": 7,
+      "y": 17,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-74541",
+        "name": "74541",
+        "renderType": "unit",
+        "width": 8,
+        "height": 14,
+        "pins": [
+          {
+            "name": "D0",
+            "side": "left",
+            "position": 2,
+            "direction": "in",
+            "number": 2,
+            "desc": "data input 1"
+          },
+          {
+            "name": "D1",
+            "side": "left",
+            "position": 3,
+            "direction": "in",
+            "number": 3,
+            "desc": "data input 2"
+          },
+          {
+            "name": "D2",
+            "side": "left",
+            "position": 4,
+            "direction": "in",
+            "number": 4,
+            "desc": "data input 3"
+          },
+          {
+            "name": "D3",
+            "side": "left",
+            "position": 5,
+            "direction": "in",
+            "number": 5,
+            "desc": "data input 4"
+          },
+          {
+            "name": "D4",
+            "side": "left",
+            "position": 6,
+            "direction": "in",
+            "number": 6,
+            "desc": "data input 5"
+          },
+          {
+            "name": "D5",
+            "side": "left",
+            "position": 7,
+            "direction": "in",
+            "number": 7,
+            "desc": "data input 6"
+          },
+          {
+            "name": "D6",
+            "side": "left",
+            "position": 8,
+            "direction": "in",
+            "number": 8,
+            "desc": "data input 7"
+          },
+          {
+            "name": "D7",
+            "side": "left",
+            "position": 9,
+            "direction": "in",
+            "number": 9,
+            "desc": "data input 8"
+          },
+          {
+            "name": "Q0",
+            "side": "right",
+            "position": 2,
+            "direction": "tristate",
+            "number": 18,
+            "desc": "3-state output 1"
+          },
+          {
+            "name": "Q1",
+            "side": "right",
+            "position": 3,
+            "direction": "tristate",
+            "number": 17,
+            "desc": "3-state output 2"
+          },
+          {
+            "name": "Q2",
+            "side": "right",
+            "position": 4,
+            "direction": "tristate",
+            "number": 16,
+            "desc": "3-state output 3"
+          },
+          {
+            "name": "Q3",
+            "side": "right",
+            "position": 5,
+            "direction": "tristate",
+            "number": 15,
+            "desc": "3-state output 4"
+          },
+          {
+            "name": "Q4",
+            "side": "right",
+            "position": 6,
+            "direction": "tristate",
+            "number": 14,
+            "desc": "3-state output 5"
+          },
+          {
+            "name": "Q5",
+            "side": "right",
+            "position": 7,
+            "direction": "tristate",
+            "number": 13,
+            "desc": "3-state output 6"
+          },
+          {
+            "name": "Q6",
+            "side": "right",
+            "position": 8,
+            "direction": "tristate",
+            "number": 12,
+            "desc": "3-state output 7"
+          },
+          {
+            "name": "Q7",
+            "side": "right",
+            "position": 9,
+            "direction": "tristate",
+            "number": 11,
+            "desc": "3-state output 8"
+          },
+          {
+            "name": "/OE1",
+            "side": "left",
+            "position": 11,
+            "direction": "in",
+            "number": 1,
+            "desc": "active-low output enable 1"
+          },
+          {
+            "name": "/OE2",
+            "side": "left",
+            "position": 12,
+            "direction": "in",
+            "number": 19,
+            "desc": "active-low output enable 2"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "D",
+            "pins": [
+              "D0",
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5",
+              "D6",
+              "D7"
+            ]
+          },
+          {
+            "name": "Q",
+            "pins": [
+              "Q0",
+              "Q1",
+              "Q2",
+              "Q3",
+              "Q4",
+              "Q5",
+              "Q6",
+              "Q7"
+            ]
+          }
+        ],
+        "delays": {
+          "tdis": 15,
+          "ten": 15,
+          "tpd": 11
+        },
+        "behavior": "; 74541 — octal non-inverting 3-state buffer.\n; Both active-low enables must be LOW for the outputs to drive.\n; Otherwise all outputs are high impedance.\n\nQ0.T = D0\nQ0.E = /OE1 * /OE2\nQ1.T = D1\nQ1.E = /OE1 * /OE2\nQ2.T = D2\nQ2.E = /OE1 * /OE2\nQ3.T = D3\nQ3.E = /OE1 * /OE2\nQ4.T = D4\nQ4.E = /OE1 * /OE2\nQ5.T = D5\nQ5.E = /OE1 * /OE2\nQ6.T = D6\nQ6.E = /OE1 * /OE2\nQ7.T = D7\nQ7.E = /OE1 * /OE2\n",
+        "description": "Octal non-inverting buffer/line driver, 3-state, dual active-low enables",
+        "datasheet": {
+          "vendor": "Nexperia",
+          "title": "74HC540; 74HCT540 Octal buffer/line driver; 3-state; inverting",
+          "rev": "Rev. 6",
+          "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT540.pdf"
+        },
+        "physical": {
+          "package": "DIP-20",
+          "pincount": 20,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 20
+            },
+            {
+              "name": "GND",
+              "number": 10
+            }
+          ]
+        }
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-4",
+      "type": "type-pullup",
+      "x": -7,
+      "y": 13,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-pullup",
+        "name": "pullup",
+        "builtin": true,
+        "title": "pull up",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"none\" stroke=\"#000\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"8,13 18,6 28,13\"/><polyline points=\"8,20 18,13 28,20\"/><line x1=\"18\" y1=\"22\" x2=\"18\" y2=\"32\"/></svg>",
+        "renderType": "pullup",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "bottom",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-5",
+      "type": "type-pulldown",
+      "x": 0,
+      "y": 44,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-pulldown",
+        "name": "pulldown",
+        "builtin": true,
+        "title": "pull down",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"none\" stroke=\"#000\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"4\" x2=\"18\" y2=\"28\"/><line x1=\"8\" y1=\"28\" x2=\"28\" y2=\"28\"/></svg>",
+        "renderType": "pulldown",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "top",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-8",
+      "type": "type-indicator8",
+      "x": 55,
+      "y": 20,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator8",
+        "name": "indicator8",
+        "builtin": true,
+        "title": "state indicator (8-wide)",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"7\" y=\"3\" width=\"22\" height=\"30\" fill=\"#fff\" stroke=\"#333\" stroke-width=\"1.5\"/><rect x=\"10\" y=\"5\" width=\"16\" height=\"2.2\" fill=\"#222\"/><rect x=\"10\" y=\"8.4\" width=\"16\" height=\"2.2\" fill=\"#cfcfcf\"/><rect x=\"10\" y=\"11.8\" width=\"16\" height=\"2.2\" fill=\"#222\"/><rect x=\"10\" y=\"15.2\" width=\"16\" height=\"2.2\" fill=\"#cfcfcf\"/><rect x=\"10\" y=\"18.6\" width=\"16\" height=\"2.2\" fill=\"#222\"/><rect x=\"10\" y=\"22\" width=\"16\" height=\"2.2\" fill=\"#cfcfcf\"/><rect x=\"10\" y=\"25.4\" width=\"16\" height=\"2.2\" fill=\"#222\"/><rect x=\"10\" y=\"28.8\" width=\"16\" height=\"2.2\" fill=\"#cfcfcf\"/></svg>",
+        "renderType": "indicator8",
+        "width": 3,
+        "height": 9,
+        "pins": [
+          {
+            "name": "D0",
+            "side": "left",
+            "position": 1,
+            "direction": "in"
+          },
+          {
+            "name": "D1",
+            "side": "left",
+            "position": 2,
+            "direction": "in"
+          },
+          {
+            "name": "D2",
+            "side": "left",
+            "position": 3,
+            "direction": "in"
+          },
+          {
+            "name": "D3",
+            "side": "left",
+            "position": 4,
+            "direction": "in"
+          },
+          {
+            "name": "D4",
+            "side": "left",
+            "position": 5,
+            "direction": "in"
+          },
+          {
+            "name": "D5",
+            "side": "left",
+            "position": 6,
+            "direction": "in"
+          },
+          {
+            "name": "D6",
+            "side": "left",
+            "position": 7,
+            "direction": "in"
+          },
+          {
+            "name": "D7",
+            "side": "left",
+            "position": 8,
+            "direction": "in"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "D",
+            "pins": [
+              "D0",
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5",
+              "D6",
+              "D7"
+            ]
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-9",
+      "type": "type-indicator8",
+      "x": 54,
+      "y": 32,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator8",
+        "name": "indicator8",
+        "builtin": true,
+        "title": "state indicator (8-wide)",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"7\" y=\"3\" width=\"22\" height=\"30\" fill=\"#fff\" stroke=\"#333\" stroke-width=\"1.5\"/><rect x=\"10\" y=\"5\" width=\"16\" height=\"2.2\" fill=\"#222\"/><rect x=\"10\" y=\"8.4\" width=\"16\" height=\"2.2\" fill=\"#cfcfcf\"/><rect x=\"10\" y=\"11.8\" width=\"16\" height=\"2.2\" fill=\"#222\"/><rect x=\"10\" y=\"15.2\" width=\"16\" height=\"2.2\" fill=\"#cfcfcf\"/><rect x=\"10\" y=\"18.6\" width=\"16\" height=\"2.2\" fill=\"#222\"/><rect x=\"10\" y=\"22\" width=\"16\" height=\"2.2\" fill=\"#cfcfcf\"/><rect x=\"10\" y=\"25.4\" width=\"16\" height=\"2.2\" fill=\"#222\"/><rect x=\"10\" y=\"28.8\" width=\"16\" height=\"2.2\" fill=\"#cfcfcf\"/></svg>",
+        "renderType": "indicator8",
+        "width": 3,
+        "height": 9,
+        "pins": [
+          {
+            "name": "D0",
+            "side": "left",
+            "position": 1,
+            "direction": "in"
+          },
+          {
+            "name": "D1",
+            "side": "left",
+            "position": 2,
+            "direction": "in"
+          },
+          {
+            "name": "D2",
+            "side": "left",
+            "position": 3,
+            "direction": "in"
+          },
+          {
+            "name": "D3",
+            "side": "left",
+            "position": 4,
+            "direction": "in"
+          },
+          {
+            "name": "D4",
+            "side": "left",
+            "position": 5,
+            "direction": "in"
+          },
+          {
+            "name": "D5",
+            "side": "left",
+            "position": 6,
+            "direction": "in"
+          },
+          {
+            "name": "D6",
+            "side": "left",
+            "position": 7,
+            "direction": "in"
+          },
+          {
+            "name": "D7",
+            "side": "left",
+            "position": 8,
+            "direction": "in"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "D",
+            "pins": [
+              "D0",
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5",
+              "D6",
+              "D7"
+            ]
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-10",
+      "type": "type-pullup",
+      "x": 18,
+      "y": 40,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-pullup",
+        "name": "pullup",
+        "builtin": true,
+        "title": "pull up",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"none\" stroke=\"#000\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"8,13 18,6 28,13\"/><polyline points=\"8,20 18,13 28,20\"/><line x1=\"18\" y1=\"22\" x2=\"18\" y2=\"32\"/></svg>",
+        "renderType": "pullup",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "bottom",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-11",
+      "type": "type-pulldown",
+      "x": 25,
+      "y": 53,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-pulldown",
+        "name": "pulldown",
+        "builtin": true,
+        "title": "pull down",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"none\" stroke=\"#000\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"4\" x2=\"18\" y2=\"28\"/><line x1=\"8\" y1=\"28\" x2=\"28\" y2=\"28\"/></svg>",
+        "renderType": "pulldown",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "top",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-12",
+      "type": "type-switch",
+      "x": -8,
+      "y": 31,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0",
+      "label": "G2"
+    },
+    {
+      "refdes": "A-13",
+      "type": "type-switch",
+      "x": -7,
+      "y": 50,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0",
+      "label": "OSA"
+    },
+    {
+      "refdes": "A-14",
+      "type": "type-switch",
+      "x": -7,
+      "y": 53,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0",
+      "label": "OSB"
+    },
+    {
+      "refdes": "A-15",
+      "type": "type-indicator",
+      "x": 16,
+      "y": 2,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-16",
+      "type": "type-switch",
+      "x": -7,
+      "y": 56,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0",
+      "label": "S0"
+    },
+    {
+      "refdes": "A-17",
+      "type": "type-switch",
+      "x": -7,
+      "y": 59,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0",
+      "label": "S1"
+    },
+    {
+      "refdes": "A-18",
+      "type": "type-switch",
+      "x": -7,
+      "y": 62,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0",
+      "label": "S2"
     }
   ],
-  "wires": [],
-  "buses": [],
-  "vertices": [],
+  "wires": [
+    {
+      "id": "w10",
+      "path": [
+        {
+          "t": "node",
+          "v": "v20"
+        },
+        {
+          "t": "bend",
+          "x": -6,
+          "y": 20
+        },
+        {
+          "t": "node",
+          "v": "v52"
+        }
+      ]
+    },
+    {
+      "id": "w11",
+      "path": [
+        {
+          "t": "node",
+          "v": "v24"
+        },
+        {
+          "t": "node",
+          "v": "v26"
+        },
+        {
+          "t": "node",
+          "v": "v25"
+        }
+      ]
+    },
+    {
+      "id": "w12",
+      "path": [
+        {
+          "t": "node",
+          "v": "v27"
+        },
+        {
+          "t": "node",
+          "v": "v28"
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 41
+        },
+        {
+          "t": "node",
+          "v": "v26"
+        }
+      ]
+    },
+    {
+      "id": "w13",
+      "path": [
+        {
+          "t": "node",
+          "v": "v29"
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 40
+        },
+        {
+          "t": "node",
+          "v": "v30"
+        },
+        {
+          "t": "node",
+          "v": "v28"
+        }
+      ]
+    },
+    {
+      "id": "w14",
+      "path": [
+        {
+          "t": "node",
+          "v": "v31"
+        },
+        {
+          "t": "node",
+          "v": "v32"
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 39
+        },
+        {
+          "t": "node",
+          "v": "v30"
+        }
+      ]
+    },
+    {
+      "id": "w15",
+      "path": [
+        {
+          "t": "node",
+          "v": "v33"
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 38
+        },
+        {
+          "t": "node",
+          "v": "v34"
+        },
+        {
+          "t": "node",
+          "v": "v32"
+        }
+      ]
+    },
+    {
+      "id": "w16",
+      "path": [
+        {
+          "t": "node",
+          "v": "v35"
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 37
+        },
+        {
+          "t": "node",
+          "v": "v36"
+        },
+        {
+          "t": "node",
+          "v": "v34"
+        }
+      ]
+    },
+    {
+      "id": "w17",
+      "path": [
+        {
+          "t": "node",
+          "v": "v37"
+        },
+        {
+          "t": "node",
+          "v": "v38"
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 36
+        },
+        {
+          "t": "node",
+          "v": "v36"
+        }
+      ]
+    },
+    {
+      "id": "w18",
+      "path": [
+        {
+          "t": "node",
+          "v": "v39"
+        },
+        {
+          "t": "node",
+          "v": "v40"
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 35
+        },
+        {
+          "t": "node",
+          "v": "v38"
+        }
+      ]
+    },
+    {
+      "id": "w19",
+      "path": [
+        {
+          "t": "node",
+          "v": "v41"
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 26
+        },
+        {
+          "t": "node",
+          "v": "v42"
+        },
+        {
+          "t": "node",
+          "v": "v40"
+        }
+      ]
+    },
+    {
+      "id": "w20",
+      "path": [
+        {
+          "t": "node",
+          "v": "v43"
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 25
+        },
+        {
+          "t": "node",
+          "v": "v44"
+        },
+        {
+          "t": "node",
+          "v": "v42"
+        }
+      ]
+    },
+    {
+      "id": "w21",
+      "path": [
+        {
+          "t": "node",
+          "v": "v45"
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 24
+        },
+        {
+          "t": "node",
+          "v": "v46"
+        },
+        {
+          "t": "node",
+          "v": "v44"
+        }
+      ]
+    },
+    {
+      "id": "w22",
+      "path": [
+        {
+          "t": "node",
+          "v": "v47"
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 23
+        },
+        {
+          "t": "node",
+          "v": "v48"
+        },
+        {
+          "t": "node",
+          "v": "v46"
+        }
+      ]
+    },
+    {
+      "id": "w23",
+      "path": [
+        {
+          "t": "node",
+          "v": "v49"
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 22
+        },
+        {
+          "t": "node",
+          "v": "v50"
+        },
+        {
+          "t": "node",
+          "v": "v48"
+        }
+      ]
+    },
+    {
+      "id": "w24",
+      "path": [
+        {
+          "t": "node",
+          "v": "v51"
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 21
+        },
+        {
+          "t": "node",
+          "v": "v53"
+        },
+        {
+          "t": "node",
+          "v": "v50"
+        }
+      ]
+    },
+    {
+      "id": "w26",
+      "path": [
+        {
+          "t": "node",
+          "v": "v54"
+        },
+        {
+          "t": "bend",
+          "x": 1,
+          "y": 19
+        },
+        {
+          "t": "node",
+          "v": "v53"
+        }
+      ]
+    },
+    {
+      "id": "w28",
+      "path": [
+        {
+          "t": "node",
+          "v": "v58"
+        },
+        {
+          "t": "bend",
+          "x": 5,
+          "y": 28
+        },
+        {
+          "t": "node",
+          "v": "v57"
+        }
+      ]
+    },
+    {
+      "id": "w29",
+      "path": [
+        {
+          "t": "node",
+          "v": "v60"
+        },
+        {
+          "t": "node",
+          "v": "v61"
+        },
+        {
+          "t": "node",
+          "v": "v73"
+        },
+        {
+          "t": "node",
+          "v": "v57"
+        },
+        {
+          "t": "node",
+          "v": "v56"
+        }
+      ]
+    },
+    {
+      "id": "w30",
+      "path": [
+        {
+          "t": "node",
+          "v": "v62"
+        },
+        {
+          "t": "bend",
+          "x": 5,
+          "y": 45
+        },
+        {
+          "t": "node",
+          "v": "v61"
+        }
+      ]
+    },
+    {
+      "id": "w34",
+      "path": [
+        {
+          "t": "node",
+          "v": "v71"
+        },
+        {
+          "t": "bend",
+          "x": 27,
+          "y": 40
+        },
+        {
+          "t": "bend",
+          "x": 27,
+          "y": 9
+        },
+        {
+          "t": "node",
+          "v": "v113"
+        },
+        {
+          "t": "bend",
+          "x": 11,
+          "y": 9
+        },
+        {
+          "t": "bend",
+          "x": 11,
+          "y": 8
+        },
+        {
+          "t": "node",
+          "v": "v72"
+        }
+      ]
+    },
+    {
+      "id": "w36",
+      "path": [
+        {
+          "t": "node",
+          "v": "v73"
+        },
+        {
+          "t": "node",
+          "v": "v93"
+        }
+      ]
+    },
+    {
+      "id": "w47",
+      "path": [
+        {
+          "t": "node",
+          "v": "v96"
+        },
+        {
+          "t": "bend",
+          "x": 16,
+          "y": 46
+        },
+        {
+          "t": "bend",
+          "x": 16,
+          "y": 51
+        },
+        {
+          "t": "node",
+          "v": "v97"
+        }
+      ]
+    },
+    {
+      "id": "w48",
+      "path": [
+        {
+          "t": "node",
+          "v": "v98"
+        },
+        {
+          "t": "bend",
+          "x": 17,
+          "y": 47
+        },
+        {
+          "t": "bend",
+          "x": 17,
+          "y": 54
+        },
+        {
+          "t": "node",
+          "v": "v99"
+        }
+      ]
+    },
+    {
+      "id": "w49",
+      "path": [
+        {
+          "t": "node",
+          "v": "v101"
+        },
+        {
+          "t": "node",
+          "v": "v107"
+        },
+        {
+          "t": "node",
+          "v": "v105"
+        },
+        {
+          "t": "node",
+          "v": "v89"
+        }
+      ]
+    },
+    {
+      "id": "w50",
+      "path": [
+        {
+          "t": "node",
+          "v": "v102"
+        },
+        {
+          "t": "bend",
+          "x": 19,
+          "y": 43
+        },
+        {
+          "t": "node",
+          "v": "v91"
+        }
+      ]
+    },
+    {
+      "id": "w51",
+      "path": [
+        {
+          "t": "node",
+          "v": "v104"
+        },
+        {
+          "t": "bend",
+          "x": 19,
+          "y": 44
+        },
+        {
+          "t": "node",
+          "v": "v91"
+        }
+      ]
+    },
+    {
+      "id": "w52",
+      "path": [
+        {
+          "t": "node",
+          "v": "v106"
+        },
+        {
+          "t": "node",
+          "v": "v105"
+        }
+      ]
+    },
+    {
+      "id": "w53",
+      "path": [
+        {
+          "t": "node",
+          "v": "v108"
+        },
+        {
+          "t": "node",
+          "v": "v109"
+        },
+        {
+          "t": "bend",
+          "x": 26,
+          "y": 41
+        },
+        {
+          "t": "node",
+          "v": "v107"
+        }
+      ]
+    },
+    {
+      "id": "w54",
+      "path": [
+        {
+          "t": "node",
+          "v": "v110"
+        },
+        {
+          "t": "bend",
+          "x": 26,
+          "y": 7
+        },
+        {
+          "t": "node",
+          "v": "v111"
+        },
+        {
+          "t": "bend",
+          "x": 25,
+          "y": 41
+        },
+        {
+          "t": "node",
+          "v": "v109"
+        }
+      ]
+    },
+    {
+      "id": "w55",
+      "path": [
+        {
+          "t": "node",
+          "v": "v112"
+        },
+        {
+          "t": "bend",
+          "x": 25,
+          "y": 6
+        },
+        {
+          "t": "node",
+          "v": "v111"
+        }
+      ]
+    },
+    {
+      "id": "w56",
+      "path": [
+        {
+          "t": "node",
+          "v": "v114"
+        },
+        {
+          "t": "node",
+          "v": "v113"
+        }
+      ]
+    },
+    {
+      "id": "w60",
+      "path": [
+        {
+          "t": "node",
+          "v": "v116"
+        },
+        {
+          "t": "bend",
+          "x": 18,
+          "y": 48
+        },
+        {
+          "t": "bend",
+          "x": 18,
+          "y": 57
+        },
+        {
+          "t": "node",
+          "v": "v117"
+        }
+      ]
+    },
+    {
+      "id": "w61",
+      "path": [
+        {
+          "t": "node",
+          "v": "v118"
+        },
+        {
+          "t": "bend",
+          "x": 19,
+          "y": 49
+        },
+        {
+          "t": "bend",
+          "x": 19,
+          "y": 60
+        },
+        {
+          "t": "node",
+          "v": "v119"
+        }
+      ]
+    },
+    {
+      "id": "w62",
+      "path": [
+        {
+          "t": "node",
+          "v": "v120"
+        },
+        {
+          "t": "bend",
+          "x": 20,
+          "y": 50
+        },
+        {
+          "t": "bend",
+          "x": 20,
+          "y": 63
+        },
+        {
+          "t": "node",
+          "v": "v121"
+        }
+      ]
+    }
+  ],
+  "buses": [
+    {
+      "id": "b1",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1"
+        },
+        {
+          "t": "bend",
+          "x": 20,
+          "y": 23
+        },
+        {
+          "t": "bend",
+          "x": 20,
+          "y": 11
+        },
+        {
+          "t": "node",
+          "v": "v2"
+        }
+      ],
+      "width": 8,
+      "name": null,
+      "groupConnections": [
+        {
+          "vertex": "v1",
+          "instance": "U2",
+          "group": "Q",
+          "bitMap": [
+            "Q0",
+            "Q1",
+            "Q2",
+            "Q3",
+            "Q4",
+            "Q5",
+            "Q6",
+            "Q7"
+          ]
+        },
+        {
+          "vertex": "v2",
+          "instance": "X1",
+          "group": "Ain-high",
+          "bitMap": [
+            "Ain-high0",
+            "Ain-high1",
+            "Ain-high2",
+            "Ain-high3",
+            "Ain-high4",
+            "Ain-high5",
+            "Ain-high6",
+            "Ain-high7"
+          ]
+        }
+      ],
+      "bitNames": [
+        "Q0",
+        "Q1",
+        "Q2",
+        "Q3",
+        "Q4",
+        "Q5",
+        "Q6",
+        "Q7"
+      ]
+    },
+    {
+      "id": "b2",
+      "path": [
+        {
+          "t": "node",
+          "v": "v3"
+        },
+        {
+          "t": "bend",
+          "x": 23,
+          "y": 19
+        },
+        {
+          "t": "bend",
+          "x": 23,
+          "y": 39
+        },
+        {
+          "t": "node",
+          "v": "v4"
+        }
+      ],
+      "width": 8,
+      "name": null,
+      "groupConnections": [
+        {
+          "vertex": "v3",
+          "instance": "X1",
+          "group": "Ain-low",
+          "bitMap": [
+            "Ain-low0",
+            "Ain-low1",
+            "Ain-low2",
+            "Ain-low3",
+            "Ain-low4",
+            "Ain-low5",
+            "Ain-low6",
+            "Ain-low7"
+          ]
+        },
+        {
+          "vertex": "v4",
+          "instance": "U1",
+          "group": "Q",
+          "bitMap": [
+            "Q0",
+            "Q1",
+            "Q2",
+            "Q3",
+            "Q4",
+            "Q5",
+            "Q6",
+            "Q7"
+          ]
+        }
+      ],
+      "bitNames": [
+        "Ain-low0",
+        "Ain-low1",
+        "Ain-low2",
+        "Ain-low3",
+        "Ain-low4",
+        "Ain-low5",
+        "Ain-low6",
+        "Ain-low7"
+      ]
+    },
+    {
+      "id": "b5",
+      "path": [
+        {
+          "t": "node",
+          "v": "v77"
+        },
+        {
+          "t": "bend",
+          "x": 48,
+          "y": 12
+        },
+        {
+          "t": "bend",
+          "x": 48,
+          "y": 24
+        },
+        {
+          "t": "node",
+          "v": "v78"
+        }
+      ],
+      "width": 8,
+      "name": null,
+      "groupConnections": [
+        {
+          "vertex": "v77",
+          "instance": "X1",
+          "group": "Out0-7",
+          "bitMap": [
+            "Out0-70",
+            "Out0-71",
+            "Out0-72",
+            "Out0-73",
+            "Out0-74",
+            "Out0-75",
+            "Out0-76",
+            "Out0-77"
+          ]
+        },
+        {
+          "vertex": "v78",
+          "instance": "A-8",
+          "group": "D",
+          "bitMap": [
+            "D0",
+            "D1",
+            "D2",
+            "D3",
+            "D4",
+            "D5",
+            "D6",
+            "D7"
+          ]
+        }
+      ],
+      "bitNames": [
+        "Out0-70",
+        "Out0-71",
+        "Out0-72",
+        "Out0-73",
+        "Out0-74",
+        "Out0-75",
+        "Out0-76",
+        "Out0-77"
+      ]
+    },
+    {
+      "id": "b6",
+      "path": [
+        {
+          "t": "node",
+          "v": "v79"
+        },
+        {
+          "t": "bend",
+          "x": 45,
+          "y": 36
+        },
+        {
+          "t": "bend",
+          "x": 45,
+          "y": 20
+        },
+        {
+          "t": "node",
+          "v": "v80"
+        }
+      ],
+      "width": 8,
+      "name": null,
+      "groupConnections": [
+        {
+          "vertex": "v79",
+          "instance": "A-9",
+          "group": "D",
+          "bitMap": [
+            "D0",
+            "D1",
+            "D2",
+            "D3",
+            "D4",
+            "D5",
+            "D6",
+            "D7"
+          ]
+        },
+        {
+          "vertex": "v80",
+          "instance": "X1",
+          "group": "Out8-15",
+          "bitMap": [
+            "Out8-150",
+            "Out8-151",
+            "Out8-152",
+            "Out8-153",
+            "Out8-154",
+            "Out8-155",
+            "Out8-156",
+            "Out8-157"
+          ]
+        }
+      ],
+      "bitNames": [
+        "D0",
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "D6",
+        "D7"
+      ]
+    }
+  ],
+  "vertices": [
+    {
+      "id": "v1",
+      "kind": "free",
+      "x": 17,
+      "y": 23
+    },
+    {
+      "id": "v2",
+      "kind": "free",
+      "x": 26,
+      "y": 11
+    },
+    {
+      "id": "v3",
+      "kind": "free",
+      "x": 26,
+      "y": 19
+    },
+    {
+      "id": "v4",
+      "kind": "free",
+      "x": 17,
+      "y": 39
+    },
+    {
+      "id": "v20",
+      "kind": "pin",
+      "ref": "A-4",
+      "pin": "OUT",
+      "x": -4,
+      "y": 34
+    },
+    {
+      "id": "v24",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D7",
+      "x": 7,
+      "y": 42
+    },
+    {
+      "id": "v25",
+      "kind": "pin",
+      "ref": "A-5",
+      "pin": "OUT",
+      "x": 1,
+      "y": 50
+    },
+    {
+      "id": "v26",
+      "kind": "junction",
+      "x": 1,
+      "y": 42
+    },
+    {
+      "id": "v27",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D6",
+      "x": 7,
+      "y": 41
+    },
+    {
+      "id": "v28",
+      "kind": "junction",
+      "x": 1,
+      "y": 41
+    },
+    {
+      "id": "v29",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D5",
+      "x": 7,
+      "y": 40
+    },
+    {
+      "id": "v30",
+      "kind": "junction",
+      "x": 1,
+      "y": 40
+    },
+    {
+      "id": "v31",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D4",
+      "x": 7,
+      "y": 39
+    },
+    {
+      "id": "v32",
+      "kind": "junction",
+      "x": 1,
+      "y": 39
+    },
+    {
+      "id": "v33",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D3",
+      "x": 7,
+      "y": 38
+    },
+    {
+      "id": "v34",
+      "kind": "junction",
+      "x": 1,
+      "y": 38
+    },
+    {
+      "id": "v35",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D2",
+      "x": 7,
+      "y": 37
+    },
+    {
+      "id": "v36",
+      "kind": "junction",
+      "x": 1,
+      "y": 37
+    },
+    {
+      "id": "v37",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D1",
+      "x": 7,
+      "y": 36
+    },
+    {
+      "id": "v38",
+      "kind": "junction",
+      "x": 1,
+      "y": 36
+    },
+    {
+      "id": "v39",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D0",
+      "x": 7,
+      "y": 35
+    },
+    {
+      "id": "v40",
+      "kind": "junction",
+      "x": 1,
+      "y": 35
+    },
+    {
+      "id": "v41",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "D7",
+      "x": 7,
+      "y": 26
+    },
+    {
+      "id": "v42",
+      "kind": "junction",
+      "x": 1,
+      "y": 26
+    },
+    {
+      "id": "v43",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "D6",
+      "x": 7,
+      "y": 25
+    },
+    {
+      "id": "v44",
+      "kind": "junction",
+      "x": 1,
+      "y": 25
+    },
+    {
+      "id": "v45",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "D5",
+      "x": 7,
+      "y": 24
+    },
+    {
+      "id": "v46",
+      "kind": "junction",
+      "x": 1,
+      "y": 24
+    },
+    {
+      "id": "v47",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "D4",
+      "x": 7,
+      "y": 23
+    },
+    {
+      "id": "v48",
+      "kind": "junction",
+      "x": 1,
+      "y": 23
+    },
+    {
+      "id": "v49",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "D3",
+      "x": 7,
+      "y": 22
+    },
+    {
+      "id": "v50",
+      "kind": "junction",
+      "x": 1,
+      "y": 22
+    },
+    {
+      "id": "v51",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "D2",
+      "x": 7,
+      "y": 21
+    },
+    {
+      "id": "v52",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "D1",
+      "x": 7,
+      "y": 20
+    },
+    {
+      "id": "v53",
+      "kind": "junction",
+      "x": 1,
+      "y": 21
+    },
+    {
+      "id": "v54",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "D0",
+      "x": 7,
+      "y": 19
+    },
+    {
+      "id": "v56",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "/OE2",
+      "x": 7,
+      "y": 29
+    },
+    {
+      "id": "v57",
+      "kind": "junction",
+      "x": 5,
+      "y": 29
+    },
+    {
+      "id": "v58",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "/OE1",
+      "x": 7,
+      "y": 28
+    },
+    {
+      "id": "v60",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "/OE1",
+      "x": 7,
+      "y": 44
+    },
+    {
+      "id": "v61",
+      "kind": "junction",
+      "x": 5,
+      "y": 44
+    },
+    {
+      "id": "v62",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "/OE2",
+      "x": 7,
+      "y": 45
+    },
+    {
+      "id": "v71",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "CLK",
+      "x": 28,
+      "y": 40
+    },
+    {
+      "id": "v72",
+      "kind": "pin",
+      "ref": "A-2",
+      "pin": "OUT",
+      "x": 10,
+      "y": 8
+    },
+    {
+      "id": "v73",
+      "kind": "junction",
+      "x": 5,
+      "y": 32
+    },
+    {
+      "id": "v77",
+      "kind": "free",
+      "x": 36,
+      "y": 12
+    },
+    {
+      "id": "v78",
+      "kind": "free",
+      "x": 53,
+      "y": 24
+    },
+    {
+      "id": "v79",
+      "kind": "free",
+      "x": 52,
+      "y": 36
+    },
+    {
+      "id": "v80",
+      "kind": "free",
+      "x": 36,
+      "y": 20
+    },
+    {
+      "id": "v89",
+      "kind": "pin",
+      "ref": "A-11",
+      "pin": "OUT",
+      "x": 26,
+      "y": 53
+    },
+    {
+      "id": "v91",
+      "kind": "pin",
+      "ref": "A-10",
+      "pin": "OUT",
+      "x": 25,
+      "y": 47
+    },
+    {
+      "id": "v93",
+      "kind": "pin",
+      "ref": "A-12",
+      "pin": "OUT",
+      "x": -34,
+      "y": 32
+    },
+    {
+      "id": "v96",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "OSA",
+      "x": 28,
+      "y": 46
+    },
+    {
+      "id": "v97",
+      "kind": "pin",
+      "ref": "A-13",
+      "pin": "OUT",
+      "x": -5,
+      "y": 51
+    },
+    {
+      "id": "v98",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "OSB",
+      "x": 28,
+      "y": 47
+    },
+    {
+      "id": "v99",
+      "kind": "pin",
+      "ref": "A-14",
+      "pin": "OUT",
+      "x": -5,
+      "y": 54
+    },
+    {
+      "id": "v101",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "ENF/",
+      "x": 28,
+      "y": 42
+    },
+    {
+      "id": "v102",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "FTAB",
+      "x": 28,
+      "y": 43
+    },
+    {
+      "id": "v104",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "FTF",
+      "x": 28,
+      "y": 44
+    },
+    {
+      "id": "v105",
+      "kind": "junction",
+      "x": 26,
+      "y": 45
+    },
+    {
+      "id": "v106",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "OE/",
+      "x": 28,
+      "y": 45
+    },
+    {
+      "id": "v107",
+      "kind": "junction",
+      "x": 26,
+      "y": 42
+    },
+    {
+      "id": "v108",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "Cin",
+      "x": 28,
+      "y": 41
+    },
+    {
+      "id": "v109",
+      "kind": "junction",
+      "x": 26,
+      "y": 41
+    },
+    {
+      "id": "v110",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "/ENB",
+      "x": 28,
+      "y": 7
+    },
+    {
+      "id": "v111",
+      "kind": "junction",
+      "x": 25,
+      "y": 7
+    },
+    {
+      "id": "v112",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "/ENA",
+      "x": 28,
+      "y": 6
+    },
+    {
+      "id": "v113",
+      "kind": "junction",
+      "x": 17,
+      "y": 9
+    },
+    {
+      "id": "v114",
+      "kind": "pin",
+      "ref": "A-15",
+      "pin": "IN",
+      "x": 17,
+      "y": 4
+    },
+    {
+      "id": "v116",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "S0",
+      "x": 28,
+      "y": 48
+    },
+    {
+      "id": "v117",
+      "kind": "pin",
+      "ref": "A-16",
+      "pin": "OUT",
+      "x": -5,
+      "y": 57
+    },
+    {
+      "id": "v118",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "S1",
+      "x": 28,
+      "y": 49
+    },
+    {
+      "id": "v119",
+      "kind": "pin",
+      "ref": "A-17",
+      "pin": "OUT",
+      "x": -5,
+      "y": 60
+    },
+    {
+      "id": "v120",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "S2",
+      "x": 28,
+      "y": 50
+    },
+    {
+      "id": "v121",
+      "kind": "pin",
+      "ref": "A-18",
+      "pin": "OUT",
+      "x": -5,
+      "y": 63
+    }
+  ],
   "refCounters": {
-    "U": 1,
-    "A": 3,
+    "U": 4,
+    "A": 19,
     "N": 3,
-    "X": 1
+    "X": 2
   },
-  "nets": []
+  "nets": [
+    {
+      "pins": [
+        "A-4.OUT",
+        "U2.D1"
+      ],
+      "members": [
+        "w10"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U1.D7",
+        "A-5.OUT",
+        "U1.D6",
+        "U1.D5",
+        "U1.D4",
+        "U1.D3",
+        "U1.D2",
+        "U1.D1",
+        "U1.D0",
+        "U2.D7",
+        "U2.D6",
+        "U2.D5",
+        "U2.D4",
+        "U2.D3",
+        "U2.D2",
+        "U2.D0"
+      ],
+      "members": [
+        "w11",
+        "w12",
+        "w13",
+        "w14",
+        "w15",
+        "w16",
+        "w17",
+        "w18",
+        "w19",
+        "w20",
+        "w21",
+        "w22",
+        "w23",
+        "w24",
+        "w26"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U2./OE1",
+        "U1./OE1",
+        "U2./OE2",
+        "U1./OE2",
+        "A-12.OUT"
+      ],
+      "members": [
+        "w28",
+        "w29",
+        "w30",
+        "w36"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "X1.CLK",
+        "A-2.OUT",
+        "A-15.IN"
+      ],
+      "members": [
+        "w34",
+        "w56"
+      ],
+      "provenance": [],
+      "name": "IN"
+    },
+    {
+      "pins": [
+        "X1.OSA",
+        "A-13.OUT"
+      ],
+      "members": [
+        "w47"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "X1.OSB",
+        "A-14.OUT"
+      ],
+      "members": [
+        "w48"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "X1.ENF/",
+        "A-11.OUT",
+        "X1.OE/",
+        "X1.Cin",
+        "X1./ENB",
+        "X1./ENA"
+      ],
+      "members": [
+        "w49",
+        "w52",
+        "w53",
+        "w54",
+        "w55"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "X1.FTAB",
+        "A-10.OUT",
+        "X1.FTF"
+      ],
+      "members": [
+        "w50",
+        "w51"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "X1.S0",
+        "A-16.OUT"
+      ],
+      "members": [
+        "w60"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "X1.S1",
+        "A-17.OUT"
+      ],
+      "members": [
+        "w61"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "X1.S2",
+        "A-18.OUT"
+      ],
+      "members": [
+        "w62"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U2.Q0",
+        "X1.Ain-high0"
+      ],
+      "members": [
+        "b1"
+      ],
+      "provenance": [
+        {
+          "bus": "b1",
+          "bit": 0,
+          "name": "Q0"
+        }
+      ],
+      "name": "Q0"
+    },
+    {
+      "pins": [
+        "U2.Q1",
+        "X1.Ain-high1"
+      ],
+      "members": [
+        "b1"
+      ],
+      "provenance": [
+        {
+          "bus": "b1",
+          "bit": 1,
+          "name": "Q1"
+        }
+      ],
+      "name": "Q1"
+    },
+    {
+      "pins": [
+        "U2.Q2",
+        "X1.Ain-high2"
+      ],
+      "members": [
+        "b1"
+      ],
+      "provenance": [
+        {
+          "bus": "b1",
+          "bit": 2,
+          "name": "Q2"
+        }
+      ],
+      "name": "Q2"
+    },
+    {
+      "pins": [
+        "U2.Q3",
+        "X1.Ain-high3"
+      ],
+      "members": [
+        "b1"
+      ],
+      "provenance": [
+        {
+          "bus": "b1",
+          "bit": 3,
+          "name": "Q3"
+        }
+      ],
+      "name": "Q3"
+    },
+    {
+      "pins": [
+        "U2.Q4",
+        "X1.Ain-high4"
+      ],
+      "members": [
+        "b1"
+      ],
+      "provenance": [
+        {
+          "bus": "b1",
+          "bit": 4,
+          "name": "Q4"
+        }
+      ],
+      "name": "Q4"
+    },
+    {
+      "pins": [
+        "U2.Q5",
+        "X1.Ain-high5"
+      ],
+      "members": [
+        "b1"
+      ],
+      "provenance": [
+        {
+          "bus": "b1",
+          "bit": 5,
+          "name": "Q5"
+        }
+      ],
+      "name": "Q5"
+    },
+    {
+      "pins": [
+        "U2.Q6",
+        "X1.Ain-high6"
+      ],
+      "members": [
+        "b1"
+      ],
+      "provenance": [
+        {
+          "bus": "b1",
+          "bit": 6,
+          "name": "Q6"
+        }
+      ],
+      "name": "Q6"
+    },
+    {
+      "pins": [
+        "U2.Q7",
+        "X1.Ain-high7"
+      ],
+      "members": [
+        "b1"
+      ],
+      "provenance": [
+        {
+          "bus": "b1",
+          "bit": 7,
+          "name": "Q7"
+        }
+      ],
+      "name": "Q7"
+    },
+    {
+      "pins": [
+        "X1.Ain-low0",
+        "U1.Q0"
+      ],
+      "members": [
+        "b2"
+      ],
+      "provenance": [
+        {
+          "bus": "b2",
+          "bit": 0,
+          "name": "Ain-low0"
+        }
+      ],
+      "name": "Ain-low0"
+    },
+    {
+      "pins": [
+        "X1.Ain-low1",
+        "U1.Q1"
+      ],
+      "members": [
+        "b2"
+      ],
+      "provenance": [
+        {
+          "bus": "b2",
+          "bit": 1,
+          "name": "Ain-low1"
+        }
+      ],
+      "name": "Ain-low1"
+    },
+    {
+      "pins": [
+        "X1.Ain-low2",
+        "U1.Q2"
+      ],
+      "members": [
+        "b2"
+      ],
+      "provenance": [
+        {
+          "bus": "b2",
+          "bit": 2,
+          "name": "Ain-low2"
+        }
+      ],
+      "name": "Ain-low2"
+    },
+    {
+      "pins": [
+        "X1.Ain-low3",
+        "U1.Q3"
+      ],
+      "members": [
+        "b2"
+      ],
+      "provenance": [
+        {
+          "bus": "b2",
+          "bit": 3,
+          "name": "Ain-low3"
+        }
+      ],
+      "name": "Ain-low3"
+    },
+    {
+      "pins": [
+        "X1.Ain-low4",
+        "U1.Q4"
+      ],
+      "members": [
+        "b2"
+      ],
+      "provenance": [
+        {
+          "bus": "b2",
+          "bit": 4,
+          "name": "Ain-low4"
+        }
+      ],
+      "name": "Ain-low4"
+    },
+    {
+      "pins": [
+        "X1.Ain-low5",
+        "U1.Q5"
+      ],
+      "members": [
+        "b2"
+      ],
+      "provenance": [
+        {
+          "bus": "b2",
+          "bit": 5,
+          "name": "Ain-low5"
+        }
+      ],
+      "name": "Ain-low5"
+    },
+    {
+      "pins": [
+        "X1.Ain-low6",
+        "U1.Q6"
+      ],
+      "members": [
+        "b2"
+      ],
+      "provenance": [
+        {
+          "bus": "b2",
+          "bit": 6,
+          "name": "Ain-low6"
+        }
+      ],
+      "name": "Ain-low6"
+    },
+    {
+      "pins": [
+        "X1.Ain-low7",
+        "U1.Q7"
+      ],
+      "members": [
+        "b2"
+      ],
+      "provenance": [
+        {
+          "bus": "b2",
+          "bit": 7,
+          "name": "Ain-low7"
+        }
+      ],
+      "name": "Ain-low7"
+    },
+    {
+      "pins": [
+        "X1.Out0-70",
+        "A-8.D0"
+      ],
+      "members": [
+        "b5"
+      ],
+      "provenance": [
+        {
+          "bus": "b5",
+          "bit": 0,
+          "name": "Out0-70"
+        }
+      ],
+      "name": "Out0-70"
+    },
+    {
+      "pins": [
+        "X1.Out0-71",
+        "A-8.D1"
+      ],
+      "members": [
+        "b5"
+      ],
+      "provenance": [
+        {
+          "bus": "b5",
+          "bit": 1,
+          "name": "Out0-71"
+        }
+      ],
+      "name": "Out0-71"
+    },
+    {
+      "pins": [
+        "X1.Out0-72",
+        "A-8.D2"
+      ],
+      "members": [
+        "b5"
+      ],
+      "provenance": [
+        {
+          "bus": "b5",
+          "bit": 2,
+          "name": "Out0-72"
+        }
+      ],
+      "name": "Out0-72"
+    },
+    {
+      "pins": [
+        "X1.Out0-73",
+        "A-8.D3"
+      ],
+      "members": [
+        "b5"
+      ],
+      "provenance": [
+        {
+          "bus": "b5",
+          "bit": 3,
+          "name": "Out0-73"
+        }
+      ],
+      "name": "Out0-73"
+    },
+    {
+      "pins": [
+        "X1.Out0-74",
+        "A-8.D4"
+      ],
+      "members": [
+        "b5"
+      ],
+      "provenance": [
+        {
+          "bus": "b5",
+          "bit": 4,
+          "name": "Out0-74"
+        }
+      ],
+      "name": "Out0-74"
+    },
+    {
+      "pins": [
+        "X1.Out0-75",
+        "A-8.D5"
+      ],
+      "members": [
+        "b5"
+      ],
+      "provenance": [
+        {
+          "bus": "b5",
+          "bit": 5,
+          "name": "Out0-75"
+        }
+      ],
+      "name": "Out0-75"
+    },
+    {
+      "pins": [
+        "X1.Out0-76",
+        "A-8.D6"
+      ],
+      "members": [
+        "b5"
+      ],
+      "provenance": [
+        {
+          "bus": "b5",
+          "bit": 6,
+          "name": "Out0-76"
+        }
+      ],
+      "name": "Out0-76"
+    },
+    {
+      "pins": [
+        "X1.Out0-77",
+        "A-8.D7"
+      ],
+      "members": [
+        "b5"
+      ],
+      "provenance": [
+        {
+          "bus": "b5",
+          "bit": 7,
+          "name": "Out0-77"
+        }
+      ],
+      "name": "Out0-77"
+    },
+    {
+      "pins": [
+        "A-9.D0",
+        "X1.Out8-150"
+      ],
+      "members": [
+        "b6"
+      ],
+      "provenance": [
+        {
+          "bus": "b6",
+          "bit": 0,
+          "name": "D0"
+        }
+      ],
+      "name": "D0"
+    },
+    {
+      "pins": [
+        "A-9.D1",
+        "X1.Out8-151"
+      ],
+      "members": [
+        "b6"
+      ],
+      "provenance": [
+        {
+          "bus": "b6",
+          "bit": 1,
+          "name": "D1"
+        }
+      ],
+      "name": "D1"
+    },
+    {
+      "pins": [
+        "A-9.D2",
+        "X1.Out8-152"
+      ],
+      "members": [
+        "b6"
+      ],
+      "provenance": [
+        {
+          "bus": "b6",
+          "bit": 2,
+          "name": "D2"
+        }
+      ],
+      "name": "D2"
+    },
+    {
+      "pins": [
+        "A-9.D3",
+        "X1.Out8-153"
+      ],
+      "members": [
+        "b6"
+      ],
+      "provenance": [
+        {
+          "bus": "b6",
+          "bit": 3,
+          "name": "D3"
+        }
+      ],
+      "name": "D3"
+    },
+    {
+      "pins": [
+        "A-9.D4",
+        "X1.Out8-154"
+      ],
+      "members": [
+        "b6"
+      ],
+      "provenance": [
+        {
+          "bus": "b6",
+          "bit": 4,
+          "name": "D4"
+        }
+      ],
+      "name": "D4"
+    },
+    {
+      "pins": [
+        "A-9.D5",
+        "X1.Out8-155"
+      ],
+      "members": [
+        "b6"
+      ],
+      "provenance": [
+        {
+          "bus": "b6",
+          "bit": 5,
+          "name": "D5"
+        }
+      ],
+      "name": "D5"
+    },
+    {
+      "pins": [
+        "A-9.D6",
+        "X1.Out8-156"
+      ],
+      "members": [
+        "b6"
+      ],
+      "provenance": [
+        {
+          "bus": "b6",
+          "bit": 6,
+          "name": "D6"
+        }
+      ],
+      "name": "D6"
+    },
+    {
+      "pins": [
+        "A-9.D7",
+        "X1.Out8-157"
+      ],
+      "members": [
+        "b6"
+      ],
+      "provenance": [
+        {
+          "bus": "b6",
+          "bit": 7,
+          "name": "D7"
+        }
+      ],
+      "name": "D7"
+    }
+  ]
 }

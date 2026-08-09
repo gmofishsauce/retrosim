@@ -1,6 +1,6 @@
 {
   "formatVersion": 3,
-  "name": "notL4C381",
+  "name": "L4C381",
   "components": [
     {
       "refdes": "U2",
@@ -302,9 +302,10 @@
         ]
       },
       "overrides": {},
-      "label": "Out0-7",
+      "label": "OUT-LO",
       "width": 8,
-      "portDir": "bidir"
+      "portDir": "out",
+      "dirOverride": "out"
     },
     {
       "refdes": "A-2",
@@ -388,9 +389,10 @@
         ]
       },
       "overrides": {},
-      "label": "Out8-15",
+      "label": "OUT-HI",
       "width": 8,
-      "portDir": "bidir"
+      "portDir": "out",
+      "dirOverride": "out"
     },
     {
       "refdes": "A-3",
@@ -419,92 +421,6 @@
       "overrides": {},
       "label": "Cout",
       "portDir": "out"
-    },
-    {
-      "refdes": "A-6",
-      "type": "type-portN",
-      "x": 7,
-      "y": 36,
-      "rotation": 180,
-      "typeData": {
-        "id": "type-portN",
-        "name": "portN",
-        "builtin": true,
-        "title": "port / off-sheet connector (multi-bit)",
-        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"#fff\" stroke=\"#333\" stroke-width=\"1.5\" stroke-linejoin=\"round\"><path d=\"M7 3 H20 L28 7.5 L20 12 H7 Z\"/><path d=\"M7 11 H20 L28 15.5 L20 20 H7 Z\"/><path d=\"M7 19 H20 L28 23.5 L20 28 H7 Z\"/><path d=\"M7 27 H20 L28 31.5 L20 36 H7 Z\"/></svg>",
-        "renderType": "portN",
-        "width": 3,
-        "height": 9,
-        "pins": [
-          {
-            "name": "P0",
-            "side": "left",
-            "position": 1,
-            "direction": "bidir"
-          },
-          {
-            "name": "P1",
-            "side": "left",
-            "position": 2,
-            "direction": "bidir"
-          },
-          {
-            "name": "P2",
-            "side": "left",
-            "position": 3,
-            "direction": "bidir"
-          },
-          {
-            "name": "P3",
-            "side": "left",
-            "position": 4,
-            "direction": "bidir"
-          },
-          {
-            "name": "P4",
-            "side": "left",
-            "position": 5,
-            "direction": "bidir"
-          },
-          {
-            "name": "P5",
-            "side": "left",
-            "position": 6,
-            "direction": "bidir"
-          },
-          {
-            "name": "P6",
-            "side": "left",
-            "position": 7,
-            "direction": "bidir"
-          },
-          {
-            "name": "P7",
-            "side": "left",
-            "position": 8,
-            "direction": "bidir"
-          }
-        ],
-        "pinGroups": [
-          {
-            "name": "P",
-            "pins": [
-              "P0",
-              "P1",
-              "P2",
-              "P3",
-              "P4",
-              "P5",
-              "P6",
-              "P7"
-            ]
-          }
-        ]
-      },
-      "overrides": {},
-      "label": "S0-2",
-      "width": 3,
-      "portDir": "in"
     },
     {
       "refdes": "U19",
@@ -7771,6 +7687,57 @@
         ]
       },
       "overrides": {}
+    },
+    {
+      "refdes": "A-58",
+      "type": "type-portN",
+      "x": 6,
+      "y": 35,
+      "rotation": 180,
+      "typeData": {
+        "id": "type-portN",
+        "name": "portN",
+        "builtin": true,
+        "title": "port / off-sheet connector (multi-bit)",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"#fff\" stroke=\"#333\" stroke-width=\"1.5\" stroke-linejoin=\"round\"><path d=\"M7 3 H20 L28 7.5 L20 12 H7 Z\"/><path d=\"M7 11 H20 L28 15.5 L20 20 H7 Z\"/><path d=\"M7 19 H20 L28 23.5 L20 28 H7 Z\"/><path d=\"M7 27 H20 L28 31.5 L20 36 H7 Z\"/></svg>",
+        "renderType": "portN",
+        "width": 3,
+        "height": 4,
+        "pins": [
+          {
+            "name": "P0",
+            "side": "left",
+            "position": 1,
+            "direction": "bidir"
+          },
+          {
+            "name": "P1",
+            "side": "left",
+            "position": 2,
+            "direction": "bidir"
+          },
+          {
+            "name": "P2",
+            "side": "left",
+            "position": 3,
+            "direction": "bidir"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "P",
+            "pins": [
+              "P0",
+              "P1",
+              "P2"
+            ]
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "S",
+      "width": 3,
+      "portDir": "in"
     }
   ],
   "wires": [
@@ -12722,24 +12689,7 @@
       "path": [
         {
           "t": "node",
-          "v": "v922"
-        },
-        {
-          "t": "bend",
-          "x": 109,
-          "y": 34
-        },
-        {
-          "t": "node",
-          "v": "v1511"
-        },
-        {
-          "t": "node",
-          "v": "v1493"
-        },
-        {
-          "t": "node",
-          "v": "v1471"
+          "v": "v1450"
         },
         {
           "t": "bend",
@@ -12748,21 +12698,28 @@
         },
         {
           "t": "node",
-          "v": "v1450"
+          "v": "v1471"
+        },
+        {
+          "t": "node",
+          "v": "v1493"
+        },
+        {
+          "t": "node",
+          "v": "v1511"
+        },
+        {
+          "t": "bend",
+          "x": 109,
+          "y": 34
+        },
+        {
+          "t": "node",
+          "v": "v1586"
         }
       ],
       "width": 3,
       "groupConnections": [
-        {
-          "vertex": "v922",
-          "instance": "A-6",
-          "group": "P",
-          "bitMap": [
-            "P0",
-            "P1",
-            "P2"
-          ]
-        },
         {
           "vertex": "v1450",
           "instance": "U73",
@@ -12771,6 +12728,16 @@
             "S0",
             "S1",
             "S2"
+          ]
+        },
+        {
+          "vertex": "v1586",
+          "instance": "A-58",
+          "group": "P",
+          "bitMap": [
+            "P0",
+            "P1",
+            "P2"
           ]
         }
       ],
@@ -13629,12 +13596,6 @@
       "x": 70,
       "y": 111,
       "offset": 4
-    },
-    {
-      "id": "v922",
-      "kind": "free",
-      "x": 9,
-      "y": 34
     },
     {
       "id": "v940",
@@ -15718,11 +15679,17 @@
       "pin": "OUT",
       "x": 133,
       "y": 214
+    },
+    {
+      "id": "v1586",
+      "kind": "free",
+      "x": 8,
+      "y": 33
     }
   ],
   "refCounters": {
     "U": 77,
-    "A": 58,
+    "A": 59,
     "N": 11,
     "X": 5
   },
@@ -19645,8 +19612,8 @@
     },
     {
       "pins": [
-        "A-6.P0",
         "U73.S0",
+        "A-58.P0",
         "U74.S0",
         "U75.S0",
         "U76.S0"
@@ -19683,8 +19650,8 @@
     },
     {
       "pins": [
-        "A-6.P1",
         "U73.S1",
+        "A-58.P1",
         "U74.S1",
         "U75.S1",
         "U76.S1"
@@ -19721,8 +19688,8 @@
     },
     {
       "pins": [
-        "A-6.P2",
         "U73.S2",
+        "A-58.P2",
         "U74.S2",
         "U75.S2",
         "U76.S2"
