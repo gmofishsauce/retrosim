@@ -2651,6 +2651,31 @@ no sequential part could ever leave U.)
   `.CLK`). Each step latches each register on the 0→1 of *its own* clock net and
   applies that register's own `.ARST`/`.APRST` (async) — the existing rising-edge
   and `AR`/`SP` machinery, indexed per register instead of per entity.
+- **Registered feedback taps the register (FR-079e, `sim.js`/`cgen.js`).** A literal
+  naming one of the instance's own `.R` outputs reads the value that macrocell
+  *presents*, not its pin net — so a register carrying an `.E` enable keeps its
+  contents while its outputs are tri-stated instead of reloading from whatever else
+  drives the bus. The mechanism is one **per-entity feedback snapshot** taken at the
+  top of each step, before any register latches: for every `.R` output,
+  `fb[signal] = xorLow(registers.get(signal), out.lhsLow)` — exactly the value
+  `evalOutput` would drive, minus the enable. The entity's `readNet` answers from
+  `fb` when the signal is in it and from `curr` otherwise, so the latch phase (D
+  inputs, `.CLK`/`.ARST`/`.APRST`, `AR`/`SP`) and the drive phase (`.E` terms,
+  plain/`.T`/`.L` sums) both see it. Snapshotting at the *start* of the step is what
+  preserves FR-078 and makes the change surgical: for an enabled, unconflicted
+  output `curr[net]` is precisely that register's value at the end of the previous
+  step, which is what the snapshot holds — so every such read is bit-identical to
+  before, and only the tri-stated/foreign-driven case changes. It is also why a
+  shift chain over *pinned* registers (74164 `Q1.R = Q0`) still advances exactly one
+  stage per clock: every D input in the phase reads the same pre-edge snapshot,
+  never a `registers` map being mutated as the loop runs. Buried nodes (FR-079c) are
+  in the snapshot as well and read identically to their virtual net (which has a
+  single driver), so nothing about them changes; the virtual net remains their drive
+  target. `cgen.js` mirrors this exactly — a per-unit `regprev_<tag>[]` array,
+  filled at the top of `gen_latch` from `reg_<tag>[]` with the LHS negation applied,
+  and read by `litExpr` in place of `curr[n]` for those signals; `rt_step` runs
+  `gen_latch` before `gen_drive`, so both phases read the one snapshot as in the
+  slow engine (FR-107).
 - **Transparent-latch state (sim.js, FR-079d).** A `.L` output owns a stored
   four-state value held in the same per-instance state map as `.R` registers
   (power-up **U**, FR-079). Unlike a register, it is not edge-clocked: alongside
@@ -4807,6 +4832,7 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-062e | §6.3, §7.1, §7.6 | `yamlparse.go`, `types.go`, `srv/components/*.yaml` |
 | FR-119, FR-119a | §6.18 | `engine/ndl.js`, `chrome/dialogs.js`, `chrome/toolbar.js`, `app.js`, `docs/netlist-language.md` |
 | FR-075, FR-078, FR-079, FR-080 | §6.13 | `sim.js`, `galasm.js` |
+| FR-079e | §6.13, §6.17 | `galasm.js` (`snapshotFeedback`), `sim.js`, `cgen.js` |
 | FR-079c | §6.3, §6.13, §6.17, §7.1, §7.6 | `types.go`, `yamlparse.go`, `galasm.js`, `sim.js`, `cgen.js`, `srv/components/74165.yaml`, `examples/74165-*` |
 | FR-076, FR-087 | §6.9, §6.10, §6.11, §6.13 | `toolbar.js`, `store.js`, `interaction.js`, `sim.js`, `statusbar.js` |
 | FR-077, FR-081, FR-082, FR-083 | §6.8, §6.13 | `sim.js`, `galasm.js`, `canvas.js` |
@@ -4988,7 +5014,11 @@ tests beside them per §9).
   part with U feedback is rescued by a held clear/load (the 74163 clears to
   0000 with /CLR low even from all-U registers). `.T` with `.E` false → Z,
   `.E` of U → U. `.R` presents the register,
-  not the sum; `lhsLow` flips the presented value. `AR`/`SP` reset/set; `VCC`/
+  not the sum; `lhsLow` flips the presented value. **FR-079e:** a registered bit
+  whose hold term reads its own tri-stated output (`Q.R = LD*D + /LD*Q`,
+  `Q.E = OE`) keeps its value across clock edges taken while a foreign driver
+  holds its net at the opposite level, and reads back unchanged once the output
+  is re-enabled — the feedback is the flip-flop, not the pin. `AR`/`SP` reset/set; `VCC`/
   `GND` constants. Validation errors: two output equations for one signal; `.E`
   before its output / multi-term / on a plain output; unknown signal; `.R`
   without `clock:` is a `sim.js` preflight error.
@@ -5091,7 +5121,11 @@ tests beside them per §9).
   the fast simulator"). **FR-115p (M9):** each `gen_incols` entry carries
   `active_low` — 1 for a switch labeled `/RESET` and for every bit of a `CS/`
   `portN`, 0 for a plain column — and the flag is the last field, so a stale
-  program fails to compile rather than mis-parsing.
+  program fails to compile rather than mis-parsing. **FR-079e:** a tri-stated
+  registered output emits a `regprev_<tag>[]` snapshot array, filled from
+  `reg_<tag>[]` at the top of `gen_latch` ahead of the edge test, and the D
+  equation's own-signal literal lowers to that snapshot rather than to a
+  `curr[]` net read.
   The C **runtime** is natively testable standalone (ops/resolver truth tables
   mirroring the JS `sim` cases above). The **parity harness** (M2) generates,
   compiles (`cc`), and runs corpus design+`.tv` pairs, diffing the stdout

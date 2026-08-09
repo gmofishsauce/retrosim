@@ -240,6 +240,34 @@ test("generateC: global-clock .R output emits register state and latch (M3 step 
   assert.match(code, /v = reg_U1\[0\]; \/\* latched \*\//); // drive reads the register
 });
 
+// HOLDREG: a registered bit whose hold term reads its own output, behind a
+// tri-state enable — the 22V574 macrocell in miniature (FR-079e).
+const HOLDREG = {
+  name: "HOLDREG",
+  renderType: "unit",
+  clock: "CP",
+  pins: [
+    { name: "CP", side: "left", position: 1, direction: "in" },
+    { name: "D", side: "left", position: 2, direction: "in" },
+    { name: "LD", side: "left", position: 3, direction: "in" },
+    { name: "OE", side: "left", position: 4, direction: "in" },
+    { name: "Q", side: "right", position: 1, direction: "tristate" },
+  ],
+  behavior: "Q.R = LD * D + /LD * Q\nQ.E = OE\n",
+};
+
+test("generateC: a registered output's own-signal feedback reads the snapshot (FR-079e)", () => {
+  const d = mkDesign();
+  place(d, "U1", HOLDREG);
+  const { code } = generateC(d);
+  assert.match(code, /static rt_val regprev_U1\[1\];/);
+  // Filled from the register at the top of gen_latch, ahead of the edge test —
+  // and so in place for gen_drive too, which rt_step runs later in the step.
+  assert.match(code, /regprev_U1\[0\] = reg_U1\[0\];[\s\S]*?int grose =/);
+  // The D equation reads Q from that snapshot, never from Q's net.
+  assert.match(code, /reg_U1\[0\] = [^;\n]*rt_buf\(regprev_U1\[0\]\) \/\* Q:register \*\//);
+});
+
 // SHIFT2: first stage SR0 is a buried internal node (FR-079c); DS -> SR0 -> Q1.
 const SHIFT2 = {
   name: "SHIFT2",

@@ -174,13 +174,29 @@ export function generateC(design, { columnsFrom = design } = {}) {
 
     const hasReg = c.outputs.some((o) => o.kind === "R");
 
+    // Registered-output slots (FR-079/FR-079a), mapped BEFORE any expression is
+    // lowered: a literal naming one of this instance's own .R outputs reads the
+    // feedback snapshot regprev_<tag>[k] rather than its net (FR-079e), and it
+    // may appear in any equation — including one lowered ahead of its own
+    // output's — so the whole map has to exist first.
+    const regTag = hasReg ? insts[0].refdes.replace(/[^A-Za-z0-9_]/g, "_") : null;
+    const regIdxOf = new Map(); // .R signal → its slot in reg_<tag>[]/regprev_<tag>[]
+    for (const out of c.outputs) {
+      if (out.kind === "R") regIdxOf.set(out.signal, regIdxOf.size);
+    }
+
     // Expression lowering. A literal reads its net from curr: bare literals
     // normalize Z→U via rt_buf (galasm.js litValue), negated ones via rt_not;
-    // an unconnected signal reads RT_Z, which normalizes to U identically.
+    // an unconnected signal reads RT_Z, which normalizes to U identically. A
+    // literal naming one of this instance's .R outputs reads regprev_<tag>[k]
+    // instead — sim.js's fb map (FR-079e), filled at the top of gen_latch and so
+    // in place for both the latch and the drive phase of the step.
     const litExpr = (lit) => {
-      const n = netOf(pinOwner.get(lit.signal));
-      const rd = n >= 0 ? `curr[${n}]` : `RT_Z`;
-      const cm = n >= 0 ? lit.signal : `${lit.signal}:unconnected`;
+      const k = regIdxOf.get(lit.signal);
+      const n = k === undefined ? netOf(pinOwner.get(lit.signal)) : -1;
+      const rd = k !== undefined ? `regprev_${regTag}[${k}]` : n >= 0 ? `curr[${n}]` : `RT_Z`;
+      const cm =
+        k !== undefined ? `${lit.signal}:register` : n >= 0 ? lit.signal : `${lit.signal}:unconnected`;
       return lit.low ? `rt_not(${rd}) /* /${cm} */` : `rt_buf(${rd}) /* ${cm} */`;
     };
     // AND of a term's literals; the empty product (VCC) is true.
@@ -201,10 +217,7 @@ export function generateC(design, { columnsFrom = design } = {}) {
     //   • per-output-clock — a .CLK term; latch on its own edge; async
     //     .APRST/.ARST apply every step (FR-079a). Global AR/SP do not touch it.
     // The D input latched is combExpr; the drive block reads back reg_<tag>[k].
-    let regTag = null;
-    const regIdxOf = new Map(); // .R signal → its slot in reg_<tag>[]
     if (hasReg) {
-      regTag = insts[0].refdes.replace(/[^A-Za-z0-9_]/g, "_");
       // Global clock net — needed only if some .R output uses the global clock.
       const needsGlobal = c.outputs.some((o) => o.kind === "R" && !o.clk);
       let clockNet = -1;
@@ -217,13 +230,13 @@ export function generateC(design, { columnsFrom = design } = {}) {
           clockNet = netOf(`${owner?.refdes}.${clockPin}`);
         }
       }
-      const regs = []; // one per .R output, in output order
+      const regs = []; // one per .R output, in output order (regIdxOf's order)
       for (const out of c.outputs) {
         if (out.kind !== "R") continue;
         const k = regs.length;
-        regIdxOf.set(out.signal, k);
         regs.push({
           k,
+          lhsLow: out.lhsLow, // applied when snapshotting regprev (FR-079e)
           dExpr: combExpr(out),
           clkExpr: out.clk ? termExpr(out.clk) : null, // per-output .CLK (FR-079a)
           aprstExpr: out.aprst ? termExpr(out.aprst) : null, // async preset
@@ -640,6 +653,9 @@ export function generateC(design, { columnsFrom = design } = {}) {
   L.push(`/* --- registered state (FR-079/FR-079a .R outputs) --- */`);
   for (const u of regUnits) {
     L.push(`static rt_val reg_${u.tag}[${u.regs.length}];`);
+    // Feedback snapshot (FR-079e), the C form of sim.js's per-entity fb map:
+    // what this instance's own equations read in place of these outputs' nets.
+    L.push(`static rt_val regprev_${u.tag}[${u.regs.length}];`);
     if (u.hasGlobal) L.push(`static rt_val prevClk_${u.tag};`);
     for (const r of u.regs) if (r.clkExpr) L.push(`static rt_val prevClk_${u.tag}_${r.k};`);
   }
@@ -655,6 +671,8 @@ export function generateC(design, { columnsFrom = design } = {}) {
   resets.forEach((r, i) => L.push(`  gen_resets[${i}].released = 0;`));
   for (const u of regUnits) {
     for (const r of u.regs) L.push(`  reg_${u.tag}[${r.k}] = RT_U; /* power-up U (FR-079) */`);
+    // U either way, negated LHS or not — matching an empty fb map reading Z→U.
+    for (const r of u.regs) L.push(`  regprev_${u.tag}[${r.k}] = RT_U; /* FR-079e */`);
     if (u.hasGlobal) L.push(`  prevClk_${u.tag} = RT_U;`);
     for (const r of u.regs) if (r.clkExpr) L.push(`  prevClk_${u.tag}_${r.k} = RT_U;`);
   }
@@ -668,6 +686,14 @@ export function generateC(design, { columnsFrom = design } = {}) {
   if (!regUnits.length && !latchUnits.length) L.push(`  (void)curr;`);
   for (const u of regUnits) {
     L.push(`  {`);
+    // Feedback snapshot before this unit latches (FR-079e, sim.js
+    // snapshotFeedback): the value each .R macrocell presents — the register
+    // with its LHS negation, no .E gating — read by this instance's own
+    // equations here and in gen_drive, which rt_step runs later in the step.
+    for (const r of u.regs) {
+      const v = r.lhsLow ? `rt_not(reg_${u.tag}[${r.k}])` : `reg_${u.tag}[${r.k}]`;
+      L.push(`    regprev_${u.tag}[${r.k}] = ${v};`);
+    }
     if (u.hasGlobal) {
       const clk = u.clockNet >= 0 ? `curr[${u.clockNet}]` : `RT_Z`;
       L.push(`    rt_val gclk = ${clk}; /* global clock: pin */`);

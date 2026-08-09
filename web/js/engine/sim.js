@@ -8,6 +8,7 @@
 import {
   compileBehavior,
   evalOutput,
+  snapshotFeedback,
   updateRegisters,
   updateLatches,
   V0,
@@ -178,16 +179,25 @@ export function buildSimulation(
       pinOwner.set(node, key);
     }
 
+    // Registered-output feedback snapshot (FR-079e): signal → the value that
+    // output's macrocell presents, refilled by snapshotFeedback at the top of
+    // every step. readNet answers from it ahead of the net, so a literal naming
+    // one of this instance's own .R outputs reads the flip-flop rather than the
+    // pin — the register then holds through tri-state.
+    const fb = new Map();
+
     const e = {
       kind: "galasm",
       compiled: c,
       registers: new Map(),
+      fb,
       prevClock: VU,
       clockNet: undefined,
       clockPrev: new Map(), // per-output .CLK previous values (FR-079a edge detection)
       pinOwner,
       uPins,
       readNet(signal) {
+        if (fb.has(signal)) return fb.get(signal);
         const n = netOfPin.get(pinOwner.get(signal));
         return n === undefined ? VZ : curr[n];
       },
@@ -412,6 +422,11 @@ export function buildSimulation(
       // .CLK edges are detected inside updateRegisters against e.clockPrev.
       const cur = e.clockNet === undefined ? VZ : curr[e.clockNet];
       const globalRose = e.prevClock === V0 && cur === V1;
+      // Feedback snapshot first (FR-079e): both this phase and the drive phase
+      // below read the instance's .R outputs from it, so they see the register
+      // as of the end of the previous step — pre-edge here, and identical to
+      // what the pin's net would have carried.
+      snapshotFeedback(e.compiled, e.registers, e.fb);
       updateRegisters(e.compiled, e.readNet, e.registers, globalRose, e.clockPrev);
       // Transparent latches (FR-079d) update level-sensitively in the same
       // phase — no edge, so independent of the clock comparison above.

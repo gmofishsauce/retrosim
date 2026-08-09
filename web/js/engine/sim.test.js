@@ -313,6 +313,62 @@ test("registered output: latches D on the rising clock edge only (FR-079)", () =
   assert.equal(sim.valueOfPin("U1", "Q"), V1);
 });
 
+// HOLDREG: the 22V574 macrocell in miniature — one registered bit whose hold
+// term reads its own output, behind a tri-state enable.
+const HOLDREG = {
+  name: "HOLDREG",
+  renderType: "unit",
+  clock: "CP",
+  pins: [
+    { name: "CP", side: "left", position: 1, direction: "in" },
+    { name: "D", side: "left", position: 2, direction: "in" },
+    { name: "LD", side: "left", position: 3, direction: "in" },
+    { name: "OE", side: "left", position: 4, direction: "in" },
+    { name: "Q", side: "right", position: 1, direction: "tristate" },
+  ],
+  behavior: "Q.R = LD * D + /LD * Q\nQ.E = OE\n",
+};
+
+test("a registered output holds through tri-state: feedback reads the register (FR-079e)", () => {
+  const d = mkDesign();
+  place(d, "U1", HOLDREG);
+
+  const sim = buildSimulation(d);
+  const inputs = (dv, ld, oe) => [
+    { refdes: "U1", pin: "D", value: dv },
+    { refdes: "U1", pin: "LD", value: ld },
+    { refdes: "U1", pin: "OE", value: oe },
+  ];
+  const hold = (base, cp, extra = []) => {
+    sim.setStimulus([...base, { refdes: "U1", pin: "CP", value: cp }, ...extra]);
+    settle(sim);
+  };
+  // One full clock pulse, with `extra` held on the Q net for its duration.
+  const pulse = (base, extra = []) => {
+    hold(base, V1, extra);
+    hold(base, V0, extra);
+  };
+
+  hold(inputs(V0, V1, V1), V0); // settle the clock low: an edge is a strict 0→1
+  pulse(inputs(V0, V1, V1)); // load a 0, output enabled
+  assert.equal(sim.valueOfPin("U1", "Q"), V0);
+  pulse(inputs(V1, V0, V1)); // hold, output enabled: unchanged behavior
+  assert.equal(sim.valueOfPin("U1", "Q"), V0);
+
+  // Tri-state Q and let a foreign driver hold the net at 1 across two clocks.
+  // Before FR-079e the hold term read that 1 off the pin and the register took
+  // it; the feedback now comes from the flip-flop, ahead of the output buffer.
+  const foreign = [{ refdes: "U1", pin: "Q", value: V1 }];
+  pulse(inputs(V1, V0, V0), foreign);
+  assert.equal(sim.valueOfPin("U1", "Q"), V1); // the foreign driver owns the net
+  pulse(inputs(V1, V0, V0), foreign);
+
+  // Re-enable the output with the foreign driver gone: the 0 is still in there.
+  sim.setStimulus([...inputs(V1, V0, V1), { refdes: "U1", pin: "CP", value: V0 }]);
+  settle(sim);
+  assert.equal(sim.valueOfPin("U1", "Q"), V0);
+});
+
 test("behavior-less type drives U and is reported once (FR-080)", () => {
   const NOBEHAV = {
     name: "MYSTERY",

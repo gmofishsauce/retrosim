@@ -475,6 +475,30 @@ export function evalOutput(output, readNet, registers) {
   return xorLow(v, output.lhsLow);
 }
 
+// snapshotFeedback fills `fb` with this instance's registered-output feedback
+// values for the step (FR-079e), and is called by sim.js at the top of every
+// step, *before* any register latches. Each .R output contributes the value its
+// macrocell presents — the register XOR lhsLow, exactly what evalOutput drives,
+// minus the .E enable — and the entity's readNet answers from `fb` for those
+// signals instead of reading the pin's net. A real GAL taps its array feedback
+// from the flip-flop, ahead of the output buffer, so a register with an .E
+// enable holds its contents while its outputs are tri-stated rather than
+// reloading from whatever else drives the net.
+//
+// Taking the snapshot at the start of the step is what keeps this surgical: for
+// an enabled, unconflicted output the net carried precisely this value already
+// (its register as of the end of the previous step, FR-078), so every such read
+// is unchanged — and every D input in the latch phase reads the same pre-edge
+// snapshot rather than a `registers` map mutating as updateRegisters loops, so a
+// shift chain over pinned registers still advances exactly one stage per clock.
+export function snapshotFeedback(compiled, registers, fb) {
+  fb.clear();
+  for (const out of compiled.outputs) {
+    if (out.kind !== "R") continue;
+    fb.set(out.signal, xorLow(registers.get(out.signal), out.lhsLow));
+  }
+}
+
 // updateRegisters advances one instance's .R registers for one unit step
 // (called by sim.js *before* outputs are evaluated, every step). Registers come
 // in two families (FR-079a/FR-062d):

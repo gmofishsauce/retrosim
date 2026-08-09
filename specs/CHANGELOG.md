@@ -19,6 +19,13 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-08-09 — Registered feedback reads the register, not the pin
+What: In a GALasm behavior block, a literal naming one of the instance's own `.R` outputs now reads that macrocell's presented value (register XOR the LHS negation, ignoring `.E`) instead of the value resolved on the pin's net. Implemented in both engines as a per-entity feedback snapshot taken at the top of each step, so the fed-back value keeps the one-unit delay it had through the net and every enabled, unconflicted read stays bit-identical.
+Why: A registered output carrying an `.E` enable could not hold its contents. With the outputs tri-stated the hold term `Qn.R = CLR * EN * Qn` read whatever else drove the net, so every clock edge reloaded the register from a foreign driver. Found while writing test vectors for the `L4C381` example: its A and B input registers (22V574) are deselected by the 22V738 bus decode whenever the operand bus is sourced elsewhere, and the free-running clock then overwrote them with the bus contents. No real registered GAL macrocell does this — its array feedback is tapped from the flip-flop, ahead of the output buffer.
+Touches: FR-079e (new; supersedes the pin-net feedback rule, FR-081a wording unaffected); design §6.13 (new `sim.js`/`cgen.js` feedback-snapshot bullet), §6.17 (`regprev_<tag>[]` in `gen_latch`/`litExpr`), §11.
+
+---
+
 ## 2026-08-06 — Open Project can reopen an empty project
 What: `openProject`'s no-main-design path now lists the project root before deciding what to show. If the project holds at least one root-level design file, the rooted open-design picker appears as before (cancel still cancels the whole action). If it holds none, no dialog appears at all: the project becomes current and the canvas is replaced with a fresh design named after it — the same ending `newProject` has. A `listDir` failure falls back to presenting the picker.
 Why: reported by the user, who created a project, exited before saving any design, and then could not reopen it. §3.1 A9 had recorded "a project with no designs cannot be made current via Open Project" as an accepted consequence of the cancel semantics, naming New Project as the flow for empty projects — but `CreateProject` refuses an existing directory, so New Project could not re-enter one either, making the state permanent and escapable only by deleting the folder or hand-dropping a design into it. Fixing the dialog away rather than making its cancel commit keeps cancel meaningful where it still appears (the user picked the wrong project); the empty picker had no meaningful cancel to preserve.
