@@ -22,7 +22,7 @@ KiCad-like.
 7. [Buses](#7-buses)
 8. [Per-instance overrides](#8-per-instance-overrides)
 9. [Refreshing type data](#9-refreshing-type-data)
-10. [Projects and files](#10-projects-and-files)
+10. [Projects and files](#10-projects-and-files) — including [Importing a block from another project](#importing-a-block-from-another-project)
 11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
 13. [Simulation](#13-simulation) — including [Pausing and single-stepping](#pausing-and-single-stepping), [Probing a point](#probing-a-point), [The bottom panel area](#the-bottom-panel-area), [Console output](#console-output), [Test vectors](#test-vectors) — including [The panel's test-vector file](#the-panels-test-vector-file) and [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
@@ -102,7 +102,7 @@ appear in the running palette without a restart.
 The window has four regions plus a status bar:
 
 - **Menu bar** (top): the **File** menu (`New Project…`, `Open Project…`,
-  `Duplicate Project…`, `New`, `Open`, `Save`, `Save As`,
+  `Duplicate Project…`, `Import Block…`, `New`, `Open`, `Save`, `Save As`,
   `Export…`, `Refresh Types`), the **Edit** menu (`Undo`, `Redo`, `Copy`, `Paste`),
   the **View** menu (`Zoom In`, `Zoom Out`, `Fit to Screen`, `Console`), and the **Tools**
   menu (`Test Vectors…`, `Generate C…`, `Design Rule Check`), followed by the tool buttons `Select`,
@@ -652,6 +652,8 @@ cannot be saved under a name matching the pattern.
   file is still **shared with the original** — a shared RAM save file would be
   overwritten by running the duplicate. A failure mid-copy leaves the partial
   destination for manual cleanup.
+- **Import Block…** — copies a design from **another** project into the current
+  one, together with everything it depends on. See below.
 
 **Boundary rules — strict for designs, loose for data.** Design-file references
 stay inside the project: an embedded sub-design must be a file in the current
@@ -668,6 +670,43 @@ outside-project references are refused.
 To move a design into a different project, move the file with your file manager
 (and any children/`.tv` siblings it needs); the app deliberately has no
 cross-project save.
+
+### Importing a block from another project
+
+A sub-design is referenced by its path inside the project that defines it, so a
+block you built in one project cannot be embedded in another. **File ▸ Import
+Block…** is how you reuse one: pick a design in another project's folder, and
+the app copies it here along with its **dependency closure** —
+
+- every design it embeds as a sub-design, following the chain all the way down;
+- every peer sheet it reaches through an off-sheet connector, likewise;
+- the source project's `components/` types (GAL parts, memory devices) used by
+  any of those designs — shared-library parts like the 74-series are not
+  copied, since they are available in every project already;
+- every ROM content or RAM save file referenced by a **relative** path, copied
+  to the same relative location so the reference still resolves.
+
+The import **never overwrites**. If any file it would write already exists, or
+an imported component type's id is already in this project or the shared
+library, the whole import is refused and every collision is listed in the
+message tray — nothing is copied. Rename or remove what collides and try again.
+It is also refused if the block or one of its children is not directly in the
+source project's folder (a design in a subfolder, or an old outside-project
+reference): those references cannot be copied without rewriting them.
+
+**Import copies files — it does not place anything on the canvas.** Nothing
+appears to happen beyond a line in the message tray naming what was copied;
+your design, and the current project, are untouched. To *use* the block, drop
+the **ADD** tile on the canvas and pick the design you just imported (see
+[Sub-designs and ports](#12-sub-designs-and-ports)) — the import is what makes
+it eligible, since ADD only accepts designs inside the current project.
+Imported **component types** need no such step: they appear as palette tiles as
+soon as the import finishes.
+
+Two things worth knowing. An **absolute** data path is reported, not copied —
+that file stays shared with the source project, exactly as Duplicate Project
+warns. And an import is a **copy, not a link**: fixing a bug in the original
+later does not reach the copy you imported.
 
 ### File operations
 
@@ -872,6 +911,14 @@ to pins that no longer exist (left **dangling**, per the message tray), are left
 for you to tidy. The message tray names each re-routed instance. Hand-tweaked
 routes elsewhere are never touched, and nothing about this marks the design
 modified.
+
+A **bus** snapped to a multi-bit port of the child is treated the same way: if
+that port has been renamed or removed, the bus's connection to the block is
+dropped whole — never bit-by-bit, which would quietly change what the bus is
+wired to — and the bus is left dangling at that end, with a line in the message
+tray naming the group. Re-snap it to the renamed port to reconnect. (Renaming a
+child's port is therefore a two-step change: rename it, then re-attach the
+parent's wires and buses.)
 
 **Moving between sheets.** **Double-click** a sub-design instance (or right-click
 it and choose **Open sub-design**) to descend into the child design — it replaces
