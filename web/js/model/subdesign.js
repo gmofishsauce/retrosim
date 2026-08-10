@@ -265,6 +265,26 @@ export async function resolveSubDesigns(design, loadChild, onReport = () => {}) 
         onReport(`sub-design ${inst.refdes}: pin ${gone} is gone; left dangling`);
       }
     }
+    // The other place a (refdes, pin) reference lives: a bus group connection,
+    // whose bitMap names one interface pin per bit (FR-042, §7.2). Drop it
+    // whole when any of those pins is gone — never per-bit, which would
+    // silently change the bus's topology — leaving the bus and its endpoint
+    // vertex dangling (FR-099b), exactly as repairStructure does for an
+    // ordinary instance (§7.4). Without this the stale bitMap survives into
+    // busGroupBrace, which resolves every named pin on every frame.
+    for (const bus of design.buses ?? []) {
+      if (!bus.groupConnections) continue;
+      bus.groupConnections = bus.groupConnections.filter((gc) => {
+        if (gc.instance !== inst.refdes) return true;
+        const gone = (gc.bitMap ?? []).find((name) => !have.has(name));
+        if (gone == null) return true;
+        onReport(
+          `sub-design ${inst.refdes}: bus group ${gc.group ?? "?"} is gone ` +
+            `(no pin ${gone}); the bus is left dangling`,
+        );
+        return false;
+      });
+    }
   }
   return { changed };
 }

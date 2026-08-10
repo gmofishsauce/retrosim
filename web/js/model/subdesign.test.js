@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { createDesign, addInstance, addWire, pinWorldPos } from "./design.js";
+import { createDesign, addInstance, addWire, pinWorldPos, busGroupBrace } from "./design.js";
 import {
   designInterface,
   synthTypeForInterface,
@@ -620,4 +620,61 @@ test("resolveSubDesigns leaves a vanished interface pin dangling (FR-099b)", asy
   assert.ok(parent.vertices.every((v) => !(v.ref === x1.refdes && v.pin === "OLD")));
   assert.ok(parent.vertices.some((v) => v.kind === "free")); // OLD endpoint now dangling
   assert.ok(msgs.some((m) => m.includes("dangling")));
+});
+
+// Regression (FR-099b, 2026-08-10): the other place a (refdes, pin) reference
+// lives is a bus group connection's bitMap. A renamed multi-bit child port left
+// it naming pins that no longer exist, and busGroupBrace resolves every one of
+// them on every frame — so the canvas threw and the application was unusable.
+test("resolveSubDesigns drops a bus group snapped to a vanished portN (FR-099b)", async () => {
+  const child = childWithPortN(4, "out"); // portN labelled "b"
+  const parent = createDesign("top");
+  const x = addSubDesignInstance(
+    parent,
+    { childPath: "/lib/w.json", render: "ic", iface: designInterface(child), childName: "w" },
+    10,
+    10,
+  );
+  parent.vertices.push({ id: "pv1", kind: "free", x: 0, y: 0 }, { id: "pv2", kind: "free", x: 1, y: 0 });
+  parent.buses.push({
+    id: "pb1",
+    width: 4,
+    path: [{ t: "node", v: "pv1" }, { t: "node", v: "pv2" }],
+    groupConnections: [{ vertex: "pv2", instance: x.refdes, group: "b", bitMap: ["b0", "b1", "b2", "b3"] }],
+  });
+
+  // The child's portN is renamed "b" → "wide": same width, new pin names.
+  const renamed = structuredClone(child);
+  renamed.components.find((c) => c.refdes === "A-4").label = "wide";
+  const msgs = [];
+  await resolveSubDesigns(parent, async () => renamed, (m) => msgs.push(m));
+
+  assert.deepEqual(parent.buses[0].groupConnections, []); // dropped whole
+  assert.equal(parent.buses.length, 1); // the bus itself remains, dangling
+  assert.ok(parent.vertices.some((v) => v.id === "pv2")); // as does its endpoint
+  assert.ok(msgs.some((m) => /bus group b is gone/.test(m)), msgs.join(" | "));
+  // The canvas can now resolve every surviving group connection (the throw).
+  for (const gc of parent.buses[0].groupConnections) {
+    busGroupBrace(parent.components.find((c) => c.refdes === gc.instance), gc.bitMap);
+  }
+});
+
+// A group connection whose pins all survive is untouched, and one naming
+// another instance is never considered (FR-099b).
+test("resolveSubDesigns keeps a bus group whose interface pins survive (FR-099b)", async () => {
+  const child = childWithPortN(4, "out");
+  const parent = createDesign("top");
+  const x = addSubDesignInstance(
+    parent,
+    { childPath: "/lib/w.json", render: "ic", iface: designInterface(child), childName: "w" },
+    10,
+    10,
+  );
+  const keep = { vertex: "pv2", instance: x.refdes, group: "b", bitMap: ["b0", "b1", "b2", "b3"] };
+  const other = { vertex: "pv3", instance: "U9", group: "T", bitMap: ["T0"] };
+  parent.buses.push({ id: "pb1", width: 4, path: [], groupConnections: [keep, other] });
+  const msgs = [];
+  await resolveSubDesigns(parent, async () => child, (m) => msgs.push(m));
+  assert.deepEqual(parent.buses[0].groupConnections, [keep, other]);
+  assert.deepEqual(msgs, []);
 });
