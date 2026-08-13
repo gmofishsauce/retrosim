@@ -5,7 +5,7 @@
 // browser (§11.1), the same division vectors.js/ndl.js use against their chrome.
 
 import { buildNets } from "../model/netlist.js";
-import { REF_SERIES } from "../model/design.js";
+import { REF_SERIES, markedPins } from "../model/design.js";
 import { compileBehavior } from "./galasm.js";
 
 // Severity ordering (FR-124b). Severity orders and colours the report and
@@ -112,12 +112,20 @@ function buildContext(design, { fileExists, warnings }) {
   const instByRefdes = new Map();
   const packages = new Map(); // "U5" → [instance, …]
   const unconnectedPins = [];
+  // FR-124j: a no-connect-marked pin is removed from the check's INPUT, not
+  // filtered out of its output — so no rule can see it and none needs to know it
+  // exists. `pinsOf` is the one filter, shared with the two rules (R6, R8) that
+  // re-read an instance's pin list instead of reading pinInfo.
+  const pinsOf = (inst) => {
+    const marks = markedPins(inst);
+    return (inst.typeData?.pins ?? []).filter((p) => !marks.has(p.name));
+  };
   for (const inst of instances) {
     instByRefdes.set(inst.refdes, inst);
     const pkg = packageOf(inst.refdes);
     if (!packages.has(pkg)) packages.set(pkg, []);
     packages.get(pkg).push(inst);
-    for (const pin of inst.typeData?.pins ?? []) {
+    for (const pin of pinsOf(inst)) {
       const info = classify(inst, pin);
       pinInfo.set(info.key, info);
       if (!netOfPin.has(info.key)) unconnectedPins.push(info);
@@ -137,6 +145,7 @@ function buildContext(design, { fileExists, warnings }) {
     instances,
     instByRefdes,
     packages,
+    pinsOf,
     unconnectedPins,
     fileExists,
     warnings,
@@ -406,7 +415,7 @@ function ruleR6(ctx) {
   for (const [pkg, insts] of ctx.packages) {
     const outputs = [];
     for (const inst of insts) {
-      for (const pin of inst.typeData?.pins ?? []) {
+      for (const pin of ctx.pinsOf(inst)) {
         const info = ctx.pinInfo.get(`${inst.refdes}.${pin.name}`);
         if (info?.strong) outputs.push(info);
       }
@@ -485,13 +494,16 @@ function ruleR7(ctx) {
 function ruleR8(ctx) {
   const findings = [];
   for (const insts of ctx.packages.values()) {
-    const pinsOf = (inst) => inst.typeData?.pins ?? [];
     const connected = insts.some((inst) =>
-      pinsOf(inst).some((pin) => ctx.netOfPin.has(`${inst.refdes}.${pin.name}`)),
+      ctx.pinsOf(inst).some((pin) => ctx.netOfPin.has(`${inst.refdes}.${pin.name}`)),
     );
     if (connected) continue;
     for (const inst of insts) {
-      if (pinsOf(inst).length === 0) continue;
+      // A component every one of whose pins is marked has, to the check, no pins
+      // at all, and is skipped here on exactly the terms the text note is
+      // (FR-124j): marking every pin is a statement that it connects to nothing
+      // on purpose.
+      if (ctx.pinsOf(inst).length === 0) continue;
       findings.push(
         finding("R8", "info", `${inst.refdes} is placed but connected to nothing`, [inst.refdes]),
       );

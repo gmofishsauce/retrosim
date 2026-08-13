@@ -435,3 +435,38 @@ test("absent primaryClock stays absent; a dangling one is dropped with a warning
   assert.equal(warns.length, 1);
   assert.match(warns[0], /primary clock A-9/);
 });
+
+// --- no-connect marks (FR-071i, §7.4) --------------------------------------
+
+test("ncPins round-trip through serialize/deserialize with no version bump (FR-071i)", () => {
+  const d = createDesign("t");
+  const inst = addInstance(d, ty(), 0, 0, 0);
+  inst.ncPins = ["A0"];
+  const obj = serializeDesign(d);
+  assert.equal(obj.formatVersion, FORMAT_VERSION); // additive-optional, like waivers
+  const back = deserializeDesign(structuredClone(obj));
+  assert.deepEqual(back.components[0].ncPins, ["A0"]);
+
+  // An unmarked design gains no key, and an older file loads with none.
+  const plain = createDesign("t");
+  addInstance(plain, ty(), 0, 0, 0);
+  assert.ok(!("ncPins" in serializeDesign(plain).components[0]));
+});
+
+test("a mark naming a pin the type no longer has is dropped silently on load (FR-071i)", () => {
+  const d = createDesign("t");
+  const inst = addInstance(d, ty(), 0, 0, 0);
+  inst.ncPins = ["A0", "GONE"]; // GONE: the type was edited and refreshed (FR-088)
+  const warnings = [];
+  const back = deserializeDesign(structuredClone(serializeDesign(d)), {
+    onWarn: (m) => warnings.push(m),
+  });
+  assert.deepEqual(back.components[0].ncPins, ["A0"]);
+  assert.deepEqual(warnings, []); // a filter, not a repair: it never warns
+
+  // Every mark stale ⇒ the field goes away entirely rather than becoming [].
+  const e = createDesign("t");
+  addInstance(e, ty(), 0, 0, 0).ncPins = ["GONE"];
+  const back2 = deserializeDesign(structuredClone(serializeDesign(e)));
+  assert.ok(!("ncPins" in back2.components[0]));
+});

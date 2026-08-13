@@ -132,6 +132,12 @@ function tokenize(text) {
   return tokens;
 }
 
+// NC is reserved twice over: GALasm's own manual (§2) reserves it, and FR-062f
+// makes it the library-wide no-connect pin name. Either way it may name no signal,
+// so a block mentioning it says so explicitly rather than reporting it unknown.
+const NC_SIGNAL = "NC";
+const NC_MESSAGE = "NC is reserved (no connect) and may not appear in equations";
+
 // compileBehavior compiles typeData.behavior, or returns null when the type
 // declares no behavior block (FR-080). Throws Error with a message naming the
 // type on any language-rule violation; sim.js surfaces these at Run preflight.
@@ -142,6 +148,11 @@ export function compileBehavior(typeData) {
   // signal name and carries no polarity (physical-level convention above).
   const signals = new Map(); // signal -> { pin, direction }
   for (const p of typeData.pins) {
+    // An NC pin (FR-062f) is a declared no-connect: it owns no signal, may repeat
+    // within a part, and may not appear in an equation. Skipping it here is what
+    // permits the name on a pin while keeping it out of the namespace — a literal
+    // NC in the block then fails below with the reserved-name message.
+    if (p.name === "NC") continue;
     const signal = p.name.startsWith("/") ? p.name.slice(1) : p.name;
     signals.set(signal, { pin: p.name, direction: p.direction });
   }
@@ -150,7 +161,10 @@ export function compileBehavior(typeData) {
     throw new Error(`${typeData.name}: behavior: ${msg}`);
   };
 
-  // Reserved names (manual §2) would collide with keyword handling below.
+  // Reserved names (manual §2) would collide with keyword handling below. NC is
+  // reserved for a second reason since FR-062f — it names a no-connect pin — and
+  // is the one of the five that may legally appear in the pin list, filtered out
+  // above rather than rejected here.
   for (const reserved of ["AR", "SP", "VCC", "GND", "NC"]) {
     if (signals.has(reserved)) fail(`pin name ${reserved} is reserved`);
   }
@@ -208,6 +222,7 @@ export function compileBehavior(typeData) {
   function resolveLiteral({ name, useNeg }) {
     if (name === "AR" || name === "SP") fail(`${name} may not be used on a right-hand side`);
     if (name === "VCC" || name === "GND") fail(`${name} must be the entire right-hand side`);
+    if (name === NC_SIGNAL) fail(NC_MESSAGE);
     if (!signals.has(name)) fail(`unknown signal ${name}`);
     return { signal: name, low: useNeg };
   }
@@ -281,6 +296,7 @@ export function compileBehavior(typeData) {
     if (next() !== "=") fail(`expected = after ${suffix ? `${name}.${suffix}` : name}`);
 
     const sig = signals.get(name);
+    if (name === NC_SIGNAL) fail(NC_MESSAGE);
     if (!sig) fail(`unknown signal ${name} on a left-hand side`);
     if (!OUTPUT_DIRS.has(sig.direction)) {
       fail(`${name} is not an output-capable pin (dir ${sig.direction})`);

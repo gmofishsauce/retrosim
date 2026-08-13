@@ -21,6 +21,7 @@ import {
 import {
   hitComponent,
   hitPin,
+  hitAnyPin,
   PIN_HIT_TOL,
   hitSegment,
   hitBend,
@@ -52,6 +53,7 @@ import {
   translateWiring,
   pasteFragmentCmd,
   setNoteTextCmd,
+  setPinMarkCmd,
 } from "../commands.js";
 import { extractFragment } from "../model/clipboard.js";
 import {
@@ -72,6 +74,7 @@ import {
   danglingEndAt,
   busGroupBrace,
   typeIdentity,
+  isPinMarked,
   NOTE_PAD,
   NOTE_LINE,
   NOTE_FONT,
@@ -86,6 +89,7 @@ import {
 } from "../chrome/dialogs.js";
 import {
   INTERACTIONS,
+  PIN_MARK_TOOL,
   portNFields,
   PORTN_MIN_WIDTH,
   PORTN_MAX_WIDTH,
@@ -262,7 +266,10 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       renderer.setGhost?.(null);
     }
     const label = document.getElementById("tool-mode");
-    if (label) label.textContent = tool === "place" ? `place ${typeIdentity(type)}` : tool;
+    if (label) {
+      label.textContent =
+        tool === "place" ? `place ${typeIdentity(type)}` : tool === "markPin" ? "no connect" : tool;
+    }
     canvas.style.cursor =
       tool === "select"
         ? "default"
@@ -1057,12 +1064,26 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     return { kind: "free", x: g.x, y: g.y };
   }
 
+  // togglePinMark is the no-connect tool's whole gesture (FR-071i): the pin under
+  // the point gains a mark, or loses the one it has. It uses hitAnyPin, not hitPin,
+  // because hitPin deliberately cannot see a marked pin (it answers connection
+  // questions, §6.9) and unmarking needs to. A miss marks nothing and says nothing
+  // — the tool stays armed for the next pin.
+  function togglePinMark(world) {
+    const ph = hitAnyPin(store.design, world, pinTol());
+    if (!ph) return;
+    const inst = store.design.components.find((c) => c.refdes === ph.refdes);
+    if (!inst) return;
+    store.dispatch(setPinMarkCmd(ph.refdes, ph.pin, !isPinMarked(inst, ph.pin)));
+  }
+
   // --- palette: click to arm PLACE, or drag a tile onto the canvas ---
   palette.addEventListener("click", (e) => {
     if (store.isReadonly()) return; // placement disabled (FR-087/FR-115h)
     const tile = e.target.closest(".palette-tile");
     if (!tile) return;
     if (tile.dataset.type === "add") return setTool("place", ADD_TYPE); // §6.14
+    if (tile.dataset.type === PIN_MARK_TOOL.id) return setTool("markPin"); // FR-071i
     if (tile.dataset.type === "newgal") return void onNewGalPart?.(); // FR-066c
     if (tile.dataset.type === "mem") return void onNewMemDevice?.(); // FR-114
     const type = findType(tile.dataset.type);
@@ -1077,6 +1098,13 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     e.preventDefault();
     if (store.isReadonly()) return; // placement disabled (FR-087/FR-115h)
     const data = e.dataTransfer.getData("text/plain");
+    if (data === PIN_MARK_TOOL.id) {
+      // The mark has no position of its own, so a drop is a click on a pin
+      // (FR-071i): the drop point is the target, and a drop on anything else
+      // marks nothing and is not an error.
+      togglePinMark(worldOf(e));
+      return;
+    }
     if (data === "add") {
       placeType = ADD_TYPE;
       placeAt(canvasPoint(e));
@@ -1156,6 +1184,14 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
 
     if (store.state.tool === "place" && placeType) {
       placeAt(pt);
+      return;
+    }
+
+    // The no-connect tool (FR-071i): one gesture marks or unmarks the pin under
+    // the pointer. It stays armed — marking several pins of one chip is the
+    // normal case — and a click on anything else does nothing at all.
+    if (store.state.tool === "markPin") {
+      togglePinMark(worldOf(e));
       return;
     }
 

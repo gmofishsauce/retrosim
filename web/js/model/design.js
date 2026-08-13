@@ -9,6 +9,9 @@ import {
   symbolFootprint,
   pinSlotOffset,
 } from "../engine/symbols.js";
+// A multi-bit port's width-driven type fields (FR-071e); refreshInstance
+// regenerates them per instance rather than copying the library prototype.
+import { portNFields } from "../builtins.js";
 // The save-format version lives with the save code (§7.4); a fresh design
 // mirrors the current shape, so it carries that constant rather than a literal.
 import { FORMAT_VERSION } from "./persist.js";
@@ -173,8 +176,79 @@ export function addInstance(design, type, x, y, rotation) {
     inst.label = refdes;
     inst.width = type.pins.length;
   }
+  seedNcMarks(inst);
   design.components.push(inst);
   return inst;
+}
+
+// NC_PIN is the pin name reserved library-wide for "no connect" (FR-062f). It is
+// the one pin name a component may repeat, since nothing may ever reference it.
+export const NC_PIN = "NC";
+
+// markedPins is the single reader of the per-instance no-connect marks (FR-071i).
+// `ncPins` is additive-optional (§7.2) — absent means none — so going through
+// this means no other code has to know the field can be missing.
+export function markedPins(inst) {
+  return new Set(inst?.ncPins ?? []);
+}
+
+export function isPinMarked(inst, pinName) {
+  return markedPins(inst).has(pinName);
+}
+
+// pinAcceptsConnection is FR-071i's mutual-exclusion rule, in one predicate so
+// the wire tool, the bus tool, and the group snap cannot disagree about what is
+// connectable: a marked pin and a pin named NC take no connection at all.
+export function pinAcceptsConnection(inst, pinName) {
+  return pinName !== NC_PIN && !isPinMarked(inst, pinName);
+}
+
+// seedNcMarks stamps an instance's NC pins with marks (FR-062f). Called at
+// placement ONLY — refreshInstance (FR-088) deliberately does not, so editing a
+// type to add NC pins leaves instances already on the sheet alone.
+export function seedNcMarks(inst) {
+  // Marks are keyed by pin NAME, and NC is the one name a part may repeat
+  // (FR-062f) — so a part with six NC pins gets the single entry "NC", which
+  // marks all six. That is the point of the name being unreferenceable.
+  const hasNc = (inst.typeData?.pins ?? []).some((p) => p.name === NC_PIN);
+  if (hasNc) inst.ncPins = [NC_PIN];
+  return inst;
+}
+
+// pinHasConnection reports whether anything is wired to this pin — a pin vertex
+// of this instance, or a bus group snap naming it. It is what makes the mark and
+// a connection mutually exclusive from the other side (FR-071i): a connected pin
+// cannot be marked.
+export function pinHasConnection(design, refdes, pinName) {
+  for (const v of design.vertices ?? []) {
+    if (v.kind === "pin" && v.ref === refdes && v.pin === pinName) return true;
+  }
+  for (const bus of design.buses ?? []) {
+    for (const gc of bus.groupConnections ?? []) {
+      if (gc.instance === refdes && (gc.bitMap ?? []).includes(pinName)) return true;
+    }
+  }
+  return false;
+}
+
+// setPinMark adds or removes one pin's no-connect mark (FR-071i). Adding is
+// refused — reported, never thrown — when the pin already carries a connection;
+// the command layer (§6.10) surfaces the refusal.
+export function setPinMark(design, inst, pinName, on) {
+  if (on) {
+    if (pinHasConnection(design, inst.refdes, pinName)) {
+      return { skip: `${inst.refdes}.${pinName} is connected; disconnect it before marking it no-connect` };
+    }
+    const marks = markedPins(inst);
+    marks.add(pinName);
+    inst.ncPins = [...marks];
+  } else {
+    const marks = markedPins(inst);
+    marks.delete(pinName);
+    if (marks.size) inst.ncPins = [...marks];
+    else delete inst.ncPins;
+  }
+  return { ok: true };
 }
 
 // addSubunitPackage drops a subunit-rendered package (FR-013a): it allocates one
@@ -202,6 +276,7 @@ export function addSubunitPackage(design, type, x, y) {
       typeData: td,
       overrides: {},
     };
+    seedNcMarks(inst);
     design.components.push(inst);
     created.push(inst);
     offsetY += fp.height + 1;
@@ -249,6 +324,24 @@ export function refreshInstance(design, inst, libType) {
     td.mem.romFile = inst.typeData.mem.romFile;
   }
 
+  // A multi-bit port's bit width is the other piece of per-instance state riding
+  // in the copied type data (FR-071e): the width chosen at placement is baked
+  // into the pins, the P group, and the footprint, while the library holds only
+  // the palette prototype at the default width. Regenerate those fields from the
+  // instance's own width, or a refresh would shrink a placed 16-bit port to 8
+  // (FR-088) — stranding its own bus group connection on pins it no longer has.
+  if (newRender === "portN") {
+    Object.assign(td, portNFields(inst.width ?? inst.typeData.pins.length));
+  }
+
+  // A text note's footprint is auto-sized from its text (FR-071f) and likewise
+  // lives in the copied type data, while the library holds only the empty-note
+  // minimum. Re-derive it from the instance's own text, or a refresh would
+  // shrink every note on the sheet to 4×2 until its next edit (FR-088).
+  if (newRender === "note") {
+    Object.assign(td, noteSize(inst.text));
+  }
+
   const pinNames = new Set(td.pins.map((p) => p.name));
   for (const v of design.vertices) {
     if (
@@ -257,6 +350,20 @@ export function refreshInstance(design, inst, libType) {
       !pinNames.has(v.pin)
     ) {
       return { skip: `wired pin ${v.pin} is gone from the new definition` };
+    }
+  }
+  // The other place a (refdes, pin) reference lives: a bus group connection,
+  // whose bitMap names one pin per bit (FR-042, §7.2). Any bit gone skips the
+  // instance whole — never per-bit, which would silently change the bus's
+  // topology. (The sub-design side of the same gap is FR-099b, §6.14; there the
+  // stale reference is dropped, here the new definition is simply declined.)
+  for (const bus of design.buses ?? []) {
+    for (const gc of bus.groupConnections ?? []) {
+      if (gc.instance !== inst.refdes) continue;
+      const gone = (gc.bitMap ?? []).find((name) => !pinNames.has(name));
+      if (gone != null) {
+        return { skip: `bus-connected pin ${gone} is gone from the new definition` };
+      }
     }
   }
 
@@ -589,6 +696,11 @@ export function groupFreeBlock(design, refdes, group, width) {
 export function groupsAcceptingBus(design, inst, width) {
   const out = [];
   for (const group of inst.typeData.pinGroups ?? []) {
+    // A group holding a no-connect-marked pin is refused WHOLE (FR-071i): a
+    // partial snap would silently misroute the bus's bits, which is worse than
+    // not connecting. The pin's mark is the user's statement that it is unused,
+    // so removing the mark is the fix.
+    if (group.pins.some((name) => !pinAcceptsConnection(inst, name))) continue;
     const block = groupFreeBlock(design, inst.refdes, group, width);
     if (block) out.push({ group, block });
   }
@@ -608,6 +720,12 @@ export function snapBusGroup(design, busId, vertexId, instanceRefdes, groupName)
   if (!inst) throw new Error(`no such component ${instanceRefdes}`);
   const group = (inst.typeData.pinGroups ?? []).find((g) => g.name === groupName);
   if (!group) throw new Error(`${instanceRefdes} has no pin group ${groupName}`);
+  const blocked = group.pins.find((name) => !pinAcceptsConnection(inst, name));
+  if (blocked) {
+    throw new Error(
+      `group ${groupName} contains no-connect pin ${blocked}; remove its mark to connect the group`,
+    );
+  }
   const block = groupFreeBlock(design, instanceRefdes, group, bus.width);
   if (!block) {
     throw new Error(

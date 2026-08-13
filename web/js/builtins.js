@@ -329,14 +329,16 @@ const BUILTIN_DEFS = [
     width: 4,
     height: 4,
     // Idealized single-pin logic-level coil (in, on the top edge) and an SPDT
-    // changeover contact: NO/COM/NC down the right edge, all bidir (FR-071h). No
+    // changeover contact: NO/COM/NCC down the right edge, all bidir (FR-071h).
+    // The normally-closed terminal is NCC, not NC: the pin name NC is reserved
+    // library-wide for "no connect" (FR-062f) and cannot mean two things. No
     // properties, and no BEHAVIORS/INTERACTIONS entry — realized as a kind:"pass"
     // entity (§6.13).
     pins: [
       { name: "COIL", side: "top", position: 1, direction: "in" },
       { name: "NO", side: "right", position: 1, direction: "bidir" },
       { name: "COM", side: "right", position: 2, direction: "bidir" },
-      { name: "NC", side: "right", position: 3, direction: "bidir" },
+      { name: "NCC", side: "right", position: 3, direction: "bidir" },
     ],
   },
   {
@@ -380,6 +382,27 @@ const BUILTIN_DEFS = [
 // BUILTINS stamps each definition with its immutable id (FR-066e); placement and
 // the simulator key off `id` (typeIdentity, §6.6), divorced from the name.
 export const BUILTINS = BUILTIN_DEFS.map((t) => ({ id: builtinId(t.name), ...t }));
+
+// NOCONNECT_ICON: the small X of the no-connect mark (FR-071i), centered in the
+// tile — the same glyph canvas.js draws on a marked pin.
+const NOCONNECT_ICON =
+  '<svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"' +
+  ' fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round">' +
+  '<line x1="12" y1="12" x2="24" y2="24"/>' +
+  '<line x1="24" y1="12" x2="12" y2="24"/></svg>';
+
+// PIN_MARK_TOOL is the no-connect mark's palette entry (FR-071i), and is
+// deliberately NOT a member of BUILTINS: every consumer of that list treats its
+// entries as placeable component types (placement, type resolution for an
+// instance's `type` id, the refdes series, the generator's and exporters' type
+// switches), and this places no instance at all — it toggles a pin name on an
+// instance that is already there (§6.22). The palette appends its tile to the
+// lower region and the interaction layer enters the `markPin` tool on click.
+export const PIN_MARK_TOOL = {
+  id: "tool-noconnect",
+  title: "no connect", // palette tooltip (FR-071i)
+  icon: NOCONNECT_ICON,
+};
 
 // memDeviceType synthesizes the ComponentType for a generator-defined memory
 // device (FR-114c) from a validated dialog spec {name, kind, addressBits,

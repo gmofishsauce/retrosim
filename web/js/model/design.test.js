@@ -25,7 +25,14 @@ import {
   BUS_BRACE_DEPTH,
   typeIdentity,
   noteSize,
+  markedPins,
+  isPinMarked,
+  pinAcceptsConnection,
+  pinHasConnection,
+  setPinMark,
+  NC_PIN,
 } from "./design.js";
+import { BUILTINS, portNFields } from "../builtins.js";
 
 // A text-note built-in type (FR-071f): pinless, auto-sized.
 function typeNote() {
@@ -674,6 +681,76 @@ test("refreshInstance skips when a wired pin is gone; unwired pin changes are fi
   assert.deepEqual(refreshInstance(d, inst, renamedInput), { ok: true });
 });
 
+// Regression (2026-08-13): a multi-bit port's width is per-instance state baked
+// into its copied type data (FR-071e), while the library holds only the palette
+// prototype at the default width. Refresh Types copied the prototype wholesale
+// and shrank a placed 16-bit port to 8 pins — after which its own bus group
+// connection named P8..P15 on an instance that no longer had them, and
+// busGroupBrace threw on every canvas frame.
+test("refreshInstance regenerates a portN's pins from the instance's width (FR-088/FR-071e)", () => {
+  const proto = BUILTINS.find((t) => t.renderType === "portN"); // 8-bit palette default
+  const d = createDesign("t");
+  // The drop flow bakes the chosen width into the type before placement (§6.14).
+  const inst = addInstance(d, { ...proto, ...portNFields(16) }, 0, 0, 0);
+  assert.equal(inst.width, 16);
+
+  assert.deepEqual(refreshInstance(d, inst, proto), { ok: true });
+  assert.equal(inst.typeData.pins.length, 16);
+  assert.equal(inst.typeData.pins.at(-1).name, "P15");
+  assert.deepEqual(inst.typeData.pinGroups[0].pins.at(-1), "P15");
+  assert.equal(inst.typeData.height, 17); // 3 × (N+1) footprint, not the default's 9
+  // The width-driven fields being derived from `width` also repairs an instance
+  // an earlier refresh already shrank: `width` survived that clobber.
+  inst.typeData = structuredClone({ ...proto });
+  assert.deepEqual(refreshInstance(d, inst, proto), { ok: true });
+  assert.equal(inst.typeData.pins.length, 16);
+});
+
+// A note's footprint is auto-sized from its text (FR-071f) and rides in the
+// copied type data too; the library holds only the empty-note minimum, so the
+// wholesale copy collapsed every note on the sheet until its next edit.
+test("refreshInstance re-derives a note's footprint from its text (FR-088/FR-071f)", () => {
+  const d = createDesign("t");
+  const proto = typeNote(); // 4x2, the empty-note minimum
+  const inst = addInstance(d, proto, 0, 0, 0);
+  inst.text = "a much longer line of annotation\nand a second line";
+  Object.assign(inst.typeData, noteSize(inst.text)); // as setNoteTextCmd leaves it
+  const sized = { width: inst.typeData.width, height: inst.typeData.height };
+  assert.ok(sized.width > 4 && sized.height > 2);
+
+  assert.deepEqual(refreshInstance(d, inst, proto), { ok: true });
+  assert.equal(inst.typeData.width, sized.width);
+  assert.equal(inst.typeData.height, sized.height);
+});
+
+// The refresh-side twin of FR-099b: a bus group connection's bitMap is the other
+// place a (refdes, pin) reference lives (§7.2), and the structural check covered
+// pin vertices only.
+test("refreshInstance skips when a bus-connected group pin is gone (FR-088)", () => {
+  const d = createDesign("t");
+  const inst = addInstance(d, type74138(), 0, 0, 0);
+  d.buses.push({
+    id: "b1",
+    width: 1,
+    path: [],
+    groupConnections: [{ vertex: "v9", instance: inst.refdes, group: "Y", bitMap: ["/Y0"] }],
+  });
+
+  const renamed = refreshedType();
+  renamed.pins = [
+    { name: "A0", side: "left", position: 2, direction: "in" },
+    { name: "/O0", side: "right", position: 2, direction: "out" }, // /Y0 renamed
+  ];
+  const before = inst.typeData;
+  const r = refreshInstance(d, inst, renamed);
+  assert.equal(r.skip.includes("/Y0"), true);
+  assert.equal(inst.typeData, before); // untouched, so the brace still resolves
+
+  // A group connection naming ANOTHER instance never constrains this one.
+  d.buses[0].groupConnections[0].instance = "U99";
+  assert.deepEqual(refreshInstance(d, inst, renamed), { ok: true });
+});
+
 test("refreshInstance skips on renderType change (FR-088)", () => {
   const d = createDesign("t");
   const inst = addInstance(d, type74138(), 0, 0, 0);
@@ -743,4 +820,86 @@ test("noteSize returns the minimum for empty text and grows with content (FR-071
   // More lines make it taller; a long line makes it wider than the minimum.
   assert.ok(noteSize("a\nb\nc\nd").height > min.height);
   assert.ok(noteSize("a very long single line of note text").width > min.width);
+});
+
+// --- no-connect marks (FR-071i/FR-062f, §6.22) -----------------------------
+
+// typeWithNc is a two-pin part plus two NC pins — the shape a GAL part authored
+// with unused pins has (FR-062f). NC repeats, which is legal for that name alone.
+function typeWithNc() {
+  return {
+    id: "type-NCPART",
+    name: "NCPART",
+    width: 6,
+    height: 8,
+    pins: [
+      { name: "A", side: "left", position: 1, direction: "in" },
+      { name: "Y", side: "right", position: 1, direction: "out" },
+      { name: NC_PIN, side: "left", position: 2, direction: "in" },
+      { name: NC_PIN, side: "left", position: 3, direction: "in" },
+    ],
+  };
+}
+
+test("markedPins reads an absent ncPins as none (FR-071i)", () => {
+  assert.deepEqual([...markedPins({})], []);
+  assert.deepEqual([...markedPins({ ncPins: ["A"] })], ["A"]);
+  assert.equal(isPinMarked({ ncPins: ["A"] }, "A"), true);
+  assert.equal(isPinMarked({ ncPins: ["A"] }, "Y"), false);
+});
+
+test("pinAcceptsConnection refuses a marked pin and a pin named NC (FR-071i/FR-062f)", () => {
+  const inst = { ncPins: ["A"] };
+  assert.equal(pinAcceptsConnection(inst, "A"), false);
+  assert.equal(pinAcceptsConnection(inst, NC_PIN), false);
+  assert.equal(pinAcceptsConnection(inst, "Y"), true);
+});
+
+test("placement seeds marks on NC pins; refreshInstance adds none (FR-062f/FR-088)", () => {
+  const d = createDesign("t");
+  const inst = addInstance(d, typeWithNc(), 0, 0, 0);
+  assert.deepEqual(inst.ncPins, [NC_PIN]); // one entry: the marks are per pin NAME
+
+  // A part that gains NC pins later does not retro-mark instances already placed
+  // (FR-062f, placement-only): Refresh Types brings in the pins, not the marks.
+  const e = createDesign("t");
+  const plain = { ...typeWithNc(), pins: typeWithNc().pins.slice(0, 2) };
+  const old = addInstance(e, plain, 0, 0, 0);
+  assert.equal(old.ncPins, undefined);
+  assert.deepEqual(refreshInstance(e, old, typeWithNc()), { ok: true });
+  assert.equal(old.ncPins, undefined);
+});
+
+test("setPinMark refuses a connected pin and toggles a bare one (FR-071i)", () => {
+  const d = createDesign("t");
+  const inst = addInstance(d, type74138(), 0, 0, 0);
+  addWire(d, { kind: "pin", refdes: inst.refdes, pin: "A0" }, { kind: "free", x: 9, y: 9 });
+  assert.equal(pinHasConnection(d, inst.refdes, "A0"), true);
+
+  const refused = setPinMark(d, inst, "A0", true);
+  assert.match(refused.skip, /connected/);
+  assert.equal(inst.ncPins, undefined); // nothing changed
+
+  assert.deepEqual(setPinMark(d, inst, "A1", true), { ok: true });
+  assert.deepEqual(inst.ncPins, ["A1"]);
+  assert.deepEqual(setPinMark(d, inst, "A1", false), { ok: true });
+  assert.equal(inst.ncPins, undefined); // cleared, not left as an empty array
+});
+
+test("a bus group holding a marked pin is refused whole, not partially (FR-071i)", () => {
+  const d = createDesign("t");
+  const inst = addInstance(d, type74138Grp(), 0, 0, 0);
+  assert.deepEqual(
+    groupsAcceptingBus(d, inst, 3).map((g) => g.group.name),
+    ["A"],
+  );
+
+  setPinMark(d, inst, "A1", true); // one member of the three-pin group
+  assert.deepEqual(groupsAcceptingBus(d, inst, 3), []); // the whole group withdraws
+
+  const bus = freeBus(d, 3);
+  assert.throws(
+    () => snapBusGroup(d, bus.id, bus.path[1].v, inst.refdes, "A"),
+    /no-connect pin A1/,
+  );
 });

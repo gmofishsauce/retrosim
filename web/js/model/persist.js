@@ -301,6 +301,25 @@ export function deserializeDesign(obj, { onWarn = () => {} } = {}) {
   // silently on its next run. A waiver list is also uniquely safe to lose, costing
   // at worst a noisier report.
   d.drcWaivers = structuredClone(obj.drcWaivers ?? []);
+  // FR-071i: no-connect marks are additive-optional too, and get the one line of
+  // cleanup waivers do not — a mark naming a pin the type no longer declares (the
+  // type was edited and refreshed, FR-088) is dropped silently. This cannot fail,
+  // warn, or reject a load: it is a filter, not a repair (§7.4).
+  for (const inst of d.components) {
+    if (!Array.isArray(inst.ncPins)) {
+      delete inst.ncPins;
+      continue;
+    }
+    // A sub-design instance is exempt: it persists no typeData (FR-098), and the
+    // placeholder built below is derived from wiring — which by construction omits
+    // the unconnected pins a mark names. Its interface is resolved from the child
+    // file afterward (§6.14), so filtering here would drop every legitimate mark.
+    if (inst.kind === "subdesign") continue;
+    const declared = new Set((inst.typeData?.pins ?? []).map((p) => p.name));
+    const kept = inst.ncPins.filter((name) => declared.has(name));
+    if (kept.length) inst.ncPins = kept;
+    else delete inst.ncPins;
+  }
   // Sub-designs persist no typeData (live reference, FR-098). Give each a
   // wiring-derived placeholder so the design is always renderable; the load
   // flow's resolveSubDesigns (§6.14) then refines it from the child file (or

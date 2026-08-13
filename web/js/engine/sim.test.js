@@ -981,26 +981,26 @@ test("transmission gate: a control change joins on the next step (one-unit delay
   assert.equal(sim.valueOfPin("A-1", "B"), V1);
 });
 
-test("relay: the coil throws the changeover contact (COM–NC released, COM–NO energized) (FR-071h)", () => {
+test("relay: the coil throws the changeover contact (COM–NCC released, COM–NO energized) (FR-071h)", () => {
   const d = mkDesign();
   place(d, "A-1", builtin("relay"));
   placeSwitch(d, "A-2", "1"); // COM driver
   place(d, "A-3", builtin("indicator")); // NO probe
-  place(d, "A-4", builtin("indicator")); // NC probe
+  place(d, "A-4", builtin("indicator")); // NCC probe
   const sc = placeSwitch(d, "A-5", "0"); // coil, start released
   connect(d, ["A-1", "COM"], ["A-2", "OUT"]);
   connect(d, ["A-1", "NO"], ["A-3", "IN"]);
-  connect(d, ["A-1", "NC"], ["A-4", "IN"]);
+  connect(d, ["A-1", "NCC"], ["A-4", "IN"]);
   connect(d, ["A-1", "COIL"], ["A-5", "OUT"]);
   const sim = buildSimulation(d);
   settle(sim);
-  assert.equal(sim.valueOfPin("A-1", "NC"), V1); // released: COM–NC joined
+  assert.equal(sim.valueOfPin("A-1", "NCC"), V1); // released: COM–NCC joined
   assert.equal(sim.valueOfPin("A-1", "NO"), VZ); // NO isolated
 
   sc.switchState = "1"; // energize
   settle(sim);
   assert.equal(sim.valueOfPin("A-1", "NO"), V1); // energized: COM–NO joined
-  assert.equal(sim.valueOfPin("A-1", "NC"), VZ); // NC isolated
+  assert.equal(sim.valueOfPin("A-1", "NCC"), VZ); // NCC isolated
 });
 
 test("relay: a coil reading U forces all three contact terminals U (FR-083a)", () => {
@@ -1008,34 +1008,34 @@ test("relay: a coil reading U forces all three contact terminals U (FR-083a)", (
   place(d, "A-1", builtin("relay")); // COIL unconnected → U
   placeSwitch(d, "A-2", "1"); // COM driver
   place(d, "A-3", builtin("indicator")); // NO
-  place(d, "A-4", builtin("indicator")); // NC
+  place(d, "A-4", builtin("indicator")); // NCC
   connect(d, ["A-1", "COM"], ["A-2", "OUT"]);
   connect(d, ["A-1", "NO"], ["A-3", "IN"]);
-  connect(d, ["A-1", "NC"], ["A-4", "IN"]);
+  connect(d, ["A-1", "NCC"], ["A-4", "IN"]);
   const sim = buildSimulation(d);
   settle(sim);
   assert.equal(sim.valueOfPin("A-1", "COM"), VU);
   assert.equal(sim.valueOfPin("A-1", "NO"), VU);
-  assert.equal(sim.valueOfPin("A-1", "NC"), VU);
+  assert.equal(sim.valueOfPin("A-1", "NCC"), VU);
 });
 
 test("relay: an unwired throw gives an SPST contact (FR-071h)", () => {
   const d = mkDesign();
   place(d, "A-1", builtin("relay")); // NO left unwired
   placeSwitch(d, "A-2", "1"); // COM driver
-  place(d, "A-3", builtin("indicator")); // NC probe
+  place(d, "A-3", builtin("indicator")); // NCC probe
   const sc = placeSwitch(d, "A-4", "0"); // coil released
   connect(d, ["A-1", "COM"], ["A-2", "OUT"]);
-  connect(d, ["A-1", "NC"], ["A-3", "IN"]);
+  connect(d, ["A-1", "NCC"], ["A-3", "IN"]);
   connect(d, ["A-1", "COIL"], ["A-4", "OUT"]);
   const sim = buildSimulation(d);
   settle(sim);
-  assert.equal(sim.valueOfPin("A-1", "NC"), V1); // released: COM–NC closed
+  assert.equal(sim.valueOfPin("A-1", "NCC"), V1); // released: COM–NCC closed
 
-  sc.switchState = "1"; // energize → NC opens; the unwired NO simply never joins
+  sc.switchState = "1"; // energize → NCC opens; the unwired NO simply never joins
   settle(sim);
   assert.equal(sim.valueOfPin("A-1", "COM"), V1); // COM still driven
-  assert.equal(sim.valueOfPin("A-1", "NC"), VZ); // NC isolated
+  assert.equal(sim.valueOfPin("A-1", "NCC"), VZ); // NCC isolated
 });
 
 test("a design with no switch elements resolves per net (fast path unaffected) (FR-083a)", () => {

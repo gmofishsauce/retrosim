@@ -204,6 +204,36 @@ test("reserved pin names are rejected (manual §2)", () => {
   );
 });
 
+// NC is the one of the five reserved names that may legally appear in a pin list
+// (FR-062f): it names a no-connect pin, is skipped when the signal table is built,
+// and so may never appear in an equation.
+test("NC pins are permitted, repeatable, and unusable in equations (FR-062f)", () => {
+  const withNc = (behavior) =>
+    ty([["I", "in"], ["NC", "in"], ["NC", "in"], ["Y", "out"]], behavior);
+
+  // Two NC pins do not collide, and a part carrying them compiles.
+  const c = compileBehavior(withNc("Y = I\n"));
+  assert.equal(c.outputs.length, 1);
+  assert.equal(c.outputs[0].pin, "Y");
+
+  for (const [what, behavior] of [
+    ["a literal", "Y = NC\n"],
+    ["a left-hand side", "NC = I\n"],
+  ]) {
+    assert.throws(
+      () => compileBehavior(withNc(behavior)),
+      /NC is reserved \(no connect\)/,
+      what,
+    );
+  }
+
+  // And as an internal node name it stays rejected by the older rule (FR-079c).
+  assert.throws(
+    () => compileBehavior({ ...withNc("Y = I\n"), internal: ["NC"] }),
+    /internal node name NC is reserved/,
+  );
+});
+
 // nets(map) builds a readNet over a plain object of signal → value.
 const nets = (m) => (signal) => m[signal];
 

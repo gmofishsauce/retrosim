@@ -14,6 +14,7 @@ import {
   setPortPropsCmd,
   setNoteTextCmd,
   setLabelCmd,
+  setPinMarkCmd,
   refreshTypesCmd,
   composite,
   translateWiring,
@@ -684,4 +685,44 @@ test("setPrimaryClockCmd changes the primary clock; undo restores, including uns
   assert.equal(store.design.primaryClock, "A-1");
   store.redo();
   assert.equal(store.design.primaryClock, "A-2");
+});
+
+// setPinMarkCmd is an ordinary undoable edit (FR-071i) — deliberately unlike a
+// DRC waiver (FR-124e), which stays out of the history: the mark changes the
+// drawing, so Ctrl+Z right after marking should undo the mark.
+test("setPinMarkCmd marks and unmarks a pin, and undo/redo carry it (FR-071i)", () => {
+  const store = newStore();
+  const pinned = { name: "P", width: 4, height: 4, pins: [{ name: "A", side: "left", position: 1, direction: "in" }] };
+  store.dispatch(placeComponent(pinned, 0, 0, 0)); // U1
+
+  store.dispatch(setPinMarkCmd("U1", "A", true));
+  assert.deepEqual(find(store.design, "U1").ncPins, ["A"]);
+
+  store.undo();
+  assert.equal(find(store.design, "U1").ncPins, undefined);
+  store.redo();
+  assert.deepEqual(find(store.design, "U1").ncPins, ["A"]);
+
+  store.dispatch(setPinMarkCmd("U1", "A", false));
+  assert.equal(find(store.design, "U1").ncPins, undefined);
+  store.undo();
+  assert.deepEqual(find(store.design, "U1").ncPins, ["A"]);
+});
+
+test("marking a connected pin is refused atomically, leaving no undo entry (FR-071i)", () => {
+  const errors = [];
+  const store = createStore({
+    design: createDesign("t"),
+    project: { dir: "/proj", name: "proj" },
+    onError: (e) => errors.push(e.message),
+  });
+  const pinned = { name: "P", width: 4, height: 4, pins: [{ name: "A", side: "left", position: 1, direction: "in" }] };
+  store.dispatch(placeComponent(pinned, 0, 0, 0)); // U1
+  addWire(store.design, { kind: "pin", refdes: "U1", pin: "A" }, { kind: "free", x: 9, y: 9 });
+  const depth = store.undoDepth();
+
+  store.dispatch(setPinMarkCmd("U1", "A", true));
+  assert.equal(find(store.design, "U1").ncPins, undefined); // nothing changed
+  assert.equal(store.undoDepth(), depth); // and nothing to undo
+  assert.match(errors.at(-1), /connected/);
 });

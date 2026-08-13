@@ -11,6 +11,7 @@ import {
 import {
   pinWorldPos,
   pinVisualPos,
+  markedPins,
   sideOutward,
   getVertex,
   vertexWorld,
@@ -639,6 +640,7 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
   ctx.font = PIN_FONT;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+  const marks = markedPins(inst); // FR-071i, empty for the overwhelming majority
   for (const pin of td.pins) {
     const pw = pinWorldPos(inst, pin.name);
     const ps = worldToScreen(pw, vp);
@@ -708,6 +710,23 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
         ctx.textBaseline = outR.y < 0 ? "top" : "bottom";
         ctx.fillText(pin.name, ps.x, ps.y - Math.sign(outR.y) * PIN_LABEL_MARGIN);
       }
+    }
+
+    // No-connect mark (FR-071i): a small X centered on the marked pin's
+    // connection point, in the same zoom band as the pin names (FR-012a). It is
+    // drawn from inst.ncPins — the mark is a field of the instance, not an object
+    // of its own (§6.22) — so it needs no transform work: `ps` is already the
+    // rotated, projected pin point.
+    if (marks.has(pin.name) && symPx >= LABEL_T1) {
+      const r = 4;
+      ctx.beginPath();
+      ctx.moveTo(ps.x - r, ps.y - r);
+      ctx.lineTo(ps.x + r, ps.y + r);
+      ctx.moveTo(ps.x + r, ps.y - r);
+      ctx.lineTo(ps.x - r, ps.y + r);
+      ctx.strokeStyle = "#333";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
     }
   }
 
@@ -975,7 +994,7 @@ function drawRelay(ctx, inst, vp, selected) {
     ctx.font = PIN_FONT;
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
-    for (const [name, row] of [["NO", 1], ["COM", 2], ["NC", 3]]) {
+    for (const [name, row] of [["NO", 1], ["COM", 2], ["NCC", 3]]) {
       const o = rotateOffset(2.8, row, inst.rotation);
       const p = worldToScreen({ x: inst.x + o.x, y: inst.y + o.y }, vp);
       ctx.fillText(name, p.x, p.y);

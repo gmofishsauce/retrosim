@@ -35,6 +35,7 @@ import {
   joinFreeEnd,
   promoteBusJoin,
   reconcilePrimaryClock,
+  setPinMark,
 } from "./model/design.js";
 import { addSubDesignInstance } from "./model/subdesign.js";
 import { pasteFragment } from "./model/clipboard.js";
@@ -508,6 +509,35 @@ export function setLabelCmd(refdes, label) {
       const inst = findInstance(design, refdes);
       if (old === undefined) delete inst.label;
       else inst.label = old;
+    },
+  };
+}
+
+// setPinMarkCmd adds or removes one pin's no-connect mark (FR-071i). Unlike a DRC
+// waiver (FR-124e) this is an ordinary undoable edit: the mark changes the
+// drawing, so Ctrl+Z right after marking should undo the mark. It captures no
+// connectivity snapshot because a marked pin has no connections by construction:
+// marking a connected pin is refused, and the refusal throws, which the store
+// turns into an atomic no-op plus a toast (§6.10) — the same path a refused bus
+// snap takes.
+export function setPinMarkCmd(refdes, pinName, on) {
+  let old = null; // prior inst.ncPins (array or undefined), captured once
+  let captured = false;
+  return {
+    label: on ? "Mark no connect" : "Clear no connect",
+    apply(design) {
+      const inst = findInstance(design, refdes);
+      if (!captured) {
+        old = inst.ncPins ? [...inst.ncPins] : undefined;
+        captured = true;
+      }
+      const res = setPinMark(design, inst, pinName, on);
+      if (res.skip) throw new Error(res.skip);
+    },
+    revert(design) {
+      const inst = findInstance(design, refdes);
+      if (old === undefined) delete inst.ncPins;
+      else inst.ncPins = [...old];
     },
   };
 }

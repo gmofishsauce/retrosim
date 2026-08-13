@@ -174,16 +174,28 @@ reworked.
   2026-07-07.)
 - **FR-071h** — Relay (SPDT changeover): 4×4; `COIL` (top edge, an idealized
   one-pin logic-level coil — no second terminal, no analog) and right-edge
-  contacts `NO` (top) / `COM` (middle) / `NC` (bottom). Released (COIL=0) joins
-  COM–NC; energized (COIL=1) joins COM–NO; per FR-083a. No pick/drop delay
+  contacts `NO` (top) / `COM` (middle) / `NCC` (bottom). Released (COIL=0) joins
+  COM–NCC; energized (COIL=1) joins COM–NO; per FR-083a. No pick/drop delay
   (contacts follow the coil by the standard one unit; a delay property is a
   later additive change). SPST = leave a throw unwired. Drawn as a coil (top
   lead) + three contact terminals (COM common pole marked with a dot, plus NO
-  and NC) with **no static contact arm** (it could not track the simulated
-  state), the right-edge `NO`/`COM`/`NC` terminals labeled on the canvas so they
+  and NCC) with **no static contact arm** (it could not track the simulated
+  state), the right-edge `NO`/`COM`/`NCC` terminals labeled on the canvas so they
   are identifiable. Tooltip "relay (SPDT)". (Added 2026-07-07; COIL moved from
   the left edge to the top, footprint widened to 4×4, glyph reworked with
-  contact labels, and the misleading static contact arm removed 2026-07-07.)
+  contact labels, and the misleading static contact arm removed 2026-07-07; the
+  normally-closed contact renamed **NC → NCC** 2026-08-11, the pin name `NC`
+  having been reserved library-wide for *no connect* by FR-062f — a breaking
+  change to saved designs that wired the relay's old `NC`.)
+- **FR-071i** — **No-connect mark**: a small X, placed from a lower-region palette
+  tile onto a component **pin**, declaring the pin deliberately unused. Not an
+  object — no refdes, no footprint, no pins, no behavior; it is a **set of pin
+  names on the instance**, so it cannot detach and rides along with move, rotate,
+  copy/paste, and delete. Mutually exclusive with any connection (a marked pin
+  refuses wires and bus-group snap; a connected pin refuses the mark). Marking and
+  unmarking are undoable design edits (unlike a waiver, FR-124e). Its only effect
+  is FR-124j. A mark naming a pin the type no longer has is dropped silently on
+  load. (Added 2026-08-11.)
 
 **Component Selection and Movement**
 - **FR-016** — In select mode, click a component to select it.
@@ -394,6 +406,15 @@ reworked.
   server derives them from the author-placed pins. A pin may carry an optional
   physical pin number as footprint/BOM metadata only. (No package mechanism: the
   earlier declared-package idea was removed.)
+- **FR-062f** — The pin name **`NC`** is reserved library-wide for *no connect*:
+  declarable by any component (library YAML, GAL part, generated memory, built-in),
+  the **only** pin name exempt from within-file uniqueness (nothing may reference
+  it), drawn like any pin but inert — no connections, no pin group, not `clock:`,
+  and rejected in the behavior block (it is already a GALasm reserved word). A
+  violating definition is rejected and skipped at load. Placing an instance
+  auto-supplies a no-connect mark (FR-071i) on each `NC` pin — **at placement
+  only**, never retro-applied by Refresh Types (FR-088) — and those marks are
+  ordinary and removable afterward. Forced the relay's `NC` → `NCC` (FR-071h).
 - **FR-063** — The YAML file may declare named pin groups (ordered pins forming a
   bus) for snap-connection (FR-041…FR-043).
 - **FR-064** — The YAML file may specify propagation-delay values.
@@ -498,6 +519,13 @@ reworked.
   indication while **retaining every finding, still clickable**. Never self-clears
   (would destroy the work list after the first fix), never self-re-runs. A stale
   finding points at something or at nothing, never at the wrong thing (FR-124c).
+- **FR-124j** — A **no-connect-marked pin vanishes from the check** (FR-071i): it
+  is removed from the check's input, not filtered out of the report. So no R3; not
+  one of a package's outputs for R6 (an all-marked package is silent, like an
+  all-input part); not a load or driver for R4/R9; an all-marked component is
+  skipped by R8 like a text note; and it can never reach R1/R2/R5, which need a
+  connection. Not a waiver (FR-124e) and no interaction with one: a waiver
+  suppresses a *finding*, a mark removes a *pin*.
 
 ### 2.2 Non-Functional Requirements
 - **NFR-001** — Server binds exclusively to `127.0.0.1`; no other interface.
@@ -908,7 +936,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 
 ### 6.3 Go: YAML parser (`srv/server/yamlparse.go`)
 - **Purpose:** convert one YAML file's bytes (YAML — §7.6) into a `ComponentType`.
-- **Satisfies:** FR-061, FR-062, FR-062a, FR-062b, FR-062c, FR-062d, FR-062e, FR-063, FR-064, FR-066, FR-066a, FR-104.
+- **Satisfies:** FR-061, FR-062, FR-062a, FR-062b, FR-062c, FR-062d, FR-062e, FR-062f, FR-063, FR-064, FR-066, FR-066a, FR-104.
 - **Interface (the deferral boundary — now bound to the YAML format in §7.6):**
   - `ParseComponent(path string) (ComponentType, error)`
   - The returned `ComponentType` MUST be fully populated for the fields in §7.1.
@@ -926,7 +954,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   file without `id:` still loads. Then: every pin has a valid `side` ∈
   {left,right,top,bottom}, integer `pos ≥ 0`, `dir` ∈ {in,out,bidir,tristate};
   pin names are **unique** within the file (duplicates would make saved endpoint
-  references like `U3.A0` ambiguous); group names are unique; every pin-group
+  references like `U3.A0` ambiguous) — with the single exception of `NC`, which may
+  repeat because nothing may ever reference it (FR-062f), and which is additionally
+  rejected as a `groups[]` member and as the `clock:` pin; group names are unique; every pin-group
   member names an existing pin; every pin-group is **geometrically coherent**
   (FR-063a) — all members share one `side`, and no non-member pin lies between
   them on that side (members form a contiguous run by `pos`); every pin `pos`
@@ -1218,10 +1248,27 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     sibling, the per-unit filtered copy, reusing `addSubunitPackage`'s
     per-unit derivation), preserving refdes/position/rotation/wiring and
     `overrides`, and dropping override keys that no longer name a delay or
-    declared property. Skips (returns the reason) when `renderType` differs or
-    any pin referenced by a `pin` vertex of this instance is absent from the
-    new definition (subunits: absent from the same unit) — the wire-endpoint
-    contract (§7.1a) must stay intact.
+    declared property. Three fields of the copied type data are **per-instance
+    state riding in it** and are restored onto the fresh copy rather than
+    adopted from the library: a memory instance's `mem.romFile` (FR-114e); a
+    `portN`'s width-driven `pins`/`pinGroups`/footprint, regenerated by
+    `portNFields(inst.width)` (FR-071e) — the library holds only the palette
+    default width, so a plain copy would shrink a placed 16-bit port to 8 and
+    strand its own bus group connection on pins it no longer had; and a note's
+    auto-sized footprint, re-derived by `noteSize(inst.text)` (FR-071f), the
+    library holding only the empty-note minimum. Skips
+    (returns the reason) when `renderType` differs or any pin this instance
+    still references is absent from the new definition (subunits: absent from
+    the same unit) — the wire-endpoint contract (§7.1a) must stay intact. Both
+    kinds of reference are checked, the two places a `(refdes, pin)` pair lives
+    (§7.2): a `pin`/`connector` vertex, and a bus **group connection**'s
+    `bitMap`, which skips the instance whole when any of its bits is gone
+    (never per-bit — that would silently change the bus's topology). This is
+    the refresh-side twin of FR-099b's sub-design sweep (§6.14); the difference
+    in remedy is deliberate — a stale sub-design reference is *dropped* because
+    the child's interface is authoritative and already changed, while a refresh
+    can simply *decline* to adopt the new definition and leave the instance
+    exactly as it was.
   - `pinWorldPos(instance, pinName) → {x,y}` — applies rotation (§6.7). For
     subunit instances the unrotated pin offset comes from the symbol module
     (§6.8a) keyed by `renderAs`, input count, pin role, and slot index (the pin's
@@ -2237,7 +2284,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   right-center `bidir` pin `B`, top-center `in` pin `EN`, FR-071g — the
   renderType is `tgate`, not `switch`, which the input switch already owns);
   **relay** (`"relay"`, 4×4, top-edge `in` pin `COIL`, right-edge `bidir`
-  pins `NO`/`COM`/`NC` top-to-bottom, FR-071h). The two switch elements'
+  pins `NO`/`COM`/`NCC` top-to-bottom, FR-071h). The two switch elements'
   contact terminals are declared `bidir` — deliberately, since a switch
   terminal is genuinely directionless; a consequence is that a port whose net
   reaches a switch terminal derives direction **bidir** (FR-094c), the
@@ -2267,6 +2314,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   registry (FR-067a) mapping type **id** → behavior function with the
   `behave(ctx)` signature defined in §6.13; functions stay
   out of the type objects so `typeData` copies remain pure JSON (§7.1).
+  The module also exports **`PIN_MARK_TOOL`** (FR-071i) — the no-connect mark's
+  palette entry, deliberately **not** a member of `BUILTINS`, since it places no
+  instance and has no pins, footprint, refdes series, or behavior (§6.22).
   `drawComponent` has a render branch per built-in renderType: the
   indicator bubble (gray `?` for U/Z or no run, white `1`/black `0` from the
   live sim view, §6.8), the
@@ -2284,8 +2334,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   the `A` and `B` pins with the `EN` lead entering the top, and `drawRelay`
   draws a coil (its single lead entering from the top edge) with, on the
   right, the three contact terminals — `COM` as the common pole (marked with a
-  dot) plus `NO` and `NC`, and **no moving contact arm** (a static one could not
-  track the simulated state) — and draws the `NO`/`COM`/`NC` labels in a column
+  dot) plus `NO` and `NCC`, and **no moving contact arm** (a static one could not
+  track the simulated state) — and draws the `NO`/`COM`/`NCC` labels in a column
   between the coil and the contact so the three right-edge terminals are
   identifiable (FR-071h) — these labels are culled at low zoom like other pin
   names (FR-012a) and kept upright regardless of rotation (FR-015). The static
@@ -2293,7 +2343,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   state display, FR-068). The shared pin loop draws the connection leads at
   each pin for both. Pin
   name labels are suppressed for built-ins (the glyph owns the body) — the relay
-  is the exception, labeling its `NO`/`COM`/`NC` contacts (above); the refdes is
+  is the exception, labeling its `NO`/`COM`/`NCC` contacts (above); the refdes is
   drawn above the symbol. The **text note** (`note`) is the lone exception that
   draws neither pins nor refdes (FR-071f): `drawNote` (§6.8) draws only `inst.text`
   (plus a dotted blue outline box when selected). While a note is being edited the
@@ -2879,7 +2929,7 @@ no sequential part could ever leave U.)
   pass entity carries its control net index (`EN` or `COIL`) and a list of
   **contact records** `{a, b, closedWhen}` over terminal net indices — tgate:
   one contact `{A, B, closedWhen: 1}`; relay: two contacts `{COM, NO,
-  closedWhen: 1}` and `{COM, NC, closedWhen: 0}` (the changeover pair,
+  closedWhen: 1}` and `{COM, NCC, closedWhen: 0}` (the changeover pair,
   complementary by construction). The step loop (FR-078) changes only in its
   resolve phase: after every entity's contributions are deposited per net and
   **before** resolution, each pass entity reads its control from `curr` (same
@@ -4102,6 +4152,117 @@ supplies `onDesignRuleCheck: () => drcPanel.run()`, and passes `drc: drcPanel` i
   simulator but none of its evaluation machinery, which is what keeps it runnable on a
   design the simulator would refuse.
 
+### 6.22 JS: no-connect marks (`web/js/model/design.js` + builtins/interaction/canvas/store/drc, `srv/server/yamlparse.go`)
+- **Purpose:** the small X attached to a pin that declares it deliberately unused,
+  and the reserved pin name `NC` that supplies one automatically.
+- **Satisfies:** FR-071i, FR-062f, FR-124j; FR-071h (the relay's forced `NC`→`NCC`
+  rename).
+- **The one design decision, and everything that follows from it.** A mark is
+  **`inst.ncPins: string[]`** — an optional array of the instance's own pin names —
+  and *not* an instance of its own (§8). Attachment is therefore by **identity, not
+  geometry**, and the consequences are all the things this section does not have to
+  specify: move, rotate, copy/paste (§6.15), delete, subunit sibling handling, and
+  the refdes allocator are untouched, because a mark is a field of the thing it
+  marks. An object-shaped mark would have needed a coincidence test at every one of
+  those points and could still have drifted off its pin. The price is that the
+  palette tile does not place an object, which §6.11 and §6.9 pay below.
+- **`model/design.js` — the whole vocabulary, four functions:**
+  - `NC_PIN = "NC"` — the reserved name (FR-062f), exported so no consumer spells
+    it as a literal.
+  - `markedPins(inst) → Set<string>` — `new Set(inst.ncPins ?? [])`. Absent means
+    none; every reader goes through this, so `ncPins` never has to exist.
+  - `isPinMarked(inst, pinName)` / `pinAcceptsConnection(inst, pinName)` — the
+    latter is the mutual-exclusion predicate of FR-071i: false when the pin is
+    marked **or** named `NC`. One predicate, so the wire tool, the bus tool, and the
+    group snap cannot disagree about what is connectable.
+  - `setPinMark(design, inst, pinName, on)` — the mutation, called only by the
+    command (§6.10). Adding is refused when the pin already carries any connection
+    (a `pin` vertex of this instance/pin exists, or a bus `groupConnection` names
+    it); the caller reports the refusal, the model does not throw.
+  - `seedNcMarks(inst)` — called from `addInstance`/`addSubunitPackage` (and the
+    sub-design/memory placement paths, §6.14) **at placement only**: stamps
+    `ncPins` with every `NC` pin of the instance's `typeData`. `refreshInstance`
+    (FR-088) deliberately does **not** call it — FR-062f's placement-only rule —
+    and it also does not strip marks the refreshed type no longer justifies.
+  - **Load-time pruning** (`persist.js`, §7.4): each instance's `ncPins` is
+    filtered to names its `typeData` still has, silently, the stale-waiver rule of
+    FR-124e. This is a filter on load, not a migration: the field is
+    additive-optional, so no `formatVersion` bump (§7.2).
+- **`builtins.js` — the tile is not a built-in.** The mark's palette entry is a
+  separate export, `PIN_MARK_TOOL = {id: "tool-noconnect", title: "no connect",
+  icon: <X glyph>}`, and is **not** a member of `BUILTINS`. Every consumer of
+  `BUILTINS` treats its entries as placeable component types (palette placement,
+  type resolution for an instance's `type` id, the refdes series, the C generator's
+  and exporters' type switches); adding a pins-less, footprint-less pseudo-type to
+  that list would mean auditing all of them for a member that can never be an
+  instance. A separate export is one extra line in the palette and zero elsewhere.
+- **`chrome/toolbar.js` palette (§6.11):** the lower region appends the
+  `PIN_MARK_TOOL` tile after the built-in tiles, styled and tooltipped like them.
+  Clicking it enters the mark tool rather than the ordinary place-instance mode —
+  the FR-006a exception.
+- **`engine/interaction.js` (§6.9):** a new tool state `markPin`, entered from the
+  palette tile and left on Escape or a tool-button click, exactly as placement mode
+  is. Its click handler runs the existing pin hit-test; on a hit it dispatches
+  `setPinMarkCmd(refdes, pinName, !isPinMarked(...))` — one gesture that marks or
+  unmarks, per FR-071i — and on a miss does nothing at all (no error, no message).
+  The mark tool is one-shot in neither direction: it stays active until dismissed,
+  since marking several pins of one chip is the normal case.
+  **Refusing connections (FR-071i):** the wire and bus tools' pin targeting, and
+  `planBusEndpoint`/`snapBusGroup`'s group targeting, consult
+  `pinAcceptsConnection`. A marked pin is simply not a wire target (it does not
+  highlight and cannot be clicked into a connection), and a pin **group** containing
+  one is refused **whole** — the snap does not proceed with the group's other pins,
+  because a partial snap silently misroutes bits. The refusal reports through the
+  message tray (FR-074) naming the offending pin, since unlike a pin that is merely
+  not hit, a refused group snap is a gesture the user clearly meant.
+- **`engine/canvas.js` (§6.8):** the pin-drawing pass draws a small X centered on a
+  marked pin's connection point, in the pin-detail zoom band that already governs
+  pin names (FR-012a). It is drawn from `inst.ncPins`, in the instance's own
+  transform, so rotation is free.
+- **`store.js` (§6.10):** `setPinMarkCmd` is an ordinary undoable command
+  (`do`/`undo` toggling the pin in `ncPins`, dirtying the design) — the deliberate
+  difference from a waiver (FR-124e), which stays out of the history. It carries no
+  connectivity snapshot: a marked pin has no connections by construction, so
+  nothing electrical can change under it.
+- **`engine/drc.js` (§6.21) — FR-124j, in exactly one place.** `buildContext` skips
+  marked pins as it walks each instance's pins: they enter neither `pinInfo` nor
+  `unconnectedPins`, so no rule can see them. The two rules that re-read
+  `inst.typeData.pins` directly — R6 (package outputs) and R8 (stray component) —
+  go through a `ctx.pinsOf(inst)` helper that applies the same filter, which is what
+  makes "the pin vanishes" true rather than approximately true. Both then behave
+  correctly with no rule-specific code: R6 already skips a package with **no**
+  output-capable pins (the guard that keeps the all-input magic UART out of the
+  report), so an all-marked package is silent; R8 already skips an instance with
+  **no** pins (the guard that keeps the text note out), so an all-marked component
+  is silent. R1/R2/R5 need a connection to fire and can never see a marked pin.
+- **`engine/galasm.js` (§6.13) — `NC` stays out of the signal namespace.** The
+  compiler previously rejected any part declaring a pin named `NC` (a GALasm
+  reserved word, manual §2). It now **skips** `NC` pins when building the signal
+  table and keeps the reserved-word rejection for `internal:` nodes, so an equation
+  mentioning `NC` fails with an explicit "NC is reserved (no connect) and may not
+  appear in equations" rather than a bare unknown-signal error. Nothing downstream
+  changes: `sim.js` and `cgen.js` drive pins the compiled behavior names, and no
+  compiled output can name an `NC` pin.
+- **`srv/server/yamlparse.go` (§6.3) — the uniqueness exemption.** Pin-name
+  uniqueness is checked against every name **except** `NC`, which may repeat
+  (FR-062f). Three new rejections join it: an `NC` pin in a `groups[]` member list,
+  `clock: NC`, and — unchanged in spirit, restated because the name is now legal —
+  nothing else. The `physical:` block (FR-062e) is unaffected: an `NC` *signal* pin
+  still carries a `number` like any other, and `physical.nc` keeps its separate,
+  older meaning (package pins with no internal bond), which this feature does not
+  touch.
+- **Exporters and simulators are untouched.** An `NC` pin reaches NDL/KiCad
+  (§6.18) as an ordinary unconnected pin and reaches neither simulator's evaluation
+  in any new way — FR-071i's "the mark's sole effect is the DRC" is enforced by
+  there being no other reader of `ncPins`.
+- **Error handling:** a mark on a pin that does not exist is impossible through the
+  UI and is pruned on load; `setPinMark` on a connected pin is refused (reported,
+  not thrown); a hand-edited `ncPins` holding a non-array or non-string entries is
+  normalized by `markedPins`' `?? []` plus the load-time filter, never crashing a
+  load.
+- **Dependencies:** `model/design.js` gains no imports; `interaction.js` and
+  `canvas.js` import the two predicates; `builtins.js` exports the tile glyph.
+
 ---
 
 ## 7. Data Model
@@ -4236,6 +4397,7 @@ branch wire that meet at it share one position and cannot drift apart (A1).
 | `rotation` | int | `0`\|`90`\|`180`\|`270` |
 | `typeData` | `ComponentType` | full copy captured at placement, persisted verbatim at save (FR-057); re-copied only by Refresh Types (FR-088). **Exception (FR-121g):** `typeData.mem.romFile`/`ramFile` are held **absolute in memory** but written **project-relative** when they lie inside the project (relativized by `fileops.save`, absolutized by `loadIntoStore` — the `childPath` boundary-conversion pattern, §6.19); an outside-project data path stays absolute (FR-121d) |
 | `overrides` | object | per-instance field overrides, grouped by kind: `{"delays":{"tpd":12},"props":{"period":200}}` — `delays` shadows `typeData.delays` (FR-058), `props` shadows `typeData.properties` defaults (FR-020b) |
+| `ncPins` | string[]? | the instance's pins carrying a **no-connect mark** (FR-071i) — the mark is a field of the marked instance, never an object of its own (§6.22/§8), so it moves, rotates, copies, and is deleted with the component for free. Additive-optional: absent means none, so **no `formatVersion` bump**, exactly as `drcWaivers` (FR-124e). Seeded at placement from the type's `NC` pins (FR-062f) and thereafter ordinary user state; filtered on load to names the `typeData` still has (§7.4), the stale-waiver rule |
 | `switchState` | string? | input-switch built-in only (FR-071c): current state, `"0"` \| `"1"` (default `"0"`; a legacy `"U"` reads as `0`). Per-instance interactive state, not an `overrides` entry; set via the properties panel (FR-020c) or a click during a run (FR-087a) |
 | `kind` | string? | `"subdesign"` for a sub-design instance (FR-098); absent/`"component"` for an ordinary, subunit, or built-in instance (§6.14) |
 | `childPath` | string? | sub-design only: child design file path. **On disk relative to the parent's save dir** (FR-098); **absolute in memory** after load (absolutized by `fileops.loadIntoStore`, relativized by `fileops.save`). Resolved on load to derive the interface; no `typeData` is stored (supersedes FR-057 for sub-designs) |
@@ -4395,6 +4557,13 @@ in place from version 1 so future format changes slot in without touching caller
   cannot be defaulted, and neither is true here. A waiver list is also, uniquely
   among persisted state, **safe to lose** — dropping every waiver costs the user a
   noisier report and nothing else — which is why it needs no repair pass either.
+- **`ncPins` (FR-071i) likewise adds no step and no version**, on the same
+  additive-optional terms: written only when non-empty, read as `inst.ncPins ?? []`.
+  It does get one line of load-time cleanup, which waivers do not: `deserializeDesign`
+  filters each instance's `ncPins` to pin names its `typeData` still declares, so a
+  mark left behind by an edited-and-refreshed type disappears silently (FR-071i, the
+  stale-waiver rule). The filter is not a migration and not a repair — it cannot
+  fail, cannot warn, and cannot reject a load.
 - **`repairStructure` deliberately does not validate waivers** (below). A waiver
   naming objects that no longer exist is not corruption; it is the ordinary,
   expected result of deleting a waived object, and the checker drops it silently on
@@ -4469,6 +4638,12 @@ pins:                    # one flow-mapping per line: name, side, pos, dir [, nu
   #   add `number: 15` to record a physical DIP pin number (optional footprint/BOM
   #   metadata only). Power and ground pins (GND, Vcc) are NOT listed — they do
   #   not exist in the file, the editor, or the simulation.
+  #   The pin name `NC` is RESERVED for "no connect" (FR-062f): it may be used any
+  #   number of times in one file — the only name exempt from uniqueness, since
+  #   nothing may reference it — and such a pin may not join a `group`, may not be
+  #   the `clock:` pin, and may not appear in `behavior:`. Placing the part marks
+  #   each `NC` pin with a small X (FR-071i). This is unrelated to `physical.nc`
+  #   below, which lists package pin numbers with no internal bond.
 
 groups:                  # optional, for bus snap-connect (FR-063)
   - { name: A, pins: [A0, A1, A2] }
@@ -4736,6 +4911,8 @@ A JSON file at the project root:
 
 | Decision | Alternatives Considered | Choice | Rationale |
 |---|---|---|---|
+| No-connect mark: how it attaches (FR-071i) | (a) a built-in object like the pull-up, attached by lying on top of the pin; (b) an object that stores the pin it marks and moves with it; (c) a DRC-report-only flag with no schematic presence (the waiver, FR-124e, already being that) | **A `ncPins` string array on the marked `ComponentInstance`** — a field of the thing it marks, not an object | Attachment becomes **identity, not geometry**: it cannot detach, and move, rotate, copy/paste, delete, subunit siblings, and the refdes allocator all carry it correctly with no new code. (a) can silently drift off its pin — leaving a visible X while the DRC resumes reporting the pin — and would burn an A-series designator per mark, need a label exemption, and require an explicit skip in every rule, the netlist, flatten, the C generator, and both exporters. (b) avoids the drift but pays all the same instance-plumbing costs for it. (c) already exists and is a different thing: a waiver suppresses a *finding* in a session-local report, whereas the mark is a statement on the *drawing* that the reader of the schematic can see |
+| No-connect mark: palette entry (FR-071i) | Add it to `BUILTINS` with a null footprint and no pins | **A separate `PIN_MARK_TOOL` export the palette appends** | Every consumer of `BUILTINS` assumes its entries are placeable types (placement, type resolution, refdes series, the generator's and exporters' type switches); a pins-less pseudo-type in that list means auditing all of them for a member that can never be an instance. The separate export costs one line in the palette and nothing anywhere else |
 | Canvas tech for the drawing surface | SVG/DOM (declarative, easy hit-testing); WebGL (fast, heavy) | **HTML5 Canvas 2D (immediate mode)** | Full control over high-frequency drag/rubber-band/pan/zoom; predictable perf on large designs (NFR-005); avoids DOM-node blowup that SVG suffers; WebGL is overkill for 2D lines/rects |
 | UI "chrome" stack | React+Vite; Preact/htm; Lit | **Vanilla ES modules, no build step** | Honors the no-build/plain-JS constraint; the chrome is modest; the complexity that grows (canvas engine) lives outside any framework anyway; a framework can be added later because chrome is decoupled (user-confirmed) |
 | Mutation path | Direct model edits from event handlers | **Single Command pipeline through the Store** | Makes undo/redo total and uniform (FR-024, NFR-006); one place to set the dirty flag (FR-049a); testable commands |
@@ -5015,6 +5192,9 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-124g | §6.21, §6.16a, §6.10, §8 | `chrome/drcpanel.js`, `chrome/dock.js`, `chrome/dock.test.js`, `store.js`, `store.test.js`, `app.js`, `index.html`, `css/style.css` |
 | FR-124h | §6.11, §6.16, §6.17 | `chrome/toolbar.js` |
 | FR-124i | §6.21, §6.10 | `chrome/drcpanel.js`, `chrome/drcpanel.test.js`, `store.js` |
+| FR-062f | §6.3, §6.22, §7.6 | `yamlparse.go`, `galasm.js`, `model/design.js` |
+| FR-071i | §6.22, §6.8, §6.9, §6.10, §6.11, §7.2, §7.4 | `model/design.js`, `builtins.js`, `engine/interaction.js`, `engine/canvas.js`, `store.js`, `chrome/toolbar.js`, `model/persist.js` |
+| FR-124j | §6.22, §6.21 | `engine/drc.js`, `engine/drc.test.js` |
 | NFR-001 | §6.1 | `main.go` |
 | NFR-002 | §6.12 | `api.js` |
 | NFR-003 | all | server `*.go`, `web/js/*` |
@@ -5354,6 +5534,30 @@ tests beside them per §9).
     not throw.
   - **Robustness** — a rule that throws costs only its own findings and adds a
     warning naming it; an empty design yields zero findings rather than an error.
+  - **No-connect marks (FR-124j, §6.22)** — a marked input pin produces no R3 from
+    either source; a package whose every output pin is marked is silent for R6
+    (the same vacuous-fire guard as the UART); a component whose every pin is
+    marked is silent for R8 (the same no-pins guard as the text note); a net's
+    marked pin counts as neither load nor driver for R4/R9. The marks are set
+    directly on the in-memory instances, so these run with no store and no tool.
+- **No-connect marks (`model/design.test.js`, `store.test.js`, `engine/interaction.test.js`, §6.22, FR-071i):**
+  `pinAcceptsConnection` is false for a marked pin and for a pin named `NC`, true
+  otherwise; `setPinMark` refuses a pin carrying a `pin` vertex or a bus
+  `groupConnection` and succeeds on a bare one; `seedNcMarks` stamps an `NC`-pinned
+  type's marks at placement while `refreshInstance` (FR-088) adds none; `ncPins`
+  survives a serialize/deserialize round trip and is filtered on load to pins the
+  `typeData` still declares; `setPinMarkCmd` undoes and redoes; the wire tool
+  declines a marked pin as a target and a group snap containing one is refused
+  **whole** rather than partially connected.
+- **GALasm `NC` (`engine/galasm.test.js`, FR-062f):** a part declaring one or more
+  `NC` pins compiles (it no longer trips the reserved-word rejection), the `NC`
+  pins are absent from the signal table, and an equation mentioning `NC` — as a
+  literal, an LHS, or an `internal:` node — is rejected with the reserved-name
+  message.
+- **YAML parser `NC` (`srv/server/yamlparse_test.go`, FR-062f):** repeated `NC`
+  pins parse; a repeated non-`NC` name is still rejected; an `NC` pin in a
+  `groups[]` member list and `clock: NC` are both rejected; `physical.nc` is
+  unaffected.
 - **DRC panel (`chrome/drcpanel.test.js`, §6.21):** the DOM-free parts — the
   staleness predicate against a moving `designRev` (FR-124i), the active/waived
   partition and its re-render trigger, and that waiving calls `applyLive` while the

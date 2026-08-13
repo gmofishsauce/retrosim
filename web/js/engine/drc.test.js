@@ -720,3 +720,73 @@ test("a buildNets warning is passed through to `warnings`, never swallowed (§6.
   assert.equal(res.warnings.length, 1);
   assert.match(res.warnings[0], /alignment offset 3/);
 });
+
+// --- FR-124j: no-connect marks are invisible to the check (§6.22) ----------
+
+test("a marked input pin produces no R3, from either of R3's two sources (FR-124j)", async () => {
+  const d = createDesign("t");
+  addInstance(d, ty(), 10, 10, 0); // U1: A undriven, Y unconnected
+  const bare = await runDesignRuleCheck(d);
+  assert.equal(bare.findings.filter((f) => f.rule === "R3").length, 1);
+
+  d.components[0].ncPins = ["A"];
+  const marked = await runDesignRuleCheck(d);
+  assert.deepEqual(
+    marked.findings.filter((f) => f.rule === "R3"),
+    [],
+  );
+
+  // The other source: a pin on a real net with no driver. Two inputs wired
+  // together are one undrivable net; marking one leaves exactly one finding.
+  // The editor cannot produce a marked pin that is also wired (FR-071i makes the
+  // two mutually exclusive), so this state comes only from a hand-edited file —
+  // which is exactly why the net-side filter is worth asserting separately.
+  const e = createDesign("t");
+  addInstance(e, ty(), 10, 10, 0);
+  addInstance(e, ty(), 40, 10, 0);
+  tie(e, P("U1", "A"), P("U2", "A"));
+  assert.equal((await runDesignRuleCheck(e)).findings.filter((f) => f.rule === "R3").length, 2);
+  e.components[0].ncPins = ["A"];
+  assert.equal((await runDesignRuleCheck(e)).findings.filter((f) => f.rule === "R3").length, 1);
+});
+
+test("a package whose every output is marked is silent for R6 (FR-124j)", async () => {
+  const d = createDesign("t");
+  addInstance(d, ty(), 10, 10, 0);
+  addWire(d, P("U1", "A"), { kind: "free", x: 4, y: 12 }); // input wired, output bare
+  assert.equal((await runDesignRuleCheck(d)).findings.filter((f) => f.rule === "R6").length, 1);
+
+  // Marking the sole output leaves the package with no output-capable pin at
+  // all, which is the same vacuous-fire guard that keeps an all-input part quiet.
+  d.components[0].ncPins = ["Y"];
+  assert.deepEqual(
+    (await runDesignRuleCheck(d)).findings.filter((f) => f.rule === "R6"),
+    [],
+  );
+});
+
+test("a component whose every pin is marked is silent for R8, like a note (FR-124j)", async () => {
+  const d = createDesign("t");
+  addInstance(d, ty(), 10, 10, 0);
+  assert.equal((await runDesignRuleCheck(d)).findings.filter((f) => f.rule === "R8").length, 1);
+
+  d.components[0].ncPins = ["A", "Y"];
+  const res = await runDesignRuleCheck(d);
+  assert.deepEqual(res.findings.filter((f) => f.rule === "R8"), []);
+  assert.deepEqual(res.findings.filter((f) => f.rule === "R3"), []); // and no leftover R3
+});
+
+test("a marked pin is neither load nor driver for R9 (FR-124j)", async () => {
+  const d = createDesign("t");
+  addInstance(d, driver("out"), 10, 10, 0); // U1.D drives
+  addInstance(d, ty(), 40, 10, 0); // U2.A loads
+  tie(d, P("U1", "D"), P("U2", "A"));
+  assert.deepEqual(
+    (await runDesignRuleCheck(d)).findings.filter((f) => f.rule === "R9"),
+    [],
+  );
+
+  // With the only load marked, the net drives nothing — R9's whole subject.
+  d.components[1].ncPins = ["A"];
+  assert.equal((await runDesignRuleCheck(d)).findings.filter((f) => f.rule === "R9").length, 1);
+});

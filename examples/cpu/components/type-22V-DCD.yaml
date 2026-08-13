@@ -1,0 +1,40 @@
+id: "type-22V-DCD"
+type: "22V10"
+gal: GAL22V10
+partnumber: "22V-DCD"
+description: "decoder for PC/PRAM"
+outline: [8, 14]
+pins:
+  - { name: "CLK", side: left, pos: 1, dir: in, number: 1 }
+  - { name: "F0", side: left, pos: 2, dir: in, number: 2 }
+  - { name: "F1", side: left, pos: 3, dir: in, number: 3 }
+  - { name: "F2", side: left, pos: 4, dir: in, number: 4 }
+  - { name: "NC", side: left, pos: 5, dir: in, number: 5 }
+  - { name: "NC", side: left, pos: 6, dir: in, number: 6 }
+  - { name: "NC", side: left, pos: 7, dir: in, number: 7 }
+  - { name: "NC", side: left, pos: 8, dir: in, number: 8 }
+  - { name: "NC", side: left, pos: 9, dir: in, number: 9 }
+  - { name: "NC", side: left, pos: 10, dir: in, number: 10 }
+  - { name: "NC", side: left, pos: 11, dir: in, number: 11 }
+  - { name: "NC", side: left, pos: 12, dir: in, number: 13 }
+  - { name: "S0", side: right, pos: 1, dir: out, number: 14 }
+  - { name: "S1", side: right, pos: 2, dir: out, number: 15 }
+  - { name: "S2", side: right, pos: 3, dir: out, number: 16 }
+  - { name: "OSA", side: right, pos: 4, dir: out, number: 17 }
+  - { name: "OSB", side: right, pos: 5, dir: out, number: 18 }
+  - { name: "NC", side: right, pos: 6, dir: in, number: 19 }
+  - { name: "ENF/", side: right, pos: 7, dir: out, number: 20 }
+  - { name: "Cin", side: right, pos: 8, dir: out, number: 21 }
+  - { name: "NC", side: right, pos: 9, dir: in, number: 22 }
+  - { name: "NC", side: right, pos: 10, dir: in, number: 23 }
+behavior: |
+  ENF/ = !F0 * !F1 * !F2
+       +  F0 * !F1 *  F2
+       + !F0 *  F1 *  F2
+       +  F0 *  F1 *  F2
+  Cin  =  F0 * !F1 *  F2
+  OSA  =  F0 *  F1 *  !F2
+       + !F0 * !F1 *   F2
+  S0 = F0 + F1 + F2
+  S1 = F0 + F1 + F2
+  S2 = F0 * !F0 ; always zero for now

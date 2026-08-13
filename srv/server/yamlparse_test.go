@@ -183,6 +183,10 @@ func TestParseComponentErrors(t *testing.T) {
 		{"subunit two outputs", "type: T\nrendertype: subunit\nnumunits: 1\nrenderas: nand\npins:\n  - { name: A, side: left, unit: A, dir: in }\n  - { name: Y, side: right, unit: A, dir: out }\n  - { name: Z, side: right, unit: A, dir: out }\n", "exactly 1 output"},
 		{"mux wrong arity", "type: T\nrendertype: subunit\nnumunits: 1\nrenderas: mux2\npins:\n  - { name: I0, side: left, unit: A, dir: in }\n  - { name: S, side: top, unit: A, dir: in }\n  - { name: Y, side: right, unit: A, dir: out }\n", "data inputs"},
 		{"clock unknown pin", "type: T\nclock: CP\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "clock names unknown pin"},
+		// NC is the reserved no-connect pin name (FR-062f): it may repeat, but it may
+		// not be a group member or the clock.
+		{"NC in a group", "type: T\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n  - { name: NC, side: left, pos: 2, dir: in }\ngroups:\n  - { name: G, pins: [A0, NC] }\n", "no-connect pin"},
+		{"NC as the clock", "type: T\nclock: NC\npins:\n  - { name: NC, side: left, pos: 1, dir: in }\n", "clock pin may not be"},
 		{"clock non-input pin", "type: T\nclock: Q0\npins:\n  - { name: Q0, side: right, pos: 1, dir: out }\n", "must have dir in"},
 		{"gal unknown device", "type: T\ngal: GAL99X9\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "gal names unknown device"},
 		{"gal without partnumber", "type: \"22V10\"\ngal: GAL22V10\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "requires a 'partnumber'"},
@@ -218,6 +222,31 @@ pins:
 	}
 	if got.Clock != "CP" {
 		t.Fatalf("Clock = %q, want %q", got.Clock, "CP")
+	}
+}
+
+// NC is the reserved no-connect pin name (FR-062f) and the ONE pin name a file may
+// repeat: nothing may ever reference it, so the ambiguity that motivates the
+// uniqueness rule cannot arise. Every other duplicate stays rejected (the error
+// table above), and the NC pins are ordinary pins otherwise — they are parsed,
+// kept in order, and drawn.
+func TestParseComponentRepeatedNCPins(t *testing.T) {
+	got, err := ParseComponent(writeYAML(t, `
+type: "NCPART"
+pins:
+  - { name: A0, side: left,  pos: 1, dir: in }
+  - { name: NC, side: left,  pos: 2, dir: in }
+  - { name: NC, side: left,  pos: 3, dir: in }
+  - { name: Y0, side: right, pos: 1, dir: out }
+`))
+	if err != nil {
+		t.Fatalf("ParseComponent: %v", err)
+	}
+	if len(got.Pins) != 4 {
+		t.Fatalf("Pins = %d, want 4 (both NC pins kept)", len(got.Pins))
+	}
+	if got.Pins[1].Name != "NC" || got.Pins[2].Name != "NC" {
+		t.Fatalf("pins 1,2 = %q,%q, want NC,NC", got.Pins[1].Name, got.Pins[2].Name)
 	}
 }
 

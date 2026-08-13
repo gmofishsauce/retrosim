@@ -577,6 +577,11 @@ const GAL22V10 = {
   })),
 };
 
+// NC_PIN_LABEL is the reserved no-connect pin label (FR-062f): typing it as a
+// pin's label in this dialog declares that pin unused, which places a no-connect
+// mark on every instance of the part (FR-071i).
+const NC_PIN_LABEL = "NC";
+
 // OLMC direction choices (FR-066c): input, combinational output, or registered
 // output. `dir` is the YAML pin direction; combinational and registered outputs
 // are both `out` pins (registered is expressed by a `.R` behavior equation).
@@ -608,7 +613,11 @@ export function galPartYaml({ partnumber, description, inputs, olmcs, groups, be
     lines.push(`  - { name: ${JSON.stringify(p.name)}, side: left, pos: ${p.pos}, dir: in, number: ${p.number} }`);
   }
   for (const o of olmcs) {
-    const dir = OLMC_DIRS.find((d) => d.kind === o.kind).dir;
+    // A pin labeled NC is a declared no-connect (FR-062f): it carries no signal
+    // and can head no equation, so its OLMC direction is meaningless and it is
+    // emitted as a plain input. The dialog disables the direction control to
+    // match.
+    const dir = o.name === NC_PIN_LABEL ? "in" : OLMC_DIRS.find((d) => d.kind === o.kind).dir;
     lines.push(`  - { name: ${JSON.stringify(o.name)}, side: right, pos: ${o.pos}, dir: ${dir}, number: ${o.number} }`);
   }
   // Pin groups (FR-066d/FR-063): members are stored by skeleton DIP number; emit
@@ -868,7 +877,10 @@ export function newGalPartDialog({ submit }) {
     // so a later relabel can't break a group.
     let groups = [];
     let subOpen = false; // suppress this dialog's Escape while a sub-dialog is open
-    const currentPins = () => [
+    // NC pins are excluded from the pin-group picker (FR-062f): a no-connect
+    // carries no bit, and the server rejects a group naming one.
+    const currentPins = () =>
+      [
       ...inputFields.map((f) => ({
         number: f.meta.number,
         label: f.input.value.trim() || f.meta.name,
@@ -881,7 +893,7 @@ export function newGalPartDialog({ submit }) {
         side: "right",
         pos: f.meta.pos,
       })),
-    ];
+      ].filter((p) => p.label !== NC_PIN_LABEL);
     const groupsRow = el("div", "dialog-row");
     const groupsSummary = el("span", "dialog-label", "no pin groups");
     const groupsBtn = button("Pin groups…", async () => {
@@ -923,13 +935,23 @@ export function newGalPartDialog({ submit }) {
     buttons.append(button("Cancel", () => done(null)), createBtn);
     box.appendChild(buttons);
 
+    // An OLMC labeled NC has no direction to choose (FR-062f): the control is
+    // disabled so the dialog says what the emitted YAML does.
+    function syncNcDirs() {
+      for (const f of olmcFields) f.sel.disabled = f.input.value.trim() === NC_PIN_LABEL;
+    }
+
     // Re-validate live as labels, directions, or the behavior change (FR-066c).
     behavior.addEventListener("input", validate);
     for (const f of inputFields) f.input.addEventListener("input", validate);
     for (const f of olmcFields) {
-      f.input.addEventListener("input", validate);
+      f.input.addEventListener("input", () => {
+        syncNcDirs();
+        validate();
+      });
       f.sel.addEventListener("change", validate);
     }
+    syncNcDirs();
     validate(); // initial Create-enabled state
 
     // gather reads the current field values into a part description.

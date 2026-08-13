@@ -17,7 +17,7 @@ import {
 import { setPrimaryClockCmd } from "./commands.js";
 import { generateC } from "./engine/cgen.js";
 import { generateNDL } from "./engine/ndl.js";
-import { BUILTINS, memDeviceType } from "./builtins.js";
+import { BUILTINS, PIN_MARK_TOOL, memDeviceType } from "./builtins.js";
 import { createDesign, typeIdentity } from "./model/design.js";
 import { createStore } from "./store.js";
 import { initCanvas } from "./engine/canvas.js";
@@ -102,7 +102,8 @@ function toast(msg) {
 // makeTile builds one draggable palette tile, recording it in `tiles` for the
 // armed-state subscription. `content` is either {text} or {html} (an icon).
 function makeTile(type, content, title, tiles) {
-  const id = type.name === "add" ? "add" : typeIdentity(type);
+  const id =
+    type.name === "add" || type.name === PIN_MARK_TOOL.id ? type.name : typeIdentity(type);
   const tile = document.createElement("div");
   tile.className = "palette-tile";
   if (content.html) tile.innerHTML = content.html;
@@ -159,10 +160,19 @@ function renderPalette({ partsEl, builtinsEl, components, builtins, store }) {
   builtinsEl.appendChild(
     makeTile({ name: "add" }, { html: ADD_ICON }, "Add sub-component", tiles),
   );
+  // The no-connect mark (FR-071i): it places no instance — it drops onto a pin of
+  // a component already on the sheet — so it is not a built-in type (§6.22) and
+  // carries its own reserved id. It is registered in `tiles` like a placeable one
+  // so the armed highlight tracks it while the tool is active.
+  builtinsEl.appendChild(
+    makeTile({ name: PIN_MARK_TOOL.id }, { html: PIN_MARK_TOOL.icon }, PIN_MARK_TOOL.title, tiles),
+  );
 
   // Reflect the armed click-to-place tile with a pressed-in look (FR-009a).
   store.subscribe((state) => {
-    const armed = state.tool === "place" ? state.placeType : null;
+    // The mark tool has no placeType — it is armed by its own tool state (FR-071i).
+    const armed =
+      state.tool === "place" ? state.placeType : state.tool === "markPin" ? PIN_MARK_TOOL.id : null;
     for (const [name, tile] of Object.entries(tiles)) {
       tile.classList.toggle("armed", name === armed);
     }

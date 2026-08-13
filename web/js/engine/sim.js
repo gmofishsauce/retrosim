@@ -308,7 +308,7 @@ export function buildSimulation(
       control: netFor("COIL"),
       contacts: [
         { a: com, b: netFor("NO"), closedWhen: V1 },
-        { a: com, b: netFor("NC"), closedWhen: V0 },
+        { a: com, b: netFor("NCC"), closedWhen: V0 },
       ],
     };
   }

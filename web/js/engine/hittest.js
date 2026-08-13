@@ -8,7 +8,7 @@ import {
   pointInRect,
   segmentIntersectsRect,
 } from "../geometry.js";
-import { pinVisualPos, getVertex, vertexWorld } from "../model/design.js";
+import { pinVisualPos, getVertex, vertexWorld, pinAcceptsConnection } from "../model/design.js";
 
 // componentBBox returns the axis-aligned world bounding box of an instance's
 // outline. Since rotation is a multiple of 90 degrees the rotated rectangle is
@@ -101,13 +101,32 @@ export const PIN_HIT_TOL = 0.7;
 
 // hitPin returns { refdes, pin } for the nearest pin whose hot region
 // (FR-013d) contains the world point, or null.
+//
+// It skips pins that take no connection — no-connect-marked pins and pins named
+// NC (FR-071i/FR-062f) — because every caller here is asking a connection
+// question: where a wire starts, where it ends, what a bus snaps to, what the
+// probe reads. A marked pin is therefore simply not a target: it does not
+// highlight and cannot be clicked into a wire. The no-connect tool itself asks a
+// different question and uses `hitAnyPin` below.
 export function hitPin(design, pt, tol = PIN_HIT_TOL) {
+  return nearestPin(design, pt, tol, true);
+}
+
+// hitAnyPin is hitPin without the connectable filter: the pin under the point,
+// marked or not. Its one caller is the no-connect tool (FR-071i), which must be
+// able to hit an already-marked pin in order to unmark it.
+export function hitAnyPin(design, pt, tol = PIN_HIT_TOL) {
+  return nearestPin(design, pt, tol, false);
+}
+
+function nearestPin(design, pt, tol, connectableOnly) {
   const tol2 = tol * tol;
   let best = null;
   let bestD2 = Infinity;
   for (let i = design.components.length - 1; i >= 0; i--) {
     const inst = design.components[i];
     for (const pin of inst.typeData.pins) {
+      if (connectableOnly && !pinAcceptsConnection(inst, pin.name)) continue;
       const w = pinVisualPos(inst, pin.name);
       const dx = w.x - pt.x;
       const dy = w.y - pt.y;

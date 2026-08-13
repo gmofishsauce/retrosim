@@ -9,7 +9,15 @@ import {
   pinVisualPos,
   PIN_LEAD,
 } from "../model/design.js";
-import { hitComponent, hitPin, hitJunction, hitBend, marqueeHits, PIN_HIT_TOL } from "./hittest.js";
+import {
+  hitComponent,
+  hitPin,
+  hitAnyPin,
+  hitJunction,
+  hitBend,
+  marqueeHits,
+  PIN_HIT_TOL,
+} from "./hittest.js";
 
 function ty() {
   return {
@@ -89,6 +97,27 @@ test("hitPin returns null when no pin is within tolerance", () => {
   addInstance(d, ty(), 10, 20, 0);
   assert.equal(hitPin(d, { x: 13, y: 25 }, 0.5), null);
   assert.equal(hitPin(d, { x: 10.6, y: 22 }, 0.5), null); // just outside tol
+});
+
+// hitPin answers connection questions (where a wire starts, what a bus snaps to),
+// so a pin that takes no connection is not a target (FR-071i/FR-062f). hitAnyPin
+// is the no-connect tool's view, which must see a marked pin in order to unmark it.
+test("hitPin skips marked and NC pins; hitAnyPin sees them (FR-071i)", () => {
+  const d = createDesign("t");
+  const inst = addInstance(d, ty(), 10, 20, 0);
+  const at = { x: 9.7, y: 22.1 };
+  assert.deepEqual(hitPin(d, at, 0.5), { refdes: "U1", pin: "A0" });
+
+  inst.ncPins = ["A0"];
+  assert.equal(hitPin(d, at, 0.5), null);
+  assert.deepEqual(hitAnyPin(d, at, 0.5), { refdes: "U1", pin: "A0" });
+
+  // A pin NAMED NC is refused on the strength of the name alone, unmarked.
+  const e = createDesign("t");
+  const nc = { name: "T", width: 6, height: 12, pins: [{ name: "NC", side: "left", position: 2, direction: "in" }] };
+  delete addInstance(e, nc, 10, 20, 0).ncPins; // drop the auto-supplied mark: the NAME alone must refuse
+  assert.equal(hitPin(e, at, 0.5), null);
+  assert.deepEqual(hitAnyPin(e, at, 0.5), { refdes: "U1", pin: "NC" });
 });
 
 // ty2 has two adjacent left-side pins, one grid unit apart (FR-013).

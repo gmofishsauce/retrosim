@@ -25,6 +25,12 @@ const (
 var validSides = map[string]bool{"left": true, "right": true, "top": true, "bottom": true}
 var validDirs = map[string]bool{"in": true, "out": true, "bidir": true, "tristate": true}
 
+// ncPinName is the pin name reserved library-wide for "no connect" (FR-062f). It
+// is the one name exempt from within-file uniqueness, precisely because nothing
+// may ever reference it: it can carry no connection, join no group, be no clock,
+// and appear in no equation (the behavior compiler enforces that last one, §6.13).
+const ncPinName = "NC"
+
 // validGalDevices is GALasm's own device set (galasmManual.txt); naming one in
 // `gal:` selects strict dialect (FR-066a). The server validates only the name —
 // the dialect it selects is enforced client-side at Run (§6.13, FR-079b).
@@ -169,9 +175,10 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		if !validDirs[p.Dir] {
 			return ComponentType{}, fmt.Errorf("%s: pin %q: invalid dir %q (want in|out|bidir|tristate)", path, p.Name, p.Dir)
 		}
-		if pinNames[p.Name] {
+		if pinNames[p.Name] && p.Name != ncPinName {
 			// A duplicate pin name would make saved endpoint references like
-			// "U3.A0" ambiguous (§6.3).
+			// "U3.A0" ambiguous (§6.3). NC is the sole exception (FR-062f): it may
+			// repeat because nothing may ever reference it.
 			return ComponentType{}, fmt.Errorf("%s: duplicate pin name %q", path, p.Name)
 		}
 		var pos int
@@ -205,6 +212,9 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 	// clock: must name an existing input pin (FR-062d). Whether the behavior
 	// actually requires a clock (uses .R) is checked client-side at Run time
 	// (§6.13) — the behavior block is opaque to the server (FR-066).
+	if doc.Clock == ncPinName {
+		return ComponentType{}, fmt.Errorf("%s: clock pin may not be %q (no connect, FR-062f)", path, ncPinName)
+	}
 	if doc.Clock != "" {
 		found := false
 		for _, p := range pins {
@@ -318,6 +328,11 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		}
 		groupNames[g.Name] = true
 		for _, member := range g.Pins {
+			if member == ncPinName {
+				// A no-connect pin carries no signal, so it cannot be a bus lane
+				// (FR-062f) — and being non-unique it would not name one pin anyway.
+				return ComponentType{}, fmt.Errorf("%s: group %q names %q, which is a no-connect pin (FR-062f)", path, g.Name, member)
+			}
 			if !pinNames[member] {
 				return ComponentType{}, fmt.Errorf("%s: group %q names unknown pin %q", path, g.Name, member)
 			}
