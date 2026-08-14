@@ -4,12 +4,16 @@
 // every design file given (default: every .json under examples/), using the
 // editor's own refreshInstance core (model/design.js) so the semantics — the
 // per-unit subunit split, the wired-pin compatibility check, the overrides
-// pruning, and the skip rules — are identical to File ▸ Refresh Types.
+// pruning, and the skip rules — match File ▸ Refresh Types. One deliberate
+// difference: this tool runs with `{noDrop: true}` (§6.6), so an instance whose
+// refresh would break a connection is declined and reported rather than
+// silently unwired in a file nobody is looking at.
 //
 // The file is edited in place, minimally: only components[].typeData and
 // overrides change. Wires, buses, vertices, ids, sub-design links, port
-// directions, and the derived nets array are untouched — a type refresh does
-// not alter connectivity (FR-088), so the saved nets stay valid (A4/FR-059a).
+// directions, and the derived nets array are untouched — with `{noDrop: true}`
+// a refresh here cannot alter connectivity, so the saved nets stay valid
+// (A4/FR-059a).
 // Output formatting matches the server's design writes (2-space indent,
 // trailing newline, §6.5) so diffs show only real changes.
 //
@@ -112,7 +116,14 @@ for (const file of files) {
     const before = JSON.stringify([inst.typeData, inst.overrides]);
     const hadOverrides = inst.overrides !== undefined;
     inst.overrides ??= {}; // refreshInstance prunes overrides in place
-    const r = refreshInstance(obj, inst, libType);
+    // noDrop: this tool edits files unattended and rewrites only typeData /
+    // overrides — the design's wires, buses, vertices and derived nets array
+    // (A4/FR-059a) are left alone. So where the editor's refresh would drop a
+    // connection to a vanished pin (FR-088), the tool declines the instance and
+    // reports it instead: an unattended job may not silently unwire a design it
+    // is showing no one. Open such a file in the editor, where the drop happens
+    // in front of a human with undo available.
+    const r = refreshInstance(obj, inst, libType, { noDrop: true });
     if (r.ok) refreshed++;
     else skipped.push(`${inst.refdes} (${libType.partnumber || libType.name}): ${r.skip}`);
     if (!hadOverrides && Object.keys(inst.overrides).length === 0) {

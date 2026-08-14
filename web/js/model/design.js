@@ -298,14 +298,25 @@ function subunitTypeData(type, letter) {
 }
 
 // refreshInstance re-copies type data from the library's current definition
-// into one placed instance (FR-088), preserving refdes/position/rotation/
-// wiring and overrides; override keys the new definition no longer declares
-// are dropped. Returns {ok: true}, or {skip: reason} without touching the
-// instance when the new definition is structurally incompatible: renderType
-// changed, or a pin currently referenced by a wire/bus vertex is absent (for
-// subunit siblings, absent from this instance's unit) — the wire-endpoint
-// contract (§7.1a) must stay intact.
-export function refreshInstance(design, inst, libType) {
+// into one placed instance (FR-088), preserving refdes/position/rotation and
+// overrides; override keys the new definition no longer declares are dropped.
+//
+// Returns {ok: true, dropped: [...]}, or {skip: reason} without touching the
+// instance. The only skip is a changed renderType: old shape and new have no
+// correspondence to preserve. A pin the instance still references but the new
+// definition lacks (for subunit siblings, lacks in this unit) does NOT skip —
+// the refresh proceeds and the stale reference is dropped, exactly as
+// resolveSubDesigns does after a child interface change (FR-099b) and
+// repairStructure does at load (§7.4). Each dropped entry carries enough prior
+// state for the command layer to report it (FR-074) and revert it (§6.10).
+//
+// opts.noDrop restores the pre-2026-08-14 behavior for a caller that cannot
+// accept a connectivity change — it returns {skip} naming the pin instead of
+// dropping. Only the batch tool (web/tools/refresh-types.js) passes it: an
+// unattended job may not silently unwire a design it is showing no one. The
+// compatibility scan is the same either way, which is why it lives here once
+// rather than being copied into the tool.
+export function refreshInstance(design, inst, libType, { noDrop = false } = {}) {
   const oldRender = inst.typeData.renderType ?? "unit";
   const newRender = libType.renderType ?? "unit";
   if (newRender !== oldRender) {
@@ -342,29 +353,46 @@ export function refreshInstance(design, inst, libType) {
     Object.assign(td, noteSize(inst.text));
   }
 
+  // The two places a (refdes, pin) reference lives (§7.2): a pin/connector
+  // vertex, and a bus group connection's bitMap. A reference to a pin the new
+  // definition lacks is dropped — or, under noDrop, declines the whole refresh.
   const pinNames = new Set(td.pins.map((p) => p.name));
-  for (const v of design.vertices) {
-    if (
+  const dropped = [];
+  const staleVertices = design.vertices.filter(
+    (v) =>
       (v.kind === "pin" || v.kind === "connector") &&
       v.ref === inst.refdes &&
-      !pinNames.has(v.pin)
-    ) {
-      return { skip: `wired pin ${v.pin} is gone from the new definition` };
-    }
-  }
-  // The other place a (refdes, pin) reference lives: a bus group connection,
-  // whose bitMap names one pin per bit (FR-042, §7.2). Any bit gone skips the
-  // instance whole — never per-bit, which would silently change the bus's
-  // topology. (The sub-design side of the same gap is FR-099b, §6.14; there the
-  // stale reference is dropped, here the new definition is simply declined.)
+      !pinNames.has(v.pin),
+  );
+  const staleGroups = [];
   for (const bus of design.buses ?? []) {
     for (const gc of bus.groupConnections ?? []) {
       if (gc.instance !== inst.refdes) continue;
       const gone = (gc.bitMap ?? []).find((name) => !pinNames.has(name));
-      if (gone != null) {
-        return { skip: `bus-connected pin ${gone} is gone from the new definition` };
-      }
+      if (gone != null) staleGroups.push({ bus, gc, gone });
     }
+  }
+  if (noDrop) {
+    if (staleVertices.length) {
+      return { skip: `wired pin ${staleVertices[0].pin} is gone from the new definition` };
+    }
+    if (staleGroups.length) {
+      return { skip: `bus-connected pin ${staleGroups[0].gone} is gone from the new definition` };
+    }
+  }
+  for (const v of staleVertices) {
+    dropped.push({ kind: "vertex", id: v.id, ref: v.ref, pin: v.pin, vkind: v.kind });
+    v.kind = "free"; // dangling (FR-088/FR-099b); v.x/v.y keep the last-known point
+    delete v.ref;
+    delete v.pin;
+  }
+  // A group connection goes whole, never per-bit — dropping bits from a bitMap
+  // would silently change the bus's topology — leaving the bus and its endpoint
+  // vertex in place, dangling.
+  for (const { bus, gc, gone } of staleGroups) {
+    const index = bus.groupConnections.indexOf(gc);
+    bus.groupConnections.splice(index, 1);
+    dropped.push({ kind: "group", busId: bus.id, index, gc, gone, group: gc.group });
   }
 
   inst.typeData = td;
@@ -382,7 +410,7 @@ export function refreshInstance(design, inst, libType) {
     }
     if (Object.keys(inst.overrides.props).length === 0) delete inst.overrides.props;
   }
-  return { ok: true };
+  return { ok: true, dropped };
 }
 
 // pinOffset returns a pin's unrotated offset (grid units) from the instance

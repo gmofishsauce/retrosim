@@ -594,20 +594,30 @@ export function setPortPropsCmd(refdes, patch) {
 
 // refreshTypesCmd re-copies type data from the loaded component library into
 // every placed instance (FR-088) as one undoable command. Instances whose type
-// is missing from the library are left untouched; structurally incompatible
-// instances are skipped and reported once per type via onReport, which also
-// receives a one-line summary. Pre-state ({typeData, overrides}) is captured
-// on first apply only, so redo neither re-captures nor re-reports.
-export function refreshTypesCmd(library, onReport = () => {}) {
+// is missing from the library are left untouched; an instance whose renderType
+// changed is skipped and reported once per type via onReport, which also
+// receives a one-line summary. A connection to a pin the new definition no
+// longer has is dropped and reported individually (FR-088) — a refresh never
+// quietly unwires anything — and revert restores those connections along with
+// the type data. Pre-state is captured on first apply only, so redo neither
+// re-captures nor re-reports.
+//
+// opts.typeId restricts the refresh to instances of one type: the Edit GAL part
+// save dispatches it that way (FR-066f), so editing a part cannot disturb
+// instances of parts the user did not edit.
+export function refreshTypesCmd(library, onReport = () => {}, { typeId = null } = {}) {
   let captured = false;
   const prior = []; // { refdes, typeData, overrides } per refreshed instance
+  const undrop = []; // dropped connections, in apply order (reverted in reverse)
   return {
     label: "Refresh types",
     apply(design) {
       const first = !captured;
       const skipped = new Map(); // type name → reason (reported once per type)
       let refreshed = 0;
+      let drops = 0;
       for (const inst of design.components) {
+        if (typeId && inst.type !== typeId) continue;
         const libType = library.find((t) => typeIdentity(t) === inst.type);
         if (!libType) continue;
         const before = {
@@ -618,7 +628,18 @@ export function refreshTypesCmd(library, onReport = () => {}) {
         const r = refreshInstance(design, inst, libType);
         if (r.ok) {
           refreshed++;
-          if (first) prior.push(before);
+          drops += r.dropped.length;
+          if (first) {
+            prior.push(before);
+            undrop.push(...r.dropped);
+            for (const d of r.dropped) {
+              onReport(
+                d.kind === "vertex"
+                  ? `${inst.refdes}: pin ${d.pin} is gone from the new definition; wire left dangling`
+                  : `${inst.refdes}: bus group ${d.group ?? "?"} is gone (no pin ${d.gone}); the bus is left dangling`,
+              );
+            }
+          }
         } else if (!skipped.has(inst.type)) {
           // Keyed by type id to report once per type (FR-088), but carry the
           // display name so the message shows "74138", not the id "type-74138".
@@ -632,6 +653,7 @@ export function refreshTypesCmd(library, onReport = () => {}) {
         }
         onReport(
           `refreshed ${refreshed} instance(s)` +
+            (drops ? `; dropped ${drops} stale connection(s)` : "") +
             (skipped.size ? `; skipped ${skipped.size} type(s)` : ""),
         );
       }
@@ -641,6 +663,23 @@ export function refreshTypesCmd(library, onReport = () => {}) {
         const inst = findInstance(design, p.refdes);
         inst.typeData = p.typeData;
         inst.overrides = p.overrides;
+      }
+      // Connectivity last-in-first-out, so a group connection lands back at the
+      // index it was spliced from (FR-088: undo restores the sheet exactly).
+      for (let i = undrop.length - 1; i >= 0; i--) {
+        const d = undrop[i];
+        if (d.kind === "vertex") {
+          const v = design.vertices.find((x) => x.id === d.id);
+          if (!v) continue;
+          v.kind = d.vkind;
+          v.ref = d.ref;
+          v.pin = d.pin;
+        } else {
+          const bus = design.buses.find((b) => b.id === d.busId);
+          if (!bus) continue;
+          bus.groupConnections ??= [];
+          bus.groupConnections.splice(d.index, 0, d.gc);
+        }
       }
     },
   };

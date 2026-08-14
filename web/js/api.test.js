@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { getComponents, createComponent } from "./api.js";
+import { getComponents, createComponent, updateComponent } from "./api.js";
 
 // stubFetch replaces globalThis.fetch, capturing each request and returning a
 // fixed JSON body. node --test isolates files in separate processes, so the stub
@@ -46,6 +46,22 @@ test("createComponent posts the yaml and the current project dir (FR-007a/FR-121
   assert.deepEqual(JSON.parse(calls[0].options.body), {
     yaml: "yaml-text",
     project: "/data/proj",
+    mode: "create",
   });
   assert.deepEqual(created, { id: "type-X" });
+});
+
+// The mode is stated, never inferred (FR-007a): update and create differ only in
+// that field, so the server can refuse the wrong one rather than guess.
+test("updateComponent posts mode:update (FR-007a/FR-066f)", async () => {
+  const calls = stubFetch({ component: { id: "type-X", partnumber: "PC-A" } });
+  const updated = await updateComponent("edited-yaml", "/data/proj");
+  assert.equal(calls[0].url, "/api/v1/components");
+  assert.equal(calls[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    yaml: "edited-yaml",
+    project: "/data/proj",
+    mode: "update",
+  });
+  assert.deepEqual(updated, { id: "type-X", partnumber: "PC-A" });
 });

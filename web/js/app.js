@@ -3,10 +3,11 @@
 // only then removes the loading overlay so the canvas is not interactable until
 // the library is ready (FR-003).
 
-import { getComponents, getDefaults, createComponent, saveTextFile, fetchStaticText, loadDesign } from "./api.js";
+import { getComponents, getDefaults, createComponent, updateComponent, saveTextFile, fetchStaticText, loadDesign } from "./api.js";
 import { flatten } from "./model/subdesign.js";
 import {
   newGalPartDialog,
+  galPartFromType,
   memDeviceDialog,
   memDeviceYaml,
   testVectorsPanel,
@@ -14,7 +15,7 @@ import {
   exportFormatDialog,
   designPropertiesDialog,
 } from "./chrome/dialogs.js";
-import { setPrimaryClockCmd } from "./commands.js";
+import { setPrimaryClockCmd, refreshTypesCmd } from "./commands.js";
 import { generateC } from "./engine/cgen.js";
 import { generateNDL } from "./engine/ndl.js";
 import { BUILTINS, PIN_MARK_TOOL, memDeviceType } from "./builtins.js";
@@ -29,6 +30,7 @@ import { initProperties } from "./chrome/properties.js";
 import { createConsolePanel } from "./chrome/console.js";
 import { createDock } from "./chrome/dock.js";
 import { createDrcPanel } from "./chrome/drcpanel.js";
+import { openContextMenu } from "./chrome/contextmenu.js";
 import { initStatusBar, postMessage } from "./chrome/statusbar.js";
 import { createSim } from "./engine/sim.js";
 import { startConnectionMonitor } from "./connection.js";
@@ -117,20 +119,31 @@ function makeTile(type, content, title, tiles) {
 
 // renderPalette fills the two palette regions (FR-006a): loaded parts up top
 // (74-series and authored GAL parts, FR-005b), built-in objects below, then wires
-// the armed-tile highlight across both. Returns { addPart } so a newly authored
-// GAL part can be inserted live without re-rendering (FR-007a).
-function renderPalette({ partsEl, builtinsEl, components, builtins, store }) {
+// the armed-tile highlight across both. Returns { addPart, replacePart, setParts }
+// so an authored GAL part can be inserted or re-rendered live without a reload
+// (FR-007a/FR-066f). `onTileMenu(type, x, y)` receives a part tile's right-click
+// (FR-006b); it decides whether there is anything to offer.
+function renderPalette({ partsEl, builtinsEl, components, builtins, store, onTileMenu }) {
   partsEl.replaceChildren();
   builtinsEl.replaceChildren();
   const tiles = {};
 
+  // makePartTile is makeTile plus the upper region's context menu (FR-006b).
+  // preventDefault always, so the browser menu never appears over the palette;
+  // whether a menu opens is onTileMenu's call (no items ⇒ no menu). Right-click
+  // never arms the tile — arming stays on click (FR-009).
+  const makePartTile = (type) => {
+    const tile = makeTile(type, { text: partTileText(type) }, partTileTip(type), tiles);
+    tile.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      onTileMenu?.(type, e.clientX, e.clientY);
+    });
+    return tile;
+  };
+
   // Upper-region parts kept sorted (FR-005b) so a live insert lands in order.
   const parts = [...components].sort(partOrder);
-  for (const type of parts) {
-    partsEl.appendChild(
-      makeTile(type, { text: partTileText(type) }, partTileTip(type), tiles),
-    );
-  }
+  for (const type of parts) partsEl.appendChild(makePartTile(type));
   // Action tile that opens the New GAL part dialog (FR-066c); not placeable, so
   // it is not draggable and not registered in `tiles`. Kept last so addPart's
   // index math (which addresses part tiles by position) stays valid.
@@ -181,11 +194,25 @@ function renderPalette({ partsEl, builtinsEl, components, builtins, store }) {
   // addPart inserts a newly created part tile in sorted position (FR-007a); the
   // armed-state subscription above covers it since it shares the `tiles` map.
   function addPart(type) {
-    const tile = makeTile(type, { text: partTileText(type) }, partTileTip(type), tiles);
+    const tile = makePartTile(type);
     let at = parts.findIndex((p) => partOrder(type, p) < 0);
     if (at < 0) at = parts.length;
     parts.splice(at, 0, type);
     partsEl.insertBefore(tile, partsEl.children[at] ?? null);
+  }
+  // replacePart re-renders one existing tile in place after its definition was
+  // edited (FR-066f). The sort key is the immutable id (partOrder), so an edited
+  // part never moves — only its label and tooltip can change, when the part
+  // number or description was edited.
+  function replacePart(type) {
+    const id = typeIdentity(type);
+    const at = parts.findIndex((p) => typeIdentity(p) === id);
+    if (at < 0) return addPart(type);
+    parts[at] = type;
+    const tile = tiles[id];
+    if (!tile) return;
+    tile.textContent = partTileText(type);
+    tile.title = partTileTip(type);
   }
   // setParts replaces the upper-region part tiles wholesale (FR-121i, §6.19): a
   // project switch discards the outgoing project's local parts and lays in the new
@@ -199,7 +226,7 @@ function renderPalette({ partsEl, builtinsEl, components, builtins, store }) {
     parts.length = 0;
     for (const type of [...components].sort(partOrder)) addPart(type);
   }
-  return { addPart, setParts };
+  return { addPart, replacePart, setParts };
 }
 
 async function main() {
@@ -265,6 +292,17 @@ async function main() {
       components,
       builtins: BUILTINS,
       store,
+      // Right-click on a part tile (FR-006b). The one item today is offered for a
+      // project-local GAL part alone: a shared-library part is not this project's
+      // to change (FR-121i), a memory device has no editor yet, and a 74-series
+      // part is library metadata, not authored here. Editing is a design edit in
+      // the FR-087 sense, so it goes away while the simulator runs.
+      onTileMenu: (type, x, y) => {
+        if (!type.gal || !type.projectLocal || store.isReadonly()) return;
+        openContextMenu(x, y, [
+          { label: "Edit part definition…", onClick: () => onEditGalPart(type) },
+        ]);
+      },
     });
     // Built-ins are placeable too, so they must be findable by type identity.
     const library = [...components, ...BUILTINS];
@@ -304,6 +342,36 @@ async function main() {
         addCreatedPart(created);
         toast(`Added GAL part ${created.partnumber}`);
       }
+    };
+    // Open the Edit GAL part dialog on an existing project-local part (FR-066f):
+    // the same dialog the create flow uses, populated by galPartFromType, saving
+    // through the update endpoint (FR-007a). A definition the dialog cannot
+    // reproduce exactly is refused here rather than opened and silently reduced.
+    const onEditGalPart = async (type) => {
+      const part = galPartFromType(type);
+      if (part.refuse) {
+        postMessage(
+          `${type.partnumber || type.name}: cannot edit in the app — ${part.refuse}. ` +
+            `Edit the YAML directly, then use File ▸ Refresh Types.`,
+        );
+        return;
+      }
+      const updated = await newGalPartDialog({
+        part,
+        submit: (yaml) => updateComponent(yaml, store.state.project?.dir),
+      });
+      if (!updated) return;
+      // The edited definition replaces the loaded one (the id is immutable, so
+      // this is an in-place swap), then the refresh carries it into the placed
+      // instances of that type alone — one undo step, dropping and reporting any
+      // connection to a pin the edit removed or renamed (FR-088).
+      const id = typeIdentity(updated);
+      const at = library.findIndex((t) => typeIdentity(t) === id);
+      if (at >= 0) library[at] = updated;
+      else library.push(updated);
+      paletteApi.replacePart(updated);
+      store.dispatch(refreshTypesCmd(library, postMessage, { typeId: id }));
+      toast(`Updated GAL part ${updated.partnumber}`);
     };
     // Open the New memory device dialog (FR-114), persist the generated type to the
     // component library, and register it live — exactly like a new GAL part

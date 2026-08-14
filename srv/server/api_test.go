@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -342,5 +343,164 @@ func TestStaticServesIndex(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+}
+
+// An update rewrites the existing project-local file in place and returns the
+// reparsed type: 200, the same filename, the new content, and the new definition
+// visible to a following project-scoped GET (FR-007a/FR-066f).
+func TestUpdateComponent(t *testing.T) {
+	proj := t.TempDir()
+	srv := httptest.NewServer(NewRouter(newLibrary(), t.TempDir(), t.TempDir(), t.TempDir()))
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/api/v1/components", "application/json",
+		body(t, map[string]string{"yaml": galPartYAML, "project": proj}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d, want 201", resp.StatusCode)
+	}
+
+	// Same id (derived from the unchanged partnumber), edited pin label.
+	edited := strings.Replace(galPartYAML, "name: I0", "name: ADDR3", 1)
+	resp, err = http.Post(srv.URL+"/api/v1/components", "application/json",
+		body(t, map[string]string{"yaml": edited, "project": proj, "mode": "update"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("update status = %d, want 200", resp.StatusCode)
+	}
+	var updated struct {
+		Component ComponentType `json:"component"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Component.Pins[0].Name != "ADDR3" {
+		t.Fatalf("updated pin = %q, want ADDR3", updated.Component.Pins[0].Name)
+	}
+	if !updated.Component.ProjectLocal {
+		t.Fatal("updated component should be marked projectLocal (FR-006b)")
+	}
+
+	// The id is immutable, so the definition never moves: one file, new content.
+	path := filepath.Join(proj, "components", "type-PC-DECODE-A.yaml")
+	onDisk, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("expected the original file rewritten in place: %v", err)
+	}
+	if string(onDisk) != edited {
+		t.Fatalf("file content = %q, want the submitted YAML", string(onDisk))
+	}
+	ents, err := os.ReadDir(filepath.Join(proj, "components"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ents) != 1 {
+		t.Fatalf("components/ holds %d files, want 1 (no orphan)", len(ents))
+	}
+}
+
+// An update whose id names no project-local file is a 404: an update never
+// silently creates (FR-007a).
+func TestUpdateComponentNotFound(t *testing.T) {
+	srv := httptest.NewServer(NewRouter(newLibrary(), t.TempDir(), t.TempDir(), t.TempDir()))
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/api/v1/components", "application/json",
+		body(t, map[string]string{"yaml": galPartYAML, "project": t.TempDir(), "mode": "update"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	}
+}
+
+// An update naming a shared-library type is a 403 and leaves the shared file
+// untouched on disk: the shared library is never written from the app (FR-121i).
+func TestUpdateComponentShared(t *testing.T) {
+	sharedDir := t.TempDir()
+	sharedFile := filepath.Join(sharedDir, "type-PC-DECODE-A.yaml")
+	if err := os.WriteFile(sharedFile, []byte(galPartYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	shared := newLibrary()
+	shared.add(ComponentType{ID: "type-PC-DECODE-A", Name: "22V10", PartNumber: "PC-DECODE-A", Gal: "GAL22V10"})
+	srv := httptest.NewServer(NewRouter(shared, t.TempDir(), sharedDir, t.TempDir()))
+	defer srv.Close()
+
+	edited := strings.Replace(galPartYAML, "name: I0", "name: ADDR3", 1)
+	resp, err := http.Post(srv.URL+"/api/v1/components", "application/json",
+		body(t, map[string]string{"yaml": edited, "project": t.TempDir(), "mode": "update"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", resp.StatusCode)
+	}
+	onDisk, err := os.ReadFile(sharedFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(onDisk) != galPartYAML {
+		t.Fatal("shared library file was modified by a refused update")
+	}
+}
+
+// An unknown mode is a 400 — the server never guesses which write was meant.
+func TestComponentUnknownMode(t *testing.T) {
+	srv := httptest.NewServer(NewRouter(newLibrary(), t.TempDir(), t.TempDir(), t.TempDir()))
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/api/v1/components", "application/json",
+		body(t, map[string]string{"yaml": galPartYAML, "project": t.TempDir(), "mode": "replace"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+// A project-scanned type is marked projectLocal; a shared one is not (FR-006b).
+func TestComponentProvenance(t *testing.T) {
+	proj := t.TempDir()
+	shared := newLibrary()
+	shared.add(ComponentType{ID: "type-7400", Name: "7400"})
+	srv := httptest.NewServer(NewRouter(shared, t.TempDir(), t.TempDir(), t.TempDir()))
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/api/v1/components", "application/json",
+		body(t, map[string]string{"yaml": galPartYAML, "project": proj}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	got, err := http.Get(srv.URL + "/api/v1/components?project=" + url.QueryEscape(proj))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer got.Body.Close()
+	var list struct {
+		Components []ComponentType `json:"components"`
+	}
+	if err := json.NewDecoder(got.Body).Decode(&list); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range list.Components {
+		want := c.Key() == "type-PC-DECODE-A"
+		if c.ProjectLocal != want {
+			t.Fatalf("%s projectLocal = %v, want %v", c.Key(), c.ProjectLocal, want)
+		}
 	}
 }

@@ -911,7 +911,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     when `<projectDir>/components/` exists, walk it and return the parsed
     types (sorted by `id`) plus any per-file warnings (missing dir → empty, no
     error, FR-121i); the API layer merges these over the shared library and
-    posts warnings to the tray (FR-074).
+    posts warnings to the tray (FR-074). Each returned type carries
+    `projectLocal: true` (§7.1) — the provenance the client needs to tell an
+    **editable** project-local part from a shared one (FR-006b/FR-066f) once the
+    two are merged into one library. The flag is set by the **scan**, never read
+    from the YAML: provenance is a fact about where the file was found, and a
+    file that could assert it would let a copy of a shared part claim to be
+    editable.
   - `ProjectComponentFiles(projectDir string) (map[string]string, []string)` —
     the same walk keyed the other way: `id → file name` within
     `<projectDir>/components/`, plus the same warnings. Block import (FR-121j,
@@ -1032,7 +1038,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   | Method & Path | Request | Success Response | Errors |
   |---|---|---|---|
   | `GET /api/v1/components?project=<d>` | optional `project` (abs project dir) | `{"components":[ComponentType,…],"warnings":[…]}` — shared library, unioned with the project's `components/` types when `project` is given (FR-121i); `warnings` carries per-file scan reports | 500 on internal error |
-  | `POST /api/v1/components` | `{"yaml":"<authored YAML>","project":"<abs project dir>"}` | `{"component":ComponentType}` | 400 bad body / invalid YAML / missing `project`, 409 duplicate `id` or existing file in project `components/` **or** shared library (FR-066e/FR-007a/FR-121i), 500 write failure |
+  | `POST /api/v1/components` | `{"yaml":"<authored YAML>","project":"<abs project dir>","mode":"create"\|"update"}` — `mode` absent means `create` (the pre-2026-08-14 request shape, so existing callers are unaffected) | `{"component":ComponentType}` | 400 bad body / invalid YAML / missing `project` / unknown `mode`, 409 **create** whose `id` or derived filename already exists in project `components/` **or** shared library (FR-066e/FR-007a/FR-121i), 404 **update** whose `id` names no file in the project's `components/`, 403 **update** whose `id` names a **shared-library** type (never written from the app, FR-121i), 500 write failure |
   | `GET /api/v1/defaults` | – | `{"dataDir":"<abs path>"}` | – |
   | `GET /api/v1/files?path=<p>&exts=<e>&manifests=<0\|1>` | query `path` (abs; empty = data dir), optional `exts` (csv, default `json`; the single value `-` lists **directories only**, §6.5), optional `manifests=1` to include `*-manifest.json` files (excluded from listings by default, FR-121a) | `{"path","parent","entries":[{"name","isDir"}]}` | 400 bad path, 404 missing, 403 not a dir |
   | `GET /api/v1/project/info?dir=<d>` | query `dir` (abs project directory) | `{"dir","name","manifestFile","mainDesign","warnings":[…]}` — `manifestFile`/`mainDesign` are `""` when absent; `name` falls back to the folder base name; `warnings` carries the extra-manifest, unparseable-manifest, and dangling-`mainDesign` reports (FR-121a) | 400 bad path, 404 missing, 403 not a dir |
@@ -1081,11 +1087,25 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   FR-066b) **or** a `mem` block (a memory device, FR-114f) — an immutable
   library-unique `id` (FR-066e), **and** a `project` directory (FR-121i), then
   writes `<id>.yaml` into `<project>/components/` (created if absent; filename
-  sanitized from the `id`; reject on `id` collision **or** an existing file of that
-  name in **either** the project `components/` **or** the shared library → 409,
-  never overwriting), and returns the parsed `ComponentType` so the client can add
-  the tile live (the server keeps no per-project in-memory library — the client
-  library is the merge, refreshed on project switch and Refresh Types, FR-121i).
+  sanitized from the `id`), and returns the parsed `ComponentType` so the client
+  can add or replace the tile live (the server keeps no per-project in-memory
+  library — the client library is the merge, refreshed on project switch and
+  Refresh Types, FR-121i). The `mode` field selects between the two writes, and
+  the handler **enforces the stated intent rather than inferring it from the
+  filesystem**, so a create can never silently overwrite and an update can never
+  silently create:
+  - `create` (the default) rejects an `id` collision **or** an existing file of
+    that name in **either** the project `components/` **or** the shared library
+    → 409, never overwriting.
+  - `update` (FR-007a/FR-066f) resolves the `id` through
+    `ProjectComponentFiles(project)` (§6.2), which is exactly the `id → file`
+    map this needs: a miss → 404 (nothing to update), a hit in the **shared**
+    `Library` instead → 403 (the shared library is read-only to the app). On a
+    hit it rewrites that same file through `atomicWrite`, so the definition's
+    filename never moves — the `id` is immutable (FR-066e) and an update that
+    changed it would be a create under a new name plus an orphan under the old.
+    The parse-and-validate path is identical to a create's; only the collision
+    rule differs.
   Static handler serves
   `web/` for any non-`/api/` path; unknown SPA routes fall back to `index.html`.
   Static responses carry `Cache-Control: no-store` so a plain browser reload
@@ -1243,7 +1263,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     unit's pins (in list order) plus `renderAs`/`unit`, and `width`/`height` from
     the symbol footprint (§6.8a). The units are offset (stacked vertically by
     footprint height + 1) so they do not overlap on drop.
-  - `refreshInstance(design, inst, libType) → {ok} | {skip: reason}` (FR-088) —
+  - `refreshInstance(design, inst, libType, {noDrop}={}) → {ok, dropped[]} | {skip: reason}` (FR-088) —
     replaces `inst.typeData` with a fresh copy of `libType` (for a subunit
     sibling, the per-unit filtered copy, reusing `addSubunitPackage`'s
     per-unit derivation), preserving refdes/position/rotation/wiring and
@@ -1256,19 +1276,53 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     default width, so a plain copy would shrink a placed 16-bit port to 8 and
     strand its own bus group connection on pins it no longer had; and a note's
     auto-sized footprint, re-derived by `noteSize(inst.text)` (FR-071f), the
-    library holding only the empty-note minimum. Skips
-    (returns the reason) when `renderType` differs or any pin this instance
-    still references is absent from the new definition (subunits: absent from
-    the same unit) — the wire-endpoint contract (§7.1a) must stay intact. Both
-    kinds of reference are checked, the two places a `(refdes, pin)` pair lives
-    (§7.2): a `pin`/`connector` vertex, and a bus **group connection**'s
-    `bitMap`, which skips the instance whole when any of its bits is gone
-    (never per-bit — that would silently change the bus's topology). This is
-    the refresh-side twin of FR-099b's sub-design sweep (§6.14); the difference
-    in remedy is deliberate — a stale sub-design reference is *dropped* because
-    the child's interface is authoritative and already changed, while a refresh
-    can simply *decline* to adopt the new definition and leave the instance
-    exactly as it was.
+    library holding only the empty-note minimum. **Skips** (returning the
+    reason) on one condition only: `renderType` differs, the incompatibility
+    with no correspondence between old shape and new to preserve. A pin the
+    instance still references but the new definition lacks (subunits: lacks in
+    the same unit) no longer skips — the refresh proceeds and the stale
+    reference is **dropped**, in the two places a `(refdes, pin)` pair lives
+    (§7.2): a `pin`/`connector` **vertex** is demoted to a `free` vertex keeping
+    its last-known point (`ref`/`pin` deleted), leaving its wire on the sheet to
+    be re-attached rather than re-drawn; a bus **group connection** whose
+    `bitMap` names any vanished pin is dropped **whole**, never per-bit (that
+    would silently change the bus's topology). The wire-endpoint contract
+    (§7.1a) still holds either way: a demoted vertex is a legal free vertex, and
+    no conductor is left naming a pin that does not exist. `dropped[]` returns
+    one entry per removed reference, each carrying what it removed **and enough
+    prior state to restore it**, so the command layer (§6.10) can report every
+    drop to the tray (FR-074) and revert it exactly. This makes the refresh the
+    **same** sweep `resolveSubDesigns` runs after a child interface change
+    (FR-099b, §6.14) — one remedy for a vanished pin on every *interactive* path
+    (reworked
+    2026-08-14, FR-088; supersedes the earlier deliberate split in which a
+    refresh *declined* the new definition and left the instance stale, which
+    disagreed with both the FR-099b sweep and `repairStructure`'s load-time drop,
+    §7.4, and left the instance in exactly the out-of-date condition the action
+    exists to end). A fourth argument, `{noDrop: true}`, **restores the old
+    behavior for a caller that cannot accept a connectivity change**: instead of
+    dropping, `refreshInstance` returns `{skip: reason}` naming the pin, exactly
+    as it did before the rework, and the instance is left untouched. The editor
+    never passes it; the batch tool always does (below). Keeping the two
+    behaviors in one function is deliberate — the compatibility scan that finds
+    a vanished reference is the same scan either way, and duplicating it in the
+    tool is how the two would drift apart.
+  - **Batch tool contract (`web/tools/refresh-types.js`, §9).** The tool edits
+    saved design files in place and rewrites **only** `components[].typeData`
+    and `overrides`, leaving each file's `wires`/`buses`/`vertices` and its
+    derived `nets` array (A4/FR-059a) untouched — a premise the drop rework
+    would otherwise break. It therefore calls `refreshInstance` with
+    `{noDrop: true}` and **declines** any instance whose refresh would break a
+    connection, reporting it through the tool's existing per-instance skip list
+    (instance, type, and the pin that vanished) alongside the `renderType` skips.
+    The rest of the file still refreshes and is still written: a declined
+    instance costs that one instance's update, not the batch. A file left with
+    declined instances is a file whose definitions moved past its wiring, and
+    the fix is to open it in the editor — where the same refresh *does* drop and
+    report, and where a human can see the dangling ends and undo if the answer
+    is wrong. That asymmetry is the point: an unattended batch job may not
+    silently unwire a design it is not showing anyone, and the interactive
+    refresh may not silently leave one stale.
   - `pinWorldPos(instance, pinName) → {x,y}` — applies rotation (§6.7). For
     subunit instances the unrotated pin offset comes from the symbol module
     (§6.8a) keyed by `renderAs`, input count, pin role, and slot index (the pin's
@@ -2129,7 +2183,18 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `RefreshTypes` (FR-088) runs `refreshInstance` over every instance against
   the client's loaded library as **one** undoable command, capturing each
   refreshed instance's prior `{typeData, overrides}` for exact revert; skipped
-  instances are reported once per type via the message tray (FR-074).
+  instances (now only a `renderType` change) are reported once per type via the
+  message tray (FR-074), and each **dropped** connection — a demoted vertex, a
+  removed bus group connection — is reported individually, naming instance and
+  pin, since a refresh must never quietly unwire anything. Revert therefore
+  restores more than the type data: the command also captures every
+  `refreshInstance` `dropped[]` entry (the vertex's prior `ref`/`pin`, the group
+  connection's whole record and its index in its bus) and puts them back in
+  reverse, so one Ctrl-Z returns the sheet to its pre-refresh connectivity.
+  The command takes an optional **type-id filter**: with it, only instances of
+  that one type are visited, with identical per-instance semantics — this is
+  what the Edit GAL part save dispatches (FR-066f, §6.14), so editing a part
+  cannot disturb instances of parts the user did not edit.
   `DeleteWire`/`DeleteBus`/`DeleteSegment` accept an `{ifPresent: true}` option
   making the command a **no-op when its target no longer exists at apply time**
   — used only by the multi-delete composite (§6.9, FR-016a), whose queued
@@ -2255,7 +2320,17 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   (FR-005a) — the part number is what disambiguates same-family tiles. Two GAL
   parts of one family stay distinct because their `id`s differ, not their display
   names. An authored part created in-app (FR-066c/FR-007a) is appended
-  to the upper region live (no reload), keeping the FR-006 sort. Tiles are raised (drop shadow); a tile is `draggable` (HTML5 DnD →
+  to the upper region live (no reload), keeping the FR-006 sort; an authored part
+  **edited** in-app (FR-066f) replaces its library entry and re-renders its tile
+  in place, the `id` being immutable so the sort cannot move (only the label can
+  change, when the `partnumber` was edited). A tile also carries a **context
+  menu** (FR-006b): `renderPalette` binds `contextmenu` on the tile, and the
+  handler builds items from the type — presently just "Edit part definition…",
+  and only when the type is a project-local GAL part (`type.gal &&
+  type.projectLocal`, §7.1) and no simulation is running (FR-087). With no items
+  it opens **nothing**; the handler always `preventDefault`s so the browser menu
+  never appears, and it does **not** arm the tile (arming stays on `click`,
+  FR-009). Tiles are raised (drop shadow); a tile is `draggable` (HTML5 DnD →
   drop on canvas, FR-008) and click-selectable (sets `PLACE(type)`, FR-009). The
   armed tile shows a pressed-in (inset) look (FR-009a) by subscribing to the store
   and matching `state.placeType` while `tool === "place"`. Disabled/overlaid until
@@ -2549,7 +2624,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   is transient UI, not design state, so it does not flow through the store or
   the undo stack.
 - **Context menu (`contextmenu.js`)** — Satisfies FR-033, FR-033b, FR-033d, FR-038, FR-037b,
-  FR-033a, FR-018a. Right-click hit-tests the cursor (bend → wire → bus → component
+  FR-033a, FR-018a, FR-006b. Right-click hit-tests the cursor (bend → wire → bus → component
   priority) and surfaces the matching actions: "Delete bend point" (on a bend);
   "Delete segment" (the segment under the cursor, FR-033d) and "Delete wire" (on a wire);
   "Delete segment", "Set width…", "Edit bit names…", and "Delete bus" (on
@@ -2559,6 +2634,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   Escape, or an outside click. `interaction.js` builds the item list and dispatches
   the commands; `contextmenu.js` only renders and positions the menu. Width and
   bit-name entry use small modal prompts in `dialogs.js`.
+  The **palette** reuses the same renderer for its tile menu (FR-006b, above):
+  `openContextMenu(x, y, items)` is not canvas-specific — it takes a point and a
+  list of `{label, onClick}` — so the tile handler in `app.js` supplies its own one-item
+  list and nothing about hit-testing or canvas commands is involved. Keeping one
+  menu renderer is the whole point: dismissal, positioning, and appearance stay
+  identical wherever a right-click lands.
 - **Dependencies:** store, api, geometry.
 
 ### 6.12 JS: API client & bootstrap (`web/js/api.js`, `web/js/app.js`)
@@ -3131,6 +3212,8 @@ no sequential part could ever leave U.)
 **The ADD flow (FR-097/097a/097b).** `builtins.js` exposes a single non-placeable lower-palette entry **ADD**. Arming it and clicking (or dropping it on) the canvas opens the **Add sub-component dialog** (`dialogs.js`) at the grid point instead of creating an object. The dialog: (1) navigates/loads a child via `/api/v1/files`+`/design/load` (§6.4); (2) shows the child's `defaultRender` (§7.2) and resolved interface; (3) offers an `ic`/`connector` choice defaulting to `defaultRender`. OK → dispatch `PlaceSubDesign(childPath, render, @grid)`; Cancel → nothing; both return to SELECT (one-shot, FR-010). `childPath` is held **absolute in memory** (the picked child's absolute path) and relativized to the parent's save dir only at save time (§7.4), so embedding **does not require a saved parent** and shows no save prompt (FR-097b). The dialog rejects an interface-less file, a self/cyclic embed (`wouldCycle`), and — FR-121d — a file **outside the current project directory** (`fileops.addSubDesign` checks containment against `store.state.project.dir` before the cycle check; §6.19), each with a message. Its picker is seeded at the project root (FR-121h) under the usual FR-052a remembered-directory rule.
 
 **The New GAL part flow (FR-066b/066c/007a).** `builtins.js` exposes a non-placeable upper-palette action **New GAL part** (a tile that opens a dialog rather than arming placement). The **New GAL part dialog** (`dialogs.js`) renders the device's fixed skeleton — for the GAL22V10, the 24-pin map (pin 1 clock/in, 2–11 + 13 in, 14–23 OLMC I/O, 12 GND, 24 VCC) — and collects only the per-part data: `partnumber`, optional `description`, a label per I/O pin, a per-OLMC direction (in / comb-out / reg-out), optional named pin groups (FR-066d, below), and the `behavior` block. As the user types, the dialog assembles a candidate `typeData` (`type:"22V10"`, `gal:"GAL22V10"`, an immutable `id` generated from the `partnumber` (FR-066e), the chosen `pins`, the `behavior`) and runs `galasm.js` `compileBehavior`+`validateStrict` (§6.13) **live**, surfacing the same accept/reject diagnostics Run would (FR-079b) — the dialog reuses that one gate, adding no second validator. OK serializes the `typeData` to YAML client-side and `POST`s it to `/api/v1/components` **with the current project dir** (`store.state.project.dir`), so the server writes the `.yaml` under `<project>/components/` (FR-007a/FR-121i); on success it dispatches the live palette add (above) and returns to SELECT (one-shot, FR-010). A duplicate-`id`/existing-file 409 — collision against the project `components/` **or** the shared library (FR-121i) — or validation error is shown in the dialog; Cancel discards. Placement of the resulting tile is then ordinary FR-008/FR-009.
+
+**The Edit GAL part flow (FR-066f/FR-006b/FR-007a/FR-088).** The same `newGalPartDialog` serves as the editor, opened with the part to edit instead of a blank skeleton — one dialog, one set of fields, one validation gate, differing only in its title, its **Save** (vs. Create) button, and whether the submit posts `mode:"update"` or `mode:"create"` (§6.4). Entry is the palette tile's context menu (FR-006b, §6.11), whose "Edit part definition…" item exists only for a `type.gal && type.projectLocal` type (§7.1) with no simulation running (FR-087). **Load-back** is the new code: a pure `galPartFromType(type) → {fields} | {refuse: reason}` (`dialogs.js`, testable without DOM) maps a loaded `ComponentType` onto the dialog's model — skeleton pin ↔ label, OLMC direction (`in`/`comb`/`reg`, read back from each OLMC pin's `direction` plus whether the behavior registers it), `partnumber`, `description`, `pinGroups` resolved from current labels back to **skeleton DIP numbers** (the representation the pin-groups sub-dialog already uses, so a group survives the round trip through a rename), and the `behavior` text verbatim. It **refuses** — and the menu item reports the reason rather than opening an empty dialog — when the type is not `gal: GAL22V10`, when its pins do not map one-for-one onto the 24-pin skeleton (count, numbers, or sides), or when it carries any key the dialog does not model and would therefore drop on write. That refusal is the contract that lets Save rewrite the file whole: the dialog only ever owns a definition it can reproduce exactly (FR-066f). **Save** serializes through the very same `galPartYaml` the create path uses and posts it with `mode:"update"`; `api.js` gains `updateComponent(yaml, projectDir)` beside `createComponent`, and a 404/403/400 surfaces inline exactly as a create's 409 does, leaving the dialog open. On success `app.js` **replaces** the type in the client library (by `id`) and re-renders the tile (§6.11), then dispatches `RefreshTypes` **filtered to that `id`** (§6.10) — instances of the edited part adopt the new pins, directions, groups, and behavior; connections to a pin the edit renamed or removed are dropped and reported (FR-088); the whole refresh is one undo step. The YAML write is **not** in that step: undo restores the schematic, never the file, and the tray report says so implicitly by naming what it changed. Instances in other designs on disk are untouched until each is opened and refreshed on its own (FR-088) — the definition, not the `typeData` copy embedded in a save (FR-057), is authoritative.
 
 **Pin-groups sub-dialog (FR-066d).** A "Pin groups…" button opens a modal sub-dialog (`dialogs.js`) that edits the part's named pin groups (FR-063). It lists the groups defined so far (each with a remove control) and offers a name field plus a checkbox per pin (labeled with the pin's *current* label) to define one more; "Add group" appends it to the working list, and the sub-dialog returns the updated list to the parent on close. Membership is stored by the **skeleton pin** (its stable DIP `number`), not the label string, so a later rename does not break a group; `galPartYaml` resolves each member to its current label and emits members in **pin-layout order** (the part's pin order, top-to-bottom) so the bus bit order is deterministic (FR-066d). The parent dialog folds the groups into the candidate `typeData` only for the YAML write (a `groups:` block, §7.3) — groups do not enter `compileBehavior`/`validateStrict`. Client checks: non-empty unique name, ≥1 member, and the **geometry rule** (FR-063a) — the checked pins must share one side and form a contiguous run (no non-member pin between them); the sub-dialog rejects an "Add group" that straddles sides or is interrupted, so it can only build groups the brace can render. Membership is by skeleton DIP number, but the side/contiguity test resolves each member to its skeleton pin's side/`pos`.
 
@@ -4289,6 +4372,7 @@ supplies `onDesignRuleCheck: () => drcPanel.run()`, and passes `drc: drcPanel` i
 | `description` | string? | optional one-line function summary (FR-104), e.g. `"3-to-8 line decoder/demultiplexer"`; presentation-only |
 | `datasheet` | `Datasheet?` | optional provenance (FR-104): `{vendor, title, rev, url}`, all strings; the panel renders `url` as a link |
 | `mem` | `MemSpec?` | generated memory device only (FR-114c/FR-114f): `{kind:"ram"\|"rom", addressBits, dataWidth, locations, romFile?, ramFile?, ramLoad?}`. Serializable data the client's built-in memory behavior binds from at Run (FR-114d); round-trips through the `mem:` YAML block (§7.6) so a persisted device simulates on reload. `ramFile`/`ramLoad` carry RAM persistence (FR-114g). Absent on all other types |
+| `projectLocal` | bool? | **provenance**, set by the server's project scan (§6.2, FR-006b/FR-121i): `true` for a type read from the current project's `components/`, absent for one from the read-only shared library. Never authored in YAML — a file that could claim it would let a copied shared part pass as editable. Read only by the palette's context menu, which offers "Edit part definition…" for a project-local GAL part alone (FR-066f); it rides into an instance's copied `typeData` harmlessly, where nothing consults it |
 | `physical` | `PhysicalSpec?` | optional exporter-only package metadata (FR-062e): `{package?, pincount, power[], nc?}` — see §7.6. Carried verbatim (like `mem`), parser-validated for physical completeness, and copied into saves per FR-057 so exporters can work from the design JSON alone. Read by no editor or simulator code |
 
 Built-in types additionally have a **behavior** (FR-067a): a client-JS function
@@ -5027,7 +5111,8 @@ web/
   cgen/runtime.c            fast-engine C runtime implementation (§6.17)
   tools/tv2txt.js           .tv → generated-program stdin rows (§6.17 M2)
   tools/parity.js           fast-vs-slow FR-107 parity harness (§6.17 M2)
-  tools/refresh-types.js    batch FR-088 refresh for saved designs (uses cmd/dumplib)
+  tools/refresh-types.js    batch FR-088 refresh for saved designs (uses cmd/dumplib;
+                            `{noDrop}` — declines and reports rather than unwiring, §6.6)
 examples/                   parity corpus: design + .tv pairs (§6.17)
 specs/                      requirements.md, design.md (this document), CHANGELOG.md
 ```
@@ -5061,6 +5146,7 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-004a, FR-004b | §6.11 | `toolbar.js`, `interaction.js`, `index.html`, `style.css` |
 | FR-005, FR-005a, FR-005b, FR-006 | §6.2, §6.11 | `components.go`, `app.js` |
 | FR-006a | §6.11 | `app.js`, `style.css`, `builtins.js` |
+| FR-006b | §6.11 | `app.js`, `contextmenu.js` |
 | FR-007 | §6.2 | `components.go` |
 | FR-008, FR-009, FR-010 | §6.9, §6.11 | `interaction.js`, `app.js`, `store.js` |
 | FR-011 | §6.6 | `model/design.js` |
@@ -5136,7 +5222,7 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-071g, FR-071h, FR-083a | §6.11, §6.13, §6.17 (refusal), §6.18 (comment lines), §8 | `builtins.js`, `canvas.js`, `sim.js`, `cgen.js`, `ndl.js` |
 | FR-087b | §6.9, §6.10, §6.11, §6.13 | `interaction.js`, `store.js`, `builtins.js`, `sim.js` |
 | FR-087c | §6.8, §6.9, §6.10, §6.11, §6.13 | `interaction.js`, `properties.js`, `toolbar.js`, `canvas.js`, `sim.js`, `store.js`, `dialogs.js`, `style.css` |
-| FR-088 | §6.6, §6.10, §6.11 | `model/design.js`, `commands.js`, `toolbar.js` |
+| FR-088 | §6.6, §6.10, §6.11, §6.14 | `model/design.js`, `commands.js`, `toolbar.js`, `dialogs.js` |
 | FR-094, FR-094a, FR-095 | §6.14, §7.1a, §7.2 | `subdesign.js`, `builtins.js`, `model/design.js`, `model/netlist.js` |
 | FR-096 | §6.14, §7.2 | `model/design.js`, `dialogs.js` |
 | FR-097, FR-097a, FR-097b | §6.9, §6.11, §6.14, §6.19 (boundary) | `interaction.js`, `dialogs.js`, `subdesign.js`, `fileops.js` |
@@ -5167,6 +5253,7 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-063a | §6.3, §6.14 | `yamlparse.go`, `dialogs.js` |
 | FR-066a, FR-079a, FR-079b | §6.3, §6.13, §7.6 | `yamlparse.go`, `galasm.js`, `sim.js` |
 | FR-066b, FR-066c, FR-066d | §6.4, §6.14 | `dialogs.js`, `app.js`, `api.go`, `yamlparse.go` |
+| FR-066f | §6.2, §6.4, §6.6, §6.10, §6.11, §6.14, §7.1 | `dialogs.js`, `app.js`, `api.js`, `contextmenu.js`, `commands.js`, `api.go`, `components.go` |
 | FR-066e | §6.2, §6.3, §7.1, §7.4 | `yamlparse.go`, `components.go`, `model/persist.js`, `builtins.js` |
 | FR-071f | §6.8, §6.9, §6.11, §7.2 | `builtins.js`, `canvas.js`, `interaction.js`, `model/design.js` |
 | FR-094b, FR-094c, FR-094d, FR-094e | §6.6, §6.11, §6.14 | `subdesign.js`, `model/netlist.js`, `canvas.js`, `properties.js` |
@@ -5319,11 +5406,37 @@ tests beside them per §9).
 - **JS `refreshInstance`/`RefreshTypes` (FR-088):** refresh replaces `typeData`
   (new behavior/delays/properties reach the instance) while preserving refdes,
   position, rotation, and overrides; an override key absent from the new
-  definition is dropped; a connected pin missing from the new definition (or
-  moved to a different unit) skips the instance with a reason; renderType
-  change skips; subunit siblings get per-unit filtered copies; undo restores
-  every prior `{typeData, overrides}` exactly; unknown type names are left
-  untouched.
+  definition is dropped; renderType change skips with a reason; subunit siblings
+  get per-unit filtered copies; undo restores every prior
+  `{typeData, overrides}` exactly; unknown type names are left untouched. The
+  2026-08-14 drop rework adds: a connected pin missing from the new definition
+  (or moved to a different unit) **refreshes** the instance and demotes its
+  vertex to `free` at the same point, with the wire still present and the drop
+  reported; a bus group connection naming a vanished pin is removed whole, its
+  bus and endpoint vertex surviving; a group whose pins all survive is untouched
+  and unreported; and **undo restores both kinds of dropped connection**, not
+  just the type data (the regression this rework could most easily introduce —
+  the pre-rework command captured only `{typeData, overrides}` because nothing
+  else could change). `{noDrop: true}` reproduces the pre-rework result exactly
+  on those same fixtures — `{skip}` naming the vanished pin, instance and design
+  untouched, no `dropped[]` — the assertion that protects the batch tool's
+  guarantee (§6.6/§9) that it never rewrites connectivity in a file it edits
+  unattended.
+- **JS Edit GAL part (FR-066f):** `galPartFromType` round-trips a created part's
+  own YAML-parsed type back into dialog fields (labels, OLMC directions, `NC`
+  pins, groups by skeleton number, behavior verbatim) — the strongest test being
+  create → parse → load back → re-serialize → **byte-identical YAML**; it refuses
+  a non-22V10 `gal`, a pin set that does not map onto the skeleton, and a type
+  carrying an unmodelled key, each with a reason. The palette menu offers the
+  item for a `projectLocal` GAL only (not shared, not memory, not 74-series, not
+  while simulating). Save posts `mode:"update"`, and a filtered `RefreshTypes`
+  touches only instances of the edited `id` — an instance of a *different* type
+  whose pins would also have failed the check is provably untouched.
+- **Go create/update endpoint (FR-007a):** `mode:"update"` rewrites the existing
+  project file in place (same filename, new content) and returns the reparsed
+  type; an update naming no project-local file → 404; an update naming a
+  **shared-library** id → 403 and the shared file is byte-unchanged on disk;
+  a create over an existing id → 409 as before; an absent `mode` still creates.
 - **JS `backup` (FR-092/FR-093):** with an injected fake storage — dirty
   dispatch → debounced snapshot written with design/savePath/name/time; save
   (dirty cleared) → key removed; `offerRecovery` round-trips

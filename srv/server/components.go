@@ -19,6 +19,16 @@ var ErrDuplicateComponent = errors.New("component already exists")
 // (disk error) — mapped to HTTP 500. Validation failures are not this error.
 var ErrComponentWrite = errors.New("component write failed")
 
+// ErrComponentNotFound reports an update whose id names no file in the current
+// project's components/ (FR-007a) — mapped to HTTP 404. An update never creates:
+// there must be something to update.
+var ErrComponentNotFound = errors.New("component not found in project")
+
+// ErrComponentShared reports an update whose id names a shared-library type
+// (FR-007a/FR-121i) — mapped to HTTP 403. The shared library is read-only to the
+// application; it is edited with a text editor and picked up at restart (FR-007).
+var ErrComponentShared = errors.New("shared library components cannot be edited")
+
 // Library holds the parsed component types, keyed by library identity — the
 // type's immutable id (ComponentType.Key/ID, FR-066e), divorced from its
 // free-form display name. This holds the read-only shared library, built once at
@@ -118,6 +128,39 @@ func (l *Library) Create(projectDir, sharedDir string, yamlText []byte) (Compone
 	if err := atomicWrite(filepath.Join(compDir, fname), yamlText); err != nil {
 		return ComponentType{}, fmt.Errorf("%w: %v", ErrComponentWrite, err)
 	}
+	t.ProjectLocal = true // it now lives in the project's components/ (FR-006b)
+	return t, nil
+}
+
+// Update rewrites an existing project-local component definition in place
+// (FR-007a/FR-066f), returning the reparsed type. It is the save path of the Edit
+// GAL part dialog, and it is deliberately not a create-if-missing: the caller
+// stated its intent, so an id naming no project-local file is ErrComponentNotFound
+// rather than a silent create, and an id naming a shared-library type is
+// ErrComponentShared rather than a shadowing copy — the shared library is never
+// written from the app (FR-121i). The id is immutable (FR-066e), so the file is
+// found by id and rewritten under its existing name; the definition never moves.
+// Validation is identical to Create's; only the collision rule differs.
+func (l *Library) Update(projectDir string, yamlText []byte) (ComponentType, error) {
+	t, err := ParseComponentBytes(yamlText, "(submitted)")
+	if err != nil {
+		return ComponentType{}, err
+	}
+	if t.PartNumber == "" && t.Mem == nil {
+		return ComponentType{}, fmt.Errorf("an updated part requires a 'partnumber' (a GAL part) or a 'mem' block (a memory device)")
+	}
+	if l.has(t.Key()) {
+		return ComponentType{}, fmt.Errorf("%w: id %q", ErrComponentShared, t.ID)
+	}
+	files, _ := ProjectComponentFiles(projectDir)
+	fname, ok := files[t.Key()]
+	if !ok {
+		return ComponentType{}, fmt.Errorf("%w: id %q", ErrComponentNotFound, t.ID)
+	}
+	if err := atomicWrite(filepath.Join(projectDir, "components", fname), yamlText); err != nil {
+		return ComponentType{}, fmt.Errorf("%w: %v", ErrComponentWrite, err)
+	}
+	t.ProjectLocal = true
 	return t, nil
 }
 
@@ -232,6 +275,10 @@ func scanComponentDir(projectDir string) (map[string]ComponentType, map[string]s
 		if _, dup := types[t.Key()]; dup {
 			warnings = append(warnings, fmt.Sprintf("%s: duplicate id %q (last wins)", e.Name(), t.ID))
 		}
+		// Provenance, set by the scan and never by the file (FR-006b, §7.1): this
+		// type came from a project's components/, so the client may offer to edit
+		// it in place (FR-066f).
+		t.ProjectLocal = true
 		types[t.Key()] = t
 		files[t.Key()] = e.Name()
 	}

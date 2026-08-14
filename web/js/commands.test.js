@@ -463,6 +463,88 @@ test("refreshTypesCmd refreshes all instances, reports, and undoes exactly (FR-0
   assert.equal(find(store.design, "U1").overrides.delays, undefined);
 });
 
+// Reworked 2026-08-14 (FR-088): a refresh drops connections to vanished pins
+// rather than skipping the instance, so the command must both report each drop
+// and restore it on undo — the pre-rework command captured only
+// {typeData, overrides}, because nothing else could change.
+test("refreshTypesCmd reports dropped connections and undo restores them (FR-088)", () => {
+  const store = newStore();
+  const t = ty();
+  t.pins = [
+    { name: "A0", side: "left", position: 1, direction: "in" },
+    { name: "Y0", side: "right", position: 1, direction: "out" },
+  ];
+  store.dispatch(placeComponent(t, 0, 0, 0)); // U1
+  store.design.vertices.push({ id: "v1", kind: "pin", ref: "U1", pin: "Y0", x: 5, y: 6 });
+  const gc = { vertex: "v9", instance: "U1", group: "A", bitMap: ["A0"] };
+  store.design.buses.push({ id: "b1", width: 1, path: [], groupConnections: [gc] });
+
+  const edited = ty();
+  edited.pins = [
+    { name: "ADDR3", side: "left", position: 1, direction: "in" }, // A0 renamed
+    { name: "Y0", side: "right", position: 1, direction: "out" },
+  ];
+  edited.behavior = "Y0 = VCC\n";
+
+  const reports = [];
+  store.dispatch(refreshTypesCmd([edited], (m) => reports.push(m)));
+
+  assert.equal(find(store.design, "U1").typeData.behavior, "Y0 = VCC\n");
+  assert.equal(store.design.buses[0].groupConnections.length, 0); // group dropped whole
+  assert.equal(store.design.buses[0].id, "b1"); // the bus itself survives
+  assert.equal(store.design.vertices[0].kind, "pin"); // Y0 survived the edit
+  assert.equal(reports.some((m) => m.includes("bus group A")), true);
+  assert.equal(reports.some((m) => m.includes("dropped 1 stale connection")), true);
+
+  store.undo();
+  assert.deepEqual(store.design.buses[0].groupConnections, [gc]); // back, at its index
+  assert.equal(find(store.design, "U1").typeData.behavior, undefined);
+
+  store.redo();
+  assert.equal(store.design.buses[0].groupConnections.length, 0);
+});
+
+test("refreshTypesCmd undo re-attaches a dangled wire vertex (FR-088)", () => {
+  const store = newStore();
+  const t = ty();
+  t.pins = [{ name: "Y0", side: "right", position: 1, direction: "out" }];
+  store.dispatch(placeComponent(t, 0, 0, 0)); // U1
+  store.design.vertices.push({ id: "v1", kind: "pin", ref: "U1", pin: "Y0", x: 5, y: 6 });
+
+  const edited = ty();
+  edited.pins = [{ name: "OUT", side: "right", position: 1, direction: "out" }];
+
+  const reports = [];
+  store.dispatch(refreshTypesCmd([edited], (m) => reports.push(m)));
+  const v = () => store.design.vertices.find((x) => x.id === "v1");
+  assert.equal(v().kind, "free"); // dangling at its last-known point
+  assert.deepEqual([v().x, v().y], [5, 6]);
+  assert.equal(reports.some((m) => m.includes("pin Y0 is gone")), true);
+
+  store.undo();
+  assert.deepEqual(v(), { id: "v1", kind: "pin", ref: "U1", pin: "Y0", x: 5, y: 6 });
+});
+
+// The Edit GAL part save refreshes one type (FR-066f), so editing a part cannot
+// disturb instances of parts the user did not edit.
+test("refreshTypesCmd restricted to one typeId leaves other types alone (FR-088/FR-066f)", () => {
+  const store = newStore();
+  const a = { ...ty("74138"), id: "type-74138" };
+  const b = { ...ty("7400"), id: "type-7400" };
+  store.dispatch(placeComponent(a, 0, 0, 0)); // U1
+  store.dispatch(placeComponent(b, 10, 0, 0)); // U2
+
+  const editedA = { ...a, behavior: "A = VCC\n" };
+  const editedB = { ...b, behavior: "B = VCC\n" };
+
+  const reports = [];
+  store.dispatch(refreshTypesCmd([editedA, editedB], (m) => reports.push(m), { typeId: "type-74138" }));
+
+  assert.equal(find(store.design, "U1").typeData.behavior, "A = VCC\n");
+  assert.equal(find(store.design, "U2").typeData.behavior, undefined); // untouched
+  assert.equal(reports.some((m) => m.includes("refreshed 1")), true);
+});
+
 test("refreshTypesCmd matches subunit packages by library id (FR-088)", () => {
   const store = newStore();
   store.dispatch(placeComponent(ty7400(), 0, 0, 0)); // U1A, U1B

@@ -628,7 +628,7 @@ test("refreshInstance replaces typeData, preserving identity and wiring (FR-088)
   inst.overrides = { delays: { tpd: 12 } };
 
   const r = refreshInstance(d, inst, refreshedType());
-  assert.deepEqual(r, { ok: true });
+  assert.deepEqual(r, { ok: true, dropped: [] });
   assert.equal(inst.typeData.behavior, "/Y0 = /A0\n"); // new data arrived
   assert.equal(inst.refdes, "U1");
   assert.equal(inst.x, 10);
@@ -641,7 +641,7 @@ test("refreshInstance keeps overrides whose keys survive (FR-088)", () => {
   const d = createDesign("t");
   const inst = addInstance(d, refreshedType(), 0, 0, 0);
   inst.overrides = { delays: { tpd_a: 11 }, props: { period: 200 } };
-  assert.deepEqual(refreshInstance(d, inst, refreshedType()), { ok: true });
+  assert.deepEqual(refreshInstance(d, inst, refreshedType()), { ok: true, dropped: [] });
   assert.deepEqual(inst.overrides, { delays: { tpd_a: 11 }, props: { period: 200 } });
 });
 
@@ -652,25 +652,35 @@ test("refreshInstance preserves a memory instance's romFile binding (FR-088/FR-1
     romFile: "/library/creation-time.hex" };
   const inst = addInstance(d, libType, 0, 0, 0);
   inst.typeData.mem.romFile = "/designs/this-instance.hex"; // rebound via the ROM picker
-  assert.deepEqual(refreshInstance(d, inst, libType), { ok: true });
+  assert.deepEqual(refreshInstance(d, inst, libType), { ok: true, dropped: [] });
   // The refresh took the library's mem block but kept the instance's binding.
   assert.equal(inst.typeData.mem.romFile, "/designs/this-instance.hex");
 });
 
-test("refreshInstance skips when a wired pin is gone; unwired pin changes are fine (FR-088)", () => {
+// Reworked 2026-08-14 (FR-088): a wired pin that vanishes no longer skips the
+// instance — the refresh proceeds and the vertex is demoted to a free one at the
+// same point, leaving the wire on the sheet to be re-attached.
+test("refreshInstance drops a connection to a vanished pin; unwired pin changes are fine (FR-088)", () => {
   const d = createDesign("t");
   const inst = addInstance(d, type74138(), 0, 0, 0);
-  d.vertices.push({ id: "v1", kind: "pin", ref: inst.refdes, pin: "/Y0", x: 0, y: 0 });
+  d.vertices.push({ id: "v1", kind: "pin", ref: inst.refdes, pin: "/Y0", x: 3, y: 4 });
 
   const renamed = refreshedType();
   renamed.pins = [
     { name: "A0", side: "left", position: 2, direction: "in" },
     { name: "/O0", side: "right", position: 2, direction: "out" }, // /Y0 renamed
   ];
-  const before = inst.typeData;
   const r = refreshInstance(d, inst, renamed);
-  assert.equal(r.skip.includes("/Y0"), true);
-  assert.equal(inst.typeData, before); // untouched
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.dropped, [
+    { kind: "vertex", id: "v1", ref: inst.refdes, pin: "/Y0", vkind: "pin" },
+  ]);
+  assert.equal(inst.typeData.pins.at(-1).name, "/O0"); // the new definition arrived
+  const v = d.vertices.find((x) => x.id === "v1");
+  assert.equal(v.kind, "free"); // dangling, at its last-known point
+  assert.equal(v.ref, undefined);
+  assert.equal(v.pin, undefined);
+  assert.deepEqual([v.x, v.y], [3, 4]);
 
   // Renaming the UNwired input is fine: only connected pins constrain.
   const renamedInput = refreshedType();
@@ -678,7 +688,7 @@ test("refreshInstance skips when a wired pin is gone; unwired pin changes are fi
     { name: "B0", side: "left", position: 2, direction: "in" }, // A0 renamed
     { name: "/Y0", side: "right", position: 2, direction: "out" },
   ];
-  assert.deepEqual(refreshInstance(d, inst, renamedInput), { ok: true });
+  assert.deepEqual(refreshInstance(d, inst, renamedInput), { ok: true, dropped: [] });
 });
 
 // Regression (2026-08-13): a multi-bit port's width is per-instance state baked
@@ -694,7 +704,7 @@ test("refreshInstance regenerates a portN's pins from the instance's width (FR-0
   const inst = addInstance(d, { ...proto, ...portNFields(16) }, 0, 0, 0);
   assert.equal(inst.width, 16);
 
-  assert.deepEqual(refreshInstance(d, inst, proto), { ok: true });
+  assert.deepEqual(refreshInstance(d, inst, proto), { ok: true, dropped: [] });
   assert.equal(inst.typeData.pins.length, 16);
   assert.equal(inst.typeData.pins.at(-1).name, "P15");
   assert.deepEqual(inst.typeData.pinGroups[0].pins.at(-1), "P15");
@@ -702,7 +712,7 @@ test("refreshInstance regenerates a portN's pins from the instance's width (FR-0
   // The width-driven fields being derived from `width` also repairs an instance
   // an earlier refresh already shrank: `width` survived that clobber.
   inst.typeData = structuredClone({ ...proto });
-  assert.deepEqual(refreshInstance(d, inst, proto), { ok: true });
+  assert.deepEqual(refreshInstance(d, inst, proto), { ok: true, dropped: [] });
   assert.equal(inst.typeData.pins.length, 16);
 });
 
@@ -718,7 +728,7 @@ test("refreshInstance re-derives a note's footprint from its text (FR-088/FR-071
   const sized = { width: inst.typeData.width, height: inst.typeData.height };
   assert.ok(sized.width > 4 && sized.height > 2);
 
-  assert.deepEqual(refreshInstance(d, inst, proto), { ok: true });
+  assert.deepEqual(refreshInstance(d, inst, proto), { ok: true, dropped: [] });
   assert.equal(inst.typeData.width, sized.width);
   assert.equal(inst.typeData.height, sized.height);
 });
@@ -726,29 +736,62 @@ test("refreshInstance re-derives a note's footprint from its text (FR-088/FR-071
 // The refresh-side twin of FR-099b: a bus group connection's bitMap is the other
 // place a (refdes, pin) reference lives (§7.2), and the structural check covered
 // pin vertices only.
-test("refreshInstance skips when a bus-connected group pin is gone (FR-088)", () => {
+// The other place a (refdes, pin) reference lives (§7.2). It goes whole, never
+// per-bit — a partial bitMap would silently change the bus's topology — leaving
+// the bus and its endpoint vertex in place, dangling (FR-088/FR-099b).
+test("refreshInstance drops a bus group connection naming a vanished pin (FR-088)", () => {
   const d = createDesign("t");
   const inst = addInstance(d, type74138(), 0, 0, 0);
-  d.buses.push({
-    id: "b1",
-    width: 1,
-    path: [],
-    groupConnections: [{ vertex: "v9", instance: inst.refdes, group: "Y", bitMap: ["/Y0"] }],
-  });
+  const gc = { vertex: "v9", instance: inst.refdes, group: "Y", bitMap: ["/Y0"] };
+  d.buses.push({ id: "b1", width: 1, path: [], groupConnections: [gc] });
 
   const renamed = refreshedType();
   renamed.pins = [
     { name: "A0", side: "left", position: 2, direction: "in" },
     { name: "/O0", side: "right", position: 2, direction: "out" }, // /Y0 renamed
   ];
-  const before = inst.typeData;
   const r = refreshInstance(d, inst, renamed);
-  assert.equal(r.skip.includes("/Y0"), true);
-  assert.equal(inst.typeData, before); // untouched, so the brace still resolves
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.dropped, [
+    { kind: "group", busId: "b1", index: 0, gc, gone: "/Y0", group: "Y" },
+  ]);
+  assert.deepEqual(d.buses[0].groupConnections, []); // the bus itself survives
+  assert.equal(d.buses[0].id, "b1");
 
   // A group connection naming ANOTHER instance never constrains this one.
-  d.buses[0].groupConnections[0].instance = "U99";
-  assert.deepEqual(refreshInstance(d, inst, renamed), { ok: true });
+  d.buses[0].groupConnections = [{ ...gc, instance: "U99" }];
+  assert.deepEqual(refreshInstance(d, inst, renamed), { ok: true, dropped: [] });
+  assert.equal(d.buses[0].groupConnections.length, 1); // untouched
+});
+
+// noDrop is the batch tool's opt-out (§6.6): it reproduces the pre-2026-08-14
+// result exactly, so a file edited unattended can never be silently unwired.
+test("refreshInstance noDrop declines instead of dropping (FR-088)", () => {
+  const renamed = () => {
+    const t = refreshedType();
+    t.pins = [
+      { name: "A0", side: "left", position: 2, direction: "in" },
+      { name: "/O0", side: "right", position: 2, direction: "out" },
+    ];
+    return t;
+  };
+
+  const d = createDesign("t");
+  const inst = addInstance(d, type74138(), 0, 0, 0);
+  d.vertices.push({ id: "v1", kind: "pin", ref: inst.refdes, pin: "/Y0", x: 3, y: 4 });
+  const before = inst.typeData;
+  const r = refreshInstance(d, inst, renamed(), { noDrop: true });
+  assert.equal(r.skip.includes("/Y0"), true);
+  assert.equal(inst.typeData, before); // untouched
+  assert.deepEqual(d.vertices[0], { id: "v1", kind: "pin", ref: inst.refdes, pin: "/Y0", x: 3, y: 4 });
+
+  // Same for the bus half.
+  const e = createDesign("t");
+  const inst2 = addInstance(e, type74138(), 0, 0, 0);
+  const gc = { vertex: "v9", instance: inst2.refdes, group: "Y", bitMap: ["/Y0"] };
+  e.buses.push({ id: "b1", width: 1, path: [], groupConnections: [gc] });
+  assert.equal(refreshInstance(e, inst2, renamed(), { noDrop: true }).skip.includes("/Y0"), true);
+  assert.deepEqual(e.buses[0].groupConnections, [gc]);
 });
 
 test("refreshInstance skips on renderType change (FR-088)", () => {
@@ -780,17 +823,26 @@ test("refreshInstance rebuilds a subunit sibling's per-unit typeData (FR-088)", 
 
   const edited = structuredClone(pkg);
   edited.behavior = "1Y = /1A + /1B\n2Y = /2A + /2B\n";
-  assert.deepEqual(refreshInstance(d, b, edited), { ok: true });
+  assert.deepEqual(refreshInstance(d, b, edited), { ok: true, dropped: [] });
   // Sibling B keeps only unit B's pins, and the behavior arrived.
   assert.deepEqual(b.typeData.pins.map((p) => p.name), ["2A", "2B", "2Y"]);
   assert.equal(b.typeData.unit, "B");
   assert.ok(b.typeData.behavior.includes("2Y"));
   assert.ok(b.typeData.width > 0 && b.typeData.height > 0); // footprint rebuilt
 
-  // A wired pin moved to a DIFFERENT unit is gone from this sibling → skip.
+  // A wired pin moved to a DIFFERENT unit is gone from this sibling, so its
+  // connection drops here exactly as a renamed pin's does (FR-088).
   const moved = structuredClone(edited);
   moved.pins.find((p) => p.name === "2Y").unit = "A";
-  assert.equal(refreshInstance(d, b, moved).skip.includes("2Y"), true);
+  const r2 = refreshInstance(d, b, moved);
+  assert.equal(r2.ok, true);
+  assert.deepEqual(r2.dropped.map((x) => x.pin), ["2Y"]);
+  assert.equal(d.vertices.find((v) => v.id === "v1").kind, "free");
+  // noDrop still declines it, which is what the batch tool relies on.
+  const d2 = createDesign("t");
+  const [, b2] = addSubunitPackage(d2, pkg, 0, 0);
+  d2.vertices.push({ id: "v1", kind: "pin", ref: b2.refdes, pin: "2Y", x: 0, y: 0 });
+  assert.equal(refreshInstance(d2, b2, moved, { noDrop: true }).skip.includes("2Y"), true);
   void a;
 });
 
@@ -866,7 +918,7 @@ test("placement seeds marks on NC pins; refreshInstance adds none (FR-062f/FR-08
   const plain = { ...typeWithNc(), pins: typeWithNc().pins.slice(0, 2) };
   const old = addInstance(e, plain, 0, 0, 0);
   assert.equal(old.ncPins, undefined);
-  assert.deepEqual(refreshInstance(e, old, typeWithNc()), { ok: true });
+  assert.deepEqual(refreshInstance(e, old, typeWithNc()), { ok: true, dropped: [] });
   assert.equal(old.ncPins, undefined);
 });
 

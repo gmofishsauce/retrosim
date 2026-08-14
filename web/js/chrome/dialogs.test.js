@@ -6,6 +6,7 @@ import {
   tvPathFor,
   nextSymbol,
   galPartYaml,
+  galPartFromType,
   memDeviceYaml,
   pinGroupGeometryError,
   validateMemSpec,
@@ -68,6 +69,163 @@ test("galPartYaml emits group members resolved to current labels (FR-066d)", () 
 test("galPartYaml orders members by physical pin layout, inputs before OLMCs (FR-066d)", () => {
   const yaml = galPartYaml(part([{ name: "ALL", members: [15, 2, 14] }]));
   assert.match(yaml, /\{ name: "ALL", pins: \["D0", "Q0", "Q1"\] \}/);
+});
+
+// --- galPartFromType: the Edit GAL part load-back (FR-066f) ---
+
+// The GAL22V10 skeleton as galPartYaml emits it: 12 left inputs (DIP 1-11, 13)
+// then 10 right OLMCs (DIP 14-23). fullPart/typeFor are inverses by construction,
+// so a mismatch between them is what a broken round trip looks like.
+const IN_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13];
+const OLMC_NUMBERS = [14, 15, 16, 17, 18, 19, 20, 21, 22, 23];
+
+function fullPart(over = {}) {
+  return {
+    partnumber: "PC-DECODE-A",
+    description: "program-counter address decode",
+    inputs: IN_NUMBERS.map((number, i) => ({
+      name: i === 0 ? "CLK" : "I" + number,
+      pos: i + 1,
+      number,
+      ...(i === 0 ? { clock: true } : {}),
+    })),
+    olmcs: OLMC_NUMBERS.map((number, i) => ({
+      name: "IO" + number,
+      pos: i + 1,
+      number,
+      kind: "comb",
+    })),
+    groups: [],
+    behavior: "",
+    ...over,
+  };
+}
+
+// typeFor builds the ComponentType the server returns for galPartYaml(fields):
+// the same 22 pins, the derived outline, and the id/clock rules galPartYaml uses.
+function typeFor(fields) {
+  const reg = fields.olmcs.some((o) => o.kind === "reg");
+  const t = {
+    id: fields.id ?? "type-" + fields.partnumber,
+    name: "22V10",
+    renderType: "unit",
+    width: 8,
+    height: 14,
+    gal: "GAL22V10",
+    partnumber: fields.partnumber,
+    pins: [
+      ...fields.inputs.map((p) => ({
+        name: p.name, side: "left", position: p.pos, direction: "in", number: p.number,
+      })),
+      ...fields.olmcs.map((o) => ({
+        name: o.name,
+        side: "right",
+        position: o.pos,
+        direction: o.name === "NC" ? "in" : o.kind === "in" ? "in" : "out",
+        number: o.number,
+      })),
+    ],
+  };
+  if (fields.description) t.description = fields.description;
+  if (reg) t.clock = fields.inputs[0].name;
+  if (fields.behavior) t.behavior = fields.behavior;
+  if (fields.groups.length) {
+    const labelOf = new Map([...fields.inputs, ...fields.olmcs].map((p) => [p.number, p.name]));
+    t.pinGroups = fields.groups.map((g) => ({ name: g.name, pins: g.members.map((n) => labelOf.get(n)) }));
+  }
+  return t;
+}
+
+// The strongest statement of the round trip (FR-066f): a definition loaded back
+// into the dialog and saved unedited must re-serialize to byte-identical YAML.
+test("galPartFromType round-trips a part to byte-identical YAML (FR-066f)", () => {
+  const fields = fullPart({
+    olmcs: OLMC_NUMBERS.map((number, i) => ({
+      name: i === 0 ? "NC" : "IO" + number,
+      pos: i + 1,
+      number,
+      kind: i === 1 ? "reg" : i === 2 ? "in" : "comb",
+    })),
+    groups: [{ name: "ADDR", members: [2, 3, 4] }],
+    behavior: "IO15.R = I2 * /I3\nIO16 = I4\n",
+  });
+  const yaml = galPartYaml(fields);
+  const back = galPartFromType(typeFor(fields));
+  assert.equal(back.refuse, undefined);
+  assert.equal(back.partnumber, "PC-DECODE-A");
+  assert.equal(back.description, "program-counter address decode");
+  assert.deepEqual(back.groups, [{ name: "ADDR", members: [2, 3, 4] }]);
+  assert.equal(back.olmcs[0].name, "NC"); // the reserved no-connect label survives
+  assert.equal(back.olmcs[1].kind, "reg"); // recovered from the .R equation
+  assert.equal(back.olmcs[2].kind, "in"); // recovered from the pin direction
+  assert.equal(galPartYaml({ ...back, id: back.id }), yaml);
+});
+
+// Renaming the part number must not move the definition: the id is immutable and
+// is what the update addresses and placed instances record (FR-066e/FR-066f).
+test("galPartFromType carries the id so a renamed part keeps its file (FR-066f)", () => {
+  const fields = fullPart();
+  const type = typeFor(fields);
+  const back = galPartFromType(type);
+  const renamed = galPartYaml({ ...back, partnumber: "PC-DECODE-B" });
+  assert.match(renamed, /id: "type-PC-DECODE-A"/);
+  assert.match(renamed, /partnumber: "PC-DECODE-B"/);
+});
+
+test("galPartFromType refuses a device the dialog does not present (FR-066f)", () => {
+  const t = typeFor(fullPart());
+  t.gal = "GAL16V8";
+  assert.match(galPartFromType(t).refuse, /GAL22V10/);
+  assert.match(galPartFromType({ ...t, gal: undefined }).refuse, /not a GAL part/);
+});
+
+test("galPartFromType refuses an off-skeleton pinout (FR-066f)", () => {
+  const short = typeFor(fullPart());
+  short.pins = short.pins.slice(0, 20);
+  assert.match(galPartFromType(short).refuse, /skeleton has 22/);
+
+  const moved = typeFor(fullPart());
+  moved.pins[0] = { ...moved.pins[0], side: "right" };
+  assert.match(galPartFromType(moved).refuse, /not where the skeleton puts it/);
+
+  const unnumbered = typeFor(fullPart());
+  delete unnumbered.pins[3].number;
+  assert.match(galPartFromType(unnumbered).refuse, /no pin number/);
+});
+
+// The refusal that matters most: content the dialog would silently drop when it
+// rewrites the file whole.
+test("galPartFromType refuses content it does not model (FR-066f)", () => {
+  const withDelays = { ...typeFor(fullPart()), delays: { tpd: 10 } };
+  assert.match(galPartFromType(withDelays).refuse, /delays/);
+
+  const withInternal = { ...typeFor(fullPart()), internal: ["Q0"] };
+  assert.match(galPartFromType(withInternal).refuse, /internal/);
+
+  const withPinDesc = typeFor(fullPart());
+  withPinDesc.pins[2] = { ...withPinDesc.pins[2], desc: "address bit 3" };
+  assert.match(galPartFromType(withPinDesc).refuse, /per-pin data/);
+
+  const outlined = { ...typeFor(fullPart()), width: 10 };
+  assert.match(galPartFromType(outlined).refuse, /custom outline/);
+});
+
+// The clock line is derived (galPartYaml emits it iff an OLMC is registered,
+// naming pin 1), so one that disagrees would be silently rewritten.
+test("galPartFromType refuses a clock declaration it would rewrite (FR-066f)", () => {
+  const stray = { ...typeFor(fullPart()), clock: "CLK" }; // no registered output
+  assert.match(galPartFromType(stray).refuse, /no registered output/);
+
+  const regFields = fullPart({ behavior: "IO14.R = I2\n" });
+  regFields.olmcs[0].kind = "reg";
+  const wrongPin = { ...typeFor(regFields), clock: "I5" };
+  assert.match(galPartFromType(wrongPin).refuse, /clock: CLK/);
+});
+
+test("galPartFromType refuses a pin group naming an unknown pin (FR-066f)", () => {
+  const t = typeFor(fullPart());
+  t.pinGroups = [{ name: "ADDR", pins: ["I2", "NOSUCH"] }];
+  assert.match(galPartFromType(t).refuse, /NOSUCH/);
 });
 
 // --- applySaveExt (save-dialog extension coercion) ---

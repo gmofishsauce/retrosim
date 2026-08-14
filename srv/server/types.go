@@ -42,6 +42,14 @@ type ComponentType struct {
 	// (KiCad, NDL, BOM) can work from the design JSON alone. Read by no editor
 	// or simulator code; power/ground stay unrepresented there (FR-062).
 	Physical *PhysicalSpec `json:"physical,omitempty"`
+
+	// ProjectLocal marks a type read from the current project's components/
+	// rather than the read-only shared library (FR-006b/FR-121i, §7.1). Set by
+	// the project scan, never parsed from YAML: provenance is a fact about where
+	// the file was found, and a file that could assert it would let a copy of a
+	// shared part pass itself off as editable. The client reads it to decide
+	// whether a palette tile may be edited in place (FR-066f).
+	ProjectLocal bool `json:"projectLocal,omitempty"`
 }
 
 // PhysicalSpec describes a component's physical package for exporters

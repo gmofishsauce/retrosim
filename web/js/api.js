@@ -39,7 +39,21 @@ export async function createComponent(yaml, projectDir) {
   const body = await request("/components", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ yaml, project: projectDir }),
+    body: JSON.stringify({ yaml, project: projectDir, mode: "create" }),
+  });
+  return body.component;
+}
+
+// updateComponent rewrites an existing project-local component definition in
+// place (FR-007a/FR-066f) and returns the reparsed ComponentType. The mode is
+// stated, never inferred: the server refuses an id that names no project-local
+// file (404) rather than creating one, and an id that names a shared-library
+// type (403) rather than shadowing it. Rejects with the server's message.
+export async function updateComponent(yaml, projectDir) {
+  const body = await request("/components", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ yaml, project: projectDir, mode: "update" }),
   });
   return body.component;
 }

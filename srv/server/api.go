@@ -67,7 +67,8 @@ func handlePing() http.HandlerFunc {
 }
 
 // handleComponents serves the component library on GET (FR-065) and creates a new
-// component on POST (FR-007a). GET returns the shared library unioned with the
+// component — or updates an existing project-local one (FR-066f) — on POST
+// (FR-007a). GET returns the shared library unioned with the
 // current project's components/ types when a ?project=<dir> query is present
 // (FR-121i), plus per-file scan warnings for the tray. POST parses the submitted
 // YAML with the same validation as a startup load, requires a project directory,
@@ -90,6 +91,7 @@ func handleComponents(lib *Library, componentsDir string) http.HandlerFunc {
 			var body struct {
 				YAML    string `json:"yaml"`
 				Project string `json:"project"`
+				Mode    string `json:"mode"` // "create" (default) | "update" (FR-007a)
 			}
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				writeError(w, http.StatusBadRequest, "invalid request body")
@@ -99,14 +101,37 @@ func handleComponents(lib *Library, componentsDir string) http.HandlerFunc {
 				writeError(w, http.StatusBadRequest, "missing project directory")
 				return
 			}
-			comp, err := lib.Create(body.Project, componentsDir, []byte(body.YAML))
+			// The request states which write it intends and the server enforces
+			// that, never inferring it from whether a file happens to exist
+			// (FR-007a): a create cannot become an overwrite, and an update
+			// cannot become a create. An absent mode is "create", the request
+			// shape that predates editing.
+			var (
+				comp   ComponentType
+				err    error
+				status = http.StatusCreated
+			)
+			switch body.Mode {
+			case "", "create":
+				comp, err = lib.Create(body.Project, componentsDir, []byte(body.YAML))
+			case "update":
+				comp, err = lib.Update(body.Project, []byte(body.YAML))
+				status = http.StatusOK
+			default:
+				writeError(w, http.StatusBadRequest, "unknown mode "+body.Mode)
+				return
+			}
 			switch {
 			case err == nil:
-				writeJSON(w, http.StatusCreated, map[string]any{"component": comp})
+				writeJSON(w, status, map[string]any{"component": comp})
 			case errors.Is(err, ErrDuplicateComponent):
 				writeError(w, http.StatusConflict, err.Error())
+			case errors.Is(err, ErrComponentNotFound):
+				writeError(w, http.StatusNotFound, err.Error())
+			case errors.Is(err, ErrComponentShared):
+				writeError(w, http.StatusForbidden, err.Error())
 			case errors.Is(err, ErrComponentWrite):
-				log.Printf("api: create component: %v", err)
+				log.Printf("api: write component: %v", err)
 				writeError(w, http.StatusInternalServerError, "could not write component")
 			default:
 				// Parse/validation failure: a client (authoring) error.
