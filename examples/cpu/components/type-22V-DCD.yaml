@@ -23,18 +23,22 @@ pins:
   - { name: "OSA", side: right, pos: 4, dir: out, number: 17 }
   - { name: "OSB", side: right, pos: 5, dir: out, number: 18 }
   - { name: "NC", side: right, pos: 6, dir: in, number: 19 }
-  - { name: "ENF/", side: right, pos: 7, dir: out, number: 20 }
+  - { name: "/ENF", side: right, pos: 7, dir: out, number: 20 }
   - { name: "Cin", side: right, pos: 8, dir: out, number: 21 }
-  - { name: "NC", side: right, pos: 9, dir: in, number: 22 }
-  - { name: "NC", side: right, pos: 10, dir: in, number: 23 }
+  - { name: "/BEN", side: right, pos: 9, dir: out, number: 22 }
+  - { name: "/ZEN", side: right, pos: 10, dir: out, number: 23 }
+groups:
+  - { name: "S", pins: ["S0", "S1", "S2"] }
 behavior: |
-  ENF/ = !F0 * !F1 * !F2
+  /ENF = !F0 * !F1 * !F2
        +  F0 * !F1 *  F2
        + !F0 *  F1 *  F2
        +  F0 *  F1 *  F2
-  Cin  =  F0 * !F1 *  F2
+  Cin  =  !F0 * F1 *  !F2
   OSA  =  F0 *  F1 *  !F2
        + !F0 * !F1 *   F2
   S0 = F0 + F1 + F2
   S1 = F0 + F1 + F2
   S2 = F0 * !F0 ; always zero for now
+  /BEN = !F0 * !F1 * F2 + F0*F1*!F2
+  /ZEN = !F0*F1
