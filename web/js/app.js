@@ -134,9 +134,14 @@ function renderPalette({ partsEl, builtinsEl, components, builtins, store, onTil
   // never arms the tile — arming stays on click (FR-009).
   const makePartTile = (type) => {
     const tile = makeTile(type, { text: partTileText(type) }, partTileTip(type), tiles);
+    // The menu carries the type's **id**, never the type object captured here: an
+    // edit (FR-066f) replaces the library entry, and a captured object would keep
+    // handing the editor the definition as it stood when the tile was built. The
+    // caller resolves the id against the live library at click time.
+    const id = typeIdentity(type);
     tile.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      onTileMenu?.(type, e.clientX, e.clientY);
+      onTileMenu?.(id, e.clientX, e.clientY);
     });
     return tile;
   };
@@ -297,8 +302,12 @@ async function main() {
       // to change (FR-121i), a memory device has no editor yet, and a 74-series
       // part is library metadata, not authored here. Editing is a design edit in
       // the FR-087 sense, so it goes away while the simulator runs.
-      onTileMenu: (type, x, y) => {
-        if (!type.gal || !type.projectLocal || store.isReadonly()) return;
+      onTileMenu: (id, x, y) => {
+        // Resolve against the live library, so a part edited earlier in this
+        // session opens with the edit rather than its pre-edit snapshot
+        // (FR-066f). The tile hands over identity; the library owns the data.
+        const type = library.find((t) => typeIdentity(t) === id);
+        if (!type?.gal || !type.projectLocal || store.isReadonly()) return;
         openContextMenu(x, y, [
           { label: "Edit part definition…", onClick: () => onEditGalPart(type) },
         ]);
