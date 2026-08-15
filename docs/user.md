@@ -15,7 +15,7 @@ KiCad-like.
 
 1. [Building and running](#1-building-and-running)
 2. [The workspace](#2-the-workspace)
-3. [Placing components](#3-placing-components)
+3. [Placing components](#3-placing-components) — including [Creating](#creating-a-custom-gal-part-22v10) and [editing](#editing-a-custom-gal-part) a custom GAL part, and [Creating a memory device](#creating-a-memory-device-ramrom)
 4. [Navigating the canvas](#4-navigating-the-canvas)
 5. [The selection model](#5-the-selection-model)
 6. [Wiring](#6-wiring)
@@ -93,7 +93,8 @@ are re-read whenever you make that project current and by **File ▸ Refresh Typ
 After either kind of edit, use Refresh Types to push the new definitions into an
 existing design (see [Refreshing type data](#9-refreshing-type-data)). Parts you
 create in-app (see [Creating a custom GAL part](#creating-a-custom-gal-part-22v10))
-appear in the running palette without a restart.
+appear in the running palette without a restart, and a project's own GAL parts can be
+[edited in place](#editing-a-custom-gal-part) without touching the YAML by hand.
 
 ---
 
@@ -253,7 +254,53 @@ later produce on an actual device with GALasm.
 YAML file named after the part number) and adds its tile to the upper palette
 **immediately** — no restart. From there it places, wires, and simulates like any
 other part. The part belongs to this project: it shows in the palette while this
-project is current, and is not visible in other projects. (Cancel discards it.)
+project is current, and is not visible in other projects. (Cancel discards it.) To
+change it later, see [Editing a custom GAL part](#editing-a-custom-gal-part).
+
+### Editing a custom GAL part
+
+A part you authored is not frozen. **Right-click its palette tile** and choose
+**Edit part definition…**: the same dialog reopens with everything filled in — part
+number, description, pin labels, directions, pin groups, and the behavior — and its
+button now reads **Save**. Every field works as it does when creating a part,
+including the live GALasm check, so an edit that would break the device is refused
+before it can be saved.
+
+Two details worth knowing:
+
+- **Renaming the part number is safe.** The tile's label and the chip's on-canvas
+  label follow the new name, and nothing else changes: parts are tracked internally
+  by an identifier that never changes, so placed instances stay attached and the
+  definition file keeps its original name.
+- **Only your own project's parts are editable.** The menu item appears on a GAL
+  part stored in the current project's `components/` folder. Parts from the shared
+  library have no such item — they are shared with every project, so the app never
+  writes them; edit those files directly and restart the server. Memory devices
+  (**NEW MEM**) have no editor yet, and the dialog only knows the GAL22V10.
+
+**Save** rewrites the part's YAML file and then immediately pushes the new
+definition into every instance of that part in the open design — a
+[type refresh](#9-refreshing-type-data) narrowed to this one part, so instances of
+everything else are untouched. The message tray reports what happened, and the whole
+update is **one undo step**: `Ctrl/Cmd+Z` puts the schematic back, including any
+connection the edit dropped.
+
+> **Undo does not un-write the file.** The YAML on disk stays edited — only the
+> schematic is restored. If you undo, re-open the dialog and change the part back,
+> or use **File ▸ Refresh Types** to re-apply what the file now says.
+
+Instances of the part in **other** designs are not touched until you open each one
+and run **File ▸ Refresh Types**. The part definition, not the copy stored inside a
+saved design, is the source of truth.
+
+If the dialog **refuses to open**, the message tray says why — the part is a
+different GAL device, its pinout does not match the 24-pin skeleton, or its file
+carries something the dialog does not model (propagation delays, buried nodes,
+per-pin documentation, a custom outline). This is deliberate: **Save** rewrites the
+whole file, so rather than quietly reduce your definition to the parts it
+understands, the dialog declines and leaves that file to your text editor. Note that
+YAML **comments are not preserved** by any in-app save; a part whose file carries
+commentary you want to keep is best edited by hand.
 
 ### Creating a memory device (RAM/ROM)
 
@@ -592,14 +639,26 @@ component definition, existing instances keep their old copy.
 The **File ▸ Refresh Types** menu item re-copies type data from the **currently
 loaded** component library into every placed instance whose type still exists —
 74-series parts from the library, built-ins from the app's registry. For each
-refreshed instance it preserves position, rotation, reference designator, wiring,
-and your per-instance overrides; an override that no longer matches any delay or
-property in the new definition is dropped.
+refreshed instance it preserves position, rotation, reference designator, wiring
+(with the one exception below), and your per-instance overrides; an override that no
+longer matches any delay or property in the new definition is dropped.
 
-An instance is **skipped** (left unchanged, and reported once per type in the
-message tray) if the new definition is structurally incompatible — its render type
-changed, or a pin currently used by a wire or bus no longer exists. Refresh is one
-undo step and is disabled while simulating.
+If the new definition **no longer has a pin** that a wire or bus was using — you
+renamed or removed it — that connection is **dropped**, and each drop is reported in
+the message tray naming the component and the pin. The refresh still happens: a wire
+whose pin vanished stays on the sheet with its end left **dangling** at the point it
+last attached to (shown with the usual dangling-end marker, see
+[Wiring](#6-wiring)), so you can drag it onto the renamed pin instead of drawing it
+again. A bus group connection goes **whole** rather than bit-by-bit (dropping only
+some bits would silently change what the bus carries), leaving the bus itself in
+place. Nothing is unwired silently — if the tray says nothing was dropped, nothing
+was.
+
+An instance is **skipped** (left unchanged, reported once per type) only when its
+**render type** changed, which leaves nothing to carry over.
+
+Refresh is one undo step — undo restores dropped connections along with the old type
+data — and is disabled while simulating.
 
 Refresh also **rescans the current project's `components/` folder** first, so a
 project-local part you added or edited on disk goes live without a restart. To pick
@@ -1688,6 +1747,7 @@ clear message until then, without losing your work.
 | Mouse wheel | Zoom to cursor |
 | Right-click empty | Recenter view on the cursor |
 | Right-click object | Context menu |
+| Right-click a palette tile | Context menu for that part — currently **Edit part definition…** on a [GAL part of this project](#editing-a-custom-gal-part); tiles with nothing to offer show no menu |
 | Double-click a sub-design | Open it (descend); **← back** returns to the parent |
 | Double-click a text note | Edit its text |
 | Left-click input switch (while simulating) | Toggle its state `0 ↔ 1` |
