@@ -466,6 +466,16 @@ async function expandOne(flat, inst, pathChain, loadChild, targets) {
       targets.push({ fromDir: dirOf(childAbs), fromRef: c.refdes, target: c.target });
     }
   }
+  // Record where each interface pin went, keyed by the pre-flatten (X-refdes,
+  // pin) pair. The instance itself is about to disappear from the flat design,
+  // so a reader that still knows it by its sheet identity — the probe, which
+  // hit-tests the schematic the user is looking at, FR-087c — would otherwise
+  // find no such pin and read Z. The parent's wire is stitched to the child
+  // port, so the value it wants exists; this is the only record of which net
+  // that is (§6.13/§6.14).
+  for (const [ifacePin, t] of map) {
+    flat.pinAliases.set(`${inst.refdes}.${ifacePin}`, `${t.ref}.${t.pin}`);
+  }
   rewriteAttachments(flat, inst.refdes, map);
   flat.components = flat.components.filter((c) => c !== inst);
   flat.components.push(...child.components);
@@ -524,6 +534,9 @@ export async function flatten(rootDesign, loadChild, { rootPath = null } = {}) {
     wires: structuredClone(rootDesign.wires ?? []),
     buses: structuredClone(rootDesign.buses ?? []),
     vertices: structuredClone(rootDesign.vertices ?? []),
+    // (X-refdes, interface pin) → the flat pin it stitched to (§6.14, FR-087c).
+    // Simulation-only, like the FlatDesign itself: never saved, never exported.
+    pinAliases: new Map(),
   };
   const targets = []; // { fromDir, fromRef, target:{file,label} }
   for (const c of flat.components) {

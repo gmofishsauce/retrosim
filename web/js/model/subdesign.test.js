@@ -448,6 +448,37 @@ test("flatten shares root component objects and never mutates the root (FR-087b/
   assert.ok(parent.components.some((c) => c.kind === "subdesign"));
 });
 
+// The probe hit-tests the schematic the user is looking at, where the embedded
+// instance still exists — but flatten replaced it, so `X1.CLK` names nothing in
+// the flat design and read as Z (FR-087c, fixed 2026-08-15). pinAliases is the
+// record of where each interface pin went.
+test("flatten records where each interface pin stitched (FR-087c)", async () => {
+  const child = childClk();
+  const { parent, sws } = parentEmbedding(child, 1);
+  const flat = await flatten(parent, async () => child);
+
+  const alias = flat.pinAliases.get("X1.CLK");
+  assert.ok(alias, "expected an alias for the embedded instance's CLK pin");
+  // It names a real pin of the flat design — the child port it stitched to —
+  // and that pin is on the same net as the parent switch driving it.
+  const nets = buildNets(flat);
+  const net = nets.find((n) => n.pins.includes(`${sws[0]}.OUT`));
+  assert.ok(net.pins.includes(alias));
+  // The instance itself is gone, which is exactly why the alias is needed.
+  assert.ok(!flat.components.some((c) => c.refdes === "X1"));
+});
+
+test("flatten aliases every bit of a multi-bit interface signal (FR-087c)", async () => {
+  const child = childWithPortN(4, "out");
+  const parent = createDesign("top");
+  const iface = designInterface(child);
+  addSubDesignInstance(parent, { childPath: "/lib/w.json", render: "ic", iface, childName: "w" }, 10, 10);
+  const flat = await flatten(parent, async () => child);
+  for (const bit of ["b0", "b1", "b2", "b3"]) {
+    assert.ok(flat.pinAliases.get(`X1.${bit}`), `expected an alias for X1.${bit}`);
+  }
+});
+
 test("flatten keeps same-label ports in different instances apart (FR-102/FR-101a)", async () => {
   const child = childClk();
   const { parent, sws } = parentEmbedding(child, 2);

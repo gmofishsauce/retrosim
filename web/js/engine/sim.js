@@ -112,6 +112,21 @@ export function buildSimulation(
     }
   }
 
+  // Sub-design interface pins (FR-087c, §6.14). flatten replaced each embedded
+  // instance with its contents, so `X1.FTAB` names no component here — yet that
+  // is exactly how the probe knows the pin, because X1 is what the user sees on
+  // the sheet. flatten left the stitch behind in `pinAliases`; alias each entry
+  // onto the net its child port joined, so valueOfPin answers for an interface
+  // pin with the value on the wire attached to it. Aliases only ever ADD keys:
+  // a real pin of that name (a peer sheet tagged like an X-refdes) keeps its own
+  // net. Reading through the alias costs nothing at step time — this runs once,
+  // at build.
+  for (const [alias, real] of design.pinAliases ?? []) {
+    if (netOfPin.has(alias)) continue;
+    const n = netOfPin.get(real);
+    if (n !== undefined) netOfPin.set(alias, n);
+  }
+
   // --- Build evaluation entities ---
   const entities = [];
   const errors = [];

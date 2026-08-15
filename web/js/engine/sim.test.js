@@ -1291,3 +1291,40 @@ test("advanceOneCycle settle stops one unit before another clock's edge (FR-076a
   assert.equal(sim.simTime(), 52);
   assert.equal(sim.valueOfPin("A-1", "OUT"), V1);
 });
+
+// Probing an embedded sub-design instance (FR-087c): flatten replaces the
+// instance with its contents, so the sheet identity the probe hit-tests —
+// "X1.CLK" — names no component in the flat design. Before the 2026-08-15 fix
+// every interface pin of every sub-design read Z, including pins visibly wired
+// to a pull-up, because valueOfPin's no-net default IS Z. The alias flatten
+// leaves behind resolves the pin to the net its child port joined.
+test("valueOfPin reads a sub-design's interface pin through the flatten alias (FR-087c)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("pullup"));
+  place(d, "X1/A-9", builtin("port"));   // the child port the instance stitched to
+  connect(d, ["A-1", "OUT"], ["X1/A-9", "P"]);
+  // What flatten records: the instance's interface pin → the flat pin it became.
+  d.pinAliases = new Map([["X1.CLK", "X1/A-9.P"]]);
+
+  const sim = buildSimulation(d);
+  sim.step();
+  const v = sim.valueOfPin("X1/A-9", "P");
+  assert.equal(v, V1);                       // the pull-up drives the net
+  assert.equal(sim.valueOfPin("X1", "CLK"), v); // and the probe sees the same
+  // An interface pin with no alias is still Z, as any unknown pin is.
+  assert.equal(sim.valueOfPin("X1", "NOSUCH"), VZ);
+});
+
+// Aliases only ever add keys: they can never shadow a real pin's own net.
+test("a pin alias never overrides a real pin of the flat design (FR-087c)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("pullup"));
+  place(d, "A-2", builtin("pulldown"));
+  place(d, "X1", NOT);                       // a REAL component named X1
+  connect(d, ["A-1", "OUT"], ["X1", "A"]);
+  d.pinAliases = new Map([["X1.A", "A-2.OUT"]]); // would point it at the pull-down
+
+  const sim = buildSimulation(d);
+  sim.step();
+  assert.equal(sim.valueOfPin("X1", "A"), V1); // its own net (the pull-up), not the alias
+});
