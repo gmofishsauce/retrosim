@@ -7738,6 +7738,34 @@
       "label": "S",
       "width": 3,
       "portDir": "in"
+    },
+    {
+      "refdes": "A-59",
+      "type": "type-port",
+      "x": 235,
+      "y": 109,
+      "rotation": 180,
+      "typeData": {
+        "id": "type-port",
+        "name": "port",
+        "builtin": true,
+        "title": "port / off-sheet connector",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><path d=\"M31 11 H14 L5 18 L14 25 H31 Z\" fill=\"#fff\" stroke=\"#333\"/><text x=\"22\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">P</text></svg>",
+        "renderType": "port",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "P",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          }
+        ]
+      },
+      "overrides": {},
+      "label": "HC",
+      "portDir": "out"
     }
   ],
   "wires": [
@@ -9914,6 +9942,10 @@
           "y": 108
         },
         {
+          "t": "node",
+          "v": "v1587"
+        },
+        {
           "t": "bend",
           "x": 127,
           "y": 108
@@ -10559,6 +10591,24 @@
         {
           "t": "node",
           "v": "v1585"
+        }
+      ]
+    },
+    {
+      "id": "w603",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1588"
+        },
+        {
+          "t": "bend",
+          "x": 129,
+          "y": 108
+        },
+        {
+          "t": "node",
+          "v": "v1587"
         }
       ]
     }
@@ -15685,11 +15735,25 @@
       "kind": "free",
       "x": 8,
       "y": 33
+    },
+    {
+      "id": "v1587",
+      "kind": "junction",
+      "x": 128,
+      "y": 108
+    },
+    {
+      "id": "v1588",
+      "kind": "connector",
+      "ref": "A-59",
+      "pin": "P",
+      "x": 233,
+      "y": 109
     }
   ],
   "refCounters": {
     "U": 77,
-    "A": 59,
+    "A": 60,
     "N": 11,
     "X": 5
   },
@@ -16337,13 +16401,15 @@
     {
       "pins": [
         "U74.Cn",
-        "U75.Cout"
+        "U75.Cout",
+        "A-59.P"
       ],
       "members": [
-        "w550"
+        "w550",
+        "w603"
       ],
       "provenance": [],
-      "name": "Cn"
+      "name": "HC"
     },
     {
       "pins": [

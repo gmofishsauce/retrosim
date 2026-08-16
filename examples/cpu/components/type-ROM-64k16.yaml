@@ -1,0 +1,43 @@
+id: "type-ROM 64k16"
+type: "ROM 64k16"
+description: "65536×16 ROM (generated)"
+mem: { kind: rom, addressBits: 16, dataWidth: 16, locations: 65536, romFile: "/Users/jeff/go/src/github.com/gmofishsauce/retrosim/examples/cpu/cpurom.bin" }
+outline: [4, 20]
+pins:
+  - { name: "A0", side: left, pos: 1, dir: in }
+  - { name: "A1", side: left, pos: 2, dir: in }
+  - { name: "A2", side: left, pos: 3, dir: in }
+  - { name: "A3", side: left, pos: 4, dir: in }
+  - { name: "A4", side: left, pos: 5, dir: in }
+  - { name: "A5", side: left, pos: 6, dir: in }
+  - { name: "A6", side: left, pos: 7, dir: in }
+  - { name: "A7", side: left, pos: 8, dir: in }
+  - { name: "A8", side: left, pos: 9, dir: in }
+  - { name: "A9", side: left, pos: 10, dir: in }
+  - { name: "A10", side: left, pos: 11, dir: in }
+  - { name: "A11", side: left, pos: 12, dir: in }
+  - { name: "A12", side: left, pos: 13, dir: in }
+  - { name: "A13", side: left, pos: 14, dir: in }
+  - { name: "A14", side: left, pos: 15, dir: in }
+  - { name: "A15", side: left, pos: 16, dir: in }
+  - { name: "CE/", side: left, pos: 17, dir: in }
+  - { name: "OE/", side: left, pos: 18, dir: in }
+  - { name: "D0", side: right, pos: 1, dir: tristate }
+  - { name: "D1", side: right, pos: 2, dir: tristate }
+  - { name: "D2", side: right, pos: 3, dir: tristate }
+  - { name: "D3", side: right, pos: 4, dir: tristate }
+  - { name: "D4", side: right, pos: 5, dir: tristate }
+  - { name: "D5", side: right, pos: 6, dir: tristate }
+  - { name: "D6", side: right, pos: 7, dir: tristate }
+  - { name: "D7", side: right, pos: 8, dir: tristate }
+  - { name: "D8", side: right, pos: 9, dir: tristate }
+  - { name: "D9", side: right, pos: 10, dir: tristate }
+  - { name: "D10", side: right, pos: 11, dir: tristate }
+  - { name: "D11", side: right, pos: 12, dir: tristate }
+  - { name: "D12", side: right, pos: 13, dir: tristate }
+  - { name: "D13", side: right, pos: 14, dir: tristate }
+  - { name: "D14", side: right, pos: 15, dir: tristate }
+  - { name: "D15", side: right, pos: 16, dir: tristate }
+groups:
+  - { name: "ADDR", pins: ["A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10", "A11", "A12", "A13", "A14", "A15"] }
+  - { name: "DATA", pins: ["D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15"] }
