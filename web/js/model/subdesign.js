@@ -10,6 +10,10 @@
 
 import { allocRefNum } from "./design.js";
 import { buildNets } from "./netlist.js";
+// The weak-drive render types (FR-083), owned by builtins.js beside the
+// behaviors that declare them weak, so the direction derivation below and the
+// simulator cannot disagree about what a pull-up is.
+import { WEAK_DRIVERS } from "../builtins.js";
 // Circular with persist.js (it imports placeholderTypeFromWiring): safe — both
 // modules only call across the cycle at run time, never during evaluation.
 import { deserializeDesign } from "./persist.js";
@@ -18,13 +22,22 @@ import { deserializeDesign } from "./persist.js";
 // net contributes to a port on it (FR-094c): "bidir" if any pin is itself
 // bidirectional/three-state (a RAM/ROM data line), else "out" if a plain output
 // pin drives it, else null (no driver — contributes the "in" default).
+//
+// WEAK drivers are skipped (FR-083/FR-094c): a pull-up or pull-down is not a
+// signal source but the idiom for "input, idles high" — an active-low reset or
+// enable, a floating-input default — so a net pulled and nothing more derives
+// "in". Counting them made such a port a *definite* "out", which put it on the
+// wrong side of the embedded IC (FR-099), bound it as an output column in
+// vectors (FR-115f), and could not be corrected by hand, FR-094d's override
+// being dormant for a definite direction. A weak pull beside a real driver is
+// unaffected: the strong pin still decides, as it does electrically.
 function netContribDir(net, byRefdes) {
   let driven = false;
   for (const key of net.pins) {
     const i = key.lastIndexOf(".");
     const inst = byRefdes.get(key.slice(0, i));
     const rt = inst?.typeData?.renderType;
-    if (!inst || rt === "port" || rt === "portN") continue;
+    if (!inst || rt === "port" || rt === "portN" || WEAK_DRIVERS.has(rt)) continue;
     const dir = inst.typeData?.pins?.find((p) => p.name === key.slice(i + 1))?.direction;
     if (dir === "bidir" || dir === "tristate") return "bidir";
     if (dir === "out") driven = true;
@@ -110,6 +123,52 @@ export function isClockPort(design, portRefdes, dir = effectivePortDir(design, p
 // direction, with the same bidir-only rule as effectivePortDir (FR-094d).
 function applyOverride(dir, inst) {
   return dir === "bidir" && inst?.dirOverride ? inst.dirOverride : dir;
+}
+
+// debugPorts resolves which of a sheet's ports are interactive debug inputs for
+// a run (FR-094g), returning refdes → `{bits, releasable}`: the bit count (1 for
+// a `port`, N for a `portN`) and whether a click may return a bit to the
+// undriven state. A port qualifies when nothing outside it can drive its net: no
+// off-sheet target (flatten would join it to a peer sheet, FR-101/FR-103) and an
+// effective direction (FR-094c/FR-094d) of `in` or `bidir` — never `out`, whose
+// net is by derivation already driven by an output pin here.
+//
+// `releasable` is exactly `dir === "bidir"`. Releasing exists to let a port let
+// go of a shared bus, and only a bidir port is on one: an `in` port's net has no
+// other driver — that is what makes it `in` — so there is nothing to release to,
+// and its drive is a two-state 0↔1 toggle instead (FR-094g). A derived-bidir
+// port the user considers an input gets the toggle by setting the FR-094d
+// override, which is the same knob every other consumer of direction reads.
+//
+// Called on the ROOT design, never on a FlatDesign: a child's ports are prefixed
+// by flatten and never drawn, so they are unclickable by construction and the
+// map simply never mentions them. One buildNets pass classifies every port,
+// unlike effectivePortDir's per-port pass — the caller (`createSim.run`) wants
+// them all at once, and the design is read-only for the run's duration (FR-087),
+// so resolving once at Run is both correct and what the renderer needs to read
+// per frame.
+export function debugPorts(design) {
+  const comps = design?.components ?? [];
+  const byRefdes = new Map(comps.map((c) => [c.refdes, c]));
+  const nets = buildNets(design, () => {});
+  const out = new Map();
+  for (const inst of comps) {
+    const rt = inst.typeData?.renderType;
+    if (rt !== "port" && rt !== "portN") continue;
+    if (inst.target) continue;
+    const pins = inst.typeData?.pins ?? [];
+    const derived =
+      rt === "portN"
+        ? classifyPortNDir(nets, byRefdes, inst.refdes, pins.map((p) => p.name))
+        : classifyPortDir(nets, byRefdes, inst.label);
+    const dir = applyOverride(derived, inst);
+    if (dir === "out") continue;
+    out.set(inst.refdes, {
+      bits: rt === "portN" ? pins.length : 1,
+      releasable: dir === "bidir",
+    });
+  }
+  return out;
 }
 
 // designInterface returns a child design's external interface (FR-095): one pin

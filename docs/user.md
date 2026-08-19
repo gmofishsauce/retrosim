@@ -25,7 +25,7 @@ KiCad-like.
 10. [Projects and files](#10-projects-and-files) — including [Importing a block from another project](#importing-a-block-from-another-project)
 11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
-13. [Simulation](#13-simulation) — including [Pausing and single-stepping](#pausing-and-single-stepping), [Probing a point](#probing-a-point), [The bottom panel area](#the-bottom-panel-area), [Console output](#console-output), [Test vectors](#test-vectors) — including [The panel's test-vector file](#the-panels-test-vector-file) and [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
+13. [Simulation](#13-simulation) — including [Driving a port by hand](#driving-a-port-by-hand), [Pausing and single-stepping](#pausing-and-single-stepping), [Probing a point](#probing-a-point), [The bottom panel area](#the-bottom-panel-area), [Console output](#console-output), [Test vectors](#test-vectors) — including [The panel's test-vector file](#the-panels-test-vector-file) and [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
 14. [Checking a design](#14-checking-a-design) — including [Reading the report](#reading-the-report), [Fixing what it finds](#fixing-what-it-finds), [Waiving a finding](#waiving-a-finding), and [What each rule means](#what-each-rule-means)
 15. [If the server disconnects](#15-if-the-server-disconnects)
 16. [Keyboard and mouse reference](#16-keyboard-and-mouse-reference)
@@ -828,8 +828,8 @@ no behavior, and no designator — see below.)
 | **Power-on reset** | two outputs (`R` active-high, `/R` active-low, right) | Asserts reset (`R`=1, `/R`=0) for the first `cycles` clock periods of a run, then releases (inverse afterward). Property: `cycles` (default 3). |
 | **Input switch** | one output (`OUT`, right) | A user-set logic source with two states, **1** and **0**, drawn like the state indicator — a round value bubble (white **1** / black **0**) — with a small arrow toward its output pin. A **strong** driver: it overrides pull-ups/pull-downs on its net. The state saved with the design is its **setting** — the position every run starts from (a new switch starts at **0**), changed in the properties panel while editing. **Clicking it during a simulation** toggles **0 ↔ 1** for that run only: it does not change the setting, does not modify the design, and is undone when the run stops. |
 | **State indicator (8-wide)** | eight inputs (`D0`–`D7`, left) | An 8-bit display, drawn as an LED **bar-graph** (eight stripes). Display only — drives nothing. The eight pins form one pin group, so an 8-wide bus snap-connects to all bits at once (see [Buses](#7-buses)); each stripe shows its bit's value (white **1** / black **0** / gray **?**) during a run, and all eight go gray when it stops. |
-| **Port / off-sheet connector (multi-bit)** | N pins (`P0`–`P(N-1)`, left) | A multi-bit interface port. When you drop it, a dialog asks for its **bit width** (2–16); that width is fixed for the life of the instance (to change it, delete and re-place). It is drawn as N narrow pentagons — one roughly aligned with each pin, each pointing off-sheet away from the pins. The N pins form one pin group so a matching-width bus snap-connects to all bits at once (see [Buses](#7-buses)). Like the 1-wide [port](#12-sub-designs-and-ports) it is part of the design's interface (it contributes a pin **group** when the design is embedded), with a direction derived from its wiring; it does not yet join to same-label or cross-file ports. |
-| **Port / off-sheet connector** (1-bit) | one pin (flat back edge) | The pentagon "flag" that marks its net as part of the design's external interface for embedding. See [Sub-designs and ports](#12-sub-designs-and-ports). |
+| **Port / off-sheet connector (multi-bit)** | N pins (`P0`–`P(N-1)`, left) | A multi-bit interface port. When you drop it, a dialog asks for its **bit width** (2–16); that width is fixed for the life of the instance (to change it, delete and re-place). It is drawn as N narrow pentagons — one roughly aligned with each pin, each pointing off-sheet away from the pins. The N pins form one pin group so a matching-width bus snap-connects to all bits at once (see [Buses](#7-buses)). Like the 1-wide [port](#12-sub-designs-and-ports) it is part of the design's interface (it contributes a pin **group** when the design is embedded), with a direction derived from its wiring; it does not yet join to same-label or cross-file ports. During a run each pentagon is its own click target, so you can [drive the bits by hand](#driving-a-port-by-hand) one at a time. |
+| **Port / off-sheet connector** (1-bit) | one pin (flat back edge) | The pentagon "flag" that marks its net as part of the design's external interface for embedding. See [Sub-designs and ports](#12-sub-designs-and-ports). Drives nothing of its own — but while a simulation runs you can **click it to drive its net by hand**, which is how you exercise a design through its own edges; see [Driving a port by hand](#driving-a-port-by-hand). |
 | **Transmission gate** | `A` (left), `B` (right), `EN` (top) | An ideal **bidirectional switch**: `A` and `B` are interchangeable contact terminals — neither is an input or an output, and drivers on either side may come and go. While `EN` reads **1** the two sides are electrically **joined** (they resolve as one net); while it reads **0** they are isolated. An `EN` of U (or Z) means the switch position is unknown: both sides are forced to **U**. Drives nothing, stores nothing, no properties; see the switch-element notes in [Simulation](#13-simulation). |
 | **Relay (SPDT)** | `COIL` (top); contacts `NO` / `COM` / `NC` (right, labeled on the canvas) | A changeover relay with an idealized logic-level coil (one pin — no second coil terminal, no coil current). Released (`COIL` = 0): `COM`–`NC` joined, `NO` isolated. Energized (`COIL` = 1): `COM`–`NO` joined, `NC` isolated. A U coil forces all three contact nets to **U**. Contacts follow the coil after the standard one-unit delay (no pick/drop time is modeled). For an SPST contact, leave the unused throw unwired. No moving contact arm is drawn — read the live state from wired indicators. |
 | **Magic UART** | eight inputs (`D0`–`D7`, left, one pin group `DATA`); `CS/`, `CE/`, `CLK` (right) | A convenience character-output device — physically unrealistic, but handy for getting text out of a running design. Drawn as an IC-style box labeled **UART**. On each **rising edge of `CLK`**, and only while both `CS/` and `CE/` read **0**, it latches `D0`(LSB)…`D7`(MSB) and emits that byte as an **ASCII character** to the simulator's standard output — the **[Console panel](#console-output)** in the slow simulator, and real `stdout` in [generated C](#generating-a-standalone-c-simulator). It drives no nets and has no readback path. Emission is deliberately careful: if `CS/` or `CE/` is **1** (deselected) or uncertain (U/Z), nothing is emitted; any data bit that is not a clean **1** counts as **0**. The eight `DATA` pins form one pin group, so an 8-wide bus snap-connects to all of them at once (see [Buses](#7-buses)). No properties. |
@@ -848,6 +848,11 @@ the duration of the run and leaves the design alone: the design stays unmodified
 you gave it in the properties panel. So the settings you save *are* the starting
 conditions — running a design and flipping switches to exercise it can never
 rewrite them.
+
+**Ports** are the other interactive input: a port that nothing inside the design
+drives can be clicked during a run to drive its net, on the same terms — run-time
+only, never saved, dropped at Stop. See
+[Driving a port by hand](#driving-a-port-by-hand).
 
 ### Text notes
 
@@ -893,15 +898,20 @@ properties panel:
   defaults to its `A-` designator, i.e. its own net until you name it.)
 - **direction** — `in`, `out`, or `bidir`, **derived from the port's wiring**:
   `bidir` if its net touches a bidirectional/three-state pin (e.g. a RAM/ROM data
-  line), else `out` if a plain output drives it, else `in`. A definite `in`/`out`
+  line), else `out` if a plain output drives it, else `in`. A **pull-up or
+  pull-down does not count as a driver** here — a pulled-up net with nothing else
+  on it is an *input that idles high* (an active-low reset or enable), so such a
+  port derives `in`, not `out`. A pull alongside a real driver changes nothing:
+  the real driver decides, exactly as it does electrically. A definite `in`/`out`
   is shown **read-only** — it always agrees with the wiring. A derived **`bidir`**
   is genuinely ambiguous (the wiring can't distinguish a true bidirectional bus
   from a 3-state output used as a switchable driver), so in that case the panel
   offers an editable selector to **override** the direction to `in` or `out`
   (choose `bidir` again to clear the override). The override applies only while
   the derived value is bidir — if the wiring later becomes definite, the wiring
-  wins. The effective direction drives the embedded block's pin layout and the
-  [test-vector](#test-vectors) column binding.
+  wins. The effective direction drives the embedded block's pin layout, the
+  [test-vector](#test-vectors) column binding, and whether — and how — you can
+  [drive the port by hand](#driving-a-port-by-hand) during a simulation.
 - **clock source** (optional) — a checkbox, shown only on a **1-wide port whose
   effective direction is `in`**, that marks this port as the net a
   [test-vector](#test-vectors) run should drive as a **clock**. Use it when the
@@ -913,9 +923,11 @@ properties panel:
   netlist is untouched, and it has **no effect on the interactive simulator** —
   a marked port carries no waveform and no period, so pressing **Run** on a
   design whose only clock is a marked port still gives you a combinational run,
-  with nothing to pace and no cycle to step. (For an interactive run you need a
-  real clock generator.) You may mark more than one port, and marked ports work
-  alongside clock generators.
+  with nothing to pace and no cycle to step. (For a *paced* interactive run you
+  still need a real clock generator — but you can always
+  [clock the port by hand](#driving-a-port-by-hand) during a run, ticked or not,
+  which is often what you want for stepping a design through its edges.) You may
+  mark more than one port, and marked ports work alongside clock generators.
 - **off-sheet target** (optional) — two fields, **target file** and **target
   label**, that turn the port into an *off-sheet connector*: its net continues
   to the port carrying that label in another sheet of the same circuit. The
@@ -1085,10 +1097,87 @@ recenter, Save, and Save As remain available. Starting a run clears the current 
 tray; stopping a run clears the message tray again. A click that would normally
 select an item instead shows "Editor is locked while the simulator is running" in
 the status bar and changes nothing (a click on empty canvas does nothing). There are
-two exceptions: clicking an **interactive input** (the input switch), which
-changes its value live and re-evaluates the simulation; and clicking while
+two exceptions: clicking an **interactive input** — an input switch, or a port
+you can drive ([below](#driving-a-port-by-hand)) — which changes its value live
+and re-evaluates the simulation; and clicking while
 [probe mode](#probing-a-point) is active, which reads the clicked point's state
 instead of reporting the lock. Neither changes the selection.
+
+### Driving a port by hand
+
+A design meant to be embedded has [ports](#12-sub-designs-and-ports) at its
+edges, and nothing drives them until a parent design does. To exercise such a
+design on its own you used to have to delete its ports, wire input switches to
+the stubs, test, and then put the ports back — an edit to the very thing you
+were testing.
+
+Instead, **while a simulation is running, click a port to drive it.** No edit, no
+switches, nothing to undo afterwards.
+
+**Which ports you can drive.** Any port whose direction (which retrosim derives
+from your wiring — see [§12](#12-sub-designs-and-ports)) is `in` or `bidir`, and
+that has no off-sheet target. An **`out`** port is never drivable: its net is
+already driven by something inside the design, so driving it too would just be a
+conflict. A port carrying an off-sheet target isn't either — the sheet at the
+other end may be driving it. Ports inside an embedded sub-design aren't
+clickable; you drive the sheet you're looking at.
+
+You can tell at a glance the moment a run starts: **every port you can drive
+turns gray**, and every port you can't stays white.
+
+**Clicking.** Each click advances the port's drive, and the flag body shows it in
+the same colors an indicator uses:
+
+| appearance | meaning |
+|---|---|
+| **gray** body | *undriven* — the port drives nothing (what it did before you clicked) |
+| **black** body, white label | driving **0** |
+| **white** body, black label | driving **1** |
+
+How many states a click cycles through depends on the port's direction, because
+"undriven" only means something useful on a bus:
+
+- An **`in`** port **toggles 0 ↔ 1** — the first click drives it low, and after
+  that every click flips it. Its net has no other driver (that's what makes it
+  `in`), so there's nothing to hand the net back to.
+- A **`bidir`** port cycles **undriven → 0 → 1 → undriven**. The extra step
+  matters here: releasing the bus is a real thing to want, and it's how you let
+  the circuit's own three-state drivers have it back while you watch.
+
+If a port derives `bidir` but you think of it as an input, set its **direction
+override** to `in` in the properties panel ([§12](#12-sub-designs-and-ports)) and
+it takes the two-state toggle.
+
+**Clocking by hand.** Reaching `1` always comes *from* `0`, never from undriven,
+so every time a port goes to 1 it is a genuine rising edge. That means you can
+**clock a design through a port**: click it repeatedly and each rising edge
+advances the registers, one edge per two clicks on an `in` port. This is how you
+single-step a board whose clock arrives from outside, without a clock generator
+anywhere on the sheet.
+
+**A driven port is a strong driver**, so it overrides a pull-up or pull-down on
+the same net (that's the point — a port pulled high is an input idling high, and
+you drive it low to assert it). Driving one *against* an enabled output is an
+ordinary [bus conflict](#13-simulation): the net goes U and turns red. On a
+multi-bit port, each pentagon is its own click target with its own bit's state.
+
+**None of it touches your design.** A port's drive is run-time state only, like a
+switch click during a run: it is never saved, never marks the design modified,
+and is not undoable. **Every run starts with all ports undriven**, and Stop drops
+the drives along with the indicator values, so you never see a port drive that
+isn't backing the values shown beside it. Nothing rides along into a parent
+design that embeds this sheet, and it has no effect on
+[test vectors](#test-vectors) (which drive ports from their own stimulus — the
+scripted version of the same idea) or on the
+[generated C simulator](#generating-a-standalone-c-simulator), both of which use
+the design exactly as you authored it.
+
+One difference from a switch: while [probe mode](#probing-a-point) is active,
+clicking a port **probes** it rather than driving it. A port draws its own
+*drive*, which is not the same as its net's *value* — an undriven port on a bus
+something else is driving shows gray while the net carries a real level — so a
+port is exactly the sort of place you turn the probe on to read. Leave probe mode
+and clicks go back to driving.
 
 ### Pausing and single-stepping
 
@@ -1165,7 +1254,11 @@ Notes:
 - **Input switches are not probe targets.** Clicking a switch still toggles it,
   exactly as it does outside probe mode — a switch already draws its own state,
   and being able to change an input mid-inspection is more useful than reading
-  back what you can already see.
+  back what you can already see. **Ports are the exception:** while probe mode is
+  on, clicking a [drivable port](#driving-a-port-by-hand) reads it instead of
+  driving it, because what a port draws is its own drive, not its net's value —
+  an undriven port on a bus someone else is driving looks gray while the net
+  carries a real level.
 - **Leaving probe mode:** click **Probe** again, press **Esc**, or just stop the
   run (or release the hold). The tool returns to Select. Stopping the run also
   clears the reading — there is no simulation behind it any more — and the panel

@@ -152,3 +152,39 @@ test("text note is a pinless, behaviorless built-in (FR-071f)", () => {
   assert.ok(!("type-note" in BEHAVIORS));
   assert.ok(!("type-note" in INTERACTIONS));
 });
+
+// The debug-input port's handler (FR-094g) — the second INTERACTIONS entry, and
+// the demonstration that FR-087b's mechanism takes a new interactive input with
+// a handler alone. The FSM decides *whether* a port is clickable (§6.9); the
+// handler only advances the bit it is handed.
+// The 0-before-1 order is normative (FR-094g): a rising edge is strictly 0→1
+// (FR-079), so this is the only order that makes reaching 1 an edge and thus the
+// only one that can hand-clock a design through a clock port.
+test("a bidir port cycles undriven → 0 → 1 → undriven (FR-094g)", () => {
+  const cycle = INTERACTIONS["type-port"];
+  const inst = { refdes: "A-1", typeData: find("port") };
+  const click = () => (cycle(inst, { bit: 0, releasable: true }), inst.portDrive[0]);
+
+  assert.equal(click(), "0");
+  assert.equal(click(), "1"); // the click that carries the rising edge
+  assert.equal(click(), null); // released: back to watching the bus
+  assert.equal(click(), "0"); // and round again
+});
+
+// An input port has no bus to let go of, so it toggles instead of cycling —
+// one click per clock edge rather than three (FR-094g).
+test("an input port toggles 0 ↔ 1 and never returns to undriven (FR-094g)", () => {
+  const cycle = INTERACTIONS["type-port"];
+  const inst = { refdes: "A-1", typeData: find("port") };
+  const click = () => (cycle(inst, { bit: 0, releasable: false }), inst.portDrive[0]);
+
+  assert.equal(click(), "0"); // first click drives low, from the power-on float
+  assert.deepEqual([click(), click(), click(), click()], ["1", "0", "1", "0"]);
+});
+
+// The switch predates the {bit} argument and must be untouched by it (FR-087b).
+test("the switch handler ignores the hit descriptor (FR-087a/FR-087b)", () => {
+  const inst = { refdes: "A-1", switchState: "0" };
+  INTERACTIONS["type-switch"](inst, { bit: 3 });
+  assert.equal(inst.switchState, "1");
+});

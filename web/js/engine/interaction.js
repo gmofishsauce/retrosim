@@ -466,9 +466,40 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
   // The design is not touched and not dirtied — the click sets the input for
   // *this run*, while the instance keeps the setting the design specifies
   // (FR-087a). The handler — e.g. the switch's 0↔1 toggle — comes from the
-  // INTERACTIONS registry, so the FSM stays generic with no per-type case.
-  function interactDuringSim(inst, interact) {
-    store.setLiveInput(inst, interact);
+  // INTERACTIONS registry, so the FSM stays generic with no per-type case. `hit`
+  // says which part of the body was clicked (FR-087b) — only a port's bit so far
+  // (FR-094g); handlers with one click target ignore it.
+  function interactDuringSim(inst, interact, hit) {
+    store.setLiveInput(inst, (draft) => interact(draft, hit));
+  }
+
+  // Local-frame x of a portN pentagon's center: drawPortN spans x 0.8..2.9 on
+  // each bit's row, so bit i is centered at (PORTN_BIT_CX, i + 1).
+  const PORTN_BIT_CX = 1.85;
+
+  // portDebugHit reports which bit of a debug-input port (FR-094g) a world point
+  // falls on, or null when this port is not a debug input for this run — in
+  // which case the click falls through to the lock message like any other
+  // component. Eligibility is this run's resolved map (§6.14), not a fresh
+  // derivation: the design is read-only while it is running. A 1-wide port has
+  // the one bit; a portN's pentagons are separate targets, resolved as the
+  // nearest bit-row center so the answer holds under rotation. The map also says
+  // whether the port may be released, which selects the handler's cycle.
+  function portDebugHit(inst, world) {
+    const entry = store.state.sim?.debugPorts?.get(inst.refdes);
+    if (!entry) return null;
+    const { bits, releasable } = entry;
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < bits; i++) {
+      const o = rotateOffset(PORTN_BIT_CX, i + 1, inst.rotation);
+      const d = Math.hypot(inst.x + o.x - world.x, inst.y + o.y - world.y);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    return { bit: best, releasable };
   }
 
   // probeTargetAt resolves a probe click at the current zoom's tolerances
@@ -1144,7 +1175,20 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       if (comp) {
         const inst = store.design.components.find((c) => c.refdes === comp.refdes);
         const interact = inst && INTERACTIONS[inst.type];
-        if (interact) return interactDuringSim(inst, interact);
+        if (interact) {
+          // A port is interactive only *conditionally* (FR-094g): one this run
+          // did not qualify as a debug input yields no hit and falls through to
+          // the lock message below, exactly as a non-interactive component does.
+          // It also yields to probe mode, unlike a switch (FR-087c): what a port
+          // draws is its own drive, not its net's value, so an undriven port on
+          // a bus driven by something else is worth probing.
+          const rt = inst.typeData?.renderType;
+          const isPort = rt === "port" || rt === "portN";
+          if (!(isPort && probeClaimsClick(store.state))) {
+            const hit = isPort ? portDebugHit(inst, world) : {};
+            if (hit) return interactDuringSim(inst, interact, hit);
+          }
+        }
       }
       // Probe mode (FR-087c): the lock's second exception. It is checked after
       // the interactive-input one above, so a switch click still toggles — a

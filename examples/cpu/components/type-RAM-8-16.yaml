@@ -1,0 +1,31 @@
+id: "type-RAM 8×16"
+type: "RAM 8×16"
+description: "8×16 RAM (generated)"
+mem: { kind: ram, addressBits: 3, dataWidth: 16, locations: 8, ramFile: "/Users/jeff/go/src/github.com/gmofishsauce/retrosim/examples/cpu/regram.bin", ramLoad: false }
+outline: [4, 18]
+pins:
+  - { name: "A0", side: left, pos: 1, dir: in }
+  - { name: "A1", side: left, pos: 2, dir: in }
+  - { name: "A2", side: left, pos: 3, dir: in }
+  - { name: "CE/", side: left, pos: 4, dir: in }
+  - { name: "OE/", side: left, pos: 5, dir: in }
+  - { name: "WE/", side: left, pos: 6, dir: in }
+  - { name: "D0", side: right, pos: 1, dir: bidir }
+  - { name: "D1", side: right, pos: 2, dir: bidir }
+  - { name: "D2", side: right, pos: 3, dir: bidir }
+  - { name: "D3", side: right, pos: 4, dir: bidir }
+  - { name: "D4", side: right, pos: 5, dir: bidir }
+  - { name: "D5", side: right, pos: 6, dir: bidir }
+  - { name: "D6", side: right, pos: 7, dir: bidir }
+  - { name: "D7", side: right, pos: 8, dir: bidir }
+  - { name: "D8", side: right, pos: 9, dir: bidir }
+  - { name: "D9", side: right, pos: 10, dir: bidir }
+  - { name: "D10", side: right, pos: 11, dir: bidir }
+  - { name: "D11", side: right, pos: 12, dir: bidir }
+  - { name: "D12", side: right, pos: 13, dir: bidir }
+  - { name: "D13", side: right, pos: 14, dir: bidir }
+  - { name: "D14", side: right, pos: 15, dir: bidir }
+  - { name: "D15", side: right, pos: 16, dir: bidir }
+groups:
+  - { name: "ADDR", pins: ["A0", "A1", "A2"] }
+  - { name: "DATA", pins: ["D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15"] }

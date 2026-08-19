@@ -9,7 +9,8 @@ import {
   advanceOneCycle,
 } from "./sim.js";
 import { V0, V1, VU, VZ } from "./galasm.js";
-import { BUILTINS, memDeviceType } from "../builtins.js";
+import { debugPorts } from "../model/subdesign.js";
+import { BUILTINS, INTERACTIONS, memDeviceType, portNFields } from "../builtins.js";
 
 // --- design fixtures (literal model shapes per §7.1a/§7.2) ---
 
@@ -808,6 +809,186 @@ test("liveInputs overrides the instance's switch setting, which stays put (FR-08
   delete inputs["A-1"]; // view dropped (Stop → first edit, FR-085)
   settle(sim);
   assert.equal(sim.valueOfPin("A-2", "IN"), V0);
+});
+
+// --- ports as debug inputs (FR-094g) ---
+
+// placePort places a 1-wide port with a label. Its connection point is a
+// `connector` vertex (§7.1a), not a pin vertex, so it needs its own wiring
+// helper: wirePort joins it to an ordinary pin. Only a *wired* connector joins a
+// net (netlist step 6), which is also why an unwired port has nothing to drive.
+function placePort(d, refdes, label) {
+  place(d, refdes, builtin("port"));
+  d.components.at(-1).label = label;
+  return d.components.at(-1);
+}
+
+function wirePort(d, portRefdes, [ref, pin]) {
+  const vp = { id: `v${++d.seq}`, kind: "connector", ref: portRefdes, pin: "P", x: 0, y: 0 };
+  const vb = { id: `v${++d.seq}`, kind: "pin", ref, pin, x: 0, y: 0 };
+  d.vertices.push(vp, vb);
+  d.wires.push({
+    id: `w${++d.seq}`,
+    path: [{ t: "node", v: vp.id }, { t: "node", v: vb.id }],
+  });
+}
+
+test("an undriven port drives nothing; a debug drive strong-drives its net (FR-094g)", () => {
+  const d = mkDesign();
+  const port = placePort(d, "A-1", "IN");
+  place(d, "A-2", builtin("indicator"));
+  wirePort(d, "A-1", ["A-2", "IN"]);
+
+  const inputs = {}; // the store's run-time copies (§6.10)
+  const sim = buildSimulation(d, { liveInputs: (refdes) => inputs[refdes] });
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-2", "IN"), VZ); // the pre-FR-094g behavior
+
+  inputs["A-1"] = { ...port, portDrive: ["1"] }; // click: undriven → 1
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-2", "IN"), V1);
+
+  inputs["A-1"] = { ...port, portDrive: ["0"] }; // click: 1 → 0
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-2", "IN"), V0);
+
+  inputs["A-1"] = { ...port, portDrive: [null] }; // click: 0 → undriven
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-2", "IN"), VZ); // drives nothing again, not U
+
+  delete inputs["A-1"]; // Stop drops the view (FR-085)
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-2", "IN"), VZ);
+  assert.ok(!("portDrive" in port)); // the design was never written
+});
+
+// The drive is run-time state with no persisted counterpart, so a runner that
+// passes no accessor — the vector runner, the parity harness — must see every
+// port undriven even if an instance somehow carries the field.
+test("a port drive is invisible without a liveInputs accessor (FR-094g)", () => {
+  const d = mkDesign();
+  const port = placePort(d, "A-1", "IN");
+  place(d, "A-2", builtin("indicator"));
+  wirePort(d, "A-1", ["A-2", "IN"]);
+  port.portDrive = ["1"];
+
+  const sim = buildSimulation(d); // no liveInputs
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-2", "IN"), VZ);
+});
+
+test("a port drive beats a pull-up and conflicts with an opposing switch (FR-094g/FR-083)", () => {
+  const d = mkDesign();
+  const port = placePort(d, "A-1", "IN");
+  place(d, "A-2", builtin("indicator"));
+  place(d, "A-3", builtin("pullup"));
+  wirePort(d, "A-1", ["A-2", "IN"]);
+  connect(d, ["A-3", "OUT"], ["A-2", "IN"]);
+
+  const inputs = {};
+  const sim = buildSimulation(d, { liveInputs: (refdes) => inputs[refdes] });
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-2", "IN"), V1); // the weak pull-up alone
+
+  inputs["A-1"] = { ...port, portDrive: ["0"] };
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-2", "IN"), V0); // strong beats weak (FR-083)
+
+  // Against a strong opposing driver it is an ordinary multiple-driver conflict.
+  placeSwitch(d, "A-4", "1");
+  connect(d, ["A-4", "OUT"], ["A-2", "IN"]);
+  const sim2 = buildSimulation(d, { liveInputs: (refdes) => inputs[refdes] });
+  settle(sim2);
+  assert.equal(sim2.valueOfPin("A-2", "IN"), VU);
+});
+
+// A 1-wide port joins its net by LABEL (FR-094a), not by a drawn wire to the
+// driven port, so the drive must reach a same-label port's net too (FR-094e).
+test("a port's debug drive reaches its label-joined net (FR-094g/FR-094a)", () => {
+  const d = mkDesign();
+  const driver = placePort(d, "A-1", "IN"); // wired to nothing but its own stub
+  place(d, "A-2", builtin("indicator"));
+  place(d, "A-3", builtin("indicator"));
+  wirePort(d, "A-1", ["A-2", "IN"]);
+  placePort(d, "A-4", "IN"); // same label ⇒ same net
+  wirePort(d, "A-4", ["A-3", "IN"]);
+
+  const inputs = { "A-1": { ...driver, portDrive: ["1"] } };
+  const sim = buildSimulation(d, { liveInputs: (refdes) => inputs[refdes] });
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-3", "IN"), V1); // arrived across the label join
+});
+
+test("a multi-bit port drives only the bits that were clicked (FR-094g/FR-071e)", () => {
+  const d = mkDesign();
+  const type = BUILTINS.find((b) => b.name === "portN");
+  place(d, "A-1", { ...type, ...portNFields(4) });
+  const port = d.components.at(-1);
+  place(d, "A-2", builtin("indicator8"));
+  for (let i = 0; i < 4; i++) connect(d, ["A-1", `P${i}`], ["A-2", `D${i}`]);
+
+  const inputs = { "A-1": { ...port, portDrive: ["1", null, "0", null] } };
+  const sim = buildSimulation(d, { liveInputs: (refdes) => inputs[refdes] });
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-2", "D0"), V1);
+  assert.equal(sim.valueOfPin("A-2", "D1"), VZ); // untouched bits drive nothing
+  assert.equal(sim.valueOfPin("A-2", "D2"), V0);
+  assert.equal(sim.valueOfPin("A-2", "D3"), VZ);
+});
+
+// Regression (FR-094g): a design whose clock arrives on a port must be
+// hand-clockable. A rising edge is strictly 0→1 (FR-079) — Z→1 is not one — so
+// the drive cycle has to pass 0 before 1; the reverse order offers only a
+// falling edge and no amount of clicking ever advances the register. Reported
+// against examples/cpu/prog.json, where cycling CLK left every indicator U.
+test("an input port clocks a register on every second click (FR-094g/FR-079)", () => {
+  const d = mkDesign();
+  const clk = placePort(d, "A-1", "CLK");
+  const dat = placePort(d, "A-2", "D");
+  place(d, "U1", DFF);
+  wirePort(d, "A-1", ["U1", "CP"]);
+  wirePort(d, "A-2", ["U1", "D"]);
+
+  const inputs = {};
+  const sim = buildSimulation(d, { liveInputs: (refdes) => inputs[refdes] });
+  // Clicks go through the REAL handler, exactly as store.setLiveInput drives it
+  // (§6.10): the order the handler produces is the thing under test, so the test
+  // must not restate it.
+  // Both ports here derive "in" (nothing else drives their nets), so both take
+  // the two-state toggle — which is what makes clocking one click per edge.
+  const eligible = debugPorts(d);
+  assert.equal(eligible.get(clk.refdes).releasable, false);
+  const click = (port) => {
+    const draft = { ...(inputs[port.refdes] ?? port) };
+    INTERACTIONS[port.type](draft, { bit: 0, releasable: eligible.get(port.refdes).releasable });
+    inputs[port.refdes] = draft;
+    settle(sim);
+    return draft.portDrive[0];
+  };
+  const clickTo = (port, want) => {
+    for (let i = 0; i < 4; i++) if (click(port) === want) return;
+    assert.fail(`port never reached drive ${want}`);
+  };
+
+  settle(sim);
+  assert.equal(sim.valueOfPin("U1", "Q"), VU); // powers up unknown (FR-079)
+  clickTo(dat, "1"); // D = 1, held across the clocking below
+
+  // Click by click on the clock port.
+  const states = [click(clk)];
+  assert.equal(sim.valueOfPin("U1", "Q"), VU); // first click: Z→0, no edge yet
+  states.push(click(clk));
+  assert.equal(sim.valueOfPin("U1", "Q"), V1); // second click: 0→1 latches D
+  states.push(click(clk));
+  assert.equal(sim.valueOfPin("U1", "Q"), V1); // 1→0 is no rising edge; value holds
+  // The sequence the handler actually produced — 0 before 1 is what put the edge
+  // in it, and an input port never floats back to undriven.
+  assert.deepEqual(states, ["0", "1", "0"]);
+
+  // Clocking continues one edge per two clicks, so the register follows D.
+  clickTo(dat, "0"); // D = 0 now
+  assert.equal(click(clk), "1"); // the very next click is the next rising edge
+  assert.equal(sim.valueOfPin("U1", "Q"), V0);
 });
 
 test("transmission gate: closed passes a driver across; open isolates the far side (FR-071g/FR-083a)", () => {

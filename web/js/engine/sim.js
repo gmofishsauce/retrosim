@@ -17,7 +17,7 @@ import {
   VZ,
 } from "./galasm.js";
 import { buildNets } from "../model/netlist.js";
-import { flatten } from "../model/subdesign.js";
+import { debugPorts, flatten } from "../model/subdesign.js";
 import { BEHAVIORS } from "../builtins.js";
 import { createMemoryCore, parseRomBytes } from "./memory.js";
 import { createUartCore } from "./uart.js";
@@ -479,8 +479,20 @@ export function buildSimulation(
         if (scriptedClocks && (e.renderType === "clock" || e.renderType === "reset")) continue;
         // `state` is the EFFECTIVE interactive state (FR-087a): the run-time
         // copy a sim-time click produced, else the instance's saved setting.
-        const src = liveInputs?.(e.refdes) ?? e.inst;
-        const ctx = { props: e.props, simTime, clockPeriod, state: src.switchState };
+        // `drive` (FR-094g) comes from the run-time copy ALONE — no fallback to
+        // the instance, unlike `state`, because a port's debug drive is never
+        // part of the design. A caller that passes no accessor (the vector
+        // runner, the parity harness) therefore sees every port undriven no
+        // matter what its instances carry, which is what those runs require.
+        const live = liveInputs?.(e.refdes);
+        const src = live ?? e.inst;
+        const ctx = {
+          props: e.props,
+          simTime,
+          clockPeriod,
+          state: src.switchState,
+          drive: live?.portDrive,
+        };
         for (const c of e.behave(ctx)) {
           add(`${e.refdes}.${c.pin}`, c.value, !!c.weak, `${e.refdes}.${c.pin}`);
         }
@@ -842,6 +854,11 @@ export function createSim({ store, renderer, consolePanel = null }) {
       valueOfPin: sim.valueOfPin,
       valueOfLane: sim.valueOfLane, // conductor reads for the probe (FR-087c)
       conflictedConductors: sim.conflictedConductors,
+      // Which ports this run accepts clicks on (FR-094g), resolved once from the
+      // ROOT design — the sheet the user sees — not the flattened one. Carried on
+      // the view so the renderer and the click FSM read one agreed answer, and so
+      // Stop drops it with everything else.
+      debugPorts: debugPorts(store.design),
     });
     store.setSimulating(true); // design read-only (FR-087); notifies chrome
     store.setSelection([]); // selection is locked during a run, so clear it (FR-087)

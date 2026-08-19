@@ -606,9 +606,9 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
   } else if (td.renderType === "indicator8") {
     drawIndicator8(ctx, inst, vp, selected, sim);
   } else if (td.renderType === "portN") {
-    drawPortN(ctx, inst, vp, selected);
+    drawPortN(ctx, inst, vp, selected, sim);
   } else if (td.renderType === "port") {
-    drawPort(ctx, inst, vp, selected);
+    drawPort(ctx, inst, vp, selected, sim);
   } else if (td.renderType === "tgate") {
     drawTgate(ctx, inst, vp, selected);
   } else if (td.renderType === "relay") {
@@ -868,7 +868,7 @@ function drawIndicator8(ctx, inst, vp, selected, sim) {
 // flags line up with the connection bubbles the shared pin loop draws down the
 // left edge. N is the instance's chosen width (its pin count). Each points
 // off-sheet (apex right, away from the pins).
-function drawPortN(ctx, inst, vp, selected) {
+function drawPortN(ctx, inst, vp, selected, sim) {
   const stroke = selected ? "#4a90d9" : "#333";
   ctx.lineWidth = selected ? 2 : 1;
   const n = inst.typeData.pins.length;
@@ -876,12 +876,14 @@ function drawPortN(ctx, inst, vp, selected) {
     const mid = i + 1; // pin row
     const y0 = mid - 0.42;
     const y1 = mid + 0.42;
+    // Each pentagon carries its own bit's debug-drive state (FR-094g); outside a
+    // run, and on a port this run did not qualify, portFace answers plain white.
     fillLocalPoly(
       ctx,
       inst,
       vp,
       [[0.8, y0], [2.2, y0], [2.9, mid], [2.2, y1], [0.8, y1]],
-      "#fff",
+      portFace(inst, sim, i).bg,
       stroke,
     );
   }
@@ -1102,6 +1104,23 @@ function drawBrokenBox(ctx, inst, vp, selected) {
   ctx.stroke();
 }
 
+// portFace maps one bit of a port's flag body to its fill and label colors
+// (FR-094g). While a run lists this port among its debug inputs (§6.14), the
+// body carries the bit's run-time drive state in the state indicator's colors
+// (indicatorState): white with a black label for 1, black with a white label for
+// 0, medium gray for undriven — so the ports the user can drive are exactly the
+// non-white ones. Every other port, and every port outside a run, keeps the
+// plain white body it has always had.
+function portFace(inst, sim, bit) {
+  if (!sim?.debugPorts?.has(inst.refdes)) return { bg: "#fff", fg: "#000" };
+  // The run-time copy alone, with no fallback to the instance — the drive is
+  // never part of the design, so there is nothing there to read.
+  const d = sim.inputs?.[inst.refdes]?.portDrive?.[bit];
+  if (d === "1") return { bg: "#ffffff", fg: "#000" };
+  if (d === "0") return { bg: "#000000", fg: "#fff" };
+  return { bg: "#9a9a9a", fg: "#000" };
+}
+
 // drawPort renders a port / off-sheet connector (FR-094/FR-094b, §6.14): a
 // pentagon "flag" showing the instance's label, a "/n" width annotation when
 // width>1, and a small filled apex mark when it carries an off-sheet target
@@ -1110,7 +1129,7 @@ function drawBrokenBox(ctx, inst, vp, selected) {
 // The pentagon is built in the local grid frame and projected through
 // rotateOffset, so it rotates with the instance and the apex/pin relationship
 // holds (FR-020); the label is drawn upright so it stays legible (FR-015).
-function drawPort(ctx, inst, vp, selected) {
+function drawPort(ctx, inst, vp, selected, sim) {
   const td = inst.typeData;
   const w = td.width;
   const h = td.height;
@@ -1131,11 +1150,12 @@ function drawPort(ctx, inst, vp, selected) {
     local(0, h / 2), // apex (off-sheet front)
     local(shoulderX, 0), // top shoulder
   ];
+  const face = portFace(inst, sim, 0);
   ctx.beginPath();
   ctx.moveTo(pts[0].x, pts[0].y);
   for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
   ctx.closePath();
-  ctx.fillStyle = "#fff";
+  ctx.fillStyle = face.bg;
   ctx.fill();
   ctx.lineWidth = selected ? 2 : 1;
   ctx.strokeStyle = selected ? "#4a90d9" : "#333";
@@ -1157,7 +1177,7 @@ function drawPort(ctx, inst, vp, selected) {
   }
 
   const text = inst.label ?? ""; // a 1-wide port is always one bit (FR-094)
-  ctx.fillStyle = "#000";
+  ctx.fillStyle = face.fg;
   ctx.font = Math.round(0.45 * scaleFor(vp)) + "px system-ui, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";

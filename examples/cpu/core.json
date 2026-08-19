@@ -1,0 +1,1354 @@
+{
+  "formatVersion": 3,
+  "name": "core",
+  "components": [
+    {
+      "refdes": "U3",
+      "type": "type-RAM 8×16",
+      "x": 18,
+      "y": -1,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-RAM 8×16",
+        "name": "RAM 8×16",
+        "renderType": "unit",
+        "width": 4,
+        "height": 18,
+        "pins": [
+          {
+            "name": "A0",
+            "side": "left",
+            "position": 1,
+            "direction": "in"
+          },
+          {
+            "name": "A1",
+            "side": "left",
+            "position": 2,
+            "direction": "in"
+          },
+          {
+            "name": "A2",
+            "side": "left",
+            "position": 3,
+            "direction": "in"
+          },
+          {
+            "name": "CE/",
+            "side": "left",
+            "position": 4,
+            "direction": "in"
+          },
+          {
+            "name": "OE/",
+            "side": "left",
+            "position": 5,
+            "direction": "in"
+          },
+          {
+            "name": "WE/",
+            "side": "left",
+            "position": 6,
+            "direction": "in"
+          },
+          {
+            "name": "D0",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          },
+          {
+            "name": "D1",
+            "side": "right",
+            "position": 2,
+            "direction": "bidir"
+          },
+          {
+            "name": "D2",
+            "side": "right",
+            "position": 3,
+            "direction": "bidir"
+          },
+          {
+            "name": "D3",
+            "side": "right",
+            "position": 4,
+            "direction": "bidir"
+          },
+          {
+            "name": "D4",
+            "side": "right",
+            "position": 5,
+            "direction": "bidir"
+          },
+          {
+            "name": "D5",
+            "side": "right",
+            "position": 6,
+            "direction": "bidir"
+          },
+          {
+            "name": "D6",
+            "side": "right",
+            "position": 7,
+            "direction": "bidir"
+          },
+          {
+            "name": "D7",
+            "side": "right",
+            "position": 8,
+            "direction": "bidir"
+          },
+          {
+            "name": "D8",
+            "side": "right",
+            "position": 9,
+            "direction": "bidir"
+          },
+          {
+            "name": "D9",
+            "side": "right",
+            "position": 10,
+            "direction": "bidir"
+          },
+          {
+            "name": "D10",
+            "side": "right",
+            "position": 11,
+            "direction": "bidir"
+          },
+          {
+            "name": "D11",
+            "side": "right",
+            "position": 12,
+            "direction": "bidir"
+          },
+          {
+            "name": "D12",
+            "side": "right",
+            "position": 13,
+            "direction": "bidir"
+          },
+          {
+            "name": "D13",
+            "side": "right",
+            "position": 14,
+            "direction": "bidir"
+          },
+          {
+            "name": "D14",
+            "side": "right",
+            "position": 15,
+            "direction": "bidir"
+          },
+          {
+            "name": "D15",
+            "side": "right",
+            "position": 16,
+            "direction": "bidir"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "ADDR",
+            "pins": [
+              "A0",
+              "A1",
+              "A2"
+            ]
+          },
+          {
+            "name": "DATA",
+            "pins": [
+              "D0",
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5",
+              "D6",
+              "D7",
+              "D8",
+              "D9",
+              "D10",
+              "D11",
+              "D12",
+              "D13",
+              "D14",
+              "D15"
+            ]
+          }
+        ],
+        "description": "8×16 RAM (generated)",
+        "mem": {
+          "kind": "ram",
+          "addressBits": 3,
+          "dataWidth": 16,
+          "locations": 8,
+          "ramFile": "regram.bin"
+        },
+        "projectLocal": true
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "U4",
+      "type": "type-RAM 8×16",
+      "x": 18,
+      "y": 19,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-RAM 8×16",
+        "name": "RAM 8×16",
+        "renderType": "unit",
+        "width": 4,
+        "height": 18,
+        "pins": [
+          {
+            "name": "A0",
+            "side": "left",
+            "position": 1,
+            "direction": "in"
+          },
+          {
+            "name": "A1",
+            "side": "left",
+            "position": 2,
+            "direction": "in"
+          },
+          {
+            "name": "A2",
+            "side": "left",
+            "position": 3,
+            "direction": "in"
+          },
+          {
+            "name": "CE/",
+            "side": "left",
+            "position": 4,
+            "direction": "in"
+          },
+          {
+            "name": "OE/",
+            "side": "left",
+            "position": 5,
+            "direction": "in"
+          },
+          {
+            "name": "WE/",
+            "side": "left",
+            "position": 6,
+            "direction": "in"
+          },
+          {
+            "name": "D0",
+            "side": "right",
+            "position": 1,
+            "direction": "bidir"
+          },
+          {
+            "name": "D1",
+            "side": "right",
+            "position": 2,
+            "direction": "bidir"
+          },
+          {
+            "name": "D2",
+            "side": "right",
+            "position": 3,
+            "direction": "bidir"
+          },
+          {
+            "name": "D3",
+            "side": "right",
+            "position": 4,
+            "direction": "bidir"
+          },
+          {
+            "name": "D4",
+            "side": "right",
+            "position": 5,
+            "direction": "bidir"
+          },
+          {
+            "name": "D5",
+            "side": "right",
+            "position": 6,
+            "direction": "bidir"
+          },
+          {
+            "name": "D6",
+            "side": "right",
+            "position": 7,
+            "direction": "bidir"
+          },
+          {
+            "name": "D7",
+            "side": "right",
+            "position": 8,
+            "direction": "bidir"
+          },
+          {
+            "name": "D8",
+            "side": "right",
+            "position": 9,
+            "direction": "bidir"
+          },
+          {
+            "name": "D9",
+            "side": "right",
+            "position": 10,
+            "direction": "bidir"
+          },
+          {
+            "name": "D10",
+            "side": "right",
+            "position": 11,
+            "direction": "bidir"
+          },
+          {
+            "name": "D11",
+            "side": "right",
+            "position": 12,
+            "direction": "bidir"
+          },
+          {
+            "name": "D12",
+            "side": "right",
+            "position": 13,
+            "direction": "bidir"
+          },
+          {
+            "name": "D13",
+            "side": "right",
+            "position": 14,
+            "direction": "bidir"
+          },
+          {
+            "name": "D14",
+            "side": "right",
+            "position": 15,
+            "direction": "bidir"
+          },
+          {
+            "name": "D15",
+            "side": "right",
+            "position": 16,
+            "direction": "bidir"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "ADDR",
+            "pins": [
+              "A0",
+              "A1",
+              "A2"
+            ]
+          },
+          {
+            "name": "DATA",
+            "pins": [
+              "D0",
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5",
+              "D6",
+              "D7",
+              "D8",
+              "D9",
+              "D10",
+              "D11",
+              "D12",
+              "D13",
+              "D14",
+              "D15"
+            ]
+          }
+        ],
+        "description": "8×16 RAM (generated)",
+        "mem": {
+          "kind": "ram",
+          "addressBits": 3,
+          "dataWidth": 16,
+          "locations": 8,
+          "ramFile": "regram.bin"
+        },
+        "projectLocal": true
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "X1",
+      "type": "L4C381",
+      "kind": "subdesign",
+      "childPath": "components/L4C381.json",
+      "render": "ic",
+      "iface": [
+        {
+          "label": "/ENA",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "/ENB",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "Ain-high",
+          "dir": "in",
+          "width": 8
+        },
+        {
+          "label": "Ain-low",
+          "dir": "in",
+          "width": 8
+        },
+        {
+          "label": "Bin-high",
+          "dir": "in",
+          "width": 8
+        },
+        {
+          "label": "Bin-low",
+          "dir": "in",
+          "width": 8
+        },
+        {
+          "label": "CLK",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "Cin",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "Cout",
+          "dir": "out",
+          "width": 1
+        },
+        {
+          "label": "ENF/",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "FTAB",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "FTF",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "HC",
+          "dir": "out",
+          "width": 1
+        },
+        {
+          "label": "OE/",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "OSA",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "OSB",
+          "dir": "in",
+          "width": 1
+        },
+        {
+          "label": "OUT-HI",
+          "dir": "out",
+          "width": 8
+        },
+        {
+          "label": "OUT-LO",
+          "dir": "out",
+          "width": 8
+        },
+        {
+          "label": "OVF",
+          "dir": "out",
+          "width": 1
+        },
+        {
+          "label": "S",
+          "dir": "in",
+          "width": 3
+        },
+        {
+          "label": "Z",
+          "dir": "out",
+          "width": 1
+        }
+      ],
+      "x": 40,
+      "y": -2,
+      "rotation": 0
+    }
+  ],
+  "wires": [],
+  "buses": [
+    {
+      "id": "b5",
+      "path": [
+        {
+          "t": "node",
+          "v": "v9"
+        },
+        {
+          "t": "node",
+          "v": "v10"
+        }
+      ],
+      "width": 8,
+      "name": null,
+      "groupConnections": [
+        {
+          "vertex": "v9",
+          "instance": "X1",
+          "group": "Ain-high",
+          "bitMap": [
+            "Ain-high0",
+            "Ain-high1",
+            "Ain-high2",
+            "Ain-high3",
+            "Ain-high4",
+            "Ain-high5",
+            "Ain-high6",
+            "Ain-high7"
+          ]
+        },
+        {
+          "vertex": "v10",
+          "instance": "U3",
+          "group": "DATA",
+          "bitMap": [
+            "D0",
+            "D1",
+            "D2",
+            "D3",
+            "D4",
+            "D5",
+            "D6",
+            "D7"
+          ]
+        }
+      ],
+      "bitNames": [
+        "Ain-high0",
+        "Ain-high1",
+        "Ain-high2",
+        "Ain-high3",
+        "Ain-high4",
+        "Ain-high5",
+        "Ain-high6",
+        "Ain-high7"
+      ]
+    },
+    {
+      "id": "b6",
+      "path": [
+        {
+          "t": "node",
+          "v": "v11"
+        },
+        {
+          "t": "node",
+          "v": "v12"
+        }
+      ],
+      "width": 8,
+      "name": null,
+      "groupConnections": [
+        {
+          "vertex": "v11",
+          "instance": "X1",
+          "group": "Ain-low",
+          "bitMap": [
+            "Ain-low0",
+            "Ain-low1",
+            "Ain-low2",
+            "Ain-low3",
+            "Ain-low4",
+            "Ain-low5",
+            "Ain-low6",
+            "Ain-low7"
+          ]
+        },
+        {
+          "vertex": "v12",
+          "instance": "U3",
+          "group": "DATA",
+          "bitMap": [
+            "D8",
+            "D9",
+            "D10",
+            "D11",
+            "D12",
+            "D13",
+            "D14",
+            "D15"
+          ]
+        }
+      ],
+      "bitNames": [
+        "Ain-low0",
+        "Ain-low1",
+        "Ain-low2",
+        "Ain-low3",
+        "Ain-low4",
+        "Ain-low5",
+        "Ain-low6",
+        "Ain-low7"
+      ]
+    },
+    {
+      "id": "b7",
+      "path": [
+        {
+          "t": "node",
+          "v": "v13"
+        },
+        {
+          "t": "bend",
+          "x": 33,
+          "y": 20
+        },
+        {
+          "t": "bend",
+          "x": 33,
+          "y": 24
+        },
+        {
+          "t": "node",
+          "v": "v14"
+        }
+      ],
+      "width": 8,
+      "name": null,
+      "groupConnections": [
+        {
+          "vertex": "v13",
+          "instance": "X1",
+          "group": "Bin-high",
+          "bitMap": [
+            "Bin-high0",
+            "Bin-high1",
+            "Bin-high2",
+            "Bin-high3",
+            "Bin-high4",
+            "Bin-high5",
+            "Bin-high6",
+            "Bin-high7"
+          ]
+        },
+        {
+          "vertex": "v14",
+          "instance": "U4",
+          "group": "DATA",
+          "bitMap": [
+            "D0",
+            "D1",
+            "D2",
+            "D3",
+            "D4",
+            "D5",
+            "D6",
+            "D7"
+          ]
+        }
+      ],
+      "bitNames": [
+        "Bin-high0",
+        "Bin-high1",
+        "Bin-high2",
+        "Bin-high3",
+        "Bin-high4",
+        "Bin-high5",
+        "Bin-high6",
+        "Bin-high7"
+      ]
+    },
+    {
+      "id": "b8",
+      "path": [
+        {
+          "t": "node",
+          "v": "v15"
+        },
+        {
+          "t": "bend",
+          "x": 28,
+          "y": 28
+        },
+        {
+          "t": "bend",
+          "x": 28,
+          "y": 32
+        },
+        {
+          "t": "node",
+          "v": "v16"
+        }
+      ],
+      "width": 8,
+      "name": null,
+      "groupConnections": [
+        {
+          "vertex": "v15",
+          "instance": "X1",
+          "group": "Bin-low",
+          "bitMap": [
+            "Bin-low0",
+            "Bin-low1",
+            "Bin-low2",
+            "Bin-low3",
+            "Bin-low4",
+            "Bin-low5",
+            "Bin-low6",
+            "Bin-low7"
+          ]
+        },
+        {
+          "vertex": "v16",
+          "instance": "U4",
+          "group": "DATA",
+          "bitMap": [
+            "D8",
+            "D9",
+            "D10",
+            "D11",
+            "D12",
+            "D13",
+            "D14",
+            "D15"
+          ]
+        }
+      ],
+      "bitNames": [
+        "Bin-low0",
+        "Bin-low1",
+        "Bin-low2",
+        "Bin-low3",
+        "Bin-low4",
+        "Bin-low5",
+        "Bin-low6",
+        "Bin-low7"
+      ]
+    }
+  ],
+  "vertices": [
+    {
+      "id": "v9",
+      "kind": "free",
+      "x": 38,
+      "y": 4
+    },
+    {
+      "id": "v10",
+      "kind": "free",
+      "x": 24,
+      "y": 4
+    },
+    {
+      "id": "v11",
+      "kind": "free",
+      "x": 38,
+      "y": 12
+    },
+    {
+      "id": "v12",
+      "kind": "free",
+      "x": 24,
+      "y": 12
+    },
+    {
+      "id": "v13",
+      "kind": "free",
+      "x": 38,
+      "y": 20
+    },
+    {
+      "id": "v14",
+      "kind": "free",
+      "x": 24,
+      "y": 24
+    },
+    {
+      "id": "v15",
+      "kind": "free",
+      "x": 38,
+      "y": 28
+    },
+    {
+      "id": "v16",
+      "kind": "free",
+      "x": 24,
+      "y": 32
+    }
+  ],
+  "refCounters": {
+    "U": 5,
+    "A": 1,
+    "N": 1,
+    "X": 2
+  },
+  "nets": [
+    {
+      "pins": [
+        "X1.Ain-high0",
+        "U3.D0"
+      ],
+      "members": [
+        "b5"
+      ],
+      "provenance": [
+        {
+          "bus": "b5",
+          "bit": 0,
+          "name": "Ain-high0"
+        }
+      ],
+      "name": "Ain-high0"
+    },
+    {
+      "pins": [
+        "X1.Ain-high1",
+        "U3.D1"
+      ],
+      "members": [
+        "b5"
+      ],
+      "provenance": [
+        {
+          "bus": "b5",
+          "bit": 1,
+          "name": "Ain-high1"
+        }
+      ],
+      "name": "Ain-high1"
+    },
+    {
+      "pins": [
+        "X1.Ain-high2",
+        "U3.D2"
+      ],
+      "members": [
+        "b5"
+      ],
+      "provenance": [
+        {
+          "bus": "b5",
+          "bit": 2,
+          "name": "Ain-high2"
+        }
+      ],
+      "name": "Ain-high2"
+    },
+    {
+      "pins": [
+        "X1.Ain-high3",
+        "U3.D3"
+      ],
+      "members": [
+        "b5"
+      ],
+      "provenance": [
+        {
+          "bus": "b5",
+          "bit": 3,
+          "name": "Ain-high3"
+        }
+      ],
+      "name": "Ain-high3"
+    },
+    {
+      "pins": [
+        "X1.Ain-high4",
+        "U3.D4"
+      ],
+      "members": [
+        "b5"
+      ],
+      "provenance": [
+        {
+          "bus": "b5",
+          "bit": 4,
+          "name": "Ain-high4"
+        }
+      ],
+      "name": "Ain-high4"
+    },
+    {
+      "pins": [
+        "X1.Ain-high5",
+        "U3.D5"
+      ],
+      "members": [
+        "b5"
+      ],
+      "provenance": [
+        {
+          "bus": "b5",
+          "bit": 5,
+          "name": "Ain-high5"
+        }
+      ],
+      "name": "Ain-high5"
+    },
+    {
+      "pins": [
+        "X1.Ain-high6",
+        "U3.D6"
+      ],
+      "members": [
+        "b5"
+      ],
+      "provenance": [
+        {
+          "bus": "b5",
+          "bit": 6,
+          "name": "Ain-high6"
+        }
+      ],
+      "name": "Ain-high6"
+    },
+    {
+      "pins": [
+        "X1.Ain-high7",
+        "U3.D7"
+      ],
+      "members": [
+        "b5"
+      ],
+      "provenance": [
+        {
+          "bus": "b5",
+          "bit": 7,
+          "name": "Ain-high7"
+        }
+      ],
+      "name": "Ain-high7"
+    },
+    {
+      "pins": [
+        "X1.Ain-low0",
+        "U3.D8"
+      ],
+      "members": [
+        "b6"
+      ],
+      "provenance": [
+        {
+          "bus": "b6",
+          "bit": 0,
+          "name": "Ain-low0"
+        }
+      ],
+      "name": "Ain-low0"
+    },
+    {
+      "pins": [
+        "X1.Ain-low1",
+        "U3.D9"
+      ],
+      "members": [
+        "b6"
+      ],
+      "provenance": [
+        {
+          "bus": "b6",
+          "bit": 1,
+          "name": "Ain-low1"
+        }
+      ],
+      "name": "Ain-low1"
+    },
+    {
+      "pins": [
+        "X1.Ain-low2",
+        "U3.D10"
+      ],
+      "members": [
+        "b6"
+      ],
+      "provenance": [
+        {
+          "bus": "b6",
+          "bit": 2,
+          "name": "Ain-low2"
+        }
+      ],
+      "name": "Ain-low2"
+    },
+    {
+      "pins": [
+        "X1.Ain-low3",
+        "U3.D11"
+      ],
+      "members": [
+        "b6"
+      ],
+      "provenance": [
+        {
+          "bus": "b6",
+          "bit": 3,
+          "name": "Ain-low3"
+        }
+      ],
+      "name": "Ain-low3"
+    },
+    {
+      "pins": [
+        "X1.Ain-low4",
+        "U3.D12"
+      ],
+      "members": [
+        "b6"
+      ],
+      "provenance": [
+        {
+          "bus": "b6",
+          "bit": 4,
+          "name": "Ain-low4"
+        }
+      ],
+      "name": "Ain-low4"
+    },
+    {
+      "pins": [
+        "X1.Ain-low5",
+        "U3.D13"
+      ],
+      "members": [
+        "b6"
+      ],
+      "provenance": [
+        {
+          "bus": "b6",
+          "bit": 5,
+          "name": "Ain-low5"
+        }
+      ],
+      "name": "Ain-low5"
+    },
+    {
+      "pins": [
+        "X1.Ain-low6",
+        "U3.D14"
+      ],
+      "members": [
+        "b6"
+      ],
+      "provenance": [
+        {
+          "bus": "b6",
+          "bit": 6,
+          "name": "Ain-low6"
+        }
+      ],
+      "name": "Ain-low6"
+    },
+    {
+      "pins": [
+        "X1.Ain-low7",
+        "U3.D15"
+      ],
+      "members": [
+        "b6"
+      ],
+      "provenance": [
+        {
+          "bus": "b6",
+          "bit": 7,
+          "name": "Ain-low7"
+        }
+      ],
+      "name": "Ain-low7"
+    },
+    {
+      "pins": [
+        "X1.Bin-high0",
+        "U4.D0"
+      ],
+      "members": [
+        "b7"
+      ],
+      "provenance": [
+        {
+          "bus": "b7",
+          "bit": 0,
+          "name": "Bin-high0"
+        }
+      ],
+      "name": "Bin-high0"
+    },
+    {
+      "pins": [
+        "X1.Bin-high1",
+        "U4.D1"
+      ],
+      "members": [
+        "b7"
+      ],
+      "provenance": [
+        {
+          "bus": "b7",
+          "bit": 1,
+          "name": "Bin-high1"
+        }
+      ],
+      "name": "Bin-high1"
+    },
+    {
+      "pins": [
+        "X1.Bin-high2",
+        "U4.D2"
+      ],
+      "members": [
+        "b7"
+      ],
+      "provenance": [
+        {
+          "bus": "b7",
+          "bit": 2,
+          "name": "Bin-high2"
+        }
+      ],
+      "name": "Bin-high2"
+    },
+    {
+      "pins": [
+        "X1.Bin-high3",
+        "U4.D3"
+      ],
+      "members": [
+        "b7"
+      ],
+      "provenance": [
+        {
+          "bus": "b7",
+          "bit": 3,
+          "name": "Bin-high3"
+        }
+      ],
+      "name": "Bin-high3"
+    },
+    {
+      "pins": [
+        "X1.Bin-high4",
+        "U4.D4"
+      ],
+      "members": [
+        "b7"
+      ],
+      "provenance": [
+        {
+          "bus": "b7",
+          "bit": 4,
+          "name": "Bin-high4"
+        }
+      ],
+      "name": "Bin-high4"
+    },
+    {
+      "pins": [
+        "X1.Bin-high5",
+        "U4.D5"
+      ],
+      "members": [
+        "b7"
+      ],
+      "provenance": [
+        {
+          "bus": "b7",
+          "bit": 5,
+          "name": "Bin-high5"
+        }
+      ],
+      "name": "Bin-high5"
+    },
+    {
+      "pins": [
+        "X1.Bin-high6",
+        "U4.D6"
+      ],
+      "members": [
+        "b7"
+      ],
+      "provenance": [
+        {
+          "bus": "b7",
+          "bit": 6,
+          "name": "Bin-high6"
+        }
+      ],
+      "name": "Bin-high6"
+    },
+    {
+      "pins": [
+        "X1.Bin-high7",
+        "U4.D7"
+      ],
+      "members": [
+        "b7"
+      ],
+      "provenance": [
+        {
+          "bus": "b7",
+          "bit": 7,
+          "name": "Bin-high7"
+        }
+      ],
+      "name": "Bin-high7"
+    },
+    {
+      "pins": [
+        "X1.Bin-low0",
+        "U4.D8"
+      ],
+      "members": [
+        "b8"
+      ],
+      "provenance": [
+        {
+          "bus": "b8",
+          "bit": 0,
+          "name": "Bin-low0"
+        }
+      ],
+      "name": "Bin-low0"
+    },
+    {
+      "pins": [
+        "X1.Bin-low1",
+        "U4.D9"
+      ],
+      "members": [
+        "b8"
+      ],
+      "provenance": [
+        {
+          "bus": "b8",
+          "bit": 1,
+          "name": "Bin-low1"
+        }
+      ],
+      "name": "Bin-low1"
+    },
+    {
+      "pins": [
+        "X1.Bin-low2",
+        "U4.D10"
+      ],
+      "members": [
+        "b8"
+      ],
+      "provenance": [
+        {
+          "bus": "b8",
+          "bit": 2,
+          "name": "Bin-low2"
+        }
+      ],
+      "name": "Bin-low2"
+    },
+    {
+      "pins": [
+        "X1.Bin-low3",
+        "U4.D11"
+      ],
+      "members": [
+        "b8"
+      ],
+      "provenance": [
+        {
+          "bus": "b8",
+          "bit": 3,
+          "name": "Bin-low3"
+        }
+      ],
+      "name": "Bin-low3"
+    },
+    {
+      "pins": [
+        "X1.Bin-low4",
+        "U4.D12"
+      ],
+      "members": [
+        "b8"
+      ],
+      "provenance": [
+        {
+          "bus": "b8",
+          "bit": 4,
+          "name": "Bin-low4"
+        }
+      ],
+      "name": "Bin-low4"
+    },
+    {
+      "pins": [
+        "X1.Bin-low5",
+        "U4.D13"
+      ],
+      "members": [
+        "b8"
+      ],
+      "provenance": [
+        {
+          "bus": "b8",
+          "bit": 5,
+          "name": "Bin-low5"
+        }
+      ],
+      "name": "Bin-low5"
+    },
+    {
+      "pins": [
+        "X1.Bin-low6",
+        "U4.D14"
+      ],
+      "members": [
+        "b8"
+      ],
+      "provenance": [
+        {
+          "bus": "b8",
+          "bit": 6,
+          "name": "Bin-low6"
+        }
+      ],
+      "name": "Bin-low6"
+    },
+    {
+      "pins": [
+        "X1.Bin-low7",
+        "U4.D15"
+      ],
+      "members": [
+        "b8"
+      ],
+      "provenance": [
+        {
+          "bus": "b8",
+          "bit": 7,
+          "name": "Bin-low7"
+        }
+      ],
+      "name": "Bin-low7"
+    }
+  ]
+}

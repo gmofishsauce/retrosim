@@ -508,11 +508,15 @@ const BEHAVIOR_DEFS = {
   switch({ state }) {
     return [{ pin: "OUT", value: state === "1" ? V1 : V0 }];
   },
-  // A port drives nothing on its own: within a sheet, same-label ports share a
+  // A port drives nothing of its own: within a sheet, same-label ports share a
   // net (FR-094a, netlist step 6); cross-file continuation is composed at Run by
-  // flatten (FR-101a, §6.14). It is a net-label node, not a source.
-  port() {
-    return [];
+  // flatten (FR-101a, §6.14). It is a net-label node, not a source. The one
+  // exception is the run-time debug drive of FR-094g — a sim-time click on an
+  // eligible port — which arrives as `drive` and exists only on the run-time
+  // copy, never in the saved design: with none, this is still the empty list.
+  port({ drive }) {
+    const v = driveValue(drive?.[0]);
+    return v === null ? [] : [{ pin: "P", value: v }];
   },
   // Display only, like the 1-wide indicator (FR-071d): drives nothing; the
   // renderer reads each bit's net value to light the bar-graph stripes.
@@ -521,31 +525,88 @@ const BEHAVIOR_DEFS = {
   },
   // Multi-bit port (FR-071e): drives nothing on its own — it is an interface
   // node (FR-095). Off-sheet net joining (same-label / cross-file) is deferred.
-  portN() {
-    return [];
+  // Like the 1-wide port it drives only what a debug click put on its run-time
+  // copy (FR-094g), and there per bit: an undriven bit contributes nothing at
+  // all, so a run nobody clicked resolves exactly as it did before.
+  portN({ drive }) {
+    if (!drive) return [];
+    const out = [];
+    for (let i = 0; i < drive.length; i++) {
+      const v = driveValue(drive[i]);
+      if (v !== null) out.push({ pin: `P${i}`, value: v });
+    }
+    return out;
   },
 };
+
+// driveValue maps one bit of a port's run-time debug drive (FR-094g) to the
+// logic value it strong-drives, or null for the undriven default — the state
+// that contributes no driver at all rather than driving U, which is what lets a
+// bidir port sit on a three-state bus without contending until it is clicked.
+const driveValue = (d) => (d === "1" ? V1 : d === "0" ? V0 : null);
+
+// WEAK_DRIVERS names the built-ins whose output is a WEAK drive (FR-083) —
+// effective only when no strong driver is enabled — keyed by `renderType`. It
+// lives here, beside the behaviors that return `weak: true`, so the two cannot
+// drift: anything added to one belongs in the other. Read by the port-direction
+// derivation (FR-094c, model/subdesign.js), which must not mistake a pull-up for
+// a signal source: a pull-up is the idiom for "input, idles high", not an output.
+export const WEAK_DRIVERS = new Set(["pullup", "pulldown"]);
 
 // BEHAVIORS is BEHAVIOR_DEFS re-keyed by type id (FR-066e/FR-067a).
 export const BEHAVIORS = Object.fromEntries(
   Object.entries(BEHAVIOR_DEFS).map(([name, fn]) => [builtinId(name), fn]),
 );
 
-// INTERACTIONS maps built-in type id → an interaction handler (inst) => void
-// that mutates the instance's interactive state in place (FR-087b). It is the
-// input-side analogue of BEHAVIORS (output side): a type with an entry here is
-// interactive and accepts a sim-time click, routed through store.applyLive by
-// the interaction FSM (§6.9), which wakes the simulator to re-evaluate (§6.13).
-// A new interactive input is added by registering a handler here plus a render
-// branch — no scheduler or FSM change. Defined by name, exported keyed by id
-// (FR-066e) so `INTERACTIONS[inst.type]` matches the instance's id `type`.
+// INTERACTIONS maps built-in type id → an interaction handler
+// (inst, hit) => void that mutates the instance's interactive state in place
+// (FR-087b). It is the input-side analogue of BEHAVIORS (output side): a type
+// with an entry here is interactive and accepts a sim-time click, routed through
+// store.setLiveInput by the interaction FSM (§6.9), which wakes the simulator to
+// re-evaluate (§6.13). `hit` describes what part of the body was clicked — only
+// `{bit}`, for the multi-bit port — and is ignored by handlers with a single
+// click target. A new interactive input is added by registering a handler here
+// plus a render branch — no scheduler or FSM change. Defined by name, exported
+// keyed by id (FR-066e) so `INTERACTIONS[inst.type]` matches the instance's id
+// `type`.
 const INTERACTION_DEFS = {
   // Toggle the switch between its two states 0↔1 (FR-087a). Anything that is
   // not "1" (including a legacy "U") toggles to "1".
   switch(inst) {
     inst.switchState = inst.switchState === "1" ? "0" : "1";
   },
+  // Debug-input ports (FR-094g): advance the clicked bit's drive. The 1-wide
+  // port has one bit; a portN's pentagons are separate click targets, so the FSM
+  // says which — and, from this run's debugPorts map, whether the port may be
+  // released. Whether the port is eligible at all is likewise the FSM's
+  // question, not the handler's.
+  port: cyclePortDrive,
+  portN: cyclePortDrive,
 };
+
+// cyclePortDrive advances one bit of a port's run-time debug drive (FR-094g).
+// Two cycles, chosen by `releasable` — a bidir port's `undriven → 0 → 1 →
+// undriven`, or an input port's two-state `0 ↔ 1` toggle after a first click
+// that drives 0. Releasing exists so a port can let go of a shared bus, which
+// only a bidir port is on; an input port's undriven state is its power-on
+// condition, not a position worth cycling back into.
+//
+// The order 0-before-1 is LOAD-BEARING in both cycles, not cosmetic: it is what
+// lets a port clock a design by hand. A rising edge is strictly 0→1 (FR-079) —
+// Z→1 is not one, and must not become one — so an order that reaches 1 from
+// undriven rather than from 0 offers no rising edge at all, and no amount of
+// clicking ever advances a register.
+//
+// The array is REPLACED rather than mutated in place: setLiveInput hands us a
+// shallow copy of the previous run-time copy (§6.10), so writing through the
+// old array would also rewrite the state the renderer already drew from.
+function cyclePortDrive(inst, { bit = 0, releasable = true } = {}) {
+  const bits = inst.typeData?.renderType === "portN" ? (inst.typeData.pins?.length ?? 1) : 1;
+  const drive = inst.portDrive ? inst.portDrive.slice() : new Array(bits).fill(null);
+  const cur = drive[bit];
+  drive[bit] = cur === "0" ? "1" : cur === "1" ? (releasable ? null : "0") : "0";
+  inst.portDrive = drive;
+}
 
 export const INTERACTIONS = Object.fromEntries(
   Object.entries(INTERACTION_DEFS).map(([name, fn]) => [builtinId(name), fn]),

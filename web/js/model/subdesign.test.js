@@ -9,6 +9,7 @@ import {
   resolveSubDesigns,
   portDirection,
   effectivePortDir,
+  debugPorts,
   flatten,
   wouldCycle,
 } from "./subdesign.js";
@@ -108,6 +109,134 @@ test("effectivePortDir applies the override only when derived is bidir (FR-094d)
   q.dirOverride = "in";
   assert.equal(portDirection(d, q.refdes), "out");
   assert.equal(effectivePortDir(d, q.refdes), "out"); // override ignored for definite
+});
+
+// A pull-up/pull-down is a WEAK driver (FR-083), not a signal source: it is the
+// idiom for "input, idles high" — an active-low reset or enable. Counting it
+// made such a port a *definite* "out", which put it on the wrong side of an
+// embedded IC (FR-099), bound it as a vector output column (FR-115f), and could
+// not be corrected by hand (FR-094d's override is dormant for a definite
+// direction). Found on examples/cpu/PC.json's "LD/" port.
+test("a weak pull alone leaves a port an input (FR-094c/FR-083)", () => {
+  for (const weak of ["pullup", "pulldown"]) {
+    const d = createDesign("t");
+    const p = addInstance(d, PORT, 0, 0, 0);
+    p.label = "LD/";
+    const w = addInstance(d, BUILTINS.find((b) => b.name === weak), 10, 0, 0);
+    addWire(
+      d,
+      { kind: "pin", refdes: w.refdes, pin: "OUT" },
+      { kind: "pin", refdes: p.refdes, pin: "P" },
+    );
+    assert.equal(portDirection(d, p.refdes), "in", `${weak} alone`);
+    // And it is therefore drivable by hand, with the input port's toggle.
+    assert.equal(debugPorts(d).get(p.refdes).releasable, false);
+  }
+});
+
+test("a weak pull does not mask a real driver (FR-094c/FR-083)", () => {
+  const d = createDesign("t");
+  const p = addInstance(d, PORT, 0, 0, 0);
+  p.label = "Q";
+  const pu = addInstance(d, BUILTINS.find((b) => b.name === "pullup"), 10, 0, 0);
+  const sw = addInstance(d, SWITCH, 20, 0, 0);
+  addWire(
+    d,
+    { kind: "pin", refdes: pu.refdes, pin: "OUT" },
+    { kind: "pin", refdes: p.refdes, pin: "P" },
+  );
+  addWire(
+    d,
+    { kind: "pin", refdes: sw.refdes, pin: "OUT" },
+    { kind: "pin", refdes: p.refdes, pin: "P" },
+  );
+  // The strong pin still decides, exactly as it does electrically.
+  assert.equal(portDirection(d, p.refdes), "out");
+  assert.ok(!debugPorts(d).has(p.refdes));
+});
+
+// A bidir/tristate pin still wins over everything, pull-up present or not.
+test("a weak pull does not downgrade a bidir net (FR-094c)", () => {
+  const d = createDesign("t");
+  const p = addInstance(d, PORT, 0, 0, 0);
+  p.label = "BUS";
+  const u = addInstance(d, BIDIR, 10, 0, 0);
+  const pu = addInstance(d, BUILTINS.find((b) => b.name === "pullup"), 20, 0, 0);
+  addWire(
+    d,
+    { kind: "pin", refdes: u.refdes, pin: "IO" },
+    { kind: "pin", refdes: p.refdes, pin: "P" },
+  );
+  addWire(
+    d,
+    { kind: "pin", refdes: pu.refdes, pin: "OUT" },
+    { kind: "pin", refdes: p.refdes, pin: "P" },
+  );
+  assert.equal(portDirection(d, p.refdes), "bidir");
+  assert.equal(debugPorts(d).get(p.refdes).releasable, true);
+});
+
+// Debug-input eligibility (FR-094g): the run-time question "can the user drive
+// this port by hand?", answered from the wiring exactly as the direction is.
+test("debugPorts admits in and bidir ports, never an output (FR-094g)", () => {
+  const d = createDesign("t");
+
+  // Unwired port: nothing drives its net, so it is the plainest debug input.
+  const idle = addInstance(d, PORT, 0, 0, 0);
+  idle.label = "IDLE";
+
+  // Driven by a switch's output pin → derives "out" → not a debug input.
+  const sw = addInstance(d, SWITCH, 0, 10, 0);
+  const driven = addInstance(d, PORT, 0, 20, 0);
+  driven.label = "Q";
+  addWire(
+    d,
+    { kind: "pin", refdes: sw.refdes, pin: "OUT" },
+    { kind: "pin", refdes: driven.refdes, pin: "P" },
+  );
+
+  // On a bidirectional pin → derives "bidir" → admitted (it drives nothing until
+  // clicked, so it cannot contend by merely being eligible).
+  const u = addInstance(d, BIDIR, 20, 0, 0);
+  const bus = addInstance(d, PORT, 20, 20, 0);
+  bus.label = "BUS";
+  addWire(
+    d,
+    { kind: "pin", refdes: u.refdes, pin: "IO" },
+    { kind: "pin", refdes: bus.refdes, pin: "P" },
+  );
+
+  const eligible = debugPorts(d);
+  assert.deepEqual([...eligible.keys()].sort(), [idle.refdes, bus.refdes].sort());
+  assert.equal(eligible.get(idle.refdes).bits, 1); // a 1-wide port is one bit
+  // Cycle by direction (FR-094g): only a bus port can be released.
+  assert.equal(eligible.get(idle.refdes).releasable, false); // derived "in"
+  assert.equal(eligible.get(bus.refdes).releasable, true); // derived "bidir"
+  assert.ok(!eligible.has(driven.refdes));
+
+  // An override narrowing bidir → out disqualifies it, like a derived output.
+  bus.dirOverride = "out";
+  assert.ok(!debugPorts(d).has(bus.refdes));
+  bus.dirOverride = "in";
+  assert.ok(debugPorts(d).has(bus.refdes));
+  // An override to "in" also takes away the release step (FR-094d/FR-094g).
+  assert.equal(debugPorts(d).get(bus.refdes).releasable, false);
+
+  // An off-sheet target is an external connection: flatten joins it to the peer
+  // sheet's port, which may drive it, so it is never a debug input (FR-101).
+  idle.target = { file: "other.json", label: "IDLE" };
+  assert.ok(!debugPorts(d).has(idle.refdes));
+});
+
+test("debugPorts maps a portN to its bit count (FR-094g/FR-071e)", () => {
+  // Bus-driven by an output pin: an output portN is not a debug input.
+  assert.equal(debugPorts(childWithPortN(4, "out")).size, 0);
+  // The same portN fed from input pins is, and reports all four bits.
+  const eligible = debugPorts(childWithPortN(4, "in"));
+  assert.equal(eligible.get("A-4").bits, 4);
+  assert.equal(eligible.get("A-4").releasable, false);
+  // The same portN on a bidirectional bus keeps its release step.
+  assert.equal(debugPorts(childWithPortN(4, "bidir")).get("A-4").releasable, true);
 });
 
 test("designInterface applies a bidir port's override (FR-094d)", () => {
