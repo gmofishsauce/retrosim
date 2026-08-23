@@ -312,6 +312,79 @@ test("portN direction is derived & aggregated across bits (FR-094c)", () => {
   assert.equal(td.pins.length, 4);
 });
 
+// A child whose only driver is a *nested* sub-design instance, in exactly the
+// shape a child is read in: `kind`/`childPath`/`iface` and **no typeData**,
+// because interface resolution is one level deep and never resolves a grandchild
+// (FR-094c/FR-099). Its 4-bit interface signal "OUT" is bus-snapped to the P pins
+// of a portN labeled "b". `iface` is omittable to model a pre-FR-099c file.
+function childWithNestedSub(dir, { record = true } = {}) {
+  const bits = (p) => Array.from({ length: 4 }, (_, i) => p + i);
+  const nested = {
+    refdes: "X1",
+    kind: "subdesign",
+    type: "leaf",
+    childPath: "leaf.json",
+    render: "ic",
+  };
+  if (record) nested.iface = [{ label: "OUT", dir, width: 4 }];
+  return {
+    name: "mid",
+    components: [
+      nested,
+      { refdes: "A-4", label: "b", width: 4, typeData: { renderType: "portN", ...portNFields(4) } },
+    ],
+    buses: [
+      {
+        id: "b1",
+        width: 4,
+        path: [{ t: "node", v: "v7" }, { t: "node", v: "v8" }],
+        groupConnections: [
+          { vertex: "v7", instance: "X1", group: "OUT", bitMap: bits("OUT") },
+          { vertex: "v8", instance: "A-4", group: "P", bitMap: bits("P") },
+        ],
+      },
+    ],
+    wires: [],
+    vertices: [{ id: "v7", kind: "free", x: 0, y: 0 }, { id: "v8", kind: "free", x: 1, y: 0 }],
+  };
+}
+
+// Regression (FR-094c, 2026-08-23): a port driven only by a *nested* sub-design
+// derived "in" and drew on the input side of the embedded IC. The grandchild is
+// unresolved when its parent is read as a child, so it carried no typeData and
+// its output pins registered as no driver at all; the stored `iface` record
+// (FR-099c) supplies them. Found on examples/cpu/prog.json, whose PC-LO/PC-HI
+// (driven by an embedded ALU) rendered on the left of the IC in core.json while
+// prog.json's own properties panel called them outputs.
+test("a nested sub-design's output drives the direction derivation (FR-094c)", () => {
+  assert.deepEqual(designInterface(childWithNestedSub("out")), [
+    { label: "b", dir: "out", width: 4 },
+  ]);
+  // ...and therefore lands on the output side of the embedded IC (FR-099).
+  const td = synthTypeForInterface(designInterface(childWithNestedSub("out")), "ic", "mid");
+  assert.ok(td.pins.every((p) => p.side === "right" && p.direction === "out"));
+});
+
+// A bidir interface signal wins over an output one, exactly as a tristate pin
+// does on an ordinary part (FR-094c) — the port stays user-overridable (FR-094d).
+test("a nested sub-design's bidir signal derives bidir (FR-094c)", () => {
+  assert.deepEqual(designInterface(childWithNestedSub("bidir")), [
+    { label: "b", dir: "bidir", width: 4 },
+  ]);
+  assert.deepEqual(designInterface(childWithNestedSub("in")), [
+    { label: "b", dir: "in", width: 4 },
+  ]);
+});
+
+// No `iface` record to fall back on (a pre-FR-099c file, or a broken link whose
+// record was deliberately left untouched): the derivation must degrade to the
+// "in" default rather than throw.
+test("an unresolved sub-design with no iface record derives in (FR-094c/FR-099c)", () => {
+  assert.deepEqual(designInterface(childWithNestedSub("out", { record: false })), [
+    { label: "b", dir: "in", width: 4 },
+  ]);
+});
+
 // A 1-wide port stays a single one-bit pin with no group and no width (FR-094).
 test("synthTypeForInterface keeps 1-wide ports as one-bit pins (FR-094)", () => {
   const td = synthTypeForInterface(designInterface(childWithPorts()), "ic", "counter");

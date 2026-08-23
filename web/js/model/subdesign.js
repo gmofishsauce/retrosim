@@ -77,11 +77,39 @@ function classifyPortNDir(nets, byRefdes, refdes, pinNames) {
   return aggregateDir(contribs);
 }
 
+// resolvedByRefdes indexes a design's components for direction derivation
+// (FR-094c), filling in the synthetic typeData of any embedded sub-design
+// instance that does not carry one from its stored `iface` record (FR-099c).
+// The fill lands in the returned map only — the design itself is never mutated.
+//
+// An unresolved sub-design is the *normal* state of a design being read as a
+// child: designInterface's read is one level deep and resolveSubDesigns does not
+// recurse, so a grandchild's `X` instances have `kind`/`childPath`/`iface` but no
+// typeData at all. netContribDir reads pin directions out of typeData, so
+// without this their output pins registered as no driver whatsoever: a child port
+// driven only by a nested sub-design derived `in`, landing on the input side of
+// the embedded IC (FR-099) and binding as an input column (FR-115f), with no way
+// to correct it (FR-094d's override is dormant for a definite direction) — and
+// contradicting what the same port reported with its own design open, where the
+// nesting *is* resolved. An instance carrying a real typeData — resolved, or a
+// broken-link placeholder (FR-099a) — is passed through untouched.
+function resolvedByRefdes(components) {
+  const byRefdes = new Map();
+  for (const c of components ?? []) {
+    const fill =
+      c.kind === "subdesign" && !c.typeData && c.iface
+        ? { ...c, typeData: synthTypeForInterface(c.iface, c.render, c.type) }
+        : c;
+    byRefdes.set(c.refdes, fill);
+  }
+  return byRefdes;
+}
+
 // portDirection derives one port's direction from the current design wiring
 // (FR-094c). Used by the properties panel for a live read-only display. Handles
 // both the 1-wide port (by label) and the multi-bit port (by its P pins).
 export function portDirection(design, portRefdes) {
-  const byRefdes = new Map((design.components ?? []).map((c) => [c.refdes, c]));
+  const byRefdes = resolvedByRefdes(design.components);
   const inst = byRefdes.get(portRefdes);
   const nets = buildNets(design, () => {});
   if (inst?.typeData?.renderType === "portN") {
@@ -149,7 +177,7 @@ function applyOverride(dir, inst) {
 // per frame.
 export function debugPorts(design) {
   const comps = design?.components ?? [];
-  const byRefdes = new Map(comps.map((c) => [c.refdes, c]));
+  const byRefdes = resolvedByRefdes(comps);
   const nets = buildNets(design, () => {});
   const out = new Map();
   for (const inst of comps) {
@@ -183,7 +211,7 @@ export function designInterface(childDesign) {
     { wires: [], buses: [], vertices: [], components: [], ...childDesign },
     () => {},
   );
-  const byRefdes = new Map((childDesign.components ?? []).map((c) => [c.refdes, c]));
+  const byRefdes = resolvedByRefdes(childDesign.components);
   const byLabel = new Map();
   for (const c of childDesign.components ?? []) {
     // Identify ports by renderType, not the `type` field — the latter is now the
