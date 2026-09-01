@@ -15,7 +15,7 @@ KiCad-like.
 
 1. [Building and running](#1-building-and-running)
 2. [The workspace](#2-the-workspace)
-3. [Placing components](#3-placing-components) — including [Creating](#creating-a-custom-gal-part-22v10) and [editing](#editing-a-custom-gal-part) a custom GAL part, and [Creating a memory device](#creating-a-memory-device-ramrom)
+3. [Placing components](#3-placing-components) — including [Creating](#creating-a-custom-gal-part-22v10) and [editing](#editing-a-custom-gal-part) a custom GAL part — with [The logic table](#the-logic-table) — and [Creating a memory device](#creating-a-memory-device-ramrom)
 4. [Navigating the canvas](#4-navigating-the-canvas)
 5. [The selection model](#5-the-selection-model)
 6. [Wiring](#6-wiring)
@@ -235,8 +235,8 @@ pins 12/24 are ground/power) and collects only what varies between parts:
 - **Pin labels** — a name for each input and I/O pin.
 - **Per-I/O direction** — for each OLMC pin: **comb out** (combinational output),
   **reg out** (registered output, clocked by pin 1), or **input**.
-- **Behavior** — the logic as GALasm sum-of-products equations (the same dialect
-  used by the 74-series behavior blocks).
+- **Logic** — the part's equations, built by clicking a table rather than typed.
+  It is described in [The logic table](#the-logic-table) below.
 - **Pin groups** — optionally bundle pins into named groups so a bus can
   snap-connect to all of them at once (see [Buses](#7-buses)). Click
   **Pin groups…**, type a name, and check the member pins. A group's pins must
@@ -244,11 +244,13 @@ pins 12/24 are ground/power) and collects only what varies between parts:
   between them); the dialog refuses a group that breaks either rule and tells you
   why.
 
-As you type, the behavior is **validated live against the real GAL22V10**: the
-status line shows a green check when it is acceptable, or the specific problem
-otherwise, and **Create** is disabled until it passes. This is the same strict
-check the simulator applies at Run, so a part you can create is one you could
-later produce on an actual device with GALasm.
+Below the table a read-only pane shows **the GALasm the table will write** —
+exactly the text that lands in the part's file — and it updates as you click. That
+text is **validated live against the real GAL22V10**: the status line shows a green
+check when it is acceptable, or the specific problem otherwise, and **Create** is
+disabled until it passes. This is the same strict check the simulator applies at
+Run, so a part you can create is one you could later produce on an actual device
+with GALasm.
 
 **Create** saves the part into the **current project's** `components/` folder (as a
 YAML file named after the part number) and adds its tile to the upper palette
@@ -257,14 +259,74 @@ other part. The part belongs to this project: it shows in the palette while this
 project is current, and is not visible in other projects. (Cancel discards it.) To
 change it later, see [Editing a custom GAL part](#editing-a-custom-gal-part).
 
+### The logic table
+
+The dialog's largest region is the **logic table**, where you build the part's
+equations by clicking instead of typing GALasm. Each output is a **sum of
+products**: one or more AND terms OR'd together.
+
+The table has one **column per usable pin** — the inputs and every I/O pin, in pin
+order — and one **row per AND term**. An output's rows sit together, and their sum
+is that output's equation. Pins you have labeled `NC` get no column, since a
+no-connect carries no signal.
+
+Every cell is a button that cycles **X → 1 → 0 → X**:
+
+| Cell | Meaning in that term |
+|---|---|
+| `1` | the signal, plain |
+| `0` | the signal, inverted |
+| `X` | the signal is not part of this term |
+
+So a row reading `F0=0`, `F1=1`, `F2=0` is the term `!F0 * F1 * !F2`. Two kinds of
+cell are blocked. An output's own column in its own rows is inert — a part cannot
+read its own output back. And the pin-1 column greys out as soon as any output is
+set to **reg out**, because pin 1 is then the device's clock and may not appear in
+an equation; a literal already sitting there stays clickable so you can cycle it
+back to `X`, and until you do it shows red and the status line says which output to
+clear it from.
+
+**Adding and removing terms.** The drop-down at the end of each row starts blank and
+offers **OR** and **done**. Choosing **OR** adds another row below for a further AND
+term and puts the cursor in it; choosing **done** finishes that output and moves to
+the next one. Leaving it blank means *done* — you never have to touch it. The
+drop-down reads `OR` on any row that already has one below it, so to reopen a
+finished output just set its last row's drop-down to **OR** again. The **✕** at the
+end of a row deletes that term.
+
+**A row with every cell `X` is empty** and is simply left out of the equation — it
+is not "always true". That is what makes adding a row safe: a row you add and do not
+fill costs nothing. An output whose rows are all empty gets no equation at all and
+is left undriven.
+
+**Constant outputs.** Beside each output name is a drop-down reading **equation**,
+**always 0**, or **always 1**. The two constants drive the pin to a fixed level
+(writing `= GND` or `= VCC`), which is the way to hold an output low or high — an
+empty table cannot say it. Switching to a constant hides that output's rows but
+keeps them, so switching back to **equation** brings your terms back.
+
+**Active-low outputs.** An output's polarity comes from its **pin label**: label the
+pin `/ENF` and the equation is written `/ENF = …`, so the pin goes low when the
+terms are true. There is no separate polarity control — the slash on the label is
+the whole story. On the right-hand side of an equation the slash is dropped, so
+`/ENF` appears in other outputs' terms as `ENF`.
+
+**Notes.** Each output has a free-text **Note** field, written into the file as a
+comment on that output's first line and read back the next time you open the part.
+
+When the part is saved, the equations are written in pin order with one AND term per
+line. A part you had hand-written earlier is therefore **reformatted** the first
+time you save it from the dialog — the operator spellings and equation order become
+the table's — though the logic is unchanged.
+
 ### Editing a custom GAL part
 
 A part you authored is not frozen. **Right-click its palette tile** and choose
 **Edit part definition…**: the same dialog reopens with everything filled in — part
-number, description, pin labels, directions, pin groups, and the behavior — and its
-button now reads **Save**. Every field works as it does when creating a part,
-including the live GALasm check, so an edit that would break the device is refused
-before it can be saved.
+number, description, pin labels, directions, pin groups, and the logic table, its
+cells set from the part's existing equations — and its button now reads **Save**.
+Every field works as it does when creating a part, including the live GALasm check,
+so an edit that would break the device is refused before it can be saved.
 
 Two details worth knowing:
 
@@ -293,13 +355,29 @@ Instances of the part in **other** designs are not touched until you open each o
 and run **File ▸ Refresh Types**. The part definition, not the copy stored inside a
 saved design, is the source of truth.
 
-If the dialog **refuses to open**, the message tray says why — the part is a
-different GAL device, its pinout does not match the 24-pin skeleton, or its file
-carries something the dialog does not model (propagation delays, buried nodes,
-per-pin documentation, a custom outline). This is deliberate: **Save** rewrites the
-whole file, so rather than quietly reduce your definition to the parts it
-understands, the dialog declines and leaves that file to your text editor. Note that
-YAML **comments are not preserved** by any in-app save; a part whose file carries
+If the dialog **refuses to open**, the message tray says why. Some reasons are about
+the part as a whole: it is a different GAL device, its pinout does not match the
+24-pin skeleton, or its file carries something the dialog does not model
+(propagation delays, buried nodes, per-pin documentation, a custom outline). The
+rest are about equations the logic table cannot hold:
+
+- an equation form the table does not build — output enables (`.E`), transparent
+  latches (`.L`/`.G`), XOR (`:+:`), the per-output `.CLK`/`.ARST`/`.APRST` of other
+  devices, or the global `AR`/`SP`;
+- an equation whose polarity disagrees with its pin's label, such as `!OUT = …` on a
+  pin labeled `OUT`. Since the table writes the left-hand side *from the label*,
+  opening and saving that part would invert the output — so relabel the pin `/OUT`
+  and the part opens;
+- an output that reads itself back, which has no cell in the table;
+- a term naming one signal both ways (`F0 * !F0`), which no single cell can express.
+  As the only term of an output it is simply a hard 0, and loads as **always 0**;
+  mixed in with other terms it is refused.
+
+This is deliberate: **Save** rewrites the whole file, so rather than quietly reduce
+your definition to the parts it understands, the dialog declines and leaves that
+file to your text editor. One kind of commentary does survive: the `;` comments
+inside the equations become the per-output **Note** fields and are written back.
+Every other YAML comment is lost on an in-app save, so a part whose file carries
 commentary you want to keep is best edited by hand.
 
 ### Creating a memory device (RAM/ROM)
@@ -1481,9 +1559,16 @@ file at a time — the same way the main window edits one design.
 
 The panel binds to its file **once, when you open it** — switching tabs does not
 rebind it, but a real close does. So if you save your design under a new name while
-the panel is open, close and reopen the panel to pick up the new name. For the same
-reason, opening a *different design* while the panel is open leaves it bound to the
-file it started with: close and reopen it to bind to the new design's `.tv`.
+the panel is open, close and reopen the panel to pick up the new name.
+
+**Opening a different design closes the panel.** The panel edits one design's
+vectors, so anything that replaces the design under it — **File ▸ Open**, stepping
+into or back out of a sub-design, **File ▸ New**, or switching projects — closes the
+tab first, asking **Save** / **Discard** / **Cancel** if you have unsaved vectors
+just as the tab's ✕ does. **Cancel** there abandons the whole thing: the design does
+not change and the panel stays exactly as it was. Reopen the panel afterwards and it
+binds to the new design's `.tv` and loads it. Your rows never follow you from one
+design to another.
 
 #### Holding a run to inspect it
 
