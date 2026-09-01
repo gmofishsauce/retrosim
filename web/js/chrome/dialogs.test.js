@@ -147,7 +147,10 @@ test("galPartFromType round-trips a part to byte-identical YAML (FR-066f)", () =
       kind: i === 1 ? "reg" : i === 2 ? "in" : "comb",
     })),
     groups: [{ name: "ADDR", members: [2, 3, 4] }],
-    behavior: "IO15.R = I2 * /I3\nIO16 = I4\n",
+    // Already in the equation table's normal form (FR-066g): the load-back
+    // parses the block into the table and re-emits it, so only a normalized
+    // block can be byte-identical after the round trip.
+    behavior: "IO15.R = I2 * !I3\nIO17 = I4\n",
   });
   const yaml = galPartYaml(fields);
   const back = galPartFromType(typeFor(fields));
@@ -226,6 +229,28 @@ test("galPartFromType refuses a pin group naming an unknown pin (FR-066f)", () =
   const t = typeFor(fullPart());
   t.pinGroups = [{ name: "ADDR", pins: ["I2", "NOSUCH"] }];
   assert.match(galPartFromType(t).refuse, /NOSUCH/);
+});
+
+// The behavior block is loaded by parsing it into the equation term table
+// (FR-066g), so a block using a form the table does not author is content the
+// dialog would drop — the same refusal contract as an unmodelled key.
+test("galPartFromType refuses a behavior the equation table cannot hold (FR-066g)", () => {
+  const withEnable = fullPart({ behavior: "IO14.T = I2\nIO14.E = I3\n" });
+  assert.match(galPartFromType(typeFor(withEnable)).refuse, /equation table/);
+
+  // The dangerous one: polarity lives in the pin label, so an equation written
+  // the other way round would be inverted by an unedited Save.
+  const mismatched = fullPart({ behavior: "!IO14 = I2\n" });
+  assert.match(galPartFromType(typeFor(mismatched)).refuse, /labeled "IO14"/);
+});
+
+// What the dialog opens with is what an unedited Save would write: the loaded
+// behavior comes back re-emitted from the table (FR-066g).
+test("galPartFromType normalizes the behavior it loads (FR-066g)", () => {
+  const fields = fullPart({ behavior: "IO14 =  I2*/I3\n  + I4 ; both ways\n" });
+  const back = galPartFromType(typeFor(fields));
+  assert.equal(back.refuse, undefined);
+  assert.equal(back.behavior, "IO14 = I2 * !I3 ; both ways\n     + I4\n");
 });
 
 // --- applySaveExt (save-dialog extension coercion) ---

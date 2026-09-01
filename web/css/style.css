@@ -735,14 +735,6 @@ body.dock-dragging .dock-grip { background: rgba(74, 144, 217, 0.35); }
   text-align: right;
 }
 .galdlg-dir { flex: 0 0 auto; }
-.galdlg-behavior {
-  width: 100%;
-  min-height: 6rem;
-  font-family: monospace;
-  font-size: 0.85rem;
-  resize: vertical;
-  box-sizing: border-box;
-}
 .galdlg-error {
   color: #b00;
   font-size: 0.85rem;
@@ -758,6 +750,82 @@ body.dock-dragging .dock-grip { background: rgba(74, 144, 217, 0.35); }
 .galdlg-validate.ok { color: #1a7f37; }
 .galdlg-validate.err { color: #b00; }
 .galdlg-grouptext { font-size: 0.85rem; }
+
+/* GAL equation term table (FR-066g, §6.11): the clicked sum-of-products grid
+   that replaced the dialog's GALasm textarea. The box sizes to the grid — a
+   column per signal-bearing pin is wider than the standard 30rem dialog — and
+   the pin region above gives up height to it. */
+.galdlg-box { width: auto; min-width: 34rem; max-width: 96vw; max-height: 92vh; }
+/* The pin region keeps its scroll but yields most of the height to the grid,
+   which is the dialog's working surface now. */
+.galdlg-box .galdlg-pins { flex: 0 1 auto; max-height: 9rem; min-height: 4rem; }
+.galeq-wrap {
+  overflow: auto;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  flex: 2 1 auto;
+  min-height: 10rem;
+}
+.galeq-table { border-collapse: collapse; font-size: 0.85rem; }
+.galeq-table th,
+.galeq-table td {
+  border: 1px solid #e2e2e2;
+  padding: 0.1rem 0.25rem;
+  text-align: center;
+  white-space: nowrap;
+}
+/* The column labels stay put while the terms scroll under them; an opaque
+   background and an inset bottom rule for the same reason the vector table's
+   sticky header needs them (border-collapse scrolls a real border away). */
+.galeq-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f3f3f3;
+  box-shadow: inset 0 -1px 0 #e2e2e2;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #555;
+}
+.galeq-col { font-family: monospace; }
+/* Pin 1 while any output is registered: its column heads no literal (FR-066g). */
+.galeq-blocked { color: #aaa; text-decoration: line-through; }
+.galeq-out { text-align: left; font-family: monospace; }
+.galeq-firstrow td { border-top: 1px solid #bbb; }
+.galeq-note { text-align: left; }
+.galeq-noteinput { width: 9rem; font-size: 0.75rem; padding: 0.1rem 0.2rem; }
+.galeq-cell { padding: 0.1rem; }
+.galeq-btn {
+  width: 1.5rem;
+  padding: 0.1rem 0;
+  font: inherit;
+  font-family: monospace;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 2px;
+  color: #bbb;
+  cursor: pointer;
+}
+.galeq-btn.set { color: #111; font-weight: 600; background: #eef4fb; border-color: #9bb7d4; }
+.galeq-btn.bad { color: #b00; border-color: #b00; background: #fdecec; }
+.galeq-btn:disabled { cursor: default; background: #f6f6f6; color: #ccc; }
+.galeq-sel { font-size: 0.75rem; }
+.galeq-const { text-align: left; font-family: monospace; color: #555; }
+.galeq-empty { text-align: left; font-size: 0.85rem; color: #555; }
+.galeq-x { padding: 0 0.3rem; background: #666; }
+.galeq-preview {
+  margin: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  background: #fafafa;
+  font-size: 0.8rem;
+  color: #333;
+  overflow: auto;
+  max-height: 7rem;
+  flex: 0 1 auto;
+  white-space: pre;
+}
 
 /* New memory device dialog (FR-114). */
 .memdlg-dyn { display: flex; flex-direction: column; gap: 0.5rem; margin: 0.5rem 0; }

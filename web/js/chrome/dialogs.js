@@ -4,6 +4,15 @@
 import { listDir, loadDesign, loadVectorFile, saveVectorFile } from "../api.js";
 import { setAppState } from "./statusbar.js";
 import { compileBehavior } from "../engine/galasm.js";
+import {
+  behaviorToTable,
+  tableToBehavior,
+  tableIssues,
+  cycleCell,
+  newOutput,
+  normalizeRows,
+  signalOf,
+} from "../engine/galeq.js";
 import { loadRomContents } from "../engine/sim.js";
 import { flatten } from "../model/subdesign.js";
 import {
@@ -743,6 +752,23 @@ export function galPartFromType(type) {
     groups.push({ name: g.name, members });
   }
 
+  // The behavior block is loaded by parsing it into the equation term table
+  // (FR-066g), which is a second refusal surface: a block using a form the table
+  // does not author is content the dialog would drop, exactly like an unmodelled
+  // key above. `behavior` comes back **normalized** — re-emitted from the table —
+  // so what the dialog opens with is what an unedited Save would write.
+  const tablePins = [
+    ...inputs.map((p) => ({ number: p.number, name: p.name, dir: "in", reg: false })),
+    ...olmcs.map((o) => ({
+      number: o.number,
+      name: o.name,
+      dir: o.name === NC_PIN_LABEL || o.kind === "in" ? "in" : "out",
+      reg: o.kind === "reg",
+    })),
+  ];
+  const parsed = behaviorToTable(behavior, tablePins);
+  if (parsed.refuse) return { refuse: `a behavior block the equation table cannot hold — ${parsed.refuse}` };
+
   return {
     id: type.id,
     partnumber: type.partnumber ?? "",
@@ -750,7 +776,8 @@ export function galPartFromType(type) {
     inputs,
     olmcs,
     groups,
-    behavior,
+    table: parsed.table,
+    behavior: tableToBehavior(parsed.table, tablePins),
   };
 }
 
@@ -936,7 +963,9 @@ export function newGalPartDialog({ submit, part = null }) {
   return new Promise((resolve) => {
     const editing = part != null;
     const overlay = el("div", "dialog-overlay");
-    const box = el("div", "dialog");
+    // Wider than the standard dialog: the equation grid (FR-066g) carries a
+    // column per pin, and the box sizes to it rather than the other way round.
+    const box = el("div", "dialog galdlg-box");
     overlay.appendChild(box);
     box.appendChild(
       el("div", "dialog-title", (editing ? "Edit" : "New") + " GAL part — GAL22V10"),
@@ -1037,11 +1066,225 @@ export function newGalPartDialog({ submit, part = null }) {
     groupsRow.append(groupsBtn, groupsSummary);
     box.appendChild(groupsRow);
 
-    box.appendChild(el("div", "galdlg-section", "Behavior (GALasm)"));
-    const behavior = el("textarea", "galdlg-behavior");
-    behavior.placeholder = "; sum-of-products equations, e.g.\n; IO14 = I2 * /I3 + I4";
-    if (editing) behavior.value = part.behavior;
-    box.appendChild(behavior);
+    // Equation term table (FR-066g): the part's logic is clicked into a grid of
+    // three-state cells, one column per signal-bearing pin and one row per AND
+    // term, from which the GALasm block is generated. There is no equation text
+    // box — `galeq.js` owns both directions of the translation, and the model it
+    // holds is keyed by skeleton DIP number so relabeling a pin carries its terms.
+    const table = editing ? (part.table ?? {}) : {};
+    box.appendChild(el("div", "galdlg-section", "Logic — sum of products"));
+    const eqWrap = el("div", "galeq-wrap");
+    const eqTable = el("table", "galeq-table");
+    const eqHead = el("thead");
+    const eqBody = el("tbody");
+    eqTable.append(eqHead, eqBody);
+    eqWrap.appendChild(eqTable);
+    box.appendChild(eqWrap);
+
+    box.appendChild(el("div", "galdlg-section", "GALasm this table writes"));
+    const preview = el("pre", "galeq-preview");
+    box.appendChild(preview);
+
+    // tablePins is the table's view of the pin fields above: current labels,
+    // resolved directions, and which OLMCs are registered. Everything the table
+    // does — columns, rows, emission, the clock rule — reads this.
+    const tablePins = () => [
+      ...inputFields.map((f) => ({
+        number: f.meta.number,
+        name: f.input.value.trim() || f.meta.name,
+        dir: "in",
+        reg: false,
+      })),
+      ...olmcFields.map((f) => {
+        const name = f.input.value.trim() || f.meta.name;
+        const kind = name === NC_PIN_LABEL ? "in" : f.sel.value;
+        return { number: f.meta.number, name, dir: kind === "in" ? "in" : "out", reg: kind === "reg" };
+      }),
+    ];
+    const behaviorText = () => tableToBehavior(table, tablePins());
+
+    // renderEq rebuilds the grid whole (labels, directions, and row counts all
+    // change its shape). Rebuilding is safe because no state lives in the DOM:
+    // `table` holds it, keyed by pin number.
+    function renderEq() {
+      const pins = tablePins();
+      const cols = pins.filter((p) => p.name !== NC_PIN_LABEL);
+      const outs = cols.filter((p) => p.dir === "out");
+      // Pin 1 of a registered part is its clock and may head no literal (FR-066g).
+      const someReg = outs.some((p) => p.reg);
+
+      eqHead.replaceChildren();
+      const hr = el("tr");
+      hr.append(
+        el("th", "galeq-h galeq-out", "Output"),
+        el("th", "galeq-h galeq-mode", "Drive"),
+        el("th", "galeq-h galeq-note", "Note"),
+      );
+      for (const c of cols) {
+        const th = el("th", "galeq-h galeq-col", signalOf(c.name));
+        th.title = `pin ${c.number}`;
+        if (c.number === 1 && someReg) th.classList.add("galeq-blocked");
+        hr.appendChild(th);
+      }
+      hr.append(el("th", "galeq-h", ""), el("th", "galeq-h", ""));
+      eqHead.appendChild(hr);
+
+      eqBody.replaceChildren();
+      if (!outs.length) {
+        const tr = el("tr");
+        const td = el("td", "galeq-empty", "No outputs yet — set an OLMC pin to an output above.");
+        td.colSpan = cols.length + 5;
+        tr.appendChild(td);
+        eqBody.appendChild(tr);
+        return;
+      }
+
+      outs.forEach((out, oi) => {
+        if (!table[out.number]) table[out.number] = newOutput();
+        const rec = normalizeRows(table[out.number]);
+        // A constant output shows one row in place of its terms, which are kept
+        // and come back if the mode returns to "equation" (FR-066g).
+        const rows = rec.mode === "eq" ? rec.rows : [null];
+        rows.forEach((row, ri) => {
+          const tr = el("tr", ri === 0 ? "galeq-firstrow" : null);
+          if (ri === 0) {
+            const nameTd = el("td", "galeq-out", out.name);
+            nameTd.rowSpan = rows.length;
+            nameTd.title = `pin ${out.number}${out.reg ? " (registered — writes .R)" : ""}`;
+            const modeTd = el("td", "galeq-mode");
+            modeTd.rowSpan = rows.length;
+            const modeSel = el("select", "galeq-sel");
+            for (const [v, label] of [["eq", "equation"], ["const0", "always 0"], ["const1", "always 1"]]) {
+              const op = el("option", null, label);
+              op.value = v;
+              modeSel.appendChild(op);
+            }
+            modeSel.value = rec.mode;
+            modeSel.addEventListener("change", () => {
+              rec.mode = modeSel.value;
+              renderEq();
+              refreshEq();
+            });
+            modeTd.appendChild(modeSel);
+            const noteTd = el("td", "galeq-note");
+            noteTd.rowSpan = rows.length;
+            const noteInput = el("input", "galeq-noteinput");
+            noteInput.type = "text";
+            noteInput.value = rec.note ?? "";
+            noteInput.placeholder = "comment";
+            noteInput.addEventListener("input", () => {
+              rec.note = noteInput.value;
+              refreshEq();
+            });
+            noteTd.appendChild(noteInput);
+            tr.append(nameTd, modeTd, noteTd);
+          }
+
+          if (rec.mode !== "eq") {
+            const td = el(
+              "td",
+              "galeq-const",
+              `writes ${out.name}${out.reg ? ".R" : ""} = ${rec.mode === "const1" ? "VCC" : "GND"}`,
+            );
+            td.colSpan = cols.length + 2;
+            tr.appendChild(td);
+            eqBody.appendChild(tr);
+            return;
+          }
+
+          for (const c of cols) {
+            const td = el("td", "galeq-cell");
+            const cur = row[c.number];
+            const b = el("button", "galeq-btn", cur ?? "X");
+            b.type = "button";
+            const self = c.number === out.number;
+            // The clock column blocks a *new* literal but never traps one already
+            // set: a stale cell stays clickable so it can be cycled back to X.
+            const clockBlocked = c.number === 1 && someReg && cur === undefined;
+            if (self || clockBlocked) {
+              b.disabled = true;
+              b.textContent = self ? "·" : "X";
+              b.title = self
+                ? "an output may not read itself back"
+                : "pin 1 is the clock of a registered part";
+            } else {
+              b.dataset.cell = `${out.number}:${ri}:${c.number}`;
+              b.title = "X → 1 → 0";
+              b.addEventListener("click", () => {
+                const nv = cycleCell(row[c.number]);
+                if (nv === undefined) delete row[c.number];
+                else row[c.number] = nv;
+                b.textContent = nv ?? "X";
+                b.classList.toggle("set", nv !== undefined);
+                if (c.number === 1 && someReg) renderEq(); // may re-block the cell
+                refreshEq();
+              });
+            }
+            if (cur !== undefined) b.classList.add("set");
+            if (cur !== undefined && c.number === 1 && someReg) b.classList.add("bad");
+            td.appendChild(b);
+            tr.appendChild(td);
+          }
+
+          // The done/OR drop-down is positional (FR-066g): blank on an output's
+          // last row, a fixed "OR" on any row that already has one below it.
+          const nextTd = el("td", "galeq-next");
+          const sel = el("select", "galeq-sel");
+          for (const [v, label] of [["", ""], ["OR", "OR"], ["done", "done"]]) {
+            const op = el("option", null, label);
+            op.value = v;
+            sel.appendChild(op);
+          }
+          const last = ri === rows.length - 1;
+          sel.value = last ? "" : "OR";
+          if (!last) {
+            sel.disabled = true;
+            sel.title = "OR'd with the row below — remove that row with ✕";
+          } else {
+            sel.title = "OR: add another AND term. done: finish this output.";
+            sel.addEventListener("change", () => {
+              const add = sel.value === "OR";
+              if (add) rec.rows.splice(ri + 1, 0, {});
+              renderEq();
+              refreshEq();
+              if (add) focusCell(out.number, ri + 1);
+              else focusCell(outs[oi + 1]?.number, 0);
+            });
+          }
+          nextTd.appendChild(sel);
+          tr.appendChild(nextTd);
+
+          const delTd = el("td", "galeq-del");
+          const del = button("✕", () => {
+            rec.rows.splice(ri, 1);
+            normalizeRows(rec);
+            renderEq();
+            refreshEq();
+          });
+          del.title = "delete this AND term";
+          del.classList.add("galeq-x");
+          delTd.appendChild(del);
+          tr.appendChild(delTd);
+
+          eqBody.appendChild(tr);
+        });
+      });
+    }
+
+    // focusCell puts the caret on the first live cell of a row, which is where
+    // both drop-down choices leave it (FR-066g).
+    function focusCell(outNumber, ri) {
+      if (outNumber == null) return;
+      const b = eqBody.querySelector(`button[data-cell^="${outNumber}:${ri}:"]`);
+      b?.focus();
+    }
+
+    // refreshEq re-renders the preview and re-runs the live gate; the grid itself
+    // is rebuilt only when its shape changes.
+    function refreshEq() {
+      preview.textContent = behaviorText() || "; no equations yet";
+      validate();
+    }
 
     // Live strict-validation status (FR-066c): the same gate Run applies
     // (compileBehavior + validateStrict, §6.13), so a part that fails here can't
@@ -1065,19 +1308,25 @@ export function newGalPartDialog({ submit, part = null }) {
       for (const f of olmcFields) f.sel.disabled = f.input.value.trim() === NC_PIN_LABEL;
     }
 
-    // Re-validate live as labels, directions, or the behavior change (FR-066c).
-    behavior.addEventListener("input", validate);
-    for (const f of inputFields) f.input.addEventListener("input", validate);
+    // Re-validate live as labels, directions, or the equations change (FR-066c).
+    // A label or direction edit also reshapes the grid — a renamed pin re-labels
+    // its column, a direction change adds or removes an output's rows (FR-066g) —
+    // so those two rebuild it; a cell edit only refreshes the preview and gate.
+    const rebuildEq = () => {
+      renderEq();
+      refreshEq();
+    };
+    for (const f of inputFields) f.input.addEventListener("input", rebuildEq);
     for (const f of olmcFields) {
       f.input.addEventListener("input", () => {
         syncNcDirs();
-        validate();
+        rebuildEq();
       });
-      f.sel.addEventListener("change", validate);
+      f.sel.addEventListener("change", rebuildEq);
     }
     syncNcDirs();
     showGroups(); // an edited part arrives with its groups already defined
-    validate(); // initial Create/Save-enabled state
+    rebuildEq(); // initial grid, preview, and Create/Save-enabled state
 
     // gather reads the current field values into a part description.
     function gather() {
@@ -1092,7 +1341,7 @@ export function newGalPartDialog({ submit, part = null }) {
     // candidateTypeData assembles the in-memory ComponentType the strict gate
     // validates — pins carry their resolved direction so behavior signal/output
     // checks match what Run would see (§6.13).
-    function candidateTypeData(g) {
+    function candidateTypeData(g, behavior) {
       const pins = [
         ...g.inputs.map((p) => ({ name: p.name, direction: "in" })),
         ...g.olmcs.map((o) => ({
@@ -1105,7 +1354,7 @@ export function newGalPartDialog({ submit, part = null }) {
         name: g.partnumber || "22V10",
         gal: "GAL22V10",
         pins,
-        behavior: behavior.value,
+        behavior,
         clock: reg ? g.inputs[0].name : undefined,
       };
     }
@@ -1114,13 +1363,22 @@ export function newGalPartDialog({ submit, part = null }) {
     // be authored without logic). Returns whether the part may be created.
     function validate() {
       errEl.hidden = true; // clear any stale submit error on edit
-      if (!behavior.value.trim()) {
+      const pins = tablePins();
+      // The one rule the table can express but the device cannot (FR-066g).
+      const issue = tableIssues(table, pins);
+      if (issue) {
+        setStatus(issue, "err");
+        createBtn.disabled = true;
+        return false;
+      }
+      const text = tableToBehavior(table, pins);
+      if (!text.trim()) {
         setStatus("", null);
         createBtn.disabled = false;
         return true;
       }
       try {
-        compileBehavior(candidateTypeData(gather()));
+        compileBehavior(candidateTypeData(gather(), text));
         setStatus("✓ valid GAL22V10 behavior", "ok");
         createBtn.disabled = false;
         return true;
@@ -1140,7 +1398,7 @@ export function newGalPartDialog({ submit, part = null }) {
       const g = gather();
       if (!g.partnumber) return showError("A part number is required.");
       if (!validate()) return; // behavior must pass the strict gate (FR-066c)
-      const yaml = galPartYaml({ ...g, groups, behavior: behavior.value, id: part?.id });
+      const yaml = galPartYaml({ ...g, groups, behavior: behaviorText(), id: part?.id });
       createBtn.disabled = true;
       try {
         const comp = await submit(yaml);
