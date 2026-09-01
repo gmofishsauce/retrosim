@@ -37,7 +37,21 @@ function sanitize(name) {
 // model/persist.js since the FR-121g data-path conversion (§6.19); imported
 // above.
 
-export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {}, onLoaded = () => {}, setCurrentProject = async () => {} }) {
+export function makeFileOps({
+  store,
+  dataDir,
+  defaultName,
+  onNavChange = () => {},
+  onLoaded = () => {},
+  setCurrentProject = async () => {},
+  // beforeReplace guards everything that swaps a DIFFERENT design in
+  // (FR-115m/FR-115h, OQ-002): the test-vector panel edits a document bound to
+  // the design it was opened on, so a replacement closes it through its own
+  // guarded close. Returning false abandons the replacement — the Open or New
+  // does not happen — which is what makes a cancelled save-prompt leave both the
+  // design and the panel exactly as they were. Default: nothing to guard.
+  beforeReplace = async () => true,
+} = {}) {
   // navStack records the absolute paths of the sheets descended through, so the
   // user can step back up the chain (FR-100a). Session-only: not persisted, not
   // on the undo stack. A plain Open/New starts a fresh chain.
@@ -207,6 +221,9 @@ export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {
         const n = rerouteAttachedWires(loaded, [refdes]);
         toast(`sub-design ${refdes}: interface changed; ${n} wire${n === 1 ? "" : "s"} re-routed`);
       }
+      // Immediately before the swap, so a Cancel abandons a fully-prepared load
+      // rather than leaving a half-replaced canvas (FR-115m/OQ-002).
+      if (!(await beforeReplace())) return false;
       store.replaceDesign(loaded, { savePath: absPath });
       // Containing-folder rule (§3.1 A10, FR-121b): switching falls out of
       // this one shared load path. `projectInfo` avoids a duplicate fetch when
@@ -351,9 +368,10 @@ export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {
   // newDesign starts a fresh empty design in the current project (FR-044),
   // warning about unsaved changes (FR-045/049a). The design belongs to the
   // project from creation (FR-121c); it is simply unsaved until FR-047.
-  function newDesign() {
+  async function newDesign() {
     if (noProject("New")) return;
     if (store.state.dirty && !window.confirm("Discard unsaved changes?")) return;
+    if (!(await beforeReplace())) return; // FR-115m/OQ-002
     store.replaceDesign(createDesign(defaultName()), { savePath: null });
     navStack.length = 0;
     notifyNav();
@@ -366,5 +384,9 @@ export function makeFileOps({ store, dataDir, defaultName, onNavChange = () => {
     notifyNav();
   }
 
-  return { save, open, newDesign, addSubDesign, descend, followTarget, back, loadIntoStore, clearNavStack };
+  // guardReplace lets the project ops (§6.19) run the same replacement guard
+  // without a second wiring of the callback — one owner, one hook (OQ-002).
+  const guardReplace = () => beforeReplace();
+
+  return { save, open, newDesign, addSubDesign, descend, followTarget, back, loadIntoStore, clearNavStack, guardReplace };
 }

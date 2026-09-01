@@ -56,7 +56,7 @@ test("absoluteDataPaths finds absolute mem paths, ignores relative and non-mem",
 // harness builds a store plus a makeProjectOps instance whose api/dialog deps
 // are scripted: `dialogResults` is consumed by successive openFileDialog
 // calls; api stubs come from `api`.
-function harness({ dialogResults = [], api = {}, loadResult = true } = {}) {
+function harness({ dialogResults = [], api = {}, loadResult = true, guardReplace = async () => true } = {}) {
   const posts = [];
   const loads = []; // loadIntoStore calls: { path, projectInfo }
   const reloads = []; // reloadLibrary calls: the project dir passed (FR-121i)
@@ -73,6 +73,9 @@ function harness({ dialogResults = [], api = {}, loadResult = true } = {}) {
       return loadResult;
     },
     clearNavStack: () => navCleared++,
+    // The FR-115m/OQ-002 replacement guard the real fileops exposes; the project
+    // navigations run it beside the unsaved-changes prompt.
+    guardReplace,
   };
   const ops = makeProjectOps(
     // freshDesign mirrors app.js: named after the project when one is given
@@ -160,6 +163,33 @@ test("newProject creates, enters, and starts a fresh design (FR-121b/FR-121c)", 
   assert.equal(h.store.state.designName, "newproj");
   assert.equal(h.store.state.savePath, null);
   assert.equal(h.navCleared(), 1);
+});
+
+// A project navigation discards the canvas, so it runs the same replacement
+// guard an Open does (FR-115m/FR-115h, OQ-002): the test-vector panel bound to
+// the outgoing design closes first, and cancelling that prompt abandons the
+// whole navigation — before the project is created, entered, or duplicated.
+test("a refused replacement guard abandons a project navigation (FR-115m/OQ-002)", async () => {
+  const created = [];
+  const h = harness({
+    guardReplace: async () => false,
+    dialogResults: [{ path: "/data/newproj" }],
+    api: {
+      projectCreate: async (path) => {
+        created.push(path);
+        return { dir: path, name: "newproj", manifestFile: "m.json", mainDesign: "", warnings: [] };
+      },
+    },
+  });
+  await h.ops.newProject();
+  assert.deepEqual(created, []); // never got as far as creating anything
+  assert.equal(h.store.state.project, null);
+  assert.equal(h.store.state.design.name, "d0"); // the canvas did not move
+  assert.equal(h.navCleared(), 0);
+
+  await h.ops.openProject();
+  assert.equal(h.store.state.project, null);
+  assert.equal(h.store.state.design.name, "d0");
 });
 
 test("newProject aborts with a tray report on a create failure (e.g. 409)", async () => {

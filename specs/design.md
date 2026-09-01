@@ -3414,6 +3414,12 @@ There is deliberately **no** horizontal freeze: the row-number column scrolls wi
 
 **The `.tv` document (FR-115m).** The panel owns three **panel-scope** (not `build()`-scope) pieces of state — `docPath`, the associated file; `docDirty`; and `ops`, the handle `build()` publishes to its document operations (`loadFrom(path)`, `saveTo(path)`, `save()`) — so `open()` and `close()` can drive a load or a save without reaching into the table's closure, the same reason `hold`/`clearHeld` live out there (FR-115l). `tvPathFor({ project, savePath, designName, dataDir })` is the **pure, exported** name rule (unit-tested in `dialogs.test.js`, DOM-free): the project root — else the design's own directory, else `dataDir` — joined to the design's save-path base name (else its display name, else `vectors`) plus `.tv`. It is the former `defaultDir()`/`defaultName()` pair promoted to one function and, per FR-115m, now *binds* the name rather than merely seeding a dialog. `open()` becomes **async**: it builds the table, sets `docPath`, then probes for the file with `listDir(dir, ["tv"])` and calls `ops.loadFrom(docPath)` only if the name is listed — an existence test rather than letting `/design/load` 404, so a design with no vectors yet opens clean while a genuinely broken file still reports through the panel's error line. Edits funnel through `touch()` = `markDirty()` + `clearResults()`: every `clearResults()` call on an **edit** path (cell `change`, hex commit, io role change, +Row/+Dup/row ✕, Capture) becomes `touch()`, while `onLoad`'s and the auto-load's stay `clearResults()` so loading never dirties, and the radix toggle and row selection call neither (presentational, FR-115m). `close()` becomes **async and returns a boolean**: while `docDirty` it first runs `confirmSaveDialog(name)` — a three-button Save/Discard/Cancel modal beside the other `dialog-overlay` primitives, Escape = Cancel — and abandons the close (returning `false`) on Cancel or on a save that failed, so a write error can never silently discard a table. `Save` writes `docPath` through `saveVectorFile` with no dialog; `Save As` and `Load` re-point `docPath` at the chosen path and clear the flag. A panel-scope `refreshTitle()` rewrites the header (`Test Vectors — <name>` plus ` *` while modified) on every association and flag change. `app.js` awaits the toggle's `close()` and ORs `vecPanel.isDirty()` into its `beforeunload` guard (FR-049a) via a `let` hoisted above the listener, the panel being constructed later in `main()`.
 
+**A design replacement closes the panel (FR-115m/FR-115h, OQ-002 resolved 2026-09-01).** `adopt()` is the *only* place `docPath` is derived and the only place the `.tv` is auto-loaded, and its one caller is `open()` — so for the panel's whole lifetime the association is fixed while `syncToDesign` keeps re-deriving columns from `store.design`. `store.replaceDesign()` (§6.10) calls `bumpDesign()` deliberately ("a wholly different design: the strongest change of all"), so before this change an Open under an open panel took the `syncToDesign` path and treated design B as an *edit of design A*: columns re-derived, design A's rows reconciled onto them (no column matches, so every output cell defaults), `setDirty(true)`, association untouched. `Save` then wrote that table to design A's `.tv` with no dialog and no overwrite confirmation — correct policy for a bound document, lethal for a stale binding.
+
+The fix is a **guard at the replacement sites**, not new state in the panel: the panel already owns exactly the right operation in `requestClose()` (the guarded close, Save/Discard/Cancel, returning `false` when abandoned). `makeFileOps` takes a `beforeReplace = async () => true` callback and awaits it immediately before every `store.replaceDesign`, in `loadIntoStore` (which covers Open, sub-design descend, and Back, FR-100/FR-100a) and in `newDesign`; a `false` return abandons the operation, which `loadIntoStore`'s existing boolean already propagates to `open()`/`navigateTo()`. `makeProjectOps` reaches the same callback through `fileops.guardReplace()` rather than taking a second copy of it, and calls it in `freshCanvas` (the three project navigations). `app.js` supplies `() => vecPanel.requestClose()`, late-bound through the `let vecPanel` the `beforeunload` guard already closes over, since `fileops` is constructed before the panel exists. `backup.js`'s recovery replaces the design during boot, before any panel can be open, and is left alone.
+
+Two properties follow, and are what the tests assert: the guard runs **before** the replacement, so a Cancel leaves both the design and the panel exactly as they were; and after it, `syncToDesign` can never observe a design other than the one the panel adopted, so cross-design reconciliation is unreachable by construction rather than by a check inside the panel.
+
 **Live columns (FR-115h, added 2026-08-02).** With the read-only lock gone, the design can change under an open panel, so the columns `build()` derived once must track it. The panel subscribes to the store for the panel's lifetime (`open()` subscribes, `requestClose()` unsubscribes) and, on each notification, compares two remembered values:
 
   - **`designRev`** (§6.10) — did the design change at all? Any increment clears stale pass/fail results (`clearResults()`, already the cell-edit path) and releases a held run (`clearHeld()`, FR-115l), because both describe a circuit that no longer exists. This is FR-085's rule for the interactive sim view, applied to the panel's two displays.
@@ -5518,6 +5524,19 @@ tests beside them per §9).
   while simulating). Save posts `mode:"update"`, and a filtered `RefreshTypes`
   touches only instances of the edited `id` — an instance of a *different* type
   whose pins would also have failed the check is provably untouched.
+- **JS design-replacement guard (FR-115m/FR-115h, OQ-002; `fileops.test.js`,
+  `project.test.js`):** the contract is an ordering, so the tests assert one: a
+  log records `guard` before `replaceDesign` on the load path, and a guard that
+  returns false leaves the log at `["guard"]` with both the design *and* its save
+  path unchanged — the pair that keeps a panel bound to a design still on the
+  canvas. `loadIntoStore` returns false on a refusal, which is what `open()` and
+  `navigateTo()` already propagate; `newDesign()` is covered both ways; a
+  `makeFileOps` built with no `beforeReplace` still replaces, so the guard is
+  opt-in. On the project side a refused guard abandons **New Project** before
+  `projectCreate` is called at all (nothing created, no project entered, canvas
+  unmoved, nav stack untouched) and likewise **Open Project** — the assertion
+  that the guard runs at the top of a navigation rather than beside the canvas
+  swap at its end.
 - **JS GAL equation term table (FR-066g, `galeq.test.js`):** the round trip is
   the spine — `behaviorToTable` → `tableToBehavior` reproduces each library and
   `examples/` GAL block that the table claims to represent, and the fixtures that
@@ -5964,10 +5983,10 @@ machine. (Confirm the target numbers in §12 if different.)
 
 ## 12. Open Questions
 
-Every item below is **resolved** except **OQ-002** and **OQ-014**, neither of which
-gates the work already done; the rest are retained as decision records. (Intro
+Every item below is **resolved** except **OQ-014**, which does not
+gate the work already done; the rest are retained as decision records. (Intro
 re-scoped 2026-07-08; it formerly gated implementation slices that have long since
-shipped. OQ-014 added 2026-08-02 with FR-124.)
+shipped. OQ-014 added 2026-08-02 with FR-124; OQ-002 resolved 2026-09-01.)
 
 - **OQ-014 — Should a clean DRC report disclose that findings were waived? —
   OPEN (raised 2026-08-02).** FR-124d specifies that a run with no *active*
@@ -5984,19 +6003,22 @@ shipped. OQ-014 added 2026-08-02 with FR-124.)
   what they chose and the objection only became visible once it was written down.
 
 - **OQ-002 — What should an open test-vector panel do when the whole DESIGN is
-  replaced? — OPEN (raised 2026-08-02).** Removing the read-only lock (FR-115h)
-  made File ▸ New and File ▸ Open reachable while the panel is open, which the
-  lock previously made impossible. FR-115m says the `.tv` association "lasts the
-  panel's lifetime" and is dropped only by a real close, so the implemented
-  behavior is the literal reading: the panel reconciles its columns against the
-  new design, stays bound to the **old** design's `.tv` path, and marks itself
-  modified. That is visible — the header shows the old file name and a `*` — and
-  overwriting requires a deliberate Save, so it is safe rather than silent. It is
-  still arguably wrong: a table derived from design B, bound to `A.tv`, is a
-  footgun one Save wide. The alternatives are to **re-adopt** the new design's
-  sibling `.tv` (FR-115m's auto-load path, already written) or to **close the tab**
-  on a design replacement. Deciding this needs the stakeholder, since all three are
-  defensible and FR-115m as written picks the first.
+  replaced? — RESOLVED (2026-09-01).** Settled with the stakeholder: a design
+  replacement **closes the tab**, through the ordinary guarded close, with Cancel
+  abandoning the replacement itself (FR-115m/FR-115h, §6.16). The prediction in
+  this entry — "a footgun one Save wide" — was realized before the decision was
+  taken: with the panel open on an ALU design, opening a second design reconciled
+  the ALU's 66 rows onto the new design's columns (every output cell defaulting to
+  `X`, the columns binding refdes the ALU does not contain), left the association
+  pointing at the ALU's `.tv`, and marked the document modified; one Save then
+  wrote the second design's bench over the ALU's vector suite. The "safe rather
+  than silent" reasoning held in the letter — it did take a deliberate Save — but
+  the header naming the old file is not a signal a user reads while the table in
+  front of them describes the design on screen. Of the three alternatives, closing
+  was chosen over re-adopting because a panel is an editor of one document opened
+  on one design: re-adopting silently swaps both the document and the table under
+  a tab the user last touched for a different purpose, whereas a close is a visible
+  event that asks about unsaved work and leaves the reopening to the user.
 
 - **OQ-001 / G1 — YAML file syntax — RESOLVED.** Settled with the stakeholder: the
   YAML file is **YAML** (§7.6, binding; §6.3 parser). The package mechanism is

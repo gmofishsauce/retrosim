@@ -426,6 +426,12 @@ async function main() {
       // becomes the current project (late-bound: projectops is built below
       // from this very fileops).
       setCurrentProject: (dir, info) => projectops.setCurrentProject(dir, info),
+      // Replacing the design closes the test-vector panel bound to the outgoing
+      // one, through its own guarded close (FR-115m/FR-115h, OQ-002); a Cancel
+      // there abandons the Open or New. Late-bound through the same `let
+      // vecPanel` the beforeunload guard closes over — fileops is built before
+      // the panel exists, and this only ever runs on a user action long after.
+      beforeReplace: () => vecPanel?.requestClose() ?? true,
     });
     backBtn.addEventListener("click", () => fileops.back());
     // Project lifecycle ops (FR-121b, §6.19), wired to the File menu below.

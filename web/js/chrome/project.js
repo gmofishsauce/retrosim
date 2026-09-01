@@ -217,9 +217,16 @@ export function makeProjectOps(
   }
 
   // dirtyGuard is the FR-049a unsaved-changes warning shared by the three
-  // project navigations (they discard the canvas, FR-121b).
-  function dirtyGuard() {
-    return !store.state.dirty || confirm("Discard unsaved changes?");
+  // project navigations (they discard the canvas, FR-121b), plus the FR-115m
+  // replacement guard that closes the test-vector panel bound to the outgoing
+  // design (OQ-002). Both run at the TOP of a navigation, before the project is
+  // created, entered, or duplicated, so a Cancel abandons the whole operation
+  // rather than stranding a switched project behind a canvas that did not move.
+  // `loadIntoStore` runs the same panel guard again on its own path; the second
+  // call lands on an already-closed panel and returns true immediately.
+  async function dirtyGuard() {
+    if (store.state.dirty && !confirm("Discard unsaved changes?")) return false;
+    return (await fileops.guardReplace?.()) ?? true;
   }
 
   // freshCanvas replaces the canvas with a fresh empty design in the (new)
@@ -249,7 +256,7 @@ export function makeProjectOps(
   // newProject creates a project directory with a fresh manifest and enters
   // it with a new empty design (FR-121b/FR-121c).
   async function newProject() {
-    if (!dirtyGuard()) return;
+    if (!(await dirtyGuard())) return;
     const res = await promptForProjectDir("New Project");
     if (!res) return;
     let info;
@@ -286,7 +293,7 @@ export function makeProjectOps(
   // have nothing to offer, and cancelling it left the project unreachable —
   // New Project cannot re-enter an existing directory either.
   async function openProject() {
-    if (!dirtyGuard()) return;
+    if (!(await dirtyGuard())) return;
     const res = await openFileDialog({
       mode: "open",
       title: "Open Project",
@@ -335,7 +342,7 @@ export function makeProjectOps(
   async function duplicateProject() {
     const src = store.state.project;
     if (!src) return;
-    if (!dirtyGuard()) return;
+    if (!(await dirtyGuard())) return;
     const res = await promptForProjectDir("Duplicate Project");
     if (!res) return;
     let info;
