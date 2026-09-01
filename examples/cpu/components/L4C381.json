@@ -4877,63 +4877,63 @@
             "number": 13
           },
           {
-            "name": "OUTCMB",
+            "name": "/OUTCMB",
             "side": "right",
             "position": 1,
             "direction": "out",
             "number": 14
           },
           {
-            "name": "OUTREG",
+            "name": "/OUTREG",
             "side": "right",
             "position": 2,
             "direction": "out",
             "number": 15
           },
           {
-            "name": "BISF",
+            "name": "/BISF",
             "side": "right",
             "position": 3,
             "direction": "out",
             "number": 16
           },
           {
-            "name": "INREGA",
+            "name": "/INREGA",
             "side": "right",
             "position": 4,
             "direction": "out",
             "number": 17
           },
           {
-            "name": "INBUSA",
+            "name": "/INBUSA",
             "side": "right",
             "position": 5,
             "direction": "out",
             "number": 18
           },
           {
-            "name": "INA0",
+            "name": "/INA0",
             "side": "right",
             "position": 6,
             "direction": "out",
             "number": 19
           },
           {
-            "name": "INB0",
+            "name": "/INB0",
             "side": "right",
             "position": 7,
             "direction": "out",
             "number": 20
           },
           {
-            "name": "INREGB",
+            "name": "/INREGB",
             "side": "right",
             "position": 8,
             "direction": "out",
             "number": 21
           },
           {
-            "name": "INBUSB",
+            "name": "/INBUSB",
             "side": "right",
             "position": 9,
             "direction": "out",
@@ -4947,7 +4947,7 @@
             "number": 23
           }
         ],
-        "behavior": "!OUTCMB = !OE * FTF\n!OUTREG = !OE * !FTF\n!BISF = !OSA * !OSB\n!INREGA = OSA * !FTAB +\n !OSA * !OSB * !FTAB\n!INBUSA = OSA * FTAB +\n !OSA * !OSB * FTAB\n!INBUSB = OSB * FTAB\n!INREGB = OSB * !FTAB\n!INA0 = !OSA * OSB\n!INB0 = OSA * !OSB\n",
+        "behavior": "/OUTCMB = !OE * FTF\n/OUTREG = !OE * !FTF\n/BISF = !OSA * !OSB\n/INREGA = !FTAB * OSA\n        + !FTAB * !OSA * !OSB\n/INBUSA = FTAB * OSA\n        + FTAB * !OSA * !OSB\n/INA0 = !OSA * OSB\n/INB0 = OSA * !OSB\n/INREGB = !FTAB * OSB\n/INBUSB = FTAB * OSB\n",
         "gal": "GAL22V10",
         "partnumber": "22V738",
         "description": "Bus enable decoder"
@@ -6529,7 +6529,7 @@
         "title": "text note",
         "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"3\" y=\"11\" width=\"30\" height=\"14\" fill=\"#fff\" stroke=\"#1565c0\" stroke-dasharray=\"3 2\"/><text x=\"18\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"9\" fill=\"#000\">NOTE</text></svg>",
         "renderType": "note",
-        "width": 4,
+        "width": 8,
         "height": 2,
         "pins": []
       },
@@ -14268,7 +14268,7 @@
       "id": "v1209",
       "kind": "pin",
       "ref": "U63",
-      "pin": "OUTCMB",
+      "pin": "/OUTCMB",
       "x": 191,
       "y": 53
     },
@@ -14276,7 +14276,7 @@
       "id": "v1211",
       "kind": "pin",
       "ref": "U63",
-      "pin": "OUTREG",
+      "pin": "/OUTREG",
       "x": 191,
       "y": 54
     },
@@ -14290,7 +14290,7 @@
       "id": "v1213",
       "kind": "pin",
       "ref": "U63",
-      "pin": "BISF",
+      "pin": "/BISF",
       "x": 191,
       "y": 55
     },
@@ -14298,7 +14298,7 @@
       "id": "v1214",
       "kind": "pin",
       "ref": "U63",
-      "pin": "INBUSA",
+      "pin": "/INBUSA",
       "x": 191,
       "y": 57
     },
@@ -14306,7 +14306,7 @@
       "id": "v1215",
       "kind": "pin",
       "ref": "U63",
-      "pin": "INREGA",
+      "pin": "/INREGA",
       "x": 191,
       "y": 56
     },
@@ -14600,7 +14600,7 @@
       "id": "v1263",
       "kind": "pin",
       "ref": "U63",
-      "pin": "INA0",
+      "pin": "/INA0",
       "x": 191,
       "y": 58
     },
@@ -14704,7 +14704,7 @@
       "id": "v1315",
       "kind": "pin",
       "ref": "U63",
-      "pin": "INB0",
+      "pin": "/INB0",
       "x": 191,
       "y": 59
     },
@@ -14712,7 +14712,7 @@
       "id": "v1317",
       "kind": "pin",
       "ref": "U63",
-      "pin": "INREGB",
+      "pin": "/INREGB",
       "x": 191,
       "y": 60
     },
@@ -14844,7 +14844,7 @@
       "id": "v1345",
       "kind": "pin",
       "ref": "U63",
-      "pin": "INBUSB",
+      "pin": "/INBUSB",
       "x": 191,
       "y": 61
     },

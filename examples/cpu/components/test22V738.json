@@ -100,63 +100,63 @@
             "number": 13
           },
           {
-            "name": "OUTCMB",
+            "name": "/OUTCMB",
             "side": "right",
             "position": 1,
             "direction": "out",
             "number": 14
           },
           {
-            "name": "OUTREG",
+            "name": "/OUTREG",
             "side": "right",
             "position": 2,
             "direction": "out",
             "number": 15
           },
           {
-            "name": "BISF",
+            "name": "/BISF",
             "side": "right",
             "position": 3,
             "direction": "out",
             "number": 16
           },
           {
-            "name": "INREGA",
+            "name": "/INREGA",
             "side": "right",
             "position": 4,
             "direction": "out",
             "number": 17
           },
           {
-            "name": "INBUSA",
+            "name": "/INBUSA",
             "side": "right",
             "position": 5,
             "direction": "out",
             "number": 18
           },
           {
-            "name": "INA0",
+            "name": "/INA0",
             "side": "right",
             "position": 6,
             "direction": "out",
             "number": 19
           },
           {
-            "name": "INB0",
+            "name": "/INB0",
             "side": "right",
             "position": 7,
             "direction": "out",
             "number": 20
           },
           {
-            "name": "INREGB",
+            "name": "/INREGB",
             "side": "right",
             "position": 8,
             "direction": "out",
             "number": 21
           },
           {
-            "name": "INBUSB",
+            "name": "/INBUSB",
             "side": "right",
             "position": 9,
             "direction": "out",
@@ -170,7 +170,7 @@
             "number": 23
           }
         ],
-        "behavior": "!OUTCMB = !OE * FTF\n!OUTREG = !OE * !FTF\n!BISF = !OSA * !OSB\n!INREGA = OSA * !FTAB +\n !OSA * !OSB * !FTAB\n!INBUSA = OSA * FTAB +\n !OSA * !OSB * FTAB\n!INBUSB = OSB * FTAB\n!INREGB = OSB * !FTAB\n!INA0 = !OSA * OSB\n!INB0 = OSA * !OSB\n",
+        "behavior": "/OUTCMB = !OE * FTF\n/OUTREG = !OE * !FTF\n/BISF = !OSA * !OSB\n/INREGA = !FTAB * OSA\n        + !FTAB * !OSA * !OSB\n/INBUSA = FTAB * OSA\n        + FTAB * !OSA * !OSB\n/INA0 = !OSA * OSB\n/INB0 = OSA * !OSB\n/INREGB = !FTAB * OSB\n/INBUSB = FTAB * OSB\n",
         "gal": "GAL22V10",
         "partnumber": "22V738",
         "description": "Bus enable decoder"
@@ -821,7 +821,7 @@
       "id": "v1",
       "kind": "pin",
       "ref": "U1",
-      "pin": "OUTCMB",
+      "pin": "/OUTCMB",
       "x": 199,
       "y": 59
     },
@@ -837,7 +837,7 @@
       "id": "v3",
       "kind": "pin",
       "ref": "U1",
-      "pin": "OUTREG",
+      "pin": "/OUTREG",
       "x": 199,
       "y": 60
     },
@@ -853,7 +853,7 @@
       "id": "v7",
       "kind": "pin",
       "ref": "U1",
-      "pin": "INREGA",
+      "pin": "/INREGA",
       "x": 199,
       "y": 62
     },
@@ -869,7 +869,7 @@
       "id": "v9",
       "kind": "pin",
       "ref": "U1",
-      "pin": "INBUSA",
+      "pin": "/INBUSA",
       "x": 199,
       "y": 63
     },
@@ -885,7 +885,7 @@
       "id": "v11",
       "kind": "pin",
       "ref": "U1",
-      "pin": "INBUSB",
+      "pin": "/INBUSB",
       "x": 199,
       "y": 67
     },
@@ -901,7 +901,7 @@
       "id": "v13",
       "kind": "pin",
       "ref": "U1",
-      "pin": "INREGB",
+      "pin": "/INREGB",
       "x": 199,
       "y": 66
     },
@@ -1005,7 +1005,7 @@
       "id": "v35",
       "kind": "pin",
       "ref": "U1",
-      "pin": "BISF",
+      "pin": "/BISF",
       "x": 199,
       "y": 61
     },
@@ -1013,7 +1013,7 @@
       "id": "v37",
       "kind": "pin",
       "ref": "U1",
-      "pin": "INA0",
+      "pin": "/INA0",
       "x": 199,
       "y": 64
     },
@@ -1029,7 +1029,7 @@
       "id": "v39",
       "kind": "pin",
       "ref": "U1",
-      "pin": "INB0",
+      "pin": "/INB0",
       "x": 199,
       "y": 65
     },
