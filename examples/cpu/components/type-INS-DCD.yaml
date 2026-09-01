@@ -2,6 +2,7 @@ id: "type-INS-DCD"
 type: "22V10"
 gal: GAL22V10
 partnumber: "INS-DCD"
+clock: "CLK"
 outline: [8, 14]
 pins:
   - { name: "CLK", side: left, pos: 1, dir: in, number: 1 }
@@ -12,17 +13,22 @@ pins:
   - { name: "IR13", side: left, pos: 6, dir: in, number: 6 }
   - { name: "IR14", side: left, pos: 7, dir: in, number: 7 }
   - { name: "IR15", side: left, pos: 8, dir: in, number: 8 }
-  - { name: "I9", side: left, pos: 9, dir: in, number: 9 }
-  - { name: "I10", side: left, pos: 10, dir: in, number: 10 }
-  - { name: "I11", side: left, pos: 11, dir: in, number: 11 }
-  - { name: "I13", side: left, pos: 12, dir: in, number: 13 }
+  - { name: "NC", side: left, pos: 9, dir: in, number: 9 }
+  - { name: "NC", side: left, pos: 10, dir: in, number: 10 }
+  - { name: "NC", side: left, pos: 11, dir: in, number: 11 }
+  - { name: "NC", side: left, pos: 12, dir: in, number: 13 }
   - { name: "F0", side: right, pos: 1, dir: out, number: 14 }
   - { name: "F1", side: right, pos: 2, dir: out, number: 15 }
   - { name: "F2", side: right, pos: 3, dir: out, number: 16 }
   - { name: "/LD", side: right, pos: 4, dir: out, number: 17 }
-  - { name: "/RD", side: right, pos: 5, dir: out, number: 18 }
+  - { name: "NC", side: right, pos: 5, dir: in, number: 18 }
   - { name: "CSRC", side: right, pos: 6, dir: out, number: 19 }
   - { name: "/RWE", side: right, pos: 7, dir: out, number: 20 }
-  - { name: "/MWE", side: right, pos: 8, dir: out, number: 21 }
+  - { name: "NC", side: right, pos: 8, dir: in, number: 21 }
   - { name: "/ROE1", side: right, pos: 9, dir: out, number: 22 }
   - { name: "/ROE2", side: right, pos: 10, dir: out, number: 23 }
+behavior: |
+  F0.R = !CY0 * !CY1 * !CY2 * !CY3 * !LD
+  F1.R = IR13 * !IR14 * IR15
+       + !IR13 * IR14 * IR15
+  /LD = !CY0 * !CY1 * !CY2 * !CY3
