@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { planBusEndpoint, probeClaimsClick, probeTarget } from "./interaction.js";
+import { editableGalType, planBusEndpoint, probeClaimsClick, probeTarget } from "./interaction.js";
 
 // A type with a single 3-bit group "A".
 const typeA = {
@@ -190,4 +190,48 @@ test("probeClaimsClick: no live values, or another tool, is not a probe click (F
   assert.equal(probeClaimsClick({ tool: "probe", simulating: false, vectorHold: false }), false);
   assert.equal(probeClaimsClick({ tool: "select", simulating: true, vectorHold: false }), false);
   assert.equal(probeClaimsClick({ tool: "select", simulating: false, vectorHold: true }), false);
+});
+
+// --- "Edit part definition…" eligibility on a placed instance (FR-033b/FR-066f) ---
+
+// A library holding one project-local GAL part, one shared GAL part, and one
+// ordinary 74-series part; findType resolves by type id as interaction.js does.
+const galLib = [
+  { id: "type-22V-DCD", gal: "GAL22V10", projectLocal: true },
+  { id: "type-22V574", gal: "GAL22V10" }, // shared library: no projectLocal
+  { id: "type-7400" },
+];
+const findIn = (lib) => (id) => lib.find((t) => t.id === id) ?? undefined;
+const instOf = (id) => ({ refdes: "U1", typeData: { id } });
+
+test("editableGalType offers a project-local GAL part's definition (FR-033b)", () => {
+  const t = editableGalType(instOf("type-22V-DCD"), findIn(galLib));
+  assert.equal(t, galLib[0]);
+});
+
+test("editableGalType declines a shared-library GAL part (FR-006b/FR-121i)", () => {
+  assert.equal(editableGalType(instOf("type-22V574"), findIn(galLib)), null);
+});
+
+test("editableGalType declines a non-GAL part", () => {
+  assert.equal(editableGalType(instOf("type-7400"), findIn(galLib)), null);
+});
+
+test("editableGalType declines a type absent from the loaded library (FR-033b)", () => {
+  // A design opened outside the project that defines its parts: the instance
+  // carries typeData, but there is no library definition to edit.
+  assert.equal(editableGalType(instOf("type-elsewhere"), findIn(galLib)), null);
+});
+
+test("editableGalType resolves through the library, not the instance's copy (FR-057)", () => {
+  // The instance carries a pre-edit snapshot; the dialog must open on the
+  // library's current definition, which is what an earlier edit replaced.
+  const inst = { refdes: "U1", typeData: { id: "type-22V-DCD", partnumber: "OLD" } };
+  const edited = { id: "type-22V-DCD", gal: "GAL22V10", projectLocal: true, partnumber: "NEW" };
+  assert.equal(editableGalType(inst, findIn([edited])), edited);
+});
+
+test("editableGalType declines an instance with no type data", () => {
+  assert.equal(editableGalType(undefined, findIn(galLib)), null);
+  assert.equal(editableGalType({ refdes: "U1" }, findIn(galLib)), null);
 });

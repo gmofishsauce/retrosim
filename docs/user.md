@@ -321,12 +321,22 @@ the table's — though the logic is unchanged.
 
 ### Editing a custom GAL part
 
-A part you authored is not frozen. **Right-click its palette tile** and choose
-**Edit part definition…**: the same dialog reopens with everything filled in — part
-number, description, pin labels, directions, pin groups, and the logic table, its
-cells set from the part's existing equations — and its button now reads **Save**.
-Every field works as it does when creating a part, including the live GALasm check,
-so an edit that would break the device is refused before it can be saved.
+A part you authored is not frozen. There are two ways to reach its definition, and
+both open the same dialog:
+
+- **Right-click the chip on the schematic** and choose **Edit part definition…**.
+- **Right-click its palette tile** and choose the same item — the way in when the
+  part is not placed on the sheet.
+
+Reach for the chip when you have one. A palette tile shows only a part number, so
+two parts with similar numbers sit side by side looking much alike; the chip on the
+sheet is the one you are actually looking at, and there is nothing to pick wrong.
+
+Either way the dialog reopens with everything filled in — part number, description,
+pin labels, directions, pin groups, and the logic table, its cells set from the
+part's existing equations — and its button now reads **Save**. Every field works as
+it does when creating a part, including the live GALasm check, so an edit that would
+break the device is refused before it can be saved.
 
 Two details worth knowing:
 
@@ -338,7 +348,10 @@ Two details worth knowing:
   part stored in the current project's `components/` folder. Parts from the shared
   library have no such item — they are shared with every project, so the app never
   writes them; edit those files directly and restart the server. Memory devices
-  (**NEW MEM**) have no editor yet, and the dialog only knows the GAL22V10.
+  (**NEW MEM**) have no editor yet, and the dialog only knows the GAL22V10. A chip
+  on the sheet whose part is not in the current library — a design opened outside
+  the project that defines its parts — offers no item either, since there is no
+  definition loaded to edit.
 
 **Save** rewrites the part's YAML file and then immediately pushes the new
 definition into every instance of that part in the open design — a
@@ -1924,7 +1937,7 @@ clear message until then, without losing your work.
 | Middle-drag / Space+left-drag | Pan |
 | Mouse wheel | Zoom to cursor |
 | Right-click empty | Recenter view on the cursor |
-| Right-click object | Context menu |
+| Right-click object | Context menu — on a chip this includes **Edit part definition…** for a [GAL part of this project](#editing-a-custom-gal-part) |
 | Right-click a palette tile | Context menu for that part — currently **Edit part definition…** on a [GAL part of this project](#editing-a-custom-gal-part); tiles with nothing to offer show no menu |
 | Double-click a sub-design | Open it (descend); **← back** returns to the parent |
 | Double-click a text note | Edit its text |

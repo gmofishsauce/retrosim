@@ -456,6 +456,7 @@ async function main() {
       onAddSubDesign: (x, y) => fileops.addSubDesign(x, y), // §6.14
       onOpenSubDesign: (childPath) => fileops.descend(childPath), // FR-100
       onFollowPortTarget: (target) => fileops.followTarget(target), // FR-101/FR-101b
+      onEditGalPart, // FR-033b/FR-066f: same item the palette tile carries (FR-006b)
       onNewGalPart, // FR-066c: upper-palette action tile
       onNewMemDevice, // FR-114: upper-palette action tile
     });

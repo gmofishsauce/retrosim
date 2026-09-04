@@ -181,6 +181,23 @@ export function probeClaimsClick(state) {
   return state.tool === "probe" && (state.simulating || state.vectorHold);
 }
 
+// editableGalType decides whether a placed instance offers "Edit part
+// definition…" (FR-033b), and returns the type the dialog should open on — the
+// same `gal && projectLocal` test the palette tile applies (FR-006b/FR-066f).
+//
+// The instance supplies only the *identity*; `findType` supplies the data. That
+// split is the point: an instance's `typeData` is a placement-time copy (FR-057)
+// which may predate an edit made earlier in this session, so resolving through
+// the live library is what makes a second edit start from the first one's result.
+// An instance whose type is not in the library at all — a design opened outside
+// the project that defines its parts — yields null, and no item is offered.
+// Pure, so it is exported for testing.
+export function editableGalType(inst, findType) {
+  if (!inst?.typeData) return null;
+  const type = findType(typeIdentity(inst.typeData));
+  return type?.gal && type.projectLocal ? type : null;
+}
+
 // conductorTarget describes a wire or bus for the probe. A bus carries its width
 // so the panel can read every bit's lane (FR-087c).
 function conductorTarget(design, cond) {
@@ -223,7 +240,7 @@ export function planBusEndpoint(design, target, width) {
 // `name` matches the ADD tile so the armed-tile highlight (FR-009a) still works.
 const ADD_TYPE = { name: "add", isAdd: true };
 
-export function initInteraction({ canvas, palette, store, renderer, library, fileops, onAddSubDesign, onOpenSubDesign, onFollowPortTarget, onNewGalPart, onNewMemDevice }) {
+export function initInteraction({ canvas, palette, store, renderer, library, fileops, onAddSubDesign, onOpenSubDesign, onFollowPortTarget, onEditGalPart, onNewGalPart, onNewMemDevice }) {
   let placeType = null; // ComponentType when tool === "place"
   let wireSource = null; // pending WIRE source spec
   let wireWaypoints = []; // locked intermediate waypoints for the in-progress wire/bus (FR-027e)
@@ -1553,6 +1570,18 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
         items.push({
           label: "Follow off-sheet connector",
           onClick: () => onFollowPortTarget(inst.target),
+        });
+        items.push({ separator: true });
+      }
+      // An instance of a project-local GAL part offers its definition for editing
+      // (FR-033b/FR-066f), the same item the palette tile carries (FR-006b) —
+      // reached from the chip on the sheet, which is the referent the user has in
+      // mind, rather than from a tile identified by part number alone.
+      const libType = editableGalType(inst, findType);
+      if (libType && onEditGalPart) {
+        items.push({
+          label: "Edit part definition…",
+          onClick: () => onEditGalPart(libType),
         });
         items.push({ separator: true });
       }
