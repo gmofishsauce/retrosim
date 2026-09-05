@@ -1,16 +1,11 @@
 logic families with per-family delay
-logic analyzer?
-
-A way for AIs to design (use the app). - see specs/ai-open.md
 
 Slow down and single step the clock in the slow simulator.
 
-New row in test vector generator should be a copy of the previous row.
-
-After test vectors are saved, the design should be clean unless changes were made to the schematic.
-
-When a subcomponent design is open in the editor, it should be possible to click (or perhaps right click) on a port icon in the design and set it to zero or one for visual test purposes
-
 Add a doc about giving the editor a spin.
 
-Add an indication in the YAML file that the component has built-in behaviors.
+cmd-F for fit to screen.
+
+bus connection to apex point.
+
+busses should not propose to connect at single wire points. (?)
