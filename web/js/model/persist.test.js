@@ -391,6 +391,26 @@ test("drcWaivers round-trip through serialize/deserialize (FR-124e)", () => {
   assert.deepEqual(deserializeDesign(structuredClone(obj)).drcWaivers, d.drcWaivers);
 });
 
+test("design notes round-trip through serialize/deserialize (FR-125)", () => {
+  const d = createDesign("t");
+  d.notes = "F codes 1..4 update the PC.\n\nOSB is a placeholder — see the\ncarry-select rework.";
+  const obj = serializeDesign(d);
+  assert.equal(obj.notes, d.notes); // verbatim: blank lines and indentation survive
+  assert.equal(deserializeDesign(structuredClone(obj)).notes, d.notes);
+});
+
+// Additive-optional (§7.4), on the same terms as drcWaivers below: notes are the
+// third such key, so a design with none gains nothing and no version bumps.
+test("empty notes write no key at all, and a file without one loads clean (FR-125)", () => {
+  const d = createDesign("t");
+  assert.ok(!("notes" in serializeDesign(d)));
+  d.notes = "";
+  assert.ok(!("notes" in serializeDesign(d)));
+  // A file written before the feature existed: no key, and none invented on load.
+  const back = deserializeDesign({ ...serializeDesign(createDesign("t")) });
+  assert.ok(back.notes === undefined || back.notes === "");
+});
+
 // Additive-optional (§7.4): a design with no waivers must not gain the key, and
 // a file written before the feature existed must load unchanged — which is what
 // makes this a no-migration, no-version-bump change.

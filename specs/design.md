@@ -3260,6 +3260,8 @@ no sequential part could ever leave U.)
 
 **The ADD flow (FR-097/097a/097b).** `builtins.js` exposes a single non-placeable lower-palette entry **ADD**. Arming it and clicking (or dropping it on) the canvas opens the **Add sub-component dialog** (`dialogs.js`) at the grid point instead of creating an object. The dialog: (1) navigates/loads a child via `/api/v1/files`+`/design/load` (§6.4); (2) shows the child's `defaultRender` (§7.2) and resolved interface; (3) offers an `ic`/`connector` choice defaulting to `defaultRender`. OK → dispatch `PlaceSubDesign(childPath, render, @grid)`; Cancel → nothing; both return to SELECT (one-shot, FR-010). `childPath` is held **absolute in memory** (the picked child's absolute path) and relativized to the parent's save dir only at save time (§7.4), so embedding **does not require a saved parent** and shows no save prompt (FR-097b). The dialog rejects an interface-less file, a self/cyclic embed (`wouldCycle`), and — FR-121d — a file **outside the current project directory** (`fileops.addSubDesign` checks containment against `store.state.project.dir` before the cycle check; §6.19), each with a message. Its picker is seeded at the project root (FR-121h) under the usual FR-052a remembered-directory rule.
 
+**The dialog's tabbed structure (FR-066h, 2026-09-04).** `newGalPartDialog` renders three tab bodies — **Part** (part number, description, the two pin-field lists, the pin-groups row), **Logic** (the term grid and the GALasm preview), **Notes** (one textarea over `part.notes`) — with the title, the live validation status line, the inline submit-error line, and the Cancel/Create-or-Save buttons **outside** the strip and visible from every tab. Mechanically this is a `hidden` toggle over three `<div>`s plus a `selectTab(key)`; no field moved between owners, `gather()`, `validate()`, `tablePins()`, `renderEq()`, `behaviorText()`, and `galPartYaml` are untouched, and the grid still rebuilds on a label or direction edit made on a *different* tab, because those listeners were never coupled to visibility. Two rules are worth stating because they are the ones a tabbed dialog gets wrong: the gate judges the **whole part**, never the visible tab — an equation error found while the user is on Notes still shows in the status line and still disables Save — and a **refused submit selects the tab carrying the problem** before reporting it (`onOk` picks Part for a missing part number, Logic for a validation failure), so no message ever names something off screen. A server-side submit error names no tab and moves no selection. The reason for the change is capacity, not taste: the dialog had eight stacked regions in a `92vh` box, three of them scrolling and competing for height, and FR-125a's notes area is what made a single column untenable.
+
 **The New GAL part flow (FR-066b/066c/007a).** `builtins.js` exposes a non-placeable upper-palette action **New GAL part** (a tile that opens a dialog rather than arming placement). The **New GAL part dialog** (`dialogs.js`) renders the device's fixed skeleton — for the GAL22V10, the 24-pin map (pin 1 clock/in, 2–11 + 13 in, 14–23 OLMC I/O, 12 GND, 24 VCC) — and collects only the per-part data: `partnumber`, optional `description`, a label per I/O pin, a per-OLMC direction (in / comb-out / reg-out), optional named pin groups (FR-066d, below), and the part's logic, clicked into the **equation term table** (FR-066g, below) from which the `behavior` block is generated — there is no equation text box. As the user types or clicks, the dialog assembles a candidate `typeData` (`type:"22V10"`, `gal:"GAL22V10"`, an immutable `id` generated from the `partnumber` (FR-066e), the chosen `pins`, the `behavior`) and runs `galasm.js` `compileBehavior`+`validateStrict` (§6.13) **live**, surfacing the same accept/reject diagnostics Run would (FR-079b) — the dialog reuses that one gate, adding no second validator. OK serializes the `typeData` to YAML client-side and `POST`s it to `/api/v1/components` **with the current project dir** (`store.state.project.dir`), so the server writes the `.yaml` under `<project>/components/` (FR-007a/FR-121i); on success it dispatches the live palette add (above) and returns to SELECT (one-shot, FR-010). A duplicate-`id`/existing-file 409 — collision against the project `components/` **or** the shared library (FR-121i) — or validation error is shown in the dialog; Cancel discards. Placement of the resulting tile is then ordinary FR-008/FR-009.
 
 **The Edit GAL part flow (FR-066f/FR-006b/FR-007a/FR-088).** The same `newGalPartDialog` serves as the editor, opened with the part to edit instead of a blank skeleton — one dialog, one set of fields, one validation gate, differing only in its title, its **Save** (vs. Create) button, and whether the submit posts `mode:"update"` or `mode:"create"` (§6.4). Entry is the palette tile's context menu (FR-006b, §6.11) **or** the canvas context menu on a placed instance of the part (FR-033b, §6.11), whose "Edit part definition…" item exists only for a `type.gal && type.projectLocal` type (§7.1) with no simulation running (FR-087) — resolved from the live library by `id` at click time, so a second edit in one session starts from the first edit's result rather than from a stale snapshot (§6.11). The instance route resolves through the same `findType(typeIdentity(inst.typeData))` the placement code uses: the instance supplies the **identity** and the library supplies the **data**, so an instance still carrying a pre-edit `typeData` copy (FR-057) opens the current definition, and an instance whose type is absent from the library (a design opened outside its project) offers no item. Both routes call one `onEditGalPart(type)` in `app.js`; `interaction.js` owns no part of the edit beyond deciding that the item applies. (Instance route added 2026-09-04: the tile was the only entry, and neighbouring tiles for similarly-named project parts are easy to confuse — the chip on the sheet is the unambiguous referent.) **Load-back** is the new code: a pure `galPartFromType(type) → {fields} | {refuse: reason}` (`dialogs.js`, testable without DOM) maps a loaded `ComponentType` onto the dialog's model — skeleton pin ↔ label, OLMC direction (`in`/`comb`/`reg`, read back from each OLMC pin's `direction` plus whether the behavior registers it), `partnumber`, `description`, `pinGroups` resolved from current labels back to **skeleton DIP numbers** (the representation the pin-groups sub-dialog already uses, so a group survives the round trip through a rename), and the `behavior` text, which is no longer carried verbatim but **parsed into the term table** by `galeq.js` (below), whose own refusals join the ones here. It **refuses** — and the menu item reports the reason rather than opening an empty dialog — when the type is not `gal: GAL22V10`, when its pins do not map one-for-one onto the 24-pin skeleton (count, numbers, or sides), or when it carries any key the dialog does not model and would therefore drop on write. That refusal is the contract that lets Save rewrite the file whole: the dialog only ever owns a definition it can reproduce exactly (FR-066f). **Save** serializes through the very same `galPartYaml` the create path uses and posts it with `mode:"update"`; `api.js` gains `updateComponent(yaml, projectDir)` beside `createComponent`, and a 404/403/400 surfaces inline exactly as a create's 409 does, leaving the dialog open. On success `app.js` **replaces** the type in the client library (by `id`) and re-renders the tile (§6.11), then dispatches `RefreshTypes` **filtered to that `id`** (§6.10) — instances of the edited part adopt the new pins, directions, groups, and behavior; connections to a pin the edit renamed or removed are dropped and reported (FR-088); the whole refresh is one undo step. The YAML write is **not** in that step: undo restores the schematic, never the file, and the tray report says so implicitly by naming what it changed. Instances in other designs on disk are untouched until each is opened and refreshed on its own (FR-088) — the definition, not the `typeData` copy embedded in a save (FR-057), is authoritative.
@@ -3468,13 +3470,17 @@ const TABS = [
   { key: "vec",     label: "Test Vectors", host: "#vec-panel",     openFlag: "vectorPanelOpen"  },
   { key: "console", label: "Console",      host: "#console-panel", openFlag: "consolePanelOpen" },
   { key: "drc",     label: "Design Rules", host: "#drc-panel",     openFlag: "drcPanelOpen"     },
+  { key: "notes",   label: "Notes",        host: "#notes-panel",   openFlag: "notesPanelOpen"   },
 ];
 ```
 
 A future tab adds a row plus its host element and its store flag. The `drc` row
 (FR-124g, added 2026-08-02) is the first exercise of that claim, and it cost
 exactly the row, the host, and the flag: no change to `layout`, `dragTo`,
-`render`, the strip builder, the MRU rule, or the drag. The one thing the report
+`render`, the strip builder, the MRU rule, or the drag. The `notes` row (FR-125,
+added 2026-09-04) is the second, and cost the same three things — this time
+including `menuInvoke`, which View ▸ Notes uses unchanged, the Notes tab being an
+ordinary open/select/close panel rather than a command's output surface. The one thing the report
 tab does **not** use is `menuInvoke` — running a check must open or select its tab
 but never close it (FR-124g), so `drcpanel.js` calls `setDrcPanelOpen`/`setDockActive`
 directly (§6.21). That exception lives in the panel, deliberately, so `menuInvoke`
@@ -4438,6 +4444,34 @@ supplies `onDesignRuleCheck: () => drcPanel.run()`, and passes `drc: drcPanel` i
 - **Dependencies:** `model/design.js` gains no imports; `interaction.js` and
   `canvas.js` import the two predicates; `builtins.js` exports the tile glyph.
 
+### 6.23 JS: design notes (`web/js/chrome/notespanel.js` + store/dock/toolbar/persist/app wiring)
+
+- **Purpose:** the free-form prose a design carries about itself, edited in a docked tab and saved in the design file.
+- **Satisfies:** FR-125; FR-125a is the component-type half (§6.2/§6.4/§7.6).
+- **The whole feature is one string.** `design.notes` — additive-optional in `serializeDesign` on the `primaryClock`/`drcWaivers` pattern (§7.2), written only when non-empty, so no existing save file gains a key and §7.4 needs no migration step. There is no notes *document*, no association, no path, and no second modified flag; that absence is what makes the design-replacement rule (below) a rebind rather than the test-vector panel's guarded close (§6.16).
+
+**Why a dedicated store method and not `applyLive` or `dispatch`.** A notes edit is a design mutation with an unusual combination of consequences (FR-125), and none of the three existing paths has it:
+
+| | dirty | undo stack | `designRev` | live listeners |
+|---|---|---|---|---|
+| `dispatch(cmd)` | yes | **yes** | **yes** | no |
+| `applyLive(fn)` | yes | no | **yes** | **yes** |
+| `setDesignNotes(text)` | **yes** | no | no | no |
+
+`dispatch` is wrong because interleaving prose edits with schematic commands on one undo stack lets a canvas Ctrl+Z rewrite text under the caret (FR-125). `applyLive` is closer — non-undoable, dirtying, lock-bypassing — but it bumps `designRev` and wakes the simulator, and a notes keystroke must do neither: `designRev` drives the DRC report's stale banner (`isStale`, §6.21, FR-124i) and the test-vector panel's column re-derivation (§6.16, FR-115h), and notes can change neither finding nor column. Typing a sentence would otherwise stale a report the user is working through. So `setDesignNotes` sets `state.design.notes`, sets `dirty`, and notifies — three lines, and the table above is the justification for each omission.
+
+**The panel.** `createNotesPanel({ store })` mirrors `console.js` (§6.20): it owns a `<textarea>` inside `#notes-panel`, exposes `{ open, requestClose, isOpen, syncToDesign }`, and does **not** own its host's `hidden` — the dock does (FR-123), so an open Notes tab behind the Console stays open with its flag set. `open`/`requestClose` are just `store.setNotesPanelOpen(true|false)`; there is nothing to guard on close, the notes being already in the design and covered by its own dirty flag.
+
+- **Input handling.** An `input` listener calls `store.setDesignNotes(el.value)` directly — no debounce. A keystroke costs one string assignment and one `notify()`, which is what every mouse-move-driven hover already costs (§6.10); debouncing would buy nothing and would open a window in which the design is modified and the store does not know it.
+- **Reading back without fighting the caret.** The panel subscribes to the store, but a subscriber that blindly writes `el.value` would reset the caret to the end on every keystroke — the store notifies *because* of the keystroke. `syncToDesign` therefore writes the textarea **only when its value actually differs** from `design.notes`, which is true exactly when the change came from somewhere other than this textarea (a design load, a replacement, a project switch). The same guard makes the subscriber idempotent under the dock's apply-on-every-notification policy (§6.16a).
+- **Read-only while simulating.** `textarea.disabled = store.isReadonly()`, set in the same subscriber. FR-125 keeps the tab open and the text readable during a run; only editing stops, and the running simulation is on screen as its cause (contrast the invisible lock FR-115h removed).
+
+**Design replacement is a rebind, not a close (FR-125).** `store.replaceDesign` already notifies, so the panel's ordinary subscriber sees the new design's notes and writes them into the textarea by the difference rule above — no call site changes, and `fileops.beforeReplace`/`guardReplace` (§6.16, added for OQ-002) is deliberately **not** extended to the Notes tab. That guard exists because the test-vector panel holds a *second document* whose path and modified flag can be left pointing at the design it is no longer showing; notes have no path, no flag, and no existence apart from the design, so replacing the design replaces the notes and there is nothing left over to be wrong about.
+
+**Wiring.** `store.js` gains `notesPanelOpen: false`, a `notes: "notesPanelOpen"` row in `DOCK_FLAG`, `setNotesPanelOpen(flag)` routing through `setTabOpen`, and `setDesignNotes(text)`. `dock.js` gains the `TABS` row (§6.16a). `index.html` gains `#notes-panel`. `toolbar.js` gains **View ▸ Notes** above Console, calling `onNotes?.()` → `dock.menuInvoke("notes")`, checked while the tab is open and enabled whenever a project is open. `persist.js` serializes and (by plain object carry-through) loads the key.
+
+- **Dependencies:** store, dock. The panel imports nothing else; nothing imports the panel but `app.js`.
+
 ---
 
 ## 7. Data Model
@@ -4462,6 +4496,7 @@ supplies `onDesignRuleCheck: () => drcPanel.run()`, and passes `drc: drcPanel` i
 | `internal` | `string[]?` | optional buried registered-node names (FR-079c): registered state the behavior block uses that surfaces on no pin (e.g. the 74HC165's seven hidden shift stages). Server-validated as legal, duplicate-free names distinct from pin names; that each has a `.R` equation is checked client-side at Run (§6.13). Absent on parts with no buried state |
 | `properties` | `Property[]` | optional named numeric parameters (FR-020b): `{name, unit, default}`, e.g. the clock's `{name:"period", unit:"ns", default:100}` (FR-071a). Declared by built-ins in the client registry today; YAML types may declare them later. Serializable data only — per-instance values live in `overrides.props` (§7.2) |
 | `description` | string? | optional one-line function summary (FR-104), e.g. `"3-to-8 line decoder/demultiplexer"`; presentation-only |
+| `notes` | string? | optional free-form plain-text notes (FR-125a) — prose about the part, distinct from the one-line `description` above and shown by **neither** the palette tooltip (FR-005a) nor the properties panel (FR-105). Authored for a GAL part in the dialog's Notes tab (FR-066h); hand-written in YAML for any other part. Rides into an instance's copied `typeData` where nothing consults it |
 | `datasheet` | `Datasheet?` | optional provenance (FR-104): `{vendor, title, rev, url}`, all strings; the panel renders `url` as a link |
 | `mem` | `MemSpec?` | generated memory device only (FR-114c/FR-114f): `{kind:"ram"\|"rom", addressBits, dataWidth, locations, romFile?, ramFile?, ramLoad?}`. Serializable data the client's built-in memory behavior binds from at Run (FR-114d); round-trips through the `mem:` YAML block (§7.6) so a persisted device simulates on reload. `ramFile`/`ramLoad` carry RAM persistence (FR-114g). Absent on all other types |
 | `projectLocal` | bool? | **provenance**, set by the server's project scan (§6.2, FR-006b/FR-121i): `true` for a type read from the current project's `components/`, absent for one from the read-only shared library. Never authored in YAML — a file that could claim it would let a copied shared part pass as editable. Read by the two context menus that offer "Edit part definition…" for a project-local GAL part alone — the palette tile's (FR-006b) and the canvas instance's (FR-033b) — both of which read it off the **library** type, never off the instance's copied `typeData` (FR-057), where it rides along harmlessly and is not consulted |
@@ -4554,6 +4589,7 @@ branch wire that meet at it share one position and cannot drift apart (A1).
   "primaryClock": "A-7",               // FR-076b: refdes of the primary clock generator (Step-cycle target, FR-076a); additive-optional — absent when the design has never had a clock, no formatVersion bump
   "refCounters": { "U": 29, "A": 19, "N": 4, "X": 5 },  // FR-011c: per-series high-water refdes counters — the next number each series may allocate; monotonic, so a retired designator is never reused
   "drcWaivers": [ DrcWaiver, … ],      // FR-124e: suppressed design-rule findings; additive-optional — absent/empty when nothing is waived, no formatVersion bump
+  "notes": "F codes 1..4 update the PC.\n…",  // FR-125: free-form plain-text design notes; additive-optional — absent when empty, no formatVersion bump. Edited in the Notes tab (§6.23); marks the design dirty but is NOT undoable and does NOT advance designRev
   "components": [ ComponentInstance, … ],   // (a) FR-056 (includes built-in ports and sub-design instances)
   "wires":      [ Wire, … ],                // (b) FR-056
   "buses":      [ Bus,  … ],                // (c) FR-056
@@ -4901,6 +4937,7 @@ fully and consistently numbered for KiCad/NDL/BOM export.
 | `gal` | no | `gal` | optional GAL device name selecting **strict** dialect (FR-066a): one of `GAL16V8`/`GAL20V8`/`GAL22V10`/`GAL20RA10`. Omit ⇒ **extended** dialect (default; FR-079a). Server validates the name only |
 | `partnumber` | iff `gal` | `partnumber` | GAL parts only (FR-066b): non-empty free-form **display name** (FR-005b), e.g. `"PC-DECODE-A"`; not a key and need not be unique (the library key is `id`). Absent on 74-series types |
 | `description` | no | `description` | optional one-line function summary (FR-104); presentation-only. For a GAL part it is authored in the New GAL part dialog (FR-066c) since the part has no datasheet of its own |
+| `notes` | no | `notes` | optional free-form prose (FR-125a), typically a `|` block scalar. Parsed for **any** component (no GAL special case), but authored only by the GAL dialog's Notes tab (FR-066h). Distinct from `description`: see the documentation-keys note below |
 | `datasheet` | no | `datasheet` | optional mapping `{vendor, title, rev, url}` (FR-104) |
 | `pins[].desc` | no | `Pin.desc` | optional pin role text (FR-104) |
 | `mem` | no | `mem` | generated memory device only (FR-114f): mapping `{kind: ram\|rom, addressBits, dataWidth, locations, romFile?, ramFile?, ramLoad?}` driving the built-in memory behavior (FR-114d). Carried through verbatim; the client binds the behavior from it on load. `romFile` is the absolute content-file path (ROM only, FR-114e); `ramFile` is the absolute persistent save-file path and `ramLoad` the load-on-start flag (RAM only, FR-114g) |
@@ -4910,10 +4947,15 @@ fully and consistently numbered for KiCad/NDL/BOM export.
 | `physical.power[]` | in block | — | `{name, number}`; `name` is the rail net label (`VCC`, `GND`) for exporters; names may repeat across entries (multi-ground packages) but must not collide with `pins[].name` |
 | `physical.nc` | no | — | list of no-connect pin numbers |
 
-Documentation keys (`description`, `datasheet`, `pins[].desc`) are all optional
-and presentation-only: the server copies them onto the `ComponentType` for the
-properties panel (FR-105) and never lets them affect geometry or simulation. A
-documented part looks like:
+Documentation keys (`description`, `datasheet`, `pins[].desc`, `notes`) are all
+optional and presentation-only: the server copies them onto the `ComponentType`
+for the properties panel (FR-105) and never lets them affect geometry or
+simulation. `description` and `notes` are **different fields and stay different**
+(FR-125a): `description` is the one-line label the palette tooltip (FR-005a) and
+the properties panel show, while `notes` is free-form prose that **neither
+surface shows** — it is read in the part's own editor (§6.4). A multi-line
+`description` is what the split exists to prevent, since a tooltip and a
+properties row were designed around a phrase. A documented part looks like:
 
 ```yaml
 type: "74138"
@@ -4923,6 +4965,9 @@ datasheet:
   title: "74HC138; 74HCT138 3-to-8 line decoder/demultiplexer"
   rev: "Rev. 10, 26 Feb 2024"
   url: "https://assets.nexperia.com/documents/data-sheet/74HC_HCT138.pdf"
+notes: |                 # FR-125a: free-form prose; block scalar, any length
+  E3 must be tied high on the PRAM board — the pull-up is on the
+  backplane, not the card.
 pins:
   - { name: /E1, side: left, pos: 6, dir: in, number: 4, desc: "active-low enable 1" }
   # … other pins
@@ -5347,6 +5392,9 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-066a, FR-079a, FR-079b | §6.3, §6.13, §7.6 | `yamlparse.go`, `galasm.js`, `sim.js` |
 | FR-066b, FR-066c, FR-066d | §6.4, §6.14 | `dialogs.js`, `app.js`, `api.go`, `yamlparse.go` |
 | FR-066g | §6.11 | `engine/galeq.js`, `chrome/dialogs.js`, `css/style.css` |
+| FR-066h | §6.4, §6.11 | `chrome/dialogs.js`, `chrome/dialogs.test.js`, `css/style.css` |
+| FR-125 | §6.23, §6.16a, §6.10, §7.2, §7.4 | `chrome/notespanel.js`, `chrome/notespanel.test.js`, `chrome/dock.js`, `chrome/toolbar.js`, `store.js`, `store.test.js`, `model/persist.js`, `app.js`, `index.html`, `css/style.css` |
+| FR-125a | §6.2, §6.4, §7.1, §7.6 | `yamlparse.go`, `types.go`, `chrome/dialogs.js` |
 | FR-066f | §6.2, §6.4, §6.6, §6.10, §6.11, §6.14, §7.1 | `dialogs.js`, `app.js`, `api.js`, `contextmenu.js`, `interaction.js`, `commands.js`, `api.go`, `components.go` |
 | FR-066e | §6.2, §6.3, §7.1, §7.4 | `yamlparse.go`, `components.go`, `model/persist.js`, `builtins.js` |
 | FR-071f | §6.8, §6.9, §6.11, §7.2 | `builtins.js`, `canvas.js`, `interaction.js`, `model/design.js` |
@@ -5358,7 +5406,7 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-121i | §6.19, §6.4, §6.5a, §6.2, §6.12 | `components.go`, `components_test.go`, `api.go`, `chrome/project.js`, `chrome/toolbar.js`, `api.js`, `app.js` |
 | FR-121j | §6.19, §6.4, §6.5a, §6.2, §6.11, §8 | `project.go`, `project_test.go`, `components.go`, `api.go`, `api_project_test.go`, `chrome/project.js`, `chrome/project.test.js`, `chrome/toolbar.js`, `api.js`, `model/persist.js` |
 | FR-115n | §6.16a, §6.16, §6.20, §8 | `chrome/dock.js`, `chrome/dock.test.js`, `app.js`, `css/style.css` |
-| FR-123 | §6.16a, §6.16, §6.20, §6.11, §8 | `chrome/dock.js`, `chrome/dock.test.js`, `chrome/dialogs.js`, `chrome/console.js`, `chrome/toolbar.js`, `store.js`, `store.test.js`, `app.js`, `index.html`, `css/style.css` |
+| FR-123 | §6.16a, §6.16, §6.20, §6.23, §6.11, §8 | `chrome/dock.js`, `chrome/dock.test.js`, `chrome/dialogs.js`, `chrome/console.js`, `chrome/notespanel.js`, `chrome/toolbar.js`, `store.js`, `store.test.js`, `app.js`, `index.html`, `css/style.css` |
 | FR-115o | §6.16, §8 | `chrome/dialogs.js`, `chrome/dialogs.test.js`, `css/style.css` |
 | FR-115p | §6.16, §6.17 (M9), §8 | `engine/vectors.js`, `engine/vectors.test.js`, `engine/cgen.js`, `cgen/runtime.h`, `cgen/runtime.c`, `tools/tv2txt.js` |
 | FR-122, FR-122a, FR-122b | §6.20 | `builtins.js`, `engine/uart.js`, `engine/sim.js`, `engine/canvas.js`, `engine/symbols.js` |

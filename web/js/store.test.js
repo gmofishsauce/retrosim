@@ -525,6 +525,90 @@ test("the report is a third tab with no new dock code (FR-124g)", () => {
   assert.deepEqual(store.state.dockOrder, ["vec", "console"]);
 });
 
+test("Notes is a fourth tab with no new dock code (FR-125/FR-123)", () => {
+  const store = newStore();
+  store.setVectorPanelOpen(true);
+  store.setConsolePanelOpen(true);
+  store.setNotesPanelOpen(true);
+  assert.equal(store.state.notesPanelOpen, true);
+  assert.deepEqual(store.state.dockOrder, ["vec", "console", "notes"]);
+  assert.equal(store.state.dockActive, "notes"); // opening makes it frontmost
+
+  // Modeless: notes are meant to be readable during a run, so the tab imposes
+  // no edit lock of its own (FR-125).
+  assert.equal(store.isReadonly(), false);
+  store.setNotesPanelOpen(false);
+  assert.equal(store.state.dockActive, "console"); // MRU rule, like any tab
+  assert.deepEqual(store.state.dockOrder, ["vec", "console"]);
+});
+
+// --- setDesignNotes: dirty, but neither undoable nor a design revision (FR-125) ---
+
+test("setDesignNotes writes the notes and marks the design dirty (FR-125/FR-049a)", () => {
+  const store = newStore();
+  assert.equal(store.state.dirty, false);
+  store.setDesignNotes("F codes 1..4 update the PC.");
+  assert.equal(store.state.design.notes, "F codes 1..4 update the PC.");
+  assert.equal(store.state.dirty, true);
+});
+
+test("setDesignNotes does not advance designRev (FR-125 vs FR-124i/FR-115h)", () => {
+  // The counter drives the DRC report's stale banner and the test-vector panel's
+  // column re-derivation. Notes change neither a finding nor a column, so typing
+  // a sentence must not stale a report the user is working through.
+  const store = newStore();
+  const rev = store.state.designRev;
+  store.setDesignNotes("some prose");
+  assert.equal(store.state.designRev, rev);
+});
+
+test("setDesignNotes is not undoable (FR-125 vs FR-024)", () => {
+  // Interleaving prose edits with schematic commands on one stack would let a
+  // canvas Ctrl+Z rewrite text under the caret.
+  const store = newStore();
+  store.setDesignNotes("some prose");
+  assert.equal(store.canUndo(), false);
+});
+
+test("setDesignNotes does not wake the live-input channel (FR-125 vs applyLive)", () => {
+  const store = newStore();
+  let woke = 0;
+  store.subscribeLive(() => woke++);
+  store.setDesignNotes("some prose");
+  assert.equal(woke, 0);
+});
+
+test("setDesignNotes is idempotent: an unchanged value neither dirties nor notifies", () => {
+  const store = newStore();
+  store.setDesignNotes("same");
+  const saved = { ...store.state, dirty: false };
+  store.state.dirty = false;
+  let notified = 0;
+  store.subscribe(() => notified++);
+  store.setDesignNotes("same");
+  assert.equal(notified, 0);
+  assert.equal(store.state.dirty, false);
+  assert.equal(saved.design.notes, "same");
+});
+
+test("setDesignNotes treats absent notes and \"\" as the same value", () => {
+  const store = newStore();
+  let notified = 0;
+  store.subscribe(() => notified++);
+  store.setDesignNotes(""); // design has no `notes` key at all
+  assert.equal(notified, 0);
+  assert.equal(store.state.dirty, false);
+});
+
+test("setDesignNotes edits are allowed while simulating; the panel is what stops them", () => {
+  // FR-125 keeps the tab readable during a run and disables its textarea; the
+  // store deliberately does not also refuse, which would only add a tray message.
+  const store = newStore();
+  store.setSimulating(true);
+  store.setDesignNotes("noted during a run");
+  assert.equal(store.state.design.notes, "noted during a run");
+});
+
 test("markDockUnread marks only an open, non-frontmost tab; selecting clears it (FR-123)", () => {
   const store = newStore();
   // Closed: nothing to mark — there is no tab in the strip to carry a dot.

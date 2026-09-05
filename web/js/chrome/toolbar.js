@@ -52,7 +52,7 @@ function accelLabel({ key, shift }) {
     : `Ctrl+${shift ? "Shift+" : ""}${key}`;
 }
 
-export function initToolbar({ container, store, interaction, fileops, projectops, sim, library, reloadLibrary = async () => {}, onTestVectors, onConsole, onGenerateC, onDesignRuleCheck, onExport, onDesignProperties, onReleaseHold = () => {} }) {
+export function initToolbar({ container, store, interaction, fileops, projectops, sim, library, reloadLibrary = async () => {}, onTestVectors, onConsole, onNotes, onGenerateC, onDesignRuleCheck, onExport, onDesignProperties, onReleaseHold = () => {} }) {
   const tools = [
     { tool: "select", label: "Select" },
     { tool: "wire", icon: WIRE_ICON },
@@ -136,6 +136,14 @@ export function initToolbar({ container, store, interaction, fileops, projectops
   addItem(viewMenu.panel, "Zoom Out", "Zoom out", () => interaction.zoomBy(0.8), { key: "-" });
   addItem(viewMenu.panel, "Fit to Screen", "Fit the design to the canvas", () =>
     interaction.fitToScreen(),
+  );
+  // View ▸ Notes (FR-125): the same open/select/close rule as Console below, via
+  // the same dock.menuInvoke, the Notes tab being an ordinary panel rather than a
+  // command's output surface (contrast Design Rule Check). It stays enabled while
+  // simulating — notes are meant to be readable during a run — and the panel, not
+  // this item, enforces the read-only edit lock by disabling its textarea.
+  const notesItem = addItem(viewMenu.panel, "Notes", "Design notes saved with this design", () =>
+    onNotes?.(),
   );
   // View ▸ Console (FR-122c): NOT a plain toggle. It opens the Console tab if
   // closed, selects it if open behind another tab, and closes it only when it is
@@ -385,6 +393,10 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     // still cannot overlap. Stop stays usable while simulating.
     // Console is modeless output (FR-122c): always enabled, checked when open.
     consoleItem.classList.toggle("checked", store.state.consolePanelOpen);
+    // Notes (FR-125): checked when its tab is open, disabled only with no project
+    // — the notes belong to a design, and with none open there is nothing to note.
+    notesItem.classList.toggle("checked", store.state.notesPanelOpen);
+    notesItem.disabled = noProject;
     const holding = store.state.vectorHold;
     runBtn.disabled = noProject;
     runBtn.textContent = simming || holding ? "Stop" : "Run";

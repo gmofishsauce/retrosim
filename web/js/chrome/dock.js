@@ -58,6 +58,7 @@ const TABS = [
   { key: "vec", label: "Test Vectors", id: "vec-panel", flag: "vectorPanelOpen" },
   { key: "console", label: "Console", id: "console-panel", flag: "consolePanelOpen" },
   { key: "drc", label: "Design Rules", id: "drc-panel", flag: "drcPanelOpen" },
+  { key: "notes", label: "Notes", id: "notes-panel", flag: "notesPanelOpen" },
 ];
 
 const byKey = (key) => TABS.find((t) => t.key === key) ?? null;

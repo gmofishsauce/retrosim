@@ -393,6 +393,41 @@ body.dock-dragging .dock-grip { background: rgba(74, 144, 217, 0.35); }
 }
 #console-panel[hidden] { display: none; }
 
+/* Docked design-notes editor (FR-125): a peer tab (FR-123) holding one plain-text
+   area and nothing else — no header row, since the tab already names it and there
+   is no document beside the design to name. Laid out like the Console above so the
+   textarea fills the tab at every dragged height (§6.16a, FR-115n). */
+#notes-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.notes-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  box-sizing: border-box;
+  width: 100%;
+  resize: none; /* the dock's divider is the resize gesture (FR-115n) */
+  border: 0;
+  outline: 0;
+  padding: 0.4rem 0.6rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: #222;
+  background: #fff;
+}
+/* Read-only while a simulation runs (FR-125/FR-087): greyed, still selectable. */
+.notes-body:disabled {
+  background: #f0f0f0;
+  color: #555;
+  cursor: not-allowed;
+}
+#notes-panel[hidden] { display: none; }
+
 /* Docked design-rule-check report (FR-124g): the third peer tab (FR-123), laid
    out exactly like the test-vector panel above — pinned header, scrolling body,
    the same [hidden] override — since it is the same kind of surface. The area's
@@ -756,9 +791,61 @@ body.dock-dragging .dock-grip { background: rgba(74, 144, 217, 0.35); }
    column per signal-bearing pin is wider than the standard 30rem dialog — and
    the pin region above gives up height to it. */
 .galdlg-box { width: auto; min-width: 34rem; max-width: 96vw; max-height: 92vh; }
-/* The pin region keeps its scroll but yields most of the height to the grid,
-   which is the dialog's working surface now. */
-.galdlg-box .galdlg-pins { flex: 0 1 auto; max-height: 9rem; min-height: 4rem; }
+/* Tabbed dialog body (FR-066h): a strip of three tabs over one visible body.
+   The body is the flex child that grows, so whichever tab is showing gets the
+   whole height the 92vh box has left after the title, status, and buttons —
+   which is the point of the change. */
+.galdlg-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.15rem;
+  border-bottom: 1px solid #ccc;
+  margin: 0.2rem 0 0.4rem;
+}
+.galdlg-tab {
+  padding: 0.25rem 0.9rem;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 3px 3px 0 0;
+  background: none;
+  font-size: 0.85rem;
+  color: #444;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+.galdlg-tab:hover { background: #eee; }
+.galdlg-tab.active {
+  background: #fff;
+  border-color: #ccc;
+  color: #000;
+  font-weight: 600;
+}
+.galdlg-tabbody {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.galdlg-tabbody[hidden] { display: none; }
+/* The part's free-form notes (FR-125a); fills its tab, like the docked one. */
+.galdlg-notes {
+  flex: 1 1 auto;
+  min-height: 12rem;
+  box-sizing: border-box;
+  width: 100%;
+  resize: none;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+/* The pin region owns the Part tab's height now that the grid lives on its own
+   tab (FR-066h): it still scrolls, but it no longer trades height with anything,
+   so the 9rem cap that squeezed it is gone. */
+.galdlg-box .galdlg-pins { flex: 1 1 auto; min-height: 8rem; overflow: auto; }
 .galeq-wrap {
   overflow: auto;
   border: 1px solid #ddd;

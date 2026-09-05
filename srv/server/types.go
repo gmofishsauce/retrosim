@@ -32,6 +32,12 @@ type ComponentType struct {
 	Description string     `json:"description,omitempty"` // one-line function summary
 	Datasheet   *Datasheet `json:"datasheet,omitempty"`   // datasheet provenance + link
 
+	// Notes is free-form prose about the part (FR-125a) — distinct from the
+	// one-line Description above, which the palette tooltip (FR-005a) and the
+	// properties panel (FR-105) show; Notes is shown by neither. Parsed for any
+	// component, authored only by the client's GAL dialog (FR-066h).
+	Notes string `json:"notes,omitempty"`
+
 	// Mem marks a generated memory device (FR-114c/FR-114f). Carried through
 	// verbatim from the YAML so the client's built-in memory behavior (FR-114d)
 	// binds from this serializable data on reload. Absent on all other types.

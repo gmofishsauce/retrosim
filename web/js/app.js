@@ -28,6 +28,7 @@ import { makeFileOps } from "./chrome/fileops.js";
 import { makeProjectOps } from "./chrome/project.js";
 import { initProperties } from "./chrome/properties.js";
 import { createConsolePanel } from "./chrome/console.js";
+import { createNotesPanel } from "./chrome/notespanel.js";
 import { createDock } from "./chrome/dock.js";
 import { createDrcPanel } from "./chrome/drcpanel.js";
 import { openContextMenu } from "./chrome/contextmenu.js";
@@ -490,6 +491,11 @@ async function main() {
     // stays editable while its findings are on screen. It takes `interaction` for
     // one call: revealing the objects a clicked finding names (FR-124f).
     const drcPanel = createDrcPanel({ store, interaction });
+    // The design-notes editor (FR-125/§6.23), the fourth tab. The simplest of the
+    // four: one textarea over `design.notes`. Modeless, and — having no document
+    // of its own — needing no guarded close and no entry in fileops' replacement
+    // guard: a design replacement rebinds it through its ordinary subscriber.
+    const notesPanel = createNotesPanel({ store });
     // The docked panel area (§6.16a, FR-123/FR-115n): the tab strip, which tab is
     // displayed, the shared height, and its draggable top edge. Constructed once,
     // after the three panels exist, since it drives them through their handles —
@@ -499,7 +505,7 @@ async function main() {
     // not through a call.
     const dock = createDock({
       store,
-      panels: { vec: vecPanel, console: consolePanel, drc: drcPanel },
+      panels: { vec: vecPanel, console: consolePanel, drc: drcPanel, notes: notesPanel },
     });
     // Both menu items open a closed tab, select a backgrounded one, and close
     // only a frontmost one (FR-123). Both halves are async for the vector panel
@@ -507,6 +513,7 @@ async function main() {
     // save it first.
     const onTestVectors = () => dock.menuInvoke("vec");
     const onConsole = () => dock.menuInvoke("console");
+    const onNotes = () => dock.menuInvoke("notes"); // FR-125: View ▸ Notes
     // Tools ▸ Design Rule Check (FR-124/§6.21) is NOT a panel toggle and so does
     // NOT go through dock.menuInvoke: it runs the check, which opens the report
     // tab or selects it if it is backgrounded, and never closes it (FR-124g) —
@@ -619,6 +626,7 @@ async function main() {
       reloadLibrary, // Refresh Types rescans the project's components/ first (FR-121i)
       onTestVectors, // FR-115: Tools ▸ Test Vectors… (open/select/close, FR-123)
       onConsole, // FR-122c: View ▸ Console (open/select/close, FR-123)
+      onNotes, // FR-125: View ▸ Notes (open/select/close, FR-123)
       onReleaseHold: () => vecPanel.releaseHold(), // FR-115l: Stop releases a held vector run
       onGenerateC, // FR-116: Tools ▸ Generate C…
       onDesignRuleCheck, // FR-124: Tools ▸ Design Rule Check (runs; never closes)

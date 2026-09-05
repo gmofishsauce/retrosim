@@ -71,6 +71,7 @@ type yamlComponent struct {
 
 	// Documentation (FR-104), all optional.
 	Description string         `yaml:"description"`
+	Notes       string         `yaml:"notes"` // free-form prose (FR-125a); distinct from Description
 	Datasheet   *yamlDatasheet `yaml:"datasheet"`
 
 	// Generated memory device (FR-114f), optional.
@@ -370,6 +371,7 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 			Gal:         doc.Gal,
 			PartNumber:  doc.PartNumber,
 			Description: doc.Description,
+			Notes:       doc.Notes,
 			Datasheet:   datasheet,
 			Mem:         mem,
 			Physical:    physical,
@@ -412,6 +414,7 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		Gal:         doc.Gal,
 		PartNumber:  doc.PartNumber,
 		Description: doc.Description,
+		Notes:       doc.Notes,
 		Datasheet:   datasheet,
 		Mem:         mem,
 		Physical:    physical,

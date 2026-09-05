@@ -39,6 +39,7 @@ const DOCK_FLAG = {
   vec: "vectorPanelOpen",
   console: "consolePanelOpen",
   drc: "drcPanelOpen",
+  notes: "notesPanelOpen",
 };
 
 const DESIGN_COLLECTIONS = ["components", "wires", "buses", "vertices"];
@@ -121,6 +122,12 @@ export function createStore(initial = {}) {
     // state: a report is never persisted, and reloading discards it — waivers
     // (FR-124e) are a check's only durable product, and they live in the design.
     drcPanelOpen: false,
+    // `notesPanelOpen` toggles the docked design-notes editor (FR-125). Like the
+    // Console and the report it is MODELESS — notes are meant to be readable
+    // during a run — so it does NOT feed isReadonly()/blocked(); what a run stops
+    // is editing, which the panel enforces by disabling its textarea.
+    // Session-only view state: the notes themselves live in the design.
+    notesPanelOpen: false,
     // Tab bookkeeping for the docked panel area (§6.16a, FR-123). The flags
     // above say which tabs are OPEN; these say which one is frontmost, where each
     // sits in the strip, which was used most recently, and which carries an
@@ -128,7 +135,7 @@ export function createStore(initial = {}) {
     // because the toolbar's menu items branch on it (open/select/close, FR-123).
     // Maintained only by setTabOpen/setDockActive/markDockUnread below, so the
     // four members can never disagree with each other or with the open flags.
-    dockActive: null, // "vec" | "console" | "drc" | null — the frontmost tab
+    dockActive: null, // "vec" | "console" | "drc" | "notes" | null — the frontmost tab
     dockOrder: [], // strip order: appended on open (FR-123 "order opened")
     dockMru: [], // most-recently-used first; picks the successor on close
     dockUnread: {}, // { console: true } — unseen-content marks (FR-123)
@@ -503,6 +510,43 @@ export function createStore(initial = {}) {
     // bookkeeping (§6.16a) follows.
     setDrcPanelOpen(flag) {
       setTabOpen("drc", flag);
+    },
+
+    // setNotesPanelOpen toggles the modeless design-notes editor (FR-125). Routes
+    // through setTabOpen so the tab bookkeeping (§6.16a) follows; View ▸ Notes
+    // reaches it through dock.menuInvoke exactly as View ▸ Console does.
+    setNotesPanelOpen(flag) {
+      setTabOpen("notes", flag);
+    },
+
+    // setDesignNotes writes the design's free-form notes (FR-125, §6.23). It is
+    // a THIRD design-mutation path, narrower than the two above it, and every
+    // omission is deliberate:
+    //
+    //                    dirty   undo stack   designRev   live listeners
+    //   dispatch(cmd)     yes       yes          yes           no
+    //   applyLive(fn)     yes       no           yes           yes
+    //   setDesignNotes    yes       no           no            no
+    //
+    // Not undoable: interleaving prose edits with schematic commands on one stack
+    // lets a canvas Ctrl+Z rewrite text under the caret, and the textarea's own
+    // editing is the undo a user expects with a caret in prose (FR-125).
+    // No designRev bump: that counter drives the DRC report's stale banner
+    // (FR-124i) and the test-vector panel's column re-derivation (FR-115h), and
+    // notes can change neither a finding nor a column — typing a sentence must
+    // not stale a report the user is working through. No live listeners: a
+    // running simulator has nothing to re-evaluate.
+    //
+    // It does NOT go through blocked(): the panel disables its textarea while
+    // simulating (FR-125/FR-087), so a call during a run cannot originate from
+    // the UI, and refusing here would only add a tray message no one asked for.
+    setDesignNotes(text) {
+      if (!state.design) return;
+      const next = String(text ?? "");
+      if ((state.design.notes ?? "") === next) return; // idempotent: no dirty, no notify
+      state.design.notes = next;
+      state.dirty = true;
+      notify();
     },
 
     // isReadonly is the shared edit-lock predicate (FR-087/FR-115h): true while

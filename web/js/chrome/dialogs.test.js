@@ -58,6 +58,51 @@ test("galPartYaml emits no groups block when there are none (FR-066d)", () => {
   assert.ok(!galPartYaml(part([])).includes("groups:"));
 });
 
+// --- part notes (FR-125a): a block scalar, distinct from `description` ---
+
+test("galPartYaml emits notes as a literal block scalar (FR-125a)", () => {
+  const yaml = galPartYaml({ ...part([]), notes: "why this is here\nand what is next" });
+  assert.match(yaml, /notes: \|2\n  why this is here\n  and what is next\n/);
+});
+
+test("galPartYaml states the block indentation explicitly (FR-125a)", () => {
+  // With a bare `|`, YAML infers the block indent from the first non-empty line,
+  // so notes whose first line is itself indented would make every later line read
+  // as less-indented and the file would fail to parse — the app writing a part it
+  // cannot load. The explicit `2` makes leading space content.
+  const yaml = galPartYaml({ ...part([]), notes: "    pasted, already indented\nplain line" });
+  assert.match(yaml, /notes: \|2\n      pasted, already indented\n  plain line\n/);
+});
+
+test("galPartYaml writes blank notes lines truly empty, not as stray spaces", () => {
+  const yaml = galPartYaml({ ...part([]), notes: "first\n\nthird" });
+  assert.match(yaml, /notes: \|2\n  first\n\n  third\n/);
+});
+
+test("galPartYaml omits notes entirely when there are none (FR-125a)", () => {
+  assert.ok(!galPartYaml(part([])).includes("notes:"));
+  assert.ok(!galPartYaml({ ...part([]), notes: "" }).includes("notes:"));
+  assert.ok(!galPartYaml({ ...part([]), notes: "   \n\n " }).includes("notes:"));
+});
+
+test("galPartYaml keeps notes and description separate fields (FR-125a)", () => {
+  // The whole point of the split: a one-line label the tooltip shows, and prose
+  // it does not. They must never be merged into one key.
+  const yaml = galPartYaml({
+    ...part([]),
+    description: "decoder for PC/PRAM",
+    notes: "the long story",
+  });
+  assert.match(yaml, /^description: "decoder for PC\/PRAM"$/m);
+  assert.match(yaml, /^notes: \|2$/m);
+});
+
+test("galPartYaml puts notes last so the scanned fields stay at the top (FR-125a)", () => {
+  const yaml = galPartYaml({ ...part([]), notes: "prose", behavior: "Q0 = D0\n" });
+  assert.ok(yaml.indexOf("notes:") > yaml.indexOf("behavior:"));
+  assert.ok(yaml.indexOf("notes:") > yaml.indexOf("pins:"));
+});
+
 test("galPartYaml emits group members resolved to current labels (FR-066d)", () => {
   // Members stored by skeleton DIP number, given out of layout order.
   const yaml = galPartYaml(part([{ name: "D", members: [3, 2] }]));

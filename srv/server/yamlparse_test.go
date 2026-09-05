@@ -385,6 +385,70 @@ func TestParseComponentNoDocumentation(t *testing.T) {
 	}
 }
 
+// Free-form notes (FR-125a) parse for ANY component, not only a GAL, and are a
+// field of their own — never merged into the one-line Description, which the
+// palette tooltip (FR-005a) and properties panel (FR-105) show and notes do not.
+func TestParseComponentNotes(t *testing.T) {
+	got, err := ParseComponent(writeYAML(t, `
+type: T
+description: "3-to-8 decoder"
+notes: |
+  E3 must be tied high on the PRAM board.
+
+  The pull-up is on the backplane, not the card.
+pins:
+  - { name: A0, side: left, pos: 1, dir: in }
+`))
+	if err != nil {
+		t.Fatalf("ParseComponent: %v", err)
+	}
+	want := "E3 must be tied high on the PRAM board.\n\nThe pull-up is on the backplane, not the card.\n"
+	if got.Notes != want {
+		t.Errorf("Notes = %q, want %q", got.Notes, want)
+	}
+	if got.Description != "3-to-8 decoder" {
+		t.Errorf("Description = %q; notes must not disturb it", got.Description)
+	}
+}
+
+// The client writes notes with an EXPLICIT block indentation indicator
+// (`notes: |2`, galPartYaml) because a bare `|` infers the indent from the first
+// non-empty line: notes whose first line is itself indented would then make every
+// later line read as less-indented and the file would not parse at all — the app
+// having written a part definition it cannot load. This test pins the emitted
+// form against the real parser so the two halves cannot drift apart.
+func TestParseComponentNotesExplicitIndent(t *testing.T) {
+	base := "id: x\ntype: T\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n"
+
+	// What a bare `|` would produce for such notes: a hard parse failure.
+	bare := base + "notes: |\n      pasted, already indented\n  plain line\n"
+	if _, err := ParseComponentBytes([]byte(bare), "t.yaml"); err == nil {
+		t.Fatal("expected the bare-| form to fail; if YAML now tolerates it, galPartYaml may drop the indicator")
+	}
+
+	// What galPartYaml actually writes: parses, and the leading spaces are content.
+	explicit := base + "notes: |2\n      pasted, already indented\n  plain line\n\n  after a blank line\n"
+	got, err := ParseComponentBytes([]byte(explicit), "t.yaml")
+	if err != nil {
+		t.Fatalf("explicit-indicator notes failed to parse: %v", err)
+	}
+	want := "    pasted, already indented\nplain line\n\nafter a blank line\n"
+	if got.Notes != want {
+		t.Errorf("Notes = %q, want %q", got.Notes, want)
+	}
+}
+
+// Notes are optional like every other documentation key (FR-125a).
+func TestParseComponentNoNotes(t *testing.T) {
+	got, err := ParseComponent(writeYAML(t, "type: T\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n"))
+	if err != nil {
+		t.Fatalf("ParseComponent: %v", err)
+	}
+	if got.Notes != "" {
+		t.Errorf("Notes = %q, want empty", got.Notes)
+	}
+}
+
 // yaml.v3 coerces a bare-digit type: scalar into the string name (the §7.6
 // "quote it" guidance is a safety recommendation, not enforced by the parser).
 func TestParseComponentBareIntTypeCoerced(t *testing.T) {

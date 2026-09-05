@@ -163,6 +163,10 @@ export function serializeDesign(design) {
     // written only when there are some, so no existing file gains a key and no
     // formatVersion bump or migration step is needed (§7.4).
     ...(design.drcWaivers?.length ? { drcWaivers: design.drcWaivers } : {}),
+    // FR-125: free-form design notes, additive-optional on the same terms —
+    // written only when non-empty, so no existing file gains a key and §7.4
+    // needs no migration step.
+    ...(design.notes ? { notes: design.notes } : {}),
     components: design.components.map((c) =>
       c.kind === "subdesign" ? stripSubDesign(c) : c,
     ),
@@ -301,6 +305,11 @@ export function deserializeDesign(obj, { onWarn = () => {} } = {}) {
   // silently on its next run. A waiver list is also uniquely safe to lose, costing
   // at worst a noisier report.
   d.drcWaivers = structuredClone(obj.drcWaivers ?? []);
+  // FR-125: free-form design notes, absent in every file written before this
+  // feature and defaulted to "". Nothing validates or repairs them — prose cannot
+  // dangle, and a non-string (a hand-edited file) is coerced rather than rejected,
+  // since losing a load over documentation would be absurd.
+  d.notes = typeof obj.notes === "string" ? obj.notes : "";
   // FR-071i: no-connect marks are additive-optional too, and get the one line of
   // cleanup waivers do not — a mark naming a pin the type no longer declares (the
   // type was edited and refreshed, FR-088) is dropped silently. This cannot fail,

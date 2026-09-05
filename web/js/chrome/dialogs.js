@@ -603,7 +603,7 @@ const OLMC_DIRS = [
 // galPartYaml serializes the authored part to component YAML (§7.3). Quoted
 // scalars use JSON.stringify (valid YAML 1.2 double-quoted form); the behavior is
 // emitted as a literal block scalar with each line indented two spaces.
-export function galPartYaml({ partnumber, description, inputs, olmcs, groups, behavior, id }) {
+export function galPartYaml({ partnumber, description, notes, inputs, olmcs, groups, behavior, id }) {
   // Emit an explicit, immutable id (FR-066e) so the created part keys stably even
   // if its part-number display name is later edited; matches the library files
   // and the server's derive-when-absent rule (deriveComponentID). An edit passes
@@ -651,6 +651,29 @@ export function galPartYaml({ partnumber, description, inputs, olmcs, groups, be
     lines.push(`behavior: |`);
     for (const ln of behavior.replace(/\s+$/, "").split("\n")) lines.push(`  ${ln}`);
   }
+  // Free-form notes (FR-125a), a literal block scalar like `behavior` above and
+  // for the same reason: it is multi-line prose that must survive verbatim. Kept
+  // last so the fields a reader scans for — id, part number, pins, logic — stay
+  // at the top of the file however long the notes grow. Emitted only when
+  // non-empty, so a part without notes gains no key.
+  //
+  // The `2` is an explicit block **indentation indicator**, and it is load-bearing
+  // where `behavior`'s bare `|` is not. With a bare `|` YAML infers the block's
+  // indentation from its first non-empty line, so notes whose first line is itself
+  // indented — a pasted snippet, an indented list — would set the inferred indent
+  // too deep and every following line would read as less-indented: the parser then
+  // fails with "did not find expected key" and the app has written a part file it
+  // cannot load. Stating 2 makes any extra leading space *content*. `behavior`
+  // cannot reach this case (tableToBehavior always emits `NAME = …` at column 0),
+  // which is why it is left alone rather than churned.
+  //
+  // Blank lines are emitted truly empty rather than as two spaces: an empty line
+  // is valid inside a block scalar at any indentation, and trailing whitespace in
+  // a file the user may open in an editor is just litter.
+  if (notes && notes.trim()) {
+    lines.push(`notes: |2`);
+    for (const ln of notes.replace(/\s+$/, "").split("\n")) lines.push(ln ? `  ${ln}` : "");
+  }
   return lines.join("\n") + "\n";
 }
 
@@ -661,7 +684,7 @@ export function galPartYaml({ partnumber, description, inputs, olmcs, groups, be
 // to what the dialog happens to understand (FR-066f).
 const GAL_DIALOG_KEYS = new Set([
   "id", "name", "renderType", "width", "height", "pins", "pinGroups",
-  "behavior", "clock", "gal", "partnumber", "description", "projectLocal",
+  "behavior", "clock", "gal", "partnumber", "description", "notes", "projectLocal",
 ]);
 
 // REG_EQ_RE finds the outputs a behavior block registers (`IO14.R = …`), which
@@ -773,6 +796,7 @@ export function galPartFromType(type) {
     id: type.id,
     partnumber: type.partnumber ?? "",
     description: type.description ?? "",
+    notes: type.notes ?? "", // FR-125a: free-form prose, round-tripped verbatim
     inputs,
     olmcs,
     groups,
@@ -971,13 +995,58 @@ export function newGalPartDialog({ submit, part = null }) {
       el("div", "dialog-title", (editing ? "Edit" : "New") + " GAL part — GAL22V10"),
     );
 
+    // Tabs (FR-066h). The dialog had grown to eight stacked regions inside a 92vh
+    // box — three of them scrolling and competing for the same height — and the
+    // notes area of FR-125a is what made a single column untenable. Each surface
+    // now gets the full body height instead of a squeezed slice.
+    //
+    // This is presentation only: no field moved owner, and gather(), validate(),
+    // tablePins(), renderEq(), and behaviorText() are untouched. In particular the
+    // label/direction listeners still rebuild the grid from the Part tab while the
+    // Logic tab is hidden — they were never coupled to visibility.
+    const TAB_SPECS = [
+      { key: "part", label: "Part" },
+      { key: "logic", label: "Logic" },
+      { key: "notes", label: "Notes" },
+    ];
+    const tabStrip = el("div", "galdlg-tabs");
+    tabStrip.setAttribute("role", "tablist");
+    const bodies = {};
+    const tabBtns = {};
+    let activeTab = null;
+    // selectTab shows one body and marks its tab. Hidden bodies keep their DOM —
+    // and so their scroll positions, caret, and the grid — exactly as the dock's
+    // hidden tabs do (FR-123).
+    function selectTab(key) {
+      activeTab = key;
+      for (const t of TAB_SPECS) {
+        bodies[t.key].hidden = t.key !== key;
+        tabBtns[t.key].classList.toggle("active", t.key === key);
+        tabBtns[t.key].setAttribute("aria-selected", String(t.key === key));
+      }
+    }
+    for (const t of TAB_SPECS) {
+      const btn = el("button", "galdlg-tab", t.label);
+      btn.type = "button";
+      btn.setAttribute("role", "tab");
+      btn.addEventListener("click", () => selectTab(t.key));
+      tabStrip.appendChild(btn);
+      tabBtns[t.key] = btn;
+      const body = el("div", "galdlg-tabbody");
+      bodies[t.key] = body;
+    }
+    box.appendChild(tabStrip);
+    for (const t of TAB_SPECS) box.appendChild(bodies[t.key]);
+    const partTab = bodies.part;
+    const logicTab = bodies.logic;
+
     const pnInput = el("input", "dialog-name");
     pnInput.type = "text";
     pnInput.placeholder = "e.g. PC-DECODE-A";
     if (editing) pnInput.value = part.partnumber;
     const pnRow = el("div", "dialog-row");
     pnRow.append(el("label", "dialog-label", "Part number:"), pnInput);
-    box.appendChild(pnRow);
+    partTab.appendChild(pnRow);
 
     const descInput = el("input", "dialog-name");
     descInput.type = "text";
@@ -985,11 +1054,11 @@ export function newGalPartDialog({ submit, part = null }) {
     if (editing) descInput.value = part.description;
     const descRow = el("div", "dialog-row");
     descRow.append(el("label", "dialog-label", "Description:"), descInput);
-    box.appendChild(descRow);
+    partTab.appendChild(descRow);
 
     // Scrollable pin region: inputs (labels) and OLMC pins (label + direction).
     const pins = el("div", "dialog-list galdlg-pins");
-    box.appendChild(pins);
+    partTab.appendChild(pins);
 
     pins.appendChild(el("div", "galdlg-section", "Inputs (pins 1–13)"));
     const inputFields = GAL22V10.inputs.map((p, i) => {
@@ -1064,7 +1133,7 @@ export function newGalPartDialog({ submit, part = null }) {
       }
     });
     groupsRow.append(groupsBtn, groupsSummary);
-    box.appendChild(groupsRow);
+    partTab.appendChild(groupsRow);
 
     // Equation term table (FR-066g): the part's logic is clicked into a grid of
     // three-state cells, one column per signal-bearing pin and one row per AND
@@ -1072,18 +1141,30 @@ export function newGalPartDialog({ submit, part = null }) {
     // box — `galeq.js` owns both directions of the translation, and the model it
     // holds is keyed by skeleton DIP number so relabeling a pin carries its terms.
     const table = editing ? (part.table ?? {}) : {};
-    box.appendChild(el("div", "galdlg-section", "Logic — sum of products"));
+    logicTab.appendChild(el("div", "galdlg-section", "Logic — sum of products"));
     const eqWrap = el("div", "galeq-wrap");
     const eqTable = el("table", "galeq-table");
     const eqHead = el("thead");
     const eqBody = el("tbody");
     eqTable.append(eqHead, eqBody);
     eqWrap.appendChild(eqTable);
-    box.appendChild(eqWrap);
+    logicTab.appendChild(eqWrap);
 
-    box.appendChild(el("div", "galdlg-section", "GALasm this table writes"));
+    logicTab.appendChild(el("div", "galdlg-section", "GALasm this table writes"));
     const preview = el("pre", "galeq-preview");
-    box.appendChild(preview);
+    logicTab.appendChild(preview);
+
+    // Notes tab (FR-125a): one plain-text area over the part's `notes`, the same
+    // idiom as the schematic's Notes tab (§6.23). Notes are documentation, so they
+    // are outside the validation gate entirely — nothing here can make a part
+    // invalid, and refreshEq() is deliberately not called on input.
+    const notesInput = el("textarea", "galdlg-notes");
+    notesInput.spellcheck = false;
+    notesInput.placeholder =
+      "Notes for this part — why the equations are what they are, what is provisional, what is next. Saved in the part's YAML.";
+    notesInput.setAttribute("aria-label", "Part notes");
+    if (editing) notesInput.value = part.notes ?? "";
+    bodies.notes.appendChild(notesInput);
 
     // tablePins is the table's view of the pin fields above: current labels,
     // resolved directions, and which OLMCs are registered. Everything the table
@@ -1327,12 +1408,14 @@ export function newGalPartDialog({ submit, part = null }) {
     syncNcDirs();
     showGroups(); // an edited part arrives with its groups already defined
     rebuildEq(); // initial grid, preview, and Create/Save-enabled state
+    selectTab("part"); // FR-066h: Part is selected on open, creating or editing
 
     // gather reads the current field values into a part description.
     function gather() {
       return {
         partnumber: pnInput.value.trim(),
         description: descInput.value.trim(),
+        notes: notesInput.value, // FR-125a: verbatim, not trimmed of interior shape
         inputs: inputFields.map((f) => ({ ...f.meta, name: f.input.value.trim() })),
         olmcs: olmcFields.map((f) => ({ ...f.meta, name: f.input.value.trim(), kind: f.sel.value })),
       };
@@ -1396,8 +1479,18 @@ export function newGalPartDialog({ submit, part = null }) {
 
     async function onOk() {
       const g = gather();
-      if (!g.partnumber) return showError("A part number is required.");
-      if (!validate()) return; // behavior must pass the strict gate (FR-066c)
+      // A refused submit selects the tab carrying the problem before reporting it
+      // (FR-066h), so a message never names a field the user cannot see. A submit
+      // error from the server names no tab and moves no selection.
+      if (!g.partnumber) {
+        selectTab("part");
+        pnInput.focus();
+        return showError("A part number is required.");
+      }
+      if (!validate()) {
+        selectTab("logic"); // the only other gate is the behavior's (FR-079b)
+        return;
+      }
       const yaml = galPartYaml({ ...g, groups, behavior: behaviorText(), id: part?.id });
       createBtn.disabled = true;
       try {

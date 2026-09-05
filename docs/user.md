@@ -22,7 +22,7 @@ KiCad-like.
 7. [Buses](#7-buses)
 8. [Per-instance overrides](#8-per-instance-overrides)
 9. [Refreshing type data](#9-refreshing-type-data)
-10. [Projects and files](#10-projects-and-files) — including [Importing a block from another project](#importing-a-block-from-another-project)
+10. [Projects and files](#10-projects-and-files) — including [Importing a block from another project](#importing-a-block-from-another-project) and [Design notes](#design-notes)
 11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
 13. [Simulation](#13-simulation) — including [Driving a port by hand](#driving-a-port-by-hand), [Pausing and single-stepping](#pausing-and-single-stepping), [Probing a point](#probing-a-point), [The bottom panel area](#the-bottom-panel-area), [Console output](#console-output), [Test vectors](#test-vectors) — including [The panel's test-vector file](#the-panels-test-vector-file) and [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
@@ -105,7 +105,7 @@ The window has four regions plus a status bar:
 - **Menu bar** (top): the **File** menu (`New Project…`, `Open Project…`,
   `Duplicate Project…`, `Import Block…`, `New`, `Open`, `Save`, `Save As`,
   `Export…`, `Refresh Types`), the **Edit** menu (`Undo`, `Redo`, `Copy`, `Paste`),
-  the **View** menu (`Zoom In`, `Zoom Out`, `Fit to Screen`, `Console`), and the **Tools**
+  the **View** menu (`Zoom In`, `Zoom Out`, `Fit to Screen`, `Notes`, `Console`), and the **Tools**
   menu (`Test Vectors…`, `Generate C…`, `Design Rule Check`), followed by the tool buttons `Select`,
   `Wire`, `Bus` and the `Run` button. Two more buttons appear when they apply:
   the pause/step controls while a clocked run is active
@@ -123,8 +123,9 @@ The window has four regions plus a status bar:
   built-in objects (see [Built-in components](#11-built-in-components)).
 - **Canvas** (center): the grid drawing surface. Everything snaps to grid
   intersections. A **panel area** docks along its bottom when you open the
-  Console or the Test Vectors panel, which share it as tabs (see
-  [The bottom panel area](#the-bottom-panel-area)); with neither open the canvas
+  Console, the Test Vectors panel, the Design Rules report, or the design Notes,
+  which share it as tabs (see
+  [The bottom panel area](#the-bottom-panel-area)); with none open the canvas
   fills the region.
 - **Properties panel** (right): shows the type data and per-instance overrides of
   a single selected component (see [Per-instance overrides](#8-per-instance-overrides)),
@@ -225,7 +226,12 @@ logic is yours to define. Instead of hand-editing a YAML file you can author one
 in-app: click the **NEW GAL** tile in the upper palette region to open the **New GAL
 part** dialog. It presents the chip's fixed 24-pin skeleton (pin 1 is the
 clock/input, pins 2–11 and 13 are inputs, pins 14–23 are the ten I/O "OLMC" pins,
-pins 12/24 are ground/power) and collects only what varies between parts:
+pins 12/24 are ground/power) and collects only what varies between parts.
+
+The dialog has three tabs — **Part**, **Logic**, and **Notes** — and opens on
+**Part**. The status line and the **Cancel**/**Create** buttons sit below the
+tabs and are visible from all three, because the check judges the whole part
+rather than the tab you happen to be looking at. What each tab collects:
 
 - **Part number** — a required name for this specific programmed part
   (e.g. `PC-DECODE-A`). It is the part's display name: the palette tile's label,
@@ -235,8 +241,13 @@ pins 12/24 are ground/power) and collects only what varies between parts:
 - **Pin labels** — a name for each input and I/O pin.
 - **Per-I/O direction** — for each OLMC pin: **comb out** (combinational output),
   **reg out** (registered output, clocked by pin 1), or **input**.
-- **Logic** — the part's equations, built by clicking a table rather than typed.
-  It is described in [The logic table](#the-logic-table) below.
+- **Logic** (its own tab) — the part's equations, built by clicking a table
+  rather than typed. It is described in [The logic table](#the-logic-table) below.
+- **Notes** (its own tab) — free-form prose about the part: why the equations are
+  what they are, what is provisional, what to do next. It is saved in the part's
+  YAML file and is **not** the same field as **Description** above: the
+  description is the one-line label the tooltip shows, and notes are text you read
+  in this dialog. Optional, and any length.
 - **Pin groups** — optionally bundle pins into named groups so a bus can
   snap-connect to all of them at once (see [Buses](#7-buses)). Click
   **Pin groups…**, type a name, and check the member pins. A group's pins must
@@ -244,11 +255,13 @@ pins 12/24 are ground/power) and collects only what varies between parts:
   between them); the dialog refuses a group that breaks either rule and tells you
   why.
 
-Below the table a read-only pane shows **the GALasm the table will write** —
+On the Logic tab, below the table, a read-only pane shows **the GALasm the table will write** —
 exactly the text that lands in the part's file — and it updates as you click. That
 text is **validated live against the real GAL22V10**: the status line shows a green
 check when it is acceptable, or the specific problem otherwise, and **Create** is
-disabled until it passes. This is the same strict check the simulator applies at
+disabled until it passes. If you press Create while something is wrong, the dialog
+**switches to the tab the problem is on** before telling you about it, so a message
+never names a field you cannot see. This is the same strict check the simulator applies at
 Run, so a part you can create is one you could later produce on an actual device
 with GALasm.
 
@@ -333,8 +346,8 @@ two parts with similar numbers sit side by side looking much alike; the chip on 
 sheet is the one you are actually looking at, and there is nothing to pick wrong.
 
 Either way the dialog reopens with everything filled in — part number, description,
-pin labels, directions, pin groups, and the logic table, its cells set from the
-part's existing equations — and its button now reads **Save**. Every field works as
+pin labels, directions, pin groups, notes, and the logic table, its cells set from
+the part's existing equations — and its button now reads **Save**. Every field works as
 it does when creating a part, including the live GALasm check, so an edit that would
 break the device is refused before it can be saved.
 
@@ -900,6 +913,49 @@ you can navigate to. The unsaved-changes indicator (an asterisk by the design
 name) tells you when there is work to save. Saving is allowed even while
 simulating.
 
+### Design notes
+
+A schematic records what a circuit **is**; nothing in it records **why**. Every
+design can therefore carry free-form **notes** — plain text, saved inside the
+design file itself, for the reasoning a drawing cannot hold: which choices are
+provisional, why a signal is inverted here and not there, what the next change
+should be.
+
+**View ▸ Notes** opens a **Notes** tab in the bottom panel area
+([§13](#the-bottom-panel-area)), which behaves like every other tab there — the
+same open/reveal/close menu rule, the same shared height and divider, and it
+keeps its contents while hidden behind another tab. Type straight into it; there
+is no separate edit or preview mode and no formatting. What you type is exactly
+what the file holds and exactly what the next reader sees.
+
+Three things are worth knowing:
+
+- **Notes count as unsaved work.** Typing sets the design's modified marker (the
+  `*` by the design name), so notes are covered by the ordinary Save prompt and
+  by the warning when you leave the page. They are written into the design file
+  on the next **Save** — there is no separate notes file to manage.
+- **Notes are not on the undo stack.** `Ctrl/Cmd+Z` with the caret in the notes
+  area is ordinary text undo; on the canvas it still undoes your last schematic
+  edit. The two never interfere, so an undo aimed at a typo can't remove a wire,
+  and an undo aimed at a wire can't rewrite your prose.
+- **Notes belong to the sheet.** Each design file has its own — a sub-design
+  carries notes you read by opening that sub-design, and a parent sheet's notes
+  do not gather its children's. Opening another design (including stepping into
+  or back out of a sub-design) leaves the Notes tab open and simply shows the new
+  design's notes.
+
+While a simulation is running the notes area is greyed and read-only, like
+everything else about the design; the tab stays open and the text stays readable.
+
+Design notes are distinct from the **text note** built-in
+([§11](#text-notes)), which is an annotation you place *on* the schematic at a
+particular spot. Use a text note to label a corner of the drawing; use design
+notes for prose about the design as a whole.
+
+**Custom GAL parts carry their own notes** in the same way — on the **Notes** tab
+of the part dialog, saved in the part's YAML file. See
+[Creating a custom GAL part](#creating-a-custom-gal-part-22v10).
+
 ---
 
 ## 11. Built-in components
@@ -952,6 +1008,10 @@ A **text note** lets you annotate a schematic with free-form text. Place the
 carries no signal, and is ignored by the netlist and the simulator — so it never
 affects how a design behaves. At rest it shows just its text; a dotted blue box
 appears around it only while it is selected or being edited.
+
+A text note sits **at a place on the drawing**, which is what distinguishes it
+from [design notes](#design-notes): use a text note to label a corner of the
+schematic, and design notes for prose about the design as a whole.
 
 - **Typing:** a note opens for editing the moment you place it, and you can
   re-open it any time by **double-clicking** it. While editing, a text box
@@ -1362,21 +1422,21 @@ Notes:
 
 ### The bottom panel area
 
-Three surfaces dock along the bottom of the canvas area — the **Console**, the
-**Test Vectors** panel, and the **Design Rules** report ([§14](#14-checking-a-design))
-— and they share one region as **tabs**. The schematic stays visible and fully
-usable above it.
+Four surfaces dock along the bottom of the canvas area — the **Console**, the
+**Test Vectors** panel, the **Design Rules** report ([§14](#14-checking-a-design)),
+and the **Notes** editor ([§10](#design-notes)) — and they share one region as
+**tabs**. The schematic stays visible and fully usable above it.
 
 - The area appears when you open the first tab and **disappears entirely** when
   you close the last one. There is never an empty tab strip.
 - Only the **frontmost** tab's contents are shown. Click a tab to bring it
   forward; its **✕** closes it.
-- **Tools ▸ Test Vectors…** and **View ▸ Console** do three things depending
-  on where their tab is: **open** it if closed, **bring it forward** if it is
-  open behind another one, and **close** it only if it is already frontmost. So
-  a background tab is never closed by the menu item that would reveal it — the
-  first invocation shows it, a second closes it. Both items show a check mark
-  while their tab is open. **Tools ▸ Design Rule Check** is the exception: it is
+- **Tools ▸ Test Vectors…**, **View ▸ Console**, and **View ▸ Notes** do three
+  things depending on where their tab is: **open** it if closed, **bring it
+  forward** if it is open behind another one, and **close** it only if it is
+  already frontmost. So a background tab is never closed by the menu item that
+  would reveal it — the first invocation shows it, a second closes it. All three
+  items show a check mark while their tab is open. **Tools ▸ Design Rule Check** is the exception: it is
   a command rather than a panel switch, so it always opens or reveals its report
   tab and never closes it — a check that hid its own results would be no use.
   It shows no check mark. Its **✕** closes it like any other tab.
@@ -1390,11 +1450,15 @@ usable above it.
   with no tab open.
 - If output arrives in a tab you are **not** looking at, a **dot** appears beside
   its label. Selecting the tab clears it. Nothing ever steals focus or switches
-  tabs on you.
+  tabs on you. In practice only the Console is ever marked — it is the one tab
+  whose contents arrive on their own, while the other three fill only when you
+  act on them.
 
 Closing the tab is what "closing the panel" means: closing the Test Vectors tab
-releases its held run and, if you have unsaved vectors, asks first. The Console
-and Design Rules tabs close without asking — neither holds anything you can lose.
+releases its held run and, if you have unsaved vectors, asks first. The Console,
+Design Rules, and Notes tabs close without asking — none holds anything you can
+lose. (Closing Notes discards nothing: the text is already in the design, and the
+design's own unsaved-changes prompt covers it.)
 
 ### Console output
 

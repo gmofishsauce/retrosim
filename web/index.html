@@ -50,6 +50,16 @@
           <!-- Design-rule-check report (FR-124g): built by drcpanel.js, like the
                test-vector panel above, so this host starts empty. -->
           <div id="drc-panel" role="tabpanel" hidden></div>
+          <!-- Design notes (FR-125): one plain-text area over design.notes,
+               written here rather than built in JS because it never varies. -->
+          <div id="notes-panel" role="tabpanel" hidden>
+            <textarea
+              class="notes-body"
+              spellcheck="false"
+              placeholder="Notes for this design — why it is built this way, what is provisional, what is next. Saved with the design."
+              aria-label="Design notes"
+            ></textarea>
+          </div>
         </div>
       </div>
     </section>
