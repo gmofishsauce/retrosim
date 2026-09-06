@@ -986,6 +986,7 @@
         "clock": "CLK",
         "gal": "GAL22V10",
         "partnumber": "INS-DCD",
+        "notes": "The seven inputs are: the three higher order bits of the opcode and the cycle number within the instruction.\n",
         "projectLocal": true
       },
       "overrides": {}
@@ -4354,11 +4355,6 @@
           "v": "v41"
         },
         {
-          "t": "bend",
-          "x": -105,
-          "y": -25
-        },
-        {
           "t": "node",
           "v": "v453"
         },
@@ -4401,11 +4397,6 @@
         {
           "t": "node",
           "v": "v45"
-        },
-        {
-          "t": "bend",
-          "x": -105,
-          "y": -27
         },
         {
           "t": "node",
@@ -4899,65 +4890,32 @@
         },
         {
           "t": "bend",
-          "x": -72,
+          "x": -73,
           "y": 45
         },
         {
           "t": "bend",
-          "x": -72,
-          "y": -39
+          "x": -73,
+          "y": -41
         },
         {
           "t": "bend",
-          "x": -114,
-          "y": -39
+          "x": -115,
+          "y": -41
         },
         {
           "t": "bend",
-          "x": -114,
+          "x": -115,
+          "y": -19
+        },
+        {
+          "t": "bend",
+          "x": -115,
           "y": -18
         },
         {
           "t": "node",
           "v": "v96"
-        }
-      ]
-    },
-    {
-      "id": "w42",
-      "path": [
-        {
-          "t": "node",
-          "v": "v97"
-        },
-        {
-          "t": "bend",
-          "x": -73,
-          "y": 44
-        },
-        {
-          "t": "bend",
-          "x": -73,
-          "y": -3
-        },
-        {
-          "t": "bend",
-          "x": -115,
-          "y": -3
-        },
-        {
-          "t": "bend",
-          "x": -115,
-          "y": -19
-        },
-        {
-          "t": "bend",
-          "x": -113,
-          "y": -19
-        },
-        {
-          "t": "node",
-          "v": "v98"
         }
       ]
     },
@@ -6831,6 +6789,39 @@
           "v": "v488"
         }
       ]
+    },
+    {
+      "id": "w257",
+      "path": [
+        {
+          "t": "node",
+          "v": "v97"
+        },
+        {
+          "t": "bend",
+          "x": -71,
+          "y": 44
+        },
+        {
+          "t": "bend",
+          "x": -71,
+          "y": -40
+        },
+        {
+          "t": "bend",
+          "x": -114,
+          "y": -40
+        },
+        {
+          "t": "bend",
+          "x": -114,
+          "y": -19
+        },
+        {
+          "t": "node",
+          "v": "v490"
+        }
+      ]
     }
   ],
   "buses": [
@@ -8623,14 +8614,6 @@
       "y": 44
     },
     {
-      "id": "v98",
-      "kind": "pin",
-      "ref": "X3",
-      "pin": "F1",
-      "x": -112,
-      "y": -19
-    },
-    {
       "id": "v99",
       "kind": "pin",
       "ref": "X3",
@@ -10135,6 +10118,14 @@
       "kind": "junction",
       "x": 2,
       "y": -26
+    },
+    {
+      "id": "v490",
+      "kind": "pin",
+      "ref": "X3",
+      "pin": "F1",
+      "x": -112,
+      "y": -19
     }
   ],
   "refCounters": {
@@ -10443,17 +10434,6 @@
       ],
       "provenance": [],
       "name": "F2"
-    },
-    {
-      "pins": [
-        "U6.F1",
-        "X3.F1"
-      ],
-      "members": [
-        "w42"
-      ],
-      "provenance": [],
-      "name": "F1"
     },
     {
       "pins": [
@@ -10842,6 +10822,17 @@
       ],
       "provenance": [],
       "name": "IO22"
+    },
+    {
+      "pins": [
+        "U6.F1",
+        "X3.F1"
+      ],
+      "members": [
+        "w257"
+      ],
+      "provenance": [],
+      "name": "F1"
     },
     {
       "pins": [

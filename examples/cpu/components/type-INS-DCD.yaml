@@ -32,3 +32,5 @@ behavior: |
   F1.R = IR13 * !IR14 * IR15
        + !IR13 * IR14 * IR15
   /LD = !CY0 * !CY1 * !CY2 * !CY3
+notes: |2
+  The seven inputs are: the three higher order bits of the opcode and the cycle number within the instruction.
