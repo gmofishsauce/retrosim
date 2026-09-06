@@ -2665,7 +2665,12 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   offers "Open sub-design", FR-100/§6.14, a port carrying an off-sheet
   target offers "Follow off-sheet connector", FR-101/FR-101b, and an instance of a
   project-local GAL part offers "Edit part definition…", FR-033b/FR-066f/§6.14 —
-  the same item the palette tile carries, reached from the chip on the sheet).
+  the same item the palette tile carries, reached from the chip on the sheet; and a
+  component that owns notes — **any** GAL instance, project-local or shared, plus any
+  sub-design instance — offers "View notes", which shows them read-only in the Notes
+  tab, FR-033b/FR-125b/§6.23. The two GAL tests are deliberately different widths:
+  `editableGalType` requires `projectLocal`, `viewableNotesSubject` does not, because
+  reading a definition is harmless where rewriting one in place is not).
   Dismissed by choosing an item,
   Escape, or an outside click. `interaction.js` builds the item list and dispatches
   the commands; `contextmenu.js` only renders and positions the menu. Width and
@@ -4447,7 +4452,7 @@ supplies `onDesignRuleCheck: () => drcPanel.run()`, and passes `drc: drcPanel` i
 ### 6.23 JS: design notes (`web/js/chrome/notespanel.js` + store/dock/toolbar/persist/app wiring)
 
 - **Purpose:** the free-form prose a design carries about itself, edited in a docked tab and saved in the design file.
-- **Satisfies:** FR-125; FR-125a is the component-type half (§6.2/§6.4/§7.6).
+- **Satisfies:** FR-125, FR-125b; FR-125a is the component-type half (§6.2/§6.4/§7.6).
 - **The whole feature is one string.** `design.notes` — additive-optional in `serializeDesign` on the `primaryClock`/`drcWaivers` pattern (§7.2), written only when non-empty, so no existing save file gains a key and §7.4 needs no migration step. There is no notes *document*, no association, no path, and no second modified flag; that absence is what makes the design-replacement rule (below) a rebind rather than the test-vector panel's guarded close (§6.16).
 
 **Why a dedicated store method and not `applyLive` or `dispatch`.** A notes edit is a design mutation with an unusual combination of consequences (FR-125), and none of the three existing paths has it:
@@ -4468,7 +4473,21 @@ supplies `onDesignRuleCheck: () => drcPanel.run()`, and passes `drc: drcPanel` i
 
 **Design replacement is a rebind, not a close (FR-125).** `store.replaceDesign` already notifies, so the panel's ordinary subscriber sees the new design's notes and writes them into the textarea by the difference rule above — no call site changes, and `fileops.beforeReplace`/`guardReplace` (§6.16, added for OQ-002) is deliberately **not** extended to the Notes tab. That guard exists because the test-vector panel holds a *second document* whose path and modified flag can be left pointing at the design it is no longer showing; notes have no path, no flag, and no existence apart from the design, so replacing the design replaces the notes and there is nothing left over to be wrong about.
 
-**Wiring.** `store.js` gains `notesPanelOpen: false`, a `notes: "notesPanelOpen"` row in `DOCK_FLAG`, `setNotesPanelOpen(flag)` routing through `setTabOpen`, and `setDesignNotes(text)`. `dock.js` gains the `TABS` row (§6.16a). `index.html` gains `#notes-panel`. `toolbar.js` gains **View ▸ Notes** above Console, calling `onNotes?.()` → `dock.menuInvoke("notes")`, checked while the tab is open and enabled whenever a project is open. `persist.js` serializes and (by plain object carry-through) loads the key.
+**Borrowing another component's notes (FR-125b, 2026-09-06).** The pane holds one extra piece of **session state**, a `subject`, and everything else about the feature follows from what that value is:
+
+| `subject` | title line | textarea text | disabled |
+|---|---|---|---|
+| `null` (the default) | `Notes for ` + `design.name` | `design.notes` | `store.isReadonly()` — the simulation lock (FR-087) |
+| `{ kind: "type", refdes, typeId }` | `Notes for U7 — ADDRDEC` | `findType(typeId)?.notes` | always |
+| `{ kind: "child", refdes, file, text }` | `Notes for X2 — alu.dsn` | `text`, the snapshot | always |
+
+- **Resolved, not copied — for a type.** The `type` subject stores the **type id** (FR-066e) and re-resolves it through `findType` inside `syncToDesign`, exactly as `editableGalType` does for "Edit part definition…" (§6.11): the instance's `typeData` is a placement-time copy (FR-057) that may predate an edit made minutes ago in the dialog, and re-resolving is what makes the pane update in place when that dialog saves. A `findType` miss is the type leaving the library, which reverts `subject` to `null` (FR-125b) — the same line that handles a refdes no longer on the sheet.
+- **A snapshot — for a child design.** A sub-design instance holds only a path (FR-098), so `app.js`'s handler `await loadDesign(childPath)` before binding, stores the child's `notes` string **in** the subject, and reports a failed read through the tray (FR-074) without touching the current binding. It cannot be resolved per-refresh like a type: `syncToDesign` runs on every store notification and cannot be async, and there is nothing to re-resolve *from* — the child is a file the editor does not have open, and no notification exists for it. Re-choosing the menu item is the refresh, which FR-125b states as the rule rather than hiding it.
+- **`needsSync` generalizes to the target text.** The caret guard (above) was `current !== notesOf(design)`; it becomes `current !== <the text the subject names>`, and the same "write only when they differ" rule keeps the caret intact in the one case that is still editable. The disabled cases are written by the same comparison and cost nothing.
+- **Falling back is a `null` assignment, not a branch everywhere.** `syncToDesign` clears `subject` when its type is gone from the library or its refdes is gone from the design, then renders; every reader downstream sees the design case. That is also what a design replacement gets for free — `replaceDesign` notifies, the new design has neither that refdes nor (after a project switch) that type — but the panel additionally clears `subject` in `open()`, which is what makes **View ▸ Notes always mean "my notes"** (FR-125b) even when the borrowed component is still on the sheet.
+- **The title is not the tab label.** The title line lives in `#notes-panel`'s own header (`.notes-header`, mirroring `.console-header`, §6.20); the dock's strip label stays the static `"Notes"` from the `TABS` registry (§6.16a). The header also carries the `read-only` marker for a borrowed subject, which is the visible cause for a disabled textarea (the rule FR-115h's removal established), and the textarea's `placeholder` becomes `"<subject> has no notes."` so an empty borrowed note reads as an answer rather than as an empty editor.
+
+**Wiring.** `store.js` gains `notesPanelOpen: false`, a `notes: "notesPanelOpen"` row in `DOCK_FLAG`, `setNotesPanelOpen(flag)` routing through `setTabOpen`, and `setDesignNotes(text)`. `dock.js` gains the `TABS` row (§6.16a). `index.html` gains `#notes-panel`. `toolbar.js` gains **View ▸ Notes** above Console, calling `onNotes?.()` → `dock.menuInvoke("notes")`, checked while the tab is open and enabled whenever a project is open. `persist.js` serializes and (by plain object carry-through) loads the key. For FR-125b, `interaction.js` adds a **"View notes"** item to the component branch of the canvas context menu (§6.11) — offered for `inst.kind === "subdesign"` and for any instance whose library type declares `gal:` (`viewableNotesSubject`, the wider sibling of `editableGalType`: no `projectLocal` test, since reading is not rewriting) — calling `onViewNotes(subject)`. `app.js` wires that to the child-file read above (`loadDesign(subject.path)`, a failure reported through the tray and the pane left as it was), then **reveals** the tab the way the DRC report does (§6.21) — `if (!notesPanel.isOpen()) notesPanel.open(); else store.setDockActive("notes")`, never `dock.menuInvoke("notes")`, whose third branch would *close* a frontmost tab — and only then calls `notesPanel.showSubject(subj)`, in that order because `open()` deliberately clears the subject. `createNotesPanel` gains a `findType` argument for the type case, and the panel handle gains `showSubject`; nothing else in the dock, store, or file format changes, and no save file gains a byte — what the pane is showing is session state.
 
 - **Dependencies:** store, dock. The panel imports nothing else; nothing imports the panel but `app.js`.
 
@@ -5385,7 +5404,7 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-023a, FR-023b | §6.9 | `interaction.js` |
 | FR-027d, FR-027e | §6.9, §6.9a | `router.js`, `interaction.js` |
 | FR-032a | §6.6, §6.9 | `model/design.js`, `interaction.js` |
-| FR-033b, FR-033c, FR-033d | §6.6, §6.7, §6.9, §6.11 | `contextmenu.js`, `geometry.js`, `interaction.js`, `model/design.js` |
+| FR-033b, FR-033c, FR-033d | §6.6, §6.7, §6.9, §6.11, §6.23 | `contextmenu.js`, `geometry.js`, `interaction.js`, `model/design.js`, `chrome/notespanel.js` |
 | FR-034c | §6.6, §6.9 | `model/design.js`, `interaction.js` |
 | FR-049b, FR-052a | §6.11 | `dialogs.js` |
 | FR-063a | §6.3, §6.14 | `yamlparse.go`, `dialogs.js` |
@@ -5395,6 +5414,7 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-066h | §6.4, §6.11 | `chrome/dialogs.js`, `chrome/dialogs.test.js`, `css/style.css` |
 | FR-125 | §6.23, §6.16a, §6.10, §7.2, §7.4 | `chrome/notespanel.js`, `chrome/notespanel.test.js`, `chrome/dock.js`, `chrome/toolbar.js`, `store.js`, `store.test.js`, `model/persist.js`, `app.js`, `index.html`, `css/style.css` |
 | FR-125a | §6.2, §6.4, §7.1, §7.6 | `yamlparse.go`, `types.go`, `chrome/dialogs.js` |
+| FR-125b | §6.23, §6.11 | `chrome/notespanel.js`, `chrome/notespanel.test.js`, `engine/interaction.js`, `engine/interaction.test.js`, `app.js`, `index.html`, `css/style.css` |
 | FR-066f | §6.2, §6.4, §6.6, §6.10, §6.11, §6.14, §7.1 | `dialogs.js`, `app.js`, `api.js`, `contextmenu.js`, `interaction.js`, `commands.js`, `api.go`, `components.go` |
 | FR-066e | §6.2, §6.3, §7.1, §7.4 | `yamlparse.go`, `components.go`, `model/persist.js`, `builtins.js` |
 | FR-071f | §6.8, §6.9, §6.11, §7.2 | `builtins.js`, `canvas.js`, `interaction.js`, `model/design.js` |

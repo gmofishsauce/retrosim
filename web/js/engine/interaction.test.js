@@ -1,7 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { editableGalType, planBusEndpoint, probeClaimsClick, probeTarget } from "./interaction.js";
+import {
+  editableGalType,
+  planBusEndpoint,
+  probeClaimsClick,
+  probeTarget,
+  viewableNotesSubject,
+} from "./interaction.js";
 
 // A type with a single 3-bit group "A".
 const typeA = {
@@ -234,4 +240,51 @@ test("editableGalType resolves through the library, not the instance's copy (FR-
 test("editableGalType declines an instance with no type data", () => {
   assert.equal(editableGalType(undefined, findIn(galLib)), null);
   assert.equal(editableGalType({ refdes: "U1" }, findIn(galLib)), null);
+});
+
+// --- "View notes" eligibility on a placed instance (FR-033b/FR-125b) ---
+
+test("viewableNotesSubject offers a project-local GAL part's notes", () => {
+  const lib = [{ id: "type-22V-DCD", gal: "GAL22V10", projectLocal: true, partnumber: "ADDRDEC" }];
+  assert.deepEqual(viewableNotesSubject(instOf("type-22V-DCD"), findIn(lib)), {
+    kind: "type",
+    refdes: "U1",
+    name: "ADDRDEC",
+    typeId: "type-22V-DCD",
+  });
+});
+
+test("viewableNotesSubject offers a SHARED-library GAL part too (wider than edit)", () => {
+  // The deliberate difference from editableGalType: reading a definition is
+  // harmless where rewriting one in place is not (FR-125b).
+  assert.equal(editableGalType(instOf("type-22V574"), findIn(galLib)), null);
+  assert.equal(viewableNotesSubject(instOf("type-22V574"), findIn(galLib))?.kind, "type");
+});
+
+test("viewableNotesSubject declines a non-GAL part and an unknown type", () => {
+  assert.equal(viewableNotesSubject(instOf("type-7400"), findIn(galLib)), null);
+  assert.equal(viewableNotesSubject(instOf("type-elsewhere"), findIn(galLib)), null);
+  assert.equal(viewableNotesSubject(undefined, findIn(galLib)), null);
+  assert.equal(viewableNotesSubject({ refdes: "U1" }, findIn(galLib)), null);
+});
+
+test("viewableNotesSubject names a GAL with no partnumber by its library id", () => {
+  const lib = [{ id: "type-nameless", gal: "GAL22V10" }];
+  assert.equal(viewableNotesSubject(instOf("type-nameless"), findIn(lib)).name, "type-nameless");
+});
+
+test("viewableNotesSubject offers a sub-design instance, named by its file", () => {
+  // The child is a path, not a type (FR-098): the subject carries the path and
+  // the caller reads the file, since notes live in the child, not in the parent.
+  const inst = { refdes: "X2", kind: "subdesign", childPath: "/proj/sheets/alu.dsn" };
+  assert.deepEqual(viewableNotesSubject(inst, findIn(galLib)), {
+    kind: "child",
+    refdes: "X2",
+    name: "alu.dsn",
+    path: "/proj/sheets/alu.dsn",
+  });
+});
+
+test("viewableNotesSubject declines a sub-design instance with no child path", () => {
+  assert.equal(viewableNotesSubject({ refdes: "X2", kind: "subdesign" }, findIn(galLib)), null);
 });

@@ -22,7 +22,7 @@ KiCad-like.
 7. [Buses](#7-buses)
 8. [Per-instance overrides](#8-per-instance-overrides)
 9. [Refreshing type data](#9-refreshing-type-data)
-10. [Projects and files](#10-projects-and-files) — including [Importing a block from another project](#importing-a-block-from-another-project) and [Design notes](#design-notes)
+10. [Projects and files](#10-projects-and-files) — including [Importing a block from another project](#importing-a-block-from-another-project), [Design notes](#design-notes) and [Reading a component's notes](#reading-a-components-notes)
 11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
 13. [Simulation](#13-simulation) — including [Driving a port by hand](#driving-a-port-by-hand), [Pausing and single-stepping](#pausing-and-single-stepping), [Probing a point](#probing-a-point), [The bottom panel area](#the-bottom-panel-area), [Console output](#console-output), [Test vectors](#test-vectors) — including [The panel's test-vector file](#the-panels-test-vector-file) and [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
@@ -928,6 +928,12 @@ keeps its contents while hidden behind another tab. Type straight into it; there
 is no separate edit or preview mode and no formatting. What you type is exactly
 what the file holds and exactly what the next reader sees.
 
+The pane's header always says **whose** notes you are reading — `Notes for
+cpu-decode` for the design you have open, and the component's designator for
+anything else (see [Reading a component's notes](#reading-a-components-notes)
+below). It is stated in every case on purpose: a label that showed up only
+sometimes would leave you guessing the rest of the time.
+
 Three things are worth knowing:
 
 - **Notes count as unsaved work.** Typing sets the design's modified marker (the
@@ -939,10 +945,10 @@ Three things are worth knowing:
   edit. The two never interfere, so an undo aimed at a typo can't remove a wire,
   and an undo aimed at a wire can't rewrite your prose.
 - **Notes belong to the sheet.** Each design file has its own — a sub-design
-  carries notes you read by opening that sub-design, and a parent sheet's notes
-  do not gather its children's. Opening another design (including stepping into
-  or back out of a sub-design) leaves the Notes tab open and simply shows the new
-  design's notes.
+  carries its own notes, and a parent sheet's notes do not gather its children's.
+  (You can read a child's notes from the parent without descending; see below.)
+  Opening another design (including stepping into or back out of a sub-design)
+  leaves the Notes tab open and simply shows the new design's notes.
 
 While a simulation is running the notes area is greyed and read-only, like
 everything else about the design; the tab stays open and the text stays readable.
@@ -955,6 +961,41 @@ notes for prose about the design as a whole.
 **Custom GAL parts carry their own notes** in the same way — on the **Notes** tab
 of the part dialog, saved in the part's YAML file. See
 [Creating a custom GAL part](#creating-a-custom-gal-part-22v10).
+
+### Reading a component's notes
+
+The chips that carry notes of their own are the two kinds that are designs in
+their own right: a **GAL part**, whose notes live in its definition file, and a
+**sub-design instance**, whose notes live in the child design. You can read
+either without leaving the sheet you are on:
+
+**Right-click the chip and choose "View notes".** Its notes appear in the Notes
+tab — opening it if it was closed, bringing it forward if it was behind another
+tab — with the header now naming the chip: `Notes for U7 — ADDRDEC`, or
+`Notes for X2 — alu.dsn` for a sub-design.
+
+- **What you see there is read-only** — the pane says so beside the title, and
+  the text is greyed. You are reading someone else's file, and the Notes tab
+  only ever *edits* the design you have open. To change what it shows, edit a
+  GAL part's notes on the **Notes** tab of its [part
+  dialog](#editing-a-custom-gal-part), or a sub-design's by opening that sheet
+  and typing in its own Notes tab.
+- **Any GAL part offers the item**, whether you authored it in this project or
+  it came from the shared library — reading a definition is harmless, which is
+  why this reaches further than **Edit part definition…** does.
+- **A part with no notes still offers the item**, and the pane tells you so
+  (`U7 — ADDRDEC has no notes.`) rather than leaving you to wonder whether the
+  menu was hiding something.
+- **A GAL part's notes stay current.** Edit the part in its dialog while its
+  notes are on screen and the pane follows the change. A **sub-design's** notes
+  are a snapshot taken when you chose the item — that file is not open in the
+  editor, so if you change it elsewhere, choose **View notes** again to re-read
+  it.
+- **To get back to your own notes**, choose **View ▸ Notes**. That item always
+  means "this design's notes", whatever the pane was showing. Opening another
+  design does the same thing: the borrowed notes are dropped along with the
+  sheet whose chip named them, and deleting the chip you were reading about
+  returns the pane to your design's notes as well.
 
 ---
 
@@ -1148,6 +1189,8 @@ the editing canvas. A **← back** button appears in the top bar; click it to re
 to the parent. Descending and going back are each treated as closing the current
 design, so the usual unsaved-changes prompt applies — save or discard before the
 canvas changes. A plain New or Open leaves the hierarchy and clears the back path.
+To read a child's [design notes](#reading-a-components-notes) without descending
+at all, right-click the instance and choose **View notes**.
 
 To **follow an off-sheet connector**, double-click a port that has a target (or
 right-click it and choose **Follow off-sheet connector**) — a plain click still
@@ -1458,7 +1501,9 @@ Closing the tab is what "closing the panel" means: closing the Test Vectors tab
 releases its held run and, if you have unsaved vectors, asks first. The Console,
 Design Rules, and Notes tabs close without asking — none holds anything you can
 lose. (Closing Notes discards nothing: the text is already in the design, and the
-design's own unsaved-changes prompt covers it.)
+design's own unsaved-changes prompt covers it; if the tab was showing [another
+component's notes](#reading-a-components-notes), reopening it returns to your
+own.)
 
 ### Console output
 
@@ -2001,7 +2046,7 @@ clear message until then, without losing your work.
 | Middle-drag / Space+left-drag | Pan |
 | Mouse wheel | Zoom to cursor |
 | Right-click empty | Recenter view on the cursor |
-| Right-click object | Context menu — on a chip this includes **Edit part definition…** for a [GAL part of this project](#editing-a-custom-gal-part) |
+| Right-click object | Context menu — on a chip this includes **Edit part definition…** for a [GAL part of this project](#editing-a-custom-gal-part), and **View notes** for any GAL part or sub-design ([reading a component's notes](#reading-a-components-notes)) |
 | Right-click a palette tile | Context menu for that part — currently **Edit part definition…** on a [GAL part of this project](#editing-a-custom-gal-part); tiles with nothing to offer show no menu |
 | Double-click a sub-design | Open it (descend); **← back** returns to the parent |
 | Double-click a text note | Edit its text |

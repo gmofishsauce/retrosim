@@ -405,6 +405,36 @@ body.dock-dragging .dock-grip { background: rgba(74, 144, 217, 0.35); }
   display: flex;
   flex-direction: column;
 }
+/* Header naming the pane's subject (FR-125b) — always present, so the ordinary
+   case is labeled too and a borrowed one cannot be mistaken for it. Mirrors
+   .console-header above. */
+.notes-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  background: #e7e7e7;
+  border-bottom: 1px solid #ccc;
+}
+.notes-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-right: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The visible cause for a disabled textarea when the subject is borrowed. */
+.notes-readonly {
+  font-size: 0.75rem;
+  color: #555;
+  border: 1px solid #bbb;
+  border-radius: 3px;
+  padding: 0 0.3rem;
+  background: #f6f6f6;
+}
+.notes-readonly[hidden] { display: none; }
 .notes-body {
   flex: 1 1 auto;
   min-height: 0;

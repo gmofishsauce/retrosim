@@ -447,6 +447,32 @@ async function main() {
       // (FR-121i, §6.19): setCurrentProject calls this after recording the project.
       reloadLibrary,
     });
+    // "View notes" on a placed GAL or sub-design (FR-033b/FR-125b): bind the
+    // Notes pane to that component's notes, read-only. A type subject carries
+    // only its id — the pane re-resolves it through the live library on every
+    // refresh — while a child design's notes have to be READ here: the child is
+    // a file the editor does not have open (FR-098), so what the pane shows is a
+    // snapshot of this read, and choosing the item again is the refresh. A read
+    // that fails reports and changes nothing, rather than blanking the pane.
+    const onViewNotes = async (subject) => {
+      let subj = subject;
+      if (subject.kind === "child") {
+        try {
+          const child = await loadDesign(subject.path);
+          subj = { ...subject, text: child?.notes ?? "" };
+        } catch (err) {
+          toast(`${subject.refdes}: cannot read ${subject.name} — ${err.message}`);
+          return;
+        }
+      }
+      // Open, or select if open but backgrounded — never close, like the DRC
+      // report's own reveal (§6.21): the item is a command, not a toggle. open()
+      // deliberately clears any borrowed subject (View ▸ Notes means "my notes",
+      // FR-125b), so the binding comes after the reveal, not before.
+      if (!notesPanel.isOpen()) notesPanel.open();
+      else store.setDockActive("notes");
+      notesPanel.showSubject(subj);
+    };
     const interaction = initInteraction({
       canvas: document.getElementById("canvas"),
       palette,
@@ -458,6 +484,7 @@ async function main() {
       onOpenSubDesign: (childPath) => fileops.descend(childPath), // FR-100
       onFollowPortTarget: (target) => fileops.followTarget(target), // FR-101/FR-101b
       onEditGalPart, // FR-033b/FR-066f: same item the palette tile carries (FR-006b)
+      onViewNotes, // FR-033b/FR-125b: read a placed GAL's or child sheet's notes
       onNewGalPart, // FR-066c: upper-palette action tile
       onNewMemDevice, // FR-114: upper-palette action tile
     });
@@ -495,7 +522,13 @@ async function main() {
     // four: one textarea over `design.notes`. Modeless, and — having no document
     // of its own — needing no guarded close and no entry in fileops' replacement
     // guard: a design replacement rebinds it through its ordinary subscriber.
-    const notesPanel = createNotesPanel({ store });
+    // `findType` is for FR-125b alone: a borrowed type subject is re-resolved
+    // through the live library on every refresh, never read off the instance's
+    // placement-time copy (FR-057).
+    const notesPanel = createNotesPanel({
+      store,
+      findType: (id) => library.find((t) => typeIdentity(t) === id) ?? null,
+    });
     // The docked panel area (§6.16a, FR-123/FR-115n): the tab strip, which tab is
     // displayed, the shared height, and its draggable top edge. Constructed once,
     // after the three panels exist, since it drives them through their handles —

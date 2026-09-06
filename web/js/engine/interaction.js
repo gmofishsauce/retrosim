@@ -198,6 +198,31 @@ export function editableGalType(inst, findType) {
   return type?.gal && type.projectLocal ? type : null;
 }
 
+// viewableNotesSubject decides whether a placed instance offers "View notes"
+// (FR-033b/FR-125b), and returns the descriptor the Notes pane binds to.
+//
+// It is `editableGalType`'s wider sibling, and the width is the point: reading a
+// definition is harmless where rewriting one in place is not, so a SHARED-library
+// GAL offers View notes though it offers no Edit. A sub-design instance (FR-098)
+// qualifies too, and is the async case — it carries only a child path, so the
+// caller reads the file and fills in `text` before showing it. Everything else on
+// the sheet (74-series parts, memories, built-ins, ports, text notes) owns no
+// notes of its own and yields null. Pure, so it is exported for testing.
+export function viewableNotesSubject(inst, findType) {
+  if (!inst) return null;
+  if (inst.kind === "subdesign" && inst.childPath) {
+    const name = inst.childPath.split("/").pop() || inst.childPath;
+    return { kind: "child", refdes: inst.refdes, name, path: inst.childPath };
+  }
+  if (!inst.typeData) return null;
+  // Resolved through the live library, like every other menu item that reads a
+  // definition: the instance's typeData is a placement-time copy (FR-057).
+  const id = typeIdentity(inst.typeData);
+  const type = findType(id);
+  if (!type?.gal) return null;
+  return { kind: "type", refdes: inst.refdes, name: type.partnumber || type.name || id, typeId: id };
+}
+
 // conductorTarget describes a wire or bus for the probe. A bus carries its width
 // so the panel can read every bit's lane (FR-087c).
 function conductorTarget(design, cond) {
@@ -240,7 +265,7 @@ export function planBusEndpoint(design, target, width) {
 // `name` matches the ADD tile so the armed-tile highlight (FR-009a) still works.
 const ADD_TYPE = { name: "add", isAdd: true };
 
-export function initInteraction({ canvas, palette, store, renderer, library, fileops, onAddSubDesign, onOpenSubDesign, onFollowPortTarget, onEditGalPart, onNewGalPart, onNewMemDevice }) {
+export function initInteraction({ canvas, palette, store, renderer, library, fileops, onAddSubDesign, onOpenSubDesign, onFollowPortTarget, onEditGalPart, onViewNotes, onNewGalPart, onNewMemDevice }) {
   let placeType = null; // ComponentType when tool === "place"
   let wireSource = null; // pending WIRE source spec
   let wireWaypoints = []; // locked intermediate waypoints for the in-progress wire/bus (FR-027e)
@@ -1582,6 +1607,19 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
         items.push({
           label: "Edit part definition…",
           onClick: () => onEditGalPart(libType),
+        });
+        items.push({ separator: true });
+      }
+      // A component that documents itself — any GAL part, any sub-design — shows
+      // its notes read-only in the Notes tab (FR-033b/FR-125b). Offered whether
+      // or not the notes turn out to be non-empty: hiding the item on an empty
+      // note would be indistinguishable from ineligibility, and for a child
+      // design the answer is not known until the file has been read.
+      const notesSubject = viewableNotesSubject(inst, findType);
+      if (notesSubject && onViewNotes) {
+        items.push({
+          label: "View notes",
+          onClick: () => onViewNotes(notesSubject),
         });
         items.push({ separator: true });
       }
