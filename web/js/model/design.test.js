@@ -8,6 +8,8 @@ import {
   addBus,
   addWire,
   pinWorldPos,
+  pinVisualPos,
+  PIN_LEAD,
   groupFreeBlock,
   groupsAcceptingBus,
   snapBusGroup,
@@ -920,6 +922,25 @@ test("placement seeds marks on NC pins; refreshInstance adds none (FR-062f/FR-08
   assert.equal(old.ncPins, undefined);
   assert.deepEqual(refreshInstance(e, old, typeWithNc()), { ok: true, dropped: [] });
   assert.equal(old.ncPins, undefined);
+});
+
+test("repeated NC pins are distinct pins: record vs name lookup (FR-062f, §6.6)", () => {
+  const d = createDesign("t");
+  const inst = addInstance(d, typeWithNc(), 10, 20, 0);
+  const [, , nc1, nc2] = inst.typeData.pins;
+
+  // By RECORD each NC pin sits where it was declared (left pos 2 and 3)...
+  assert.deepEqual(pinWorldPos(inst, nc1), { x: 10, y: 22 });
+  assert.deepEqual(pinWorldPos(inst, nc2), { x: 10, y: 23 });
+  assert.deepEqual(pinVisualPos(inst, nc2), { x: 10 - PIN_LEAD, y: 23 });
+
+  // ...while the NAME resolves to the first pin bearing it, which is why every
+  // caller walking typeData.pins passes the record. A name is only ever used to
+  // resolve a saved reference, and nothing may save a reference to an NC pin.
+  assert.deepEqual(pinWorldPos(inst, NC_PIN), pinWorldPos(inst, nc1));
+
+  // A unique name still resolves either way.
+  assert.deepEqual(pinWorldPos(inst, "Y"), pinWorldPos(inst, inst.typeData.pins[1]));
 });
 
 test("setPinMark refuses a connected pin and toggles a bare one (FR-071i)", () => {

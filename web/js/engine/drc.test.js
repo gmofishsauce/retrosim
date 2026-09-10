@@ -750,6 +750,37 @@ test("a marked input pin produces no R3, from either of R3's two sources (FR-124
   assert.equal((await runDesignRuleCheck(e)).findings.filter((f) => f.rule === "R3").length, 1);
 });
 
+test("an NC pin is invisible to the check by name, with no mark (FR-124j (b))", async () => {
+  // The case this rule exists for: a type that GAINED NC pins after the instance
+  // was placed. FR-062f auto-supplies marks at placement only, so this instance
+  // carries none — and R3 must still stay quiet, because pinAcceptsConnection
+  // refuses to wire an NC pin, leaving the user no way to clear such a finding.
+  const withNc = () => {
+    const t = ty();
+    t.pins.push({ name: "NC", side: "left", position: 4, direction: "in" });
+    t.pins.push({ name: "NC", side: "left", position: 6, direction: "in" });
+    t.pins.push({ name: "NC", side: "left", position: 8, direction: "in" });
+    return t;
+  };
+  const d = createDesign("t");
+  addInstance(d, withNc(), 10, 10, 0);
+  delete d.components[0].ncPins; // as if placed before the type declared them
+
+  const r3 = (await runDesignRuleCheck(d)).findings.filter((f) => f.rule === "R3");
+  assert.deepEqual(
+    r3.map((f) => f.refs),
+    [["U1.A"]], // A only — never U1.NC, and never three copies of it
+  );
+
+  // Removing an auto-supplied mark does not bring the pin back into the report:
+  // the mark governs the drawing, the name governs the check (FR-062f).
+  const e = createDesign("t");
+  const inst = addInstance(e, withNc(), 10, 10, 0);
+  assert.deepEqual(inst.ncPins, ["NC"]); // seeded at placement
+  const seeded = (await runDesignRuleCheck(e)).findings.filter((f) => f.rule === "R3");
+  assert.deepEqual(seeded.map((f) => f.refs), [["U1.A"]]);
+});
+
 test("a package whose every output is marked is silent for R6 (FR-124j)", async () => {
   const d = createDesign("t");
   addInstance(d, ty(), 10, 10, 0);

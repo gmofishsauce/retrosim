@@ -409,7 +409,9 @@ reworked.
 - **FR-062f** — The pin name **`NC`** is reserved library-wide for *no connect*:
   declarable by any component (library YAML, GAL part, generated memory, built-in),
   the **only** pin name exempt from within-file uniqueness (nothing may reference
-  it), drawn like any pin but inert — no connections, no pin group, not `clock:`,
+  it) — though repeated `NC` pins remain **distinct pins**, each drawn, hit-tested
+  and exported at its own declared position, so only *saved references* may key a
+  pin by name — drawn like any pin but inert — no connections, no pin group, not `clock:`,
   and rejected in the behavior block (it is already a GALasm reserved word). A
   violating definition is rejected and skipped at load. Placing an instance
   auto-supplies a no-connect mark (FR-071i) on each `NC` pin — **at placement
@@ -519,8 +521,12 @@ reworked.
   indication while **retaining every finding, still clickable**. Never self-clears
   (would destroy the work list after the first fix), never self-re-runs. A stale
   finding points at something or at nothing, never at the wrong thing (FR-124c).
-- **FR-124j** — A **no-connect-marked pin vanishes from the check** (FR-071i): it
-  is removed from the check's input, not filtered out of the report. So no R3; not
+- **FR-124j** — A **no-connect-marked pin, and a pin named `NC`, vanish from the
+  check** (FR-071i/FR-062f): each is removed from the check's input, not filtered
+  out of the report. The `NC` test is by **name**, independent of any mark, since
+  such a pin can carry no connection and so no finding against it could be acted
+  on (2026-09-09; previously only the mark hid a pin, which left the `NC` pins of
+  any instance placed before its type declared them reporting as undriven). So no R3; not
   one of a package's outputs for R6 (an all-marked package is silent, like an
   all-input part); not a load or driver for R4/R9; an all-marked component is
   skipped by R8 like a text note; and it can never reach R1/R2/R5, which need a
@@ -1323,7 +1329,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     is wrong. That asymmetry is the point: an unattended batch job may not
     silently unwire a design it is not showing anyone, and the interactive
     refresh may not silently leave one stale.
-  - `pinWorldPos(instance, pinName) → {x,y}` — applies rotation (§6.7). For
+  - `pinWorldPos(instance, pinOrName) → {x,y}` — applies rotation (§6.7). For
     subunit instances the unrotated pin offset comes from the symbol module
     (§6.8a) keyed by `renderAs`, input count, pin role, and slot index (the pin's
     order among same-role pins of its unit); for `unit` instances it comes from
@@ -1331,6 +1337,17 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     vertex's position is **derived** from this; when the instance moves or rotates
     its pin vertices are recomputed, so wires referencing them **stretch
     automatically** (FR-018) with no per-segment fix-up.
+    The second argument is a **pin record or a pin name**, and which one a caller
+    passes is not a convenience: `NC` may repeat within a type (FR-062f), so a
+    name resolves by `find` to the *first* pin bearing it. Any caller **walking**
+    `typeData.pins` — the renderer (§6.8) and the pin hit-test (§6.9) — passes the
+    **record**, so each repeated `NC` pin lays out where it was declared. Callers
+    resolving a **saved reference** (a `pin` vertex's `v.pin`, a bus group member,
+    a DRC ref) pass the name, which is sound by construction: nothing may ever
+    save a reference to an `NC` pin (FR-062f), so a name that reaches this path
+    names exactly one pin. `pinVisualPos` takes the same two forms and forwards
+    them. (Added 2026-09-09: both took a name only, which drew and hit-tested all
+    of a part's `NC` pins on top of the first one.)
   - `addVertex`/`removeVertex`, `addWire/addBus` (both reject a degenerate
     conductor whose two endpoints resolve to the **same vertex** — e.g. a wire
     from a pin to itself; the interaction layer additionally ignores a
@@ -3606,7 +3623,14 @@ keeps one behavior for every caller rather than growing a per-tab branch. The **
   - **Types → `pinout`.** One block per distinct `typeData` id among exported
     instances, named by the display name (whitespace → `_`, deduped). Signal
     pins emit `pin <number> = <name>`; a leading `/` (active-low) becomes a
-    trailing `'` (NDL convention: `/MR` → `MR'`). When `typeData.physical` is
+    trailing `'` (NDL convention: `/MR` → `MR'`). A type's pin list is merged
+    across the instances that share the id — which is what gives a subunit
+    package the union of its siblings' unit pins — and that merge is keyed by
+    **`name` + `number`**, not by name alone, so a part's repeated `NC` pins
+    (FR-062f) each keep their own line instead of collapsing into one. For the
+    same reason the resolved number rides on the collected pin record rather
+    than in a name-keyed map. (Changed 2026-09-09; the merge was name-only and
+    silently dropped every `NC` pin after the first.) When `typeData.physical` is
     present its `power[]` pins emit under their rail names and `nc` pins as
     `NC`; a type with any unnumbered signal pin gets lowest-unused invented
     numbers plus a warning comment in the block (FR-062e's degrade-gracefully
@@ -4404,15 +4428,29 @@ supplies `onDesignRuleCheck: () => drcPanel.run()`, and passes `drc: drcPanel` i
 - **`engine/canvas.js` (§6.8):** the pin-drawing pass draws a small X centered on a
   marked pin's connection point, in the pin-detail zoom band that already governs
   pin names (FR-012a). It is drawn from `inst.ncPins`, in the instance's own
-  transform, so rotation is free.
+  transform, so rotation is free. Because the mark set is keyed by name, all of a
+  part's `NC` pins carry the X together, which is the intent — one entry, one
+  statement about the part. The loop passes each **pin record** to `pinWorldPos`/
+  `pinVisualPos` (§6.6), never `pin.name`; the hit-test in `hittest.js` (§6.9)
+  does the same. This is what makes repeated `NC` pins draw and target at their
+  own declared positions rather than stacking on the first (FR-062f).
 - **`store.js` (§6.10):** `setPinMarkCmd` is an ordinary undoable command
   (`do`/`undo` toggling the pin in `ncPins`, dirtying the design) — the deliberate
   difference from a waiver (FR-124e), which stays out of the history. It carries no
   connectivity snapshot: a marked pin has no connections by construction, so
   nothing electrical can change under it.
 - **`engine/drc.js` (§6.21) — FR-124j, in exactly one place.** `buildContext` skips
-  marked pins as it walks each instance's pins: they enter neither `pinInfo` nor
-  `unconnectedPins`, so no rule can see them. The two rules that re-read
+  marked pins **and pins named `NC`** as it walks each instance's pins: they enter
+  neither `pinInfo` nor `unconnectedPins`, so no rule can see them. The `NC` half
+  of that test is by **name**, mark or no mark (FR-124j (b)), and it is what makes
+  the rule dependable: the mark is auto-supplied at placement only (FR-062f), so
+  an instance placed before its type grew `NC` pins carries none, and R3 used to
+  report every such pin as an undriven input — a finding the user could not clear,
+  since `pinAcceptsConnection` refuses to wire an `NC` pin in the first place.
+  Testing the name also collapses what were **duplicate findings**: `pinInfo` is
+  keyed `refdes.pinName` and so held one entry for a part's four `NC` pins, but
+  `unconnectedPins` is a list and held four — four R3 rows with byte-identical
+  `refs`, hence one waiver for four rows. (Changed 2026-09-09.) The two rules that re-read
   `inst.typeData.pins` directly — R6 (package outputs) and R8 (stray component) —
   go through a `ctx.pinsOf(inst)` helper that applies the same filter, which is what
   makes "the pin vanishes" true rather than approximately true. Both then behave
@@ -4438,8 +4476,9 @@ supplies `onDesignRuleCheck: () => drcPanel.run()`, and passes `drc: drcPanel` i
   older meaning (package pins with no internal bond), which this feature does not
   touch.
 - **Exporters and simulators are untouched.** An `NC` pin reaches NDL/KiCad
-  (§6.18) as an ordinary unconnected pin and reaches neither simulator's evaluation
-  in any new way — FR-071i's "the mark's sole effect is the DRC" is enforced by
+  (§6.18) as an ordinary unconnected pin — one pinout line per declared `NC` pin,
+  which cost §6.18 a merge key (2026-09-09) — and reaches neither simulator's
+  evaluation in any new way — FR-071i's "the mark's sole effect is the DRC" is enforced by
   there being no other reader of `ncPins`.
 - **Error handling:** a mark on a pin that does not exist is impossible through the
   UI and is pruned on load; `setPinMark` on a connected pin is refused (reported,

@@ -66,9 +66,9 @@ export function generateNDL(design, { name = "design" } = {}) {
   // One pinout per distinct type id, named by display name (deduped). Types in
   // first-use order over the refdes-sorted parts. A saved subunit sibling's
   // typeData carries only its own unit's pins, so the package pinout is the
-  // UNION of pins across every instance of the type (dedupe by name — the
+  // UNION of pins across every instance of the type (dedupe by name+number — the
   // §6.13 entity-building rule).
-  const types = new Map(); // typeId -> { ndlName, pins, physical, displayName, pinNumber, invented }
+  const types = new Map(); // typeId -> { ndlName, pins, pinKeys, physical, displayName, invented }
   const usedTypeNames = new Set(["POWER"]); // reserve the synthetic names
   for (const inst of parts) {
     const id = inst.type ?? inst.typeData.name;
@@ -83,17 +83,23 @@ export function generateNDL(design, { name = "design" } = {}) {
         ndlName,
         displayName: td.name,
         pins: [],
-        pinNames: new Set(),
+        pinKeys: new Set(),
         physical: td.physical ?? null,
-        pinNumber: new Map(),
         invented: false,
       });
     }
     const t = types.get(id);
+    // Merge each instance's pins into the type's list — which is what gives a
+    // subunit package the union of its siblings' unit pins. The merge key is
+    // `name`+`number`, NOT name alone: `NC` may repeat within a type (FR-062f)
+    // and each occurrence is its own pin, so a name-only key silently kept the
+    // first and dropped the rest from the pinout. Pins are copied, since the
+    // numbering pass below writes a resolved number onto the record.
     for (const p of td.pins) {
-      if (!t.pinNames.has(p.name)) {
-        t.pinNames.add(p.name);
-        t.pins.push(p);
+      const key = `${p.name}\u0000${p.number ?? ""}`;
+      if (!t.pinKeys.has(key)) {
+        t.pinKeys.add(key);
+        t.pins.push({ ...p });
       }
     }
     if (!t.physical && td.physical) t.physical = td.physical;
@@ -108,12 +114,10 @@ export function generateNDL(design, { name = "design" } = {}) {
     for (const n of t.physical?.nc ?? []) used.add(n);
     let next = 1;
     for (const p of t.pins) {
-      if (p.number != null) {
-        t.pinNumber.set(p.name, p.number);
-      } else {
+      if (p.number == null) {
         while (used.has(next)) next++;
         used.add(next);
-        t.pinNumber.set(p.name, next);
+        p.number = next;
         t.invented = true;
       }
     }
@@ -187,7 +191,7 @@ export function generateNDL(design, { name = "design" } = {}) {
       out.push("  # WARNING: type carries no physical pin numbers; numbers below are invented");
     }
     for (const p of t.pins) {
-      out.push(`  pin ${t.pinNumber.get(p.name)} = ${ndlPinName(p.name)}`);
+      out.push(`  pin ${p.number} = ${ndlPinName(p.name)}`);
     }
     for (const pw of t.physical?.power ?? []) {
       out.push(`  pin ${pw.number} = ${ndlPinName(pw.name)}`);

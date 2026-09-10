@@ -435,14 +435,28 @@ function pinOffset(typeData, pin) {
   }
 }
 
+// resolvePin turns this module's second argument — a pin RECORD or a pin NAME —
+// into the record. The distinction is not a convenience: `NC` may repeat within a
+// type (FR-062f), so a *name* resolves to the FIRST pin bearing it. A caller
+// walking `typeData.pins` must pass the record, or every NC pin of a part lands on
+// the first one's coordinates; a caller resolving a SAVED reference (a pin
+// vertex's `v.pin`, a bus group member, a DRC ref) passes the name and is sound by
+// construction, because nothing may ever save a reference to an NC pin.
+function resolvePin(instance, pinOrName) {
+  if (typeof pinOrName === "object" && pinOrName !== null) return pinOrName;
+  const pin = instance.typeData.pins.find((p) => p.name === pinOrName);
+  if (!pin) {
+    throw new Error(`unknown pin ${pinOrName} on ${instance.refdes}`);
+  }
+  return pin;
+}
+
 // pinWorldPos returns a pin's world (grid) coordinate, applying the instance's
 // rotation. Wires reference the pin's vertex, which is recomputed from this when
 // the instance moves or rotates, so connected segments stretch (FR-018, §7.1a).
-export function pinWorldPos(instance, pinName) {
-  const pin = instance.typeData.pins.find((p) => p.name === pinName);
-  if (!pin) {
-    throw new Error(`unknown pin ${pinName} on ${instance.refdes}`);
-  }
+// `pinOrName` is a pin record or a pin name — see resolvePin for why it matters.
+export function pinWorldPos(instance, pinOrName) {
+  const pin = resolvePin(instance, pinOrName);
   const off = pinOffset(instance.typeData, pin);
   const r = rotateOffset(off.x, off.y, instance.rotation);
   return { x: instance.x + r.x, y: instance.y + r.y };
@@ -479,10 +493,10 @@ export function sideOutward(side) {
 // rotation-aware), the plain grid point for subunit pins. Drawing and hot-region
 // use only — the grid point (pinWorldPos) remains the electrical and persisted
 // wire-connection coordinate (FR-021/FR-059).
-export function pinVisualPos(instance, pinName) {
-  const w = pinWorldPos(instance, pinName);
+export function pinVisualPos(instance, pinOrName) {
+  const pin = resolvePin(instance, pinOrName);
+  const w = pinWorldPos(instance, pin);
   if (instance.typeData.renderType === "subunit") return w;
-  const pin = instance.typeData.pins.find((p) => p.name === pinName);
   const out = sideOutward(pin.side);
   const r = rotateOffset(out.x, out.y, instance.rotation);
   return { x: w.x + r.x * PIN_LEAD, y: w.y + r.y * PIN_LEAD };

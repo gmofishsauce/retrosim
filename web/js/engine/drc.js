@@ -5,7 +5,7 @@
 // browser (§11.1), the same division vectors.js/ndl.js use against their chrome.
 
 import { buildNets } from "../model/netlist.js";
-import { REF_SERIES, markedPins } from "../model/design.js";
+import { REF_SERIES, markedPins, NC_PIN } from "../model/design.js";
 import { compileBehavior } from "./galasm.js";
 
 // Severity ordering (FR-124b). Severity orders and colours the report and
@@ -116,9 +116,18 @@ function buildContext(design, { fileExists, warnings }) {
   // filtered out of its output — so no rule can see it and none needs to know it
   // exists. `pinsOf` is the one filter, shared with the two rules (R6, R8) that
   // re-read an instance's pin list instead of reading pinInfo.
+  //
+  // A pin NAMED `NC` (FR-062f) goes too, by its name and whether or not it carries
+  // a mark — FR-124j (b). The mark alone is not enough: it is auto-supplied at
+  // PLACEMENT only, so an instance placed before its type grew its `NC` pins
+  // carries none, and every such pin would report as an undriven input (R3) —
+  // a finding with no remedy, since pinAcceptsConnection refuses to wire an `NC`
+  // pin, so the user cannot clear it by connecting it. Testing the name also keeps
+  // a part's repeated `NC` pins (the one name that may repeat) from each pushing
+  // their own byte-identical R3 finding.
   const pinsOf = (inst) => {
     const marks = markedPins(inst);
-    return (inst.typeData?.pins ?? []).filter((p) => !marks.has(p.name));
+    return (inst.typeData?.pins ?? []).filter((p) => p.name !== NC_PIN && !marks.has(p.name));
   };
   for (const inst of instances) {
     instByRefdes.set(inst.refdes, inst);

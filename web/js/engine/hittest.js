@@ -127,7 +127,9 @@ function nearestPin(design, pt, tol, connectableOnly) {
     const inst = design.components[i];
     for (const pin of inst.typeData.pins) {
       if (connectableOnly && !pinAcceptsConnection(inst, pin.name)) continue;
-      const w = pinVisualPos(inst, pin.name);
+      // The pin RECORD, not its name — repeated `NC` pins are distinct pins
+      // and must each be targetable where they are drawn (FR-062f, §6.6).
+      const w = pinVisualPos(inst, pin);
       const dx = w.x - pt.x;
       const dy = w.y - pt.y;
       const d2 = dx * dx + dy * dy;

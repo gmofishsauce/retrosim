@@ -26,7 +26,7 @@ KiCad-like.
 11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
 13. [Simulation](#13-simulation) — including [Driving a port by hand](#driving-a-port-by-hand), [Pausing and single-stepping](#pausing-and-single-stepping), [Probing a point](#probing-a-point), [The bottom panel area](#the-bottom-panel-area), [Console output](#console-output), [Test vectors](#test-vectors) — including [The panel's test-vector file](#the-panels-test-vector-file) and [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
-14. [Checking a design](#14-checking-a-design) — including [Reading the report](#reading-the-report), [Fixing what it finds](#fixing-what-it-finds), [Waiving a finding](#waiving-a-finding), and [What each rule means](#what-each-rule-means)
+14. [Checking a design](#14-checking-a-design) — including [Reading the report](#reading-the-report), [Fixing what it finds](#fixing-what-it-finds), [Pins the check ignores](#pins-the-check-ignores), [Waiving a finding](#waiving-a-finding), and [What each rule means](#what-each-rule-means)
 15. [If the server disconnects](#15-if-the-server-disconnects)
 16. [Keyboard and mouse reference](#16-keyboard-and-mouse-reference)
 
@@ -238,7 +238,11 @@ rather than the tab you happen to be looking at. What each tab collects:
   the tooltip, and the chip's on-canvas label, and is how you tell several parts of
   the same device family apart.
 - **Description** — an optional one-line summary (shown in the tile's tooltip).
-- **Pin labels** — a name for each input and I/O pin.
+- **Pin labels** — a name for each input and I/O pin. Label a pin **`NC`** to
+  declare that the part does not use it: its direction control greys out, it gets
+  no column in the logic table, it can never be wired, and the design rule check
+  never mentions it. `NC` is the one label you may repeat — use it on as many
+  pins as the part leaves unused.
 - **Per-I/O direction** — for each OLMC pin: **comb out** (combinational output),
   **reg out** (registered output, clocked by pin 1), or **input**.
 - **Logic** (its own tab) — the part's equations, built by clicking a table
@@ -1019,7 +1023,7 @@ no behavior, and no designator — see below.)
 | **Port / off-sheet connector (multi-bit)** | N pins (`P0`–`P(N-1)`, left) | A multi-bit interface port. When you drop it, a dialog asks for its **bit width** (2–16); that width is fixed for the life of the instance (to change it, delete and re-place). It is drawn as N narrow pentagons — one roughly aligned with each pin, each pointing off-sheet away from the pins. The N pins form one pin group so a matching-width bus snap-connects to all bits at once (see [Buses](#7-buses)). Like the 1-wide [port](#12-sub-designs-and-ports) it is part of the design's interface (it contributes a pin **group** when the design is embedded), with a direction derived from its wiring; it does not yet join to same-label or cross-file ports. During a run each pentagon is its own click target, so you can [drive the bits by hand](#driving-a-port-by-hand) one at a time. |
 | **Port / off-sheet connector** (1-bit) | one pin (flat back edge) | The pentagon "flag" that marks its net as part of the design's external interface for embedding. See [Sub-designs and ports](#12-sub-designs-and-ports). Drives nothing of its own — but while a simulation runs you can **click it to drive its net by hand**, which is how you exercise a design through its own edges; see [Driving a port by hand](#driving-a-port-by-hand). |
 | **Transmission gate** | `A` (left), `B` (right), `EN` (top) | An ideal **bidirectional switch**: `A` and `B` are interchangeable contact terminals — neither is an input or an output, and drivers on either side may come and go. While `EN` reads **1** the two sides are electrically **joined** (they resolve as one net); while it reads **0** they are isolated. An `EN` of U (or Z) means the switch position is unknown: both sides are forced to **U**. Drives nothing, stores nothing, no properties; see the switch-element notes in [Simulation](#13-simulation). |
-| **Relay (SPDT)** | `COIL` (top); contacts `NO` / `COM` / `NC` (right, labeled on the canvas) | A changeover relay with an idealized logic-level coil (one pin — no second coil terminal, no coil current). Released (`COIL` = 0): `COM`–`NC` joined, `NO` isolated. Energized (`COIL` = 1): `COM`–`NO` joined, `NC` isolated. A U coil forces all three contact nets to **U**. Contacts follow the coil after the standard one-unit delay (no pick/drop time is modeled). For an SPST contact, leave the unused throw unwired. No moving contact arm is drawn — read the live state from wired indicators. |
+| **Relay (SPDT)** | `COIL` (top); contacts `NO` / `COM` / `NCC` (right, labeled on the canvas) | A changeover relay with an idealized logic-level coil (one pin — no second coil terminal, no coil current). Released (`COIL` = 0): `COM`–`NCC` joined, `NO` isolated. Energized (`COIL` = 1): `COM`–`NO` joined, `NCC` isolated. (The normally-closed terminal is `NCC`, not `NC`: the pin name `NC` is reserved for *no connect*, see [Pins the check ignores](#pins-the-check-ignores).) A U coil forces all three contact nets to **U**. Contacts follow the coil after the standard one-unit delay (no pick/drop time is modeled). For an SPST contact, leave the unused throw (`NO` or `NCC`) unwired. No moving contact arm is drawn — read the live state from wired indicators. |
 | **Magic UART** | eight inputs (`D0`–`D7`, left, one pin group `DATA`); `CS/`, `CE/`, `CLK` (right) | A convenience character-output device — physically unrealistic, but handy for getting text out of a running design. Drawn as an IC-style box labeled **UART**. On each **rising edge of `CLK`**, and only while both `CS/` and `CE/` read **0**, it latches `D0`(LSB)…`D7`(MSB) and emits that byte as an **ASCII character** to the simulator's standard output — the **[Console panel](#console-output)** in the slow simulator, and real `stdout` in [generated C](#generating-a-standalone-c-simulator). It drives no nets and has no readback path. Emission is deliberately careful: if `CS/` or `CE/` is **1** (deselected) or uncertain (U/Z), nothing is emitted; any data bit that is not a clean **1** counts as **0**. The eight `DATA` pins form one pin group, so an 8-wide bus snap-connects to all of them at once (see [Buses](#7-buses)). No properties. |
 | **Text note** (`NOTE` tile) | none | A free-form text annotation — pure documentation, with no pins, no wiring, and no part in simulation. See **[Text notes](#text-notes)** below for how to type and edit one. |
 
@@ -1969,6 +1973,50 @@ Closing the tab with its **✕** discards the report and asks nothing — unlike
 Test Vectors tab, there is nothing to lose. Reloading the page discards it too.
 Waivers are the only thing a check leaves behind.
 
+### Pins the check ignores
+
+A pin that is unused **on purpose** should not turn up in the report every time
+you run the check. Two things take a pin out of it entirely — the check runs as
+though the pin were not there, so it can never be an undriven input, an
+unconnected output, or a load:
+
+- **A pin named `NC`.** A part whose definition labels a pin `NC` is saying the
+  part does not use it. Such a pin cannot be wired at all — the wire and bus tools
+  will not target it — so the check stays silent about it. This holds whether or
+  not it shows the X described below. A part may have any number of `NC` pins, and
+  each is drawn in its own place on the symbol, so the drawing still matches the
+  package.
+- **A no-connect mark** — the small **X** you attach to a pin yourself. This is
+  how you say *this particular chip's unused pin is unused on purpose* — a spare
+  gate's inputs, an unused output — for a part whose definition does not say so.
+  Click the **X** tile at the bottom of the palette (its tooltip reads *no
+  connect*), then click any pin to mark it; click a marked pin again to unmark it.
+  The tool stays active until you leave it with **Esc** or another tool, since
+  marking several pins of one chip is the usual case. Marking is undoable
+  (`Ctrl+Z`) and travels with the component when you move, rotate, copy, or delete
+  it.
+
+A pin cannot be both marked and connected: the tool refuses to mark a pin that is
+already wired (disconnect it first), and a marked pin is not a wiring target until
+you unmark it.
+
+Marks on a part's `NC` pins are added **for you** when you place it, so a chip
+with unused pins arrives already drawn correctly. They are ordinary marks from
+then on — you may remove them, and that only changes the drawing, since the check
+ignores an `NC` pin by its name either way. Two consequences worth knowing:
+
+- Placing is the only moment marks are supplied. If you **edit a part** to add
+  `NC` pins, chips already on the sheet do not sprout X's — [Refresh type
+  data](#9-refreshing-type-data) brings in the pins but not the marks. Add them by
+  hand if you want them shown. The check is quiet either way.
+- Because marks go by pin **name**, and `NC` is one name however many pins carry
+  it, marking or unmarking one `NC` pin of a part does all of them together.
+
+A mark is **not** a waiver. A mark lives on the schematic, where anyone reading
+the drawing can see the pin is unused by intent, and it removes a pin from the
+check. A waiver lives in the report and suppresses a finding after the fact. Both
+exist, and neither replaces the other.
+
 ### Waiving a finding
 
 Real designs legitimately contain spare gates, unused outputs, and conductors
@@ -2003,7 +2051,7 @@ screen, so the report does not move under you.
 |---|---|---|
 | R1 | **Output fight** — two ordinary (totem-pole) outputs on one net, which is always wrong. Several **3-state** drivers on one bus is how a bus is built and is *not* reported; neither is a bidirectional pair | error |
 | R2 | **Same-enable contention** — two 3-state drivers on one net whose enables come from the *same net with the same polarity*, so they are guaranteed to fight the moment it asserts. Drivers sharing an enable while driving *different* nets are correct design and are not reported | error |
-| R3 | **Undriven input** — an input with no driver on its net, including one connected to nothing at all. A net held by a pull-up or pull-down counts as driven | warning |
+| R3 | **Undriven input** — an input with no driver on its net, including one connected to nothing at all. A net held by a pull-up or pull-down counts as driven. Pins the check ignores (a pin named `NC`, or one you marked with an X) never appear here — see [Pins the check ignores](#pins-the-check-ignores) | warning |
 | R4 | **Can-float net** — a **1-bit** net whose only drivers are 3-state, with no pull-up or pull-down, so nothing defines its level when every driver is off. Multi-bit buses are exempt: a floating bus is normal | warning |
 | R5 | **Opposing pulls** — a pull-up and a pull-down on the same net | warning |
 | R6 | **Unconnected outputs** — a whole package none of whose outputs goes anywhere. Judged per package, so wiring any one gate of a 7400 silences it for all four, and a counter with only `Q0`–`Q3` used is silent | warning |

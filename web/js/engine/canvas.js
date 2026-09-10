@@ -642,7 +642,9 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
   ctx.textBaseline = "middle";
   const marks = markedPins(inst); // FR-071i, empty for the overwhelming majority
   for (const pin of td.pins) {
-    const pw = pinWorldPos(inst, pin.name);
+    // The pin RECORD, not its name: `NC` may repeat within a type (FR-062f),
+    // and a name resolves to the first pin bearing it (§6.6).
+    const pw = pinWorldPos(inst, pin);
     const ps = worldToScreen(pw, vp);
     const out = sideOutward(pin.side);
     const outR = rotateOffset(out.x, out.y, inst.rotation);
@@ -670,7 +672,7 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
         ctx.stroke();
       }
     } else {
-      const end = worldToScreen(pinVisualPos(inst, pin.name), vp);
+      const end = worldToScreen(pinVisualPos(inst, pin), vp);
       ctx.beginPath();
       ctx.moveTo(ps.x, ps.y);
       ctx.lineTo(end.x, end.y);

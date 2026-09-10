@@ -127,6 +127,38 @@ test("pinouts: physical numbers, power and NC pins, active-low rename", () => {
   assert.match(text, / {2}pin 5 = NC\nend 74XX/);
 });
 
+test("a type's repeated NC pins each get their own pinout line (FR-062f)", () => {
+  // `NC` is the one pin name that may repeat within a type (FR-062f), and each
+  // occurrence is its own pin. The type pin merge is keyed by name+number for
+  // exactly this: keyed by name alone it kept the first and dropped the rest.
+  const ty = {
+    id: "type-GALX",
+    name: "GALX",
+    renderType: "unit",
+    pins: [
+      { name: "A", direction: "in", number: 1 },
+      { name: "NC", direction: "in", number: 2 },
+      { name: "NC", direction: "in", number: 3 },
+      { name: "NC", direction: "in", number: 4 },
+      { name: "Y", direction: "out", number: 5 },
+    ],
+  };
+  const d = {
+    components: [
+      { refdes: "U1", type: "type-GALX", typeData: ty },
+      { refdes: "U2", type: "type-GALX", typeData: ty }, // second instance, same type
+    ],
+    wires: [],
+    buses: [],
+    vertices: [],
+  };
+  const { text } = generateNDL(d, { name: "nc rig" });
+  assert.match(
+    text,
+    /pinout GALX\n {2}pin 1 = A\n {2}pin 2 = NC\n {2}pin 3 = NC\n {2}pin 4 = NC\n {2}pin 5 = Y\nend GALX/,
+  );
+});
+
 test("numberless type gets invented numbers plus a warning", () => {
   const { text, warnings } = gen();
   assert.match(text, /pinout R2X2\n {2}# WARNING[^\n]*invented\n {2}pin 1 = A0\n {2}pin 2 = D0\nend R2X2/);
