@@ -3,6 +3,7 @@ type: "22V10"
 gal: GAL22V10
 partnumber: "22VDCD2"
 description: "more CPU decoding"
+clock: "CLK"
 outline: [8, 14]
 pins:
   - { name: "CLK", side: left, pos: 1, dir: in, number: 1 }
@@ -25,5 +26,5 @@ pins:
   - { name: "FTF", side: right, pos: 6, dir: out, number: 19 }
   - { name: "/OE", side: right, pos: 7, dir: out, number: 20 }
   - { name: "Cin", side: right, pos: 8, dir: out, number: 21 }
-  - { name: "IO22", side: right, pos: 9, dir: out, number: 22 }
-  - { name: "IO23", side: right, pos: 10, dir: out, number: 23 }
+  - { name: "IMM10/", side: right, pos: 9, dir: out, number: 22 }
+  - { name: "IMM7/", side: right, pos: 10, dir: out, number: 23 }
