@@ -4229,6 +4229,181 @@
         ]
       },
       "overrides": {}
+    },
+    {
+      "refdes": "U31",
+      "type": "type-22V003",
+      "x": -82,
+      "y": 72,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-22V003",
+        "name": "22V10",
+        "renderType": "unit",
+        "width": 8,
+        "height": 14,
+        "pins": [
+          {
+            "name": "CLK",
+            "side": "left",
+            "position": 1,
+            "direction": "in",
+            "number": 1
+          },
+          {
+            "name": "I2",
+            "side": "left",
+            "position": 2,
+            "direction": "in",
+            "number": 2
+          },
+          {
+            "name": "I3",
+            "side": "left",
+            "position": 3,
+            "direction": "in",
+            "number": 3
+          },
+          {
+            "name": "I4",
+            "side": "left",
+            "position": 4,
+            "direction": "in",
+            "number": 4
+          },
+          {
+            "name": "I5",
+            "side": "left",
+            "position": 5,
+            "direction": "in",
+            "number": 5
+          },
+          {
+            "name": "I6",
+            "side": "left",
+            "position": 6,
+            "direction": "in",
+            "number": 6
+          },
+          {
+            "name": "I7",
+            "side": "left",
+            "position": 7,
+            "direction": "in",
+            "number": 7
+          },
+          {
+            "name": "I8",
+            "side": "left",
+            "position": 8,
+            "direction": "in",
+            "number": 8
+          },
+          {
+            "name": "I9",
+            "side": "left",
+            "position": 9,
+            "direction": "in",
+            "number": 9
+          },
+          {
+            "name": "I10",
+            "side": "left",
+            "position": 10,
+            "direction": "in",
+            "number": 10
+          },
+          {
+            "name": "I11",
+            "side": "left",
+            "position": 11,
+            "direction": "in",
+            "number": 11
+          },
+          {
+            "name": "I13",
+            "side": "left",
+            "position": 12,
+            "direction": "in",
+            "number": 13
+          },
+          {
+            "name": "IO14",
+            "side": "right",
+            "position": 1,
+            "direction": "out",
+            "number": 14
+          },
+          {
+            "name": "IO15",
+            "side": "right",
+            "position": 2,
+            "direction": "out",
+            "number": 15
+          },
+          {
+            "name": "IO16",
+            "side": "right",
+            "position": 3,
+            "direction": "out",
+            "number": 16
+          },
+          {
+            "name": "IO17",
+            "side": "right",
+            "position": 4,
+            "direction": "out",
+            "number": 17
+          },
+          {
+            "name": "IO18",
+            "side": "right",
+            "position": 5,
+            "direction": "out",
+            "number": 18
+          },
+          {
+            "name": "IO19",
+            "side": "right",
+            "position": 6,
+            "direction": "out",
+            "number": 19
+          },
+          {
+            "name": "IO20",
+            "side": "right",
+            "position": 7,
+            "direction": "out",
+            "number": 20
+          },
+          {
+            "name": "IO21",
+            "side": "right",
+            "position": 8,
+            "direction": "out",
+            "number": 21
+          },
+          {
+            "name": "IO22",
+            "side": "right",
+            "position": 9,
+            "direction": "out",
+            "number": 22
+          },
+          {
+            "name": "IO23",
+            "side": "right",
+            "position": 10,
+            "direction": "out",
+            "number": 23
+          }
+        ],
+        "gal": "GAL22V10",
+        "partnumber": "22V003",
+        "description": "Part of instruction decoder",
+        "projectLocal": true
+      },
+      "overrides": {}
     }
   ],
   "wires": [
@@ -4611,6 +4786,10 @@
         {
           "t": "node",
           "v": "v75"
+        },
+        {
+          "t": "node",
+          "v": "v520"
         },
         {
           "t": "bend",
@@ -7043,6 +7222,24 @@
         {
           "t": "node",
           "v": "v515"
+        }
+      ]
+    },
+    {
+      "id": "w273",
+      "path": [
+        {
+          "t": "node",
+          "v": "v520"
+        },
+        {
+          "t": "bend",
+          "x": -97,
+          "y": 73
+        },
+        {
+          "t": "node",
+          "v": "v521"
         }
       ]
     }
@@ -10627,10 +10824,24 @@
       "kind": "free",
       "x": -113,
       "y": -26
+    },
+    {
+      "id": "v520",
+      "kind": "junction",
+      "x": -97,
+      "y": 43
+    },
+    {
+      "id": "v521",
+      "kind": "pin",
+      "ref": "U31",
+      "pin": "CLK",
+      "x": -83,
+      "y": 73
     }
   ],
   "refCounters": {
-    "U": 31,
+    "U": 32,
     "A": 11,
     "N": 6,
     "X": 4
@@ -10832,13 +11043,15 @@
         "U6.CLK",
         "X3.CLK",
         "U7.CLK",
-        "U15.CLK"
+        "U15.CLK",
+        "U31.CLK"
       ],
       "members": [
         "w27",
         "w31",
         "w32",
-        "w259"
+        "w259",
+        "w273"
       ],
       "provenance": [],
       "name": "OUT"
