@@ -15,6 +15,7 @@
 // contents baked at generate time). Sub-design instances are refused per
 // FR-116 deferred scope (fast-engine flattening is a later change).
 
+import { hasEquations } from "./galerrors.js";
 import { compileBehavior } from "./galasm.js";
 import { buildNets } from "../model/netlist.js";
 import { deriveColumns } from "./vectors.js";
@@ -122,7 +123,8 @@ export function generateC(design, { columnsFrom = design } = {}) {
     const typeData = {
       name: typeName,
       pins,
-      behavior: td0.behavior,
+      // Comments alone are no behavior (FR-080), exactly as in sim.js.
+      behavior: hasEquations(td0.behavior) ? td0.behavior : "",
       gal: td0.gal,
       internal: td0.internal, // buried registered nodes (FR-079c)
     };
@@ -311,6 +313,26 @@ export function generateC(design, { columnsFrom = design } = {}) {
       lines.push(`    rt_contrib(${net}, v, 0, ${lbl});`);
       lines.push(`  }`);
       driverCount++;
+    }
+    // A GAL output pin its behavior writes no equation for drives U (FR-080),
+    // mirroring sim.js makeGalasmEntity: unwritten logic is unknown, not undriven.
+    if (td0.gal) {
+      const written = new Set(c.outputs.map((o) => o.signal));
+      const unwritten = [];
+      for (const inst of insts) {
+        for (const p of inst.typeData.pins) {
+          const signal = p.name.startsWith("/") ? p.name.slice(1) : p.name;
+          if (p.direction === "in" || written.has(signal)) continue;
+          const key = `${inst.refdes}.${p.name}`;
+          lines.push(`  rt_contrib(${netOf(key)}, RT_U, 0, ${intern(key)}); /* ${key}: no equation (FR-080) */`);
+          driverCount++;
+          if (!unwritten.includes(p.name)) unwritten.push(p.name);
+        }
+      }
+      if (unwritten.length && !reportedNoBehavior.has(typeName)) {
+        reportedNoBehavior.add(typeName);
+        warnings.push(`${typeName}: no equation for ${unwritten.join(", ")}; ${unwritten.length === 1 ? "it is" : "they are"} U (FR-080)`);
+      }
     }
     driveBlocks.push(lines.join("\n"));
   }

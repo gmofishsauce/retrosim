@@ -188,8 +188,6 @@ func TestParseComponentErrors(t *testing.T) {
 		{"NC in a group", "type: T\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n  - { name: NC, side: left, pos: 2, dir: in }\ngroups:\n  - { name: G, pins: [A0, NC] }\n", "no-connect pin"},
 		{"NC as the clock", "type: T\nclock: NC\npins:\n  - { name: NC, side: left, pos: 1, dir: in }\n", "clock pin may not be"},
 		{"clock non-input pin", "type: T\nclock: Q0\npins:\n  - { name: Q0, side: right, pos: 1, dir: out }\n", "must have dir in"},
-		{"gal unknown device", "type: T\ngal: GAL99X9\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "gal names unknown device"},
-		{"gal without partnumber", "type: \"22V10\"\ngal: GAL22V10\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "requires a 'partnumber'"},
 		{"partnumber without gal", "type: T\npartnumber: PC-DECODE-A\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "only valid on a gal part"},
 		{"group spans two sides", "type: T\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n  - { name: A1, side: right, pos: 1, dir: out }\ngroups:\n  - { name: A, pins: [A0, A1] }\n", "different sides"},
 		{"group not contiguous", "type: T\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n  - { name: X, side: left, pos: 2, dir: in }\n  - { name: A1, side: left, pos: 3, dir: in }\ngroups:\n  - { name: A, pins: [A0, A1] }\n", "not contiguous"},
@@ -204,6 +202,101 @@ func TestParseComponentErrors(t *testing.T) {
 				t.Fatalf("error = %q, want substring %q", err.Error(), tc.wantSub)
 			}
 		})
+	}
+}
+
+// A GAL part is parsed leniently (FR-066j): every rule a non-GAL file is
+// rejected for becomes a LoadErrors entry instead, the part still loads with a
+// defined fallback, and only undecodable YAML is an error. The same faults in a
+// file without gal: still reject (the table above).
+func TestParseComponentGalLenient(t *testing.T) {
+	const head = "id: type-X\ntype: \"22V10\"\ngal: GAL22V10\npartnumber: X\n"
+	cases := []struct {
+		name    string
+		yaml    string
+		wantSub string
+	}{
+		{"gal unknown device", "type: T\ngal: GAL99X9\npartnumber: X\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "gal names unknown device"},
+		{"gal without partnumber", "type: \"22V10\"\ngal: GAL22V10\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "requires a 'partnumber'"},
+		{"clock unknown pin", head + "clock: CP\npins:\n  - { name: A0, side: left, pos: 1, dir: in }\n", "clock names unknown pin"},
+		{"clock non-input pin", head + "clock: Q0\npins:\n  - { name: Q0, side: right, pos: 1, dir: out }\n", "must have dir in"},
+		{"NC in a group", head + "pins:\n  - { name: A0, side: left, pos: 1, dir: in }\n  - { name: NC, side: left, pos: 2, dir: in }\ngroups:\n  - { name: G, pins: [A0, NC] }\n", "no-connect pin"},
+		{"group unknown pin", head + "pins:\n  - { name: A0, side: left, pos: 1, dir: in }\ngroups:\n  - { name: G, pins: [A9] }\n", "unknown pin"},
+		{"duplicate pin name", head + "pins:\n  - { name: A0, side: left, pos: 1, dir: in }\n  - { name: A0, side: left, pos: 2, dir: in }\n", "duplicate pin name"},
+		{"bad olmc", head + "pins:\n  - { name: Q0, side: right, pos: 1, dir: out, olmc: latch }\n", "invalid olmc"},
+		{"olmc on input", head + "pins:\n  - { name: A0, side: left, pos: 1, dir: in, olmc: reg }\n", "on an input pin"},
+		{"type mismatch", head + "pins:\n  - { name: A0, side: left, pos: abc, dir: in }\n", "cannot unmarshal"},
+		{"physical incomplete", head + "physical:\n  pincount: 3\npins:\n  - { name: A0, side: left, pos: 1, dir: in, number: 1 }\n", "unaccounted for"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ParseComponent(writeYAML(t, tc.yaml))
+			if err != nil {
+				t.Fatalf("ParseComponent: %v (a GAL part must load)", err)
+			}
+			if len(got.LoadErrors) != 1 || !strings.Contains(got.LoadErrors[0], tc.wantSub) {
+				t.Fatalf("LoadErrors = %q, want one containing %q", got.LoadErrors, tc.wantSub)
+			}
+		})
+	}
+
+	if _, err := ParseComponent(writeYAML(t, head+"pins: [\n")); err == nil {
+		t.Fatal("undecodable YAML must still be an error for a GAL part")
+	}
+}
+
+// The fallbacks a lenient GAL parse applies, and what it carries for the dialog:
+// the declared olmc type, an unplaced pin, a bad group left out, a bad physical
+// block kept, and unknown top-level keys in Extra (FR-066i/FR-066j).
+func TestParseComponentGalCarries(t *testing.T) {
+	got, err := ParseComponent(writeYAML(t, `
+id: type-X
+type: "22V10"
+gal: GAL22V10
+partnumber: X
+wip: { owner: me, steps: [1, 2] }
+physical:
+  pincount: 9
+pins:
+  - { name: A0, side: left,  pos: 1, dir: in }
+  - { name: A1, side: middle, pos: 2, dir: in }
+  - { name: Q0, side: right, pos: 1, dir: out, olmc: reg }
+  - { name: Q1, side: right, pos: 2, dir: sideways }
+groups:
+  - { name: G, pins: [A0, NOSUCH] }
+`))
+	if err != nil {
+		t.Fatalf("ParseComponent: %v", err)
+	}
+	if got.Pins[2].OLMC != "reg" {
+		t.Fatalf("Q0 olmc = %q, want reg", got.Pins[2].OLMC)
+	}
+	if !got.Pins[1].Unplaced || got.Pins[0].Unplaced {
+		t.Fatalf("unplaced = %v,%v, want A0 placed and A1 unplaced", got.Pins[0].Unplaced, got.Pins[1].Unplaced)
+	}
+	if got.Pins[3].Direction != "in" {
+		t.Fatalf("Q1 direction = %q, want the in fallback", got.Pins[3].Direction)
+	}
+	if len(got.PinGroups) != 0 {
+		t.Fatalf("PinGroups = %v, want the bad group left out", got.PinGroups)
+	}
+	if got.Physical == nil || got.Physical.PinCount != 9 {
+		t.Fatalf("Physical = %+v, want the failing block carried", got.Physical)
+	}
+	if w, ok := got.Extra["wip"].(map[string]any); !ok || w["owner"] != "me" {
+		t.Fatalf("Extra = %v, want wip carried", got.Extra)
+	}
+	if len(got.LoadErrors) != 4 { // side, dir, group, physical
+		t.Fatalf("LoadErrors = %q, want 4", got.LoadErrors)
+	}
+
+	// olmc is ignored, and nothing is carried, on a non-GAL type.
+	plain, err := ParseComponent(writeYAML(t, "type: T\nwip: 1\npins:\n  - { name: Q0, side: right, pos: 1, dir: out, olmc: reg }\n"))
+	if err != nil {
+		t.Fatalf("ParseComponent: %v", err)
+	}
+	if plain.Pins[0].OLMC != "" || plain.Extra != nil || plain.LoadErrors != nil {
+		t.Fatalf("non-GAL type carried GAL-only data: %+v", plain)
 	}
 }
 

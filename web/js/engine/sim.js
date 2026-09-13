@@ -18,6 +18,7 @@ import {
 } from "./galasm.js";
 import { buildNets } from "../model/netlist.js";
 import { debugPorts, flatten } from "../model/subdesign.js";
+import { designDefinitionErrors, definitionErrorsMessage, hasEquations } from "./galerrors.js";
 import { BEHAVIORS } from "../builtins.js";
 import { createMemoryCore, parseRomBytes } from "./memory.js";
 import { createUartCore } from "./uart.js";
@@ -156,7 +157,9 @@ export function buildSimulation(
     const typeData = {
       name: typeName,
       pins,
-      behavior: td0.behavior,
+      // A block of nothing but comments is no behavior (FR-080), not a block
+      // that fails to compile with "no equations found".
+      behavior: hasEquations(td0.behavior) ? td0.behavior : "",
       gal: td0.gal,
       internal: td0.internal, // buried registered nodes (FR-079c)
     };
@@ -169,15 +172,28 @@ export function buildSimulation(
     }
 
     const pinOwner = new Map(); // signal → "refdes.pinName" net key
-    const uPins = []; // behavior-less: output-capable pins driving U
+    // Output-capable pins driving U (FR-080): every one of a behavior-less type,
+    // and each output pin of a GAL part that its behavior writes no equation for
+    // — logic not yet written is unknown, not undriven.
+    const uPins = [];
+    const written = new Set((c?.outputs ?? []).map((o) => o.signal));
+    const unwritten = [];
     for (const inst of insts) {
       for (const p of inst.typeData.pins) {
         const signal = p.name.startsWith("/") ? p.name.slice(1) : p.name;
         pinOwner.set(signal, `${inst.refdes}.${p.name}`);
-        if (c === null && p.direction !== "in") {
+        if (p.direction === "in") continue;
+        if (c === null) {
           uPins.push(`${inst.refdes}.${p.name}`);
+        } else if (td0.gal && !written.has(signal)) {
+          uPins.push(`${inst.refdes}.${p.name}`);
+          if (!unwritten.includes(p.name)) unwritten.push(p.name);
         }
       }
+    }
+    if (unwritten.length && !reportedNoBehavior.has(typeName)) {
+      reportedNoBehavior.add(typeName);
+      onMessage(`${typeName}: no equation for ${unwritten.join(", ")}; ${unwritten.length === 1 ? "it is" : "they are"} U (FR-080)`);
     }
 
     // Buried registered nodes (FR-079c): realize each as a driver-less virtual
@@ -505,12 +521,13 @@ export function buildSimulation(
             add(`${e.refdes}.D${i}`, drive[i], false, `${e.refdes}.D${i}`);
           }
         }
-      } else if (e.compiled) {
-        for (const out of e.compiled.outputs) {
-          const key = e.pinOwner.get(out.signal);
-          add(key, evalOutput(out, e.readNet, e.registers), false, key);
-        }
       } else {
+        if (e.compiled) {
+          for (const out of e.compiled.outputs) {
+            const key = e.pinOwner.get(out.signal);
+            add(key, evalOutput(out, e.readNet, e.registers), false, key);
+          }
+        }
         for (const key of e.uPins) add(key, VU, false, key); // FR-080
       }
     }
@@ -796,7 +813,7 @@ const COMBINATIONAL_BATCH = 1000;
 // Combinational designs run a settling episode (unpaced) to quiescence then
 // idle, re-settling on an interactive input (FR-085/FR-087b); designs with a
 // clock run paced at period × speed units per wall second (FR-084, FR-086).
-export function createSim({ store, renderer, consolePanel = null }) {
+export function createSim({ store, renderer, consolePanel = null, onRefusal = postMessage }) {
   let sim = null; // the running buildSimulation, or null
   let rafId = null;
   let timeoutId = null;
@@ -823,6 +840,14 @@ export function createSim({ store, renderer, consolePanel = null }) {
       return;
     }
     if (!starting) return; // Stop() was hit during the async flatten
+    // A GAL part with definition errors refuses the run outright (FR-066m),
+    // before any preflight: `onRefusal` is the app's modal error dialog.
+    const refusal = definitionErrorsMessage("The design cannot be run", designDefinitionErrors(design, store.design));
+    if (refusal) {
+      starting = false;
+      onRefusal(refusal);
+      return;
+    }
     // Load ROM contents (FR-114e) and load-on-start RAM saves (FR-114g) from the
     // server first; the build is sync.
     const romContent = await loadRomContents(design);

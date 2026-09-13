@@ -228,15 +228,48 @@ func TestCreateComponentInvalid(t *testing.T) {
 	srv := httptest.NewServer(NewRouter(newLibrary(), t.TempDir(), t.TempDir(), t.TempDir()))
 	defer srv.Close()
 
-	bad := "type: \"22V10\"\ngal: GAL22V10\npins:\n  - { name: I0, side: left, pos: 1, dir: in }\n"
+	// A GAL part is refused only for YAML that does not parse (FR-066j); a part
+	// with no authored marker (neither gal: nor mem:) is refused too (FR-007a).
+	for _, bad := range []string{
+		"type: \"22V10\"\ngal: GAL22V10\npins: [\n",
+		"type: T\npins:\n  - { name: I0, side: left, pos: 1, dir: in }\n",
+	} {
+		resp, err := http.Post(srv.URL+"/api/v1/components", "application/json",
+			body(t, map[string]string{"yaml": bad, "project": t.TempDir()}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("yaml %q: status = %d, want 400", bad, resp.StatusCode)
+		}
+	}
+}
+
+// A GAL part whose definition is semantically inconsistent is still created, and
+// its problems come back as loadErrors on the returned type (FR-066j/FR-007a).
+func TestCreateComponentInconsistentGal(t *testing.T) {
+	srv := httptest.NewServer(NewRouter(newLibrary(), t.TempDir(), t.TempDir(), t.TempDir()))
+	defer srv.Close()
+
+	yml := "id: type-WIP\ntype: \"22V10\"\ngal: GAL22V10\nclock: NOSUCH\npins:\n  - { name: I0, side: left, pos: 1, dir: in }\n"
 	resp, err := http.Post(srv.URL+"/api/v1/components", "application/json",
-		body(t, map[string]string{"yaml": bad, "project": t.TempDir()}))
+		body(t, map[string]string{"yaml": yml, "project": t.TempDir()}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", resp.StatusCode)
+	}
+	var out struct {
+		Component ComponentType `json:"component"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Component.LoadErrors) != 2 { // no partnumber, unknown clock pin
+		t.Fatalf("loadErrors = %q, want 2 entries", out.Component.LoadErrors)
 	}
 }
 

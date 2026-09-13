@@ -97,6 +97,7 @@ import {
 } from "../builtins.js";
 import { openContextMenu } from "../chrome/contextmenu.js";
 import { postMessage } from "../chrome/statusbar.js";
+import { galDefinitionErrors } from "./galerrors.js";
 
 // LOCKED_MSG is posted when a click attempts to select an item while the
 // simulator is running (FR-087): editing — including selection — is locked.
@@ -183,7 +184,9 @@ export function probeClaimsClick(state) {
 
 // editableGalType decides whether a placed instance offers "Edit part
 // definition…" (FR-033b), and returns the type the dialog should open on — the
-// same `gal && projectLocal` test the palette tile applies (FR-006b/FR-066f).
+// same project-local GAL22V10 test the palette tile applies (FR-006b/FR-066f):
+// the dialog presents only that device's skeleton, and it never refuses a part
+// it opens (FR-066j), so the device test lives here, in the offer.
 //
 // The instance supplies only the *identity*; `findType` supplies the data. That
 // split is the point: an instance's `typeData` is a placement-time copy (FR-057)
@@ -195,7 +198,7 @@ export function probeClaimsClick(state) {
 export function editableGalType(inst, findType) {
   if (!inst?.typeData) return null;
   const type = findType(typeIdentity(inst.typeData));
-  return type?.gal && type.projectLocal ? type : null;
+  return type?.gal === "GAL22V10" && type.projectLocal ? type : null;
 }
 
 // viewableNotesSubject decides whether a placed instance offers "View notes"
@@ -692,6 +695,9 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
   // change, outside the command/undo path.
   function setHover(comp) {
     const refdes = comp ? comp.refdes : null;
+    // A GAL instance drawn red says why when hovered (FR-066l).
+    const tip = comp && galDefinitionErrors(comp.typeData).length ? "component definition contains errors" : "";
+    if (canvas.title !== tip) canvas.title = tip;
     if (store.state.hover !== refdes) {
       store.state.hover = refdes;
       renderer.requestRender();

@@ -925,6 +925,34 @@ body.dock-dragging .dock-grip { background: rgba(74, 144, 217, 0.35); }
 }
 .galeq-btn.set { color: #111; font-weight: 600; background: #eef4fb; border-color: #9bb7d4; }
 .galeq-btn.bad { color: #b00; border-color: #b00; background: #fdecec; }
+/* An output whose comb/reg control disagrees with its declared type, or an
+   input-configured OLMC still holding equations (FR-066g/FR-066i). */
+.galeq-sel.mismatch { color: #b00; border-color: #b00; }
+.galeq-out.bad { color: #b00; }
+/* Equations the table cannot hold, kept as written (FR-066g). */
+.galeq-kept { flex: 0 1 auto; max-height: 8rem; overflow: auto; margin: 0.3rem 0; }
+.galeq-kept[hidden] { display: none; }
+.galeq-keptrow { display: flex; align-items: flex-start; gap: 0.4rem; }
+.galeq-keptrow pre { margin: 0; flex: 1 1 auto; font-size: 0.8rem; color: #555; white-space: pre; }
+/* Pin 1's clock checkbox (FR-066i). */
+.galdlg-clock { flex: 0 0 auto; font-size: 0.75rem; color: #555; display: flex; align-items: center; gap: 0.2rem; }
+/* Errors tab (FR-066k): definition errors, then load notes; read-only. */
+.galdlg-errors {
+  flex: 1 1 auto;
+  min-height: 12rem;
+  box-sizing: border-box;
+  width: 100%;
+  resize: none;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  background: #fafafa;
+}
+/* The run/generate/test-vector refusal for GAL definition errors (FR-066m). */
+.defn-errors-msg { white-space: pre-wrap; font-size: 0.9rem; margin: 0.5rem 0; }
 .galeq-btn:disabled { cursor: default; background: #f6f6f6; color: #ccc; }
 .galeq-sel { font-size: 0.75rem; }
 .galeq-const { text-align: left; font-family: monospace; color: #555; }

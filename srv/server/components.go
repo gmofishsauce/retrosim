@@ -79,7 +79,7 @@ func (l *Library) List() []ComponentType {
 // project's components/ subdirectory (FR-007a/FR-121i), returning the parsed type
 // so the client can add the tile live. It is the in-app authoring path for GAL
 // parts (FR-066c) and generated memory devices (FR-114f): a created part must
-// carry an authored marker (a partnumber, or a mem block). The server stays
+// carry an authored marker (a gal device, or a mem block). The server stays
 // stateless — the created part is project-local and is NOT added to the in-memory
 // shared library; the client library is the shared ∪ project merge, refreshed on
 // project switch and Refresh Types (FR-121i). Creation only, never overwrite: the
@@ -92,9 +92,11 @@ func (l *Library) Create(projectDir, sharedDir string, yamlText []byte) (Compone
 		return ComponentType{}, err
 	}
 	// A created part must be identifiably authored (FR-007a): a GAL part carries a
-	// partnumber (FR-066b); a generated memory device carries a mem block (FR-114f).
-	if t.PartNumber == "" && t.Mem == nil {
-		return ComponentType{}, fmt.Errorf("a created part requires a 'partnumber' (a GAL part) or a 'mem' block (a memory device)")
+	// gal device (FR-066a) — not necessarily a partnumber, which a definition in
+	// progress may lack (FR-066j); a generated memory device carries a mem block
+	// (FR-114f).
+	if t.Gal == "" && t.Mem == nil {
+		return ComponentType{}, fmt.Errorf("a created part requires a 'gal' device (a GAL part) or a 'mem' block (a memory device)")
 	}
 	fname, err := componentFileName(t.ID)
 	if err != nil {
@@ -146,8 +148,8 @@ func (l *Library) Update(projectDir string, yamlText []byte) (ComponentType, err
 	if err != nil {
 		return ComponentType{}, err
 	}
-	if t.PartNumber == "" && t.Mem == nil {
-		return ComponentType{}, fmt.Errorf("an updated part requires a 'partnumber' (a GAL part) or a 'mem' block (a memory device)")
+	if t.Gal == "" && t.Mem == nil {
+		return ComponentType{}, fmt.Errorf("an updated part requires a 'gal' device (a GAL part) or a 'mem' block (a memory device)")
 	}
 	if l.has(t.Key()) {
 		return ComponentType{}, fmt.Errorf("%w: id %q", ErrComponentShared, t.ID)

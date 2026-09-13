@@ -126,6 +126,7 @@ function nearestPin(design, pt, tol, connectableOnly) {
   for (let i = design.components.length - 1; i >= 0; i--) {
     const inst = design.components[i];
     for (const pin of inst.typeData.pins) {
+      if (pin.unplaced) continue; // not drawn, so not targetable (FR-066j)
       if (connectableOnly && !pinAcceptsConnection(inst, pin.name)) continue;
       // The pin RECORD, not its name — repeated `NC` pins are distinct pins
       // and must each be targetable where they are drawn (FR-062f, §6.6).

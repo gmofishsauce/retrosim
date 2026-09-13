@@ -7,6 +7,7 @@ package server
 // validates the structural fields (§6.3).
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -116,6 +117,7 @@ type yamlPin struct {
 	Dir    string `yaml:"dir"`
 	Number *int   `yaml:"number"`
 	Desc   string `yaml:"desc"`
+	OLMC   string `yaml:"olmc"` // GAL parts only (FR-066i)
 }
 
 type yamlDatasheet struct {
@@ -141,18 +143,62 @@ func ParseComponent(path string) (ComponentType, error) {
 	return ParseComponentBytes(data, path)
 }
 
+// knownTopKeys are the top-level YAML keys yamlComponent maps. A GAL part's
+// other top-level keys are carried in ComponentType.Extra (FR-066j) so the Edit
+// GAL part dialog can write them back; every other type ignores them (FR-066).
+var knownTopKeys = map[string]bool{
+	"id": true, "type": true, "rendertype": true, "numunits": true, "renderas": true,
+	"outline": true, "pins": true, "groups": true, "delays": true, "behavior": true,
+	"clock": true, "internal": true, "gal": true, "partnumber": true,
+	"description": true, "notes": true, "datasheet": true, "mem": true, "physical": true,
+}
+
 // ParseComponentBytes parses already-read component YAML with the same validation
 // as ParseComponent (§6.3); it backs the in-app create path (FR-007a), whose YAML
 // arrives in a request body rather than on disk. The path argument only labels
 // error messages (a file path, or a stand-in like "(submitted)").
+//
+// A GAL part (one declaring `gal:`) is parsed leniently (FR-066j): the only error
+// it returns is YAML that does not decode. Every other violation is appended to
+// the returned type's LoadErrors and parsing continues with a defined fallback,
+// so an inconsistent definition still loads, draws red, and opens in the dialog.
+// Every other type is validated strictly, exactly as before.
 func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 	var doc yamlComponent
+	var loadErrors []string
 	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return ComponentType{}, fmt.Errorf("%s: %w", path, err)
+		// A type mismatch (e.g. `pos: abc`) is not a syntax error: yaml.v3 still
+		// decodes everything else, so a GAL part records it and carries on.
+		var te *yaml.TypeError
+		if !errors.As(err, &te) || doc.Gal == "" {
+			return ComponentType{}, fmt.Errorf("%s: %w", path, err)
+		}
+		loadErrors = append(loadErrors, te.Errors...)
+	}
+	lenient := doc.Gal != ""
+
+	// fail reports one violation. Strict: it records the error and returns true —
+	// the caller returns strictErr. Lenient: it collects the message and returns
+	// false — the caller applies its fallback and continues.
+	var strictErr error
+	fail := func(format string, a ...any) bool {
+		msg := fmt.Sprintf(format, a...)
+		if lenient {
+			loadErrors = append(loadErrors, msg)
+			return false
+		}
+		strictErr = fmt.Errorf("%s: %s", path, msg)
+		return true
+	}
+	// failErr is fail for a helper's already-formatted "path: msg" error.
+	failErr := func(err error) bool {
+		return fail("%s", strings.TrimPrefix(err.Error(), path+": "))
 	}
 
 	if doc.Type == "" {
-		return ComponentType{}, fmt.Errorf("%s: missing required field 'type' (quote all-digit names, e.g. \"74138\")", path)
+		if fail("missing required field 'type' (quote all-digit names, e.g. \"74138\")") {
+			return ComponentType{}, strictErr
+		}
 	}
 
 	renderType := doc.RenderType
@@ -160,7 +206,10 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		renderType = "unit"
 	}
 	if renderType != "unit" && renderType != "subunit" {
-		return ComponentType{}, fmt.Errorf("%s: invalid rendertype %q (want unit|subunit)", path, renderType)
+		if fail("invalid rendertype %q (want unit|subunit)", renderType) {
+			return ComponentType{}, strictErr
+		}
+		renderType = "unit"
 	}
 	subunit := renderType == "subunit"
 
@@ -168,35 +217,70 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 	pins := make([]Pin, 0, len(doc.Pins))
 	for i, p := range doc.Pins {
 		if p.Name == "" {
-			return ComponentType{}, fmt.Errorf("%s: pin %d: missing 'name'", path, i)
+			if fail("pin %d: missing 'name'", i) {
+				return ComponentType{}, strictErr
+			}
+			continue // nothing can key a nameless pin
 		}
+		unplaced := false
 		if !validSides[p.Side] {
-			return ComponentType{}, fmt.Errorf("%s: pin %q: invalid side %q (want left|right|top|bottom)", path, p.Name, p.Side)
+			if fail("pin %q: invalid side %q (want left|right|top|bottom)", p.Name, p.Side) {
+				return ComponentType{}, strictErr
+			}
+			unplaced = true
 		}
+		dir := p.Dir
 		if !validDirs[p.Dir] {
-			return ComponentType{}, fmt.Errorf("%s: pin %q: invalid dir %q (want in|out|bidir|tristate)", path, p.Name, p.Dir)
+			if fail("pin %q: invalid dir %q (want in|out|bidir|tristate)", p.Name, p.Dir) {
+				return ComponentType{}, strictErr
+			}
+			dir = "in"
 		}
 		if pinNames[p.Name] && p.Name != ncPinName {
 			// A duplicate pin name would make saved endpoint references like
 			// "U3.A0" ambiguous (§6.3). NC is the sole exception (FR-062f): it may
 			// repeat because nothing may ever reference it.
-			return ComponentType{}, fmt.Errorf("%s: duplicate pin name %q", path, p.Name)
+			if fail("duplicate pin name %q", p.Name) {
+				return ComponentType{}, strictErr
+			}
 		}
 		var pos int
 		if subunit {
 			// pos is dictated by the symbol and ignored; the unit assigns the pin
 			// to a functional unit instead (FR-014a, §6.3).
 			if p.Unit == "" {
-				return ComponentType{}, fmt.Errorf("%s: pin %q: missing 'unit' (required for rendertype: subunit)", path, p.Name)
+				if fail("pin %q: missing 'unit' (required for rendertype: subunit)", p.Name) {
+					return ComponentType{}, strictErr
+				}
 			}
 		} else {
-			if p.Pos == nil {
-				return ComponentType{}, fmt.Errorf("%s: pin %q: missing 'pos'", path, p.Name)
+			switch {
+			case p.Pos == nil:
+				if fail("pin %q: missing 'pos'", p.Name) {
+					return ComponentType{}, strictErr
+				}
+				unplaced = true
+			case *p.Pos < 0:
+				if fail("pin %q: pos %d must be >= 0", p.Name, *p.Pos) {
+					return ComponentType{}, strictErr
+				}
+				unplaced = true
+			default:
+				pos = *p.Pos
 			}
-			if *p.Pos < 0 {
-				return ComponentType{}, fmt.Errorf("%s: pin %q: pos %d must be >= 0", path, p.Name, *p.Pos)
+		}
+		// olmc (FR-066i) declares a GAL output's registered-ness independently of
+		// the behavior block; it means nothing on any other type and is ignored.
+		olmc := ""
+		if lenient && p.OLMC != "" {
+			switch {
+			case p.OLMC != "reg" && p.OLMC != "comb":
+				fail("pin %q: invalid olmc %q (want reg|comb)", p.Name, p.OLMC)
+			case dir == "in":
+				fail("pin %q: olmc: %s on an input pin (olmc declares an output's type)", p.Name, p.OLMC)
+			default:
+				olmc = p.OLMC
 			}
-			pos = *p.Pos
 		}
 		pinNames[p.Name] = true
 		pins = append(pins, Pin{
@@ -204,49 +288,59 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 			Side:      p.Side,
 			Position:  pos,
 			Unit:      p.Unit,
-			Direction: p.Dir,
+			Direction: dir,
 			Number:    p.Number,
 			Desc:      p.Desc,
+			OLMC:      olmc,
+			Unplaced:  unplaced,
 		})
 	}
 
 	// clock: must name an existing input pin (FR-062d). Whether the behavior
 	// actually requires a clock (uses .R) is checked client-side at Run time
-	// (§6.13) — the behavior block is opaque to the server (FR-066).
+	// (§6.13) — the behavior block is opaque to the server (FR-066). A GAL part
+	// carries a bad clock: as written (FR-066j).
 	if doc.Clock == ncPinName {
-		return ComponentType{}, fmt.Errorf("%s: clock pin may not be %q (no connect, FR-062f)", path, ncPinName)
-	}
-	if doc.Clock != "" {
+		if fail("clock pin may not be %q (no connect, FR-062f)", ncPinName) {
+			return ComponentType{}, strictErr
+		}
+	} else if doc.Clock != "" {
 		found := false
 		for _, p := range pins {
 			if p.Name == doc.Clock {
 				if p.Direction != "in" {
-					return ComponentType{}, fmt.Errorf("%s: clock pin %q must have dir in, got %q", path, doc.Clock, p.Direction)
+					if fail("clock pin %q must have dir in, got %q", doc.Clock, p.Direction) {
+						return ComponentType{}, strictErr
+					}
 				}
 				found = true
 				break
 			}
 		}
 		if !found {
-			return ComponentType{}, fmt.Errorf("%s: clock names unknown pin %q", path, doc.Clock)
+			if fail("clock names unknown pin %q", doc.Clock) {
+				return ComponentType{}, strictErr
+			}
 		}
 	}
 
 	// gal: (FR-066a) — validate only the device name; the strict-vs-extended
 	// dialect it selects is enforced client-side at Run (§6.13).
 	if doc.Gal != "" && !validGalDevices[doc.Gal] {
-		return ComponentType{}, fmt.Errorf("%s: gal names unknown device %q (want GAL16V8|GAL20V8|GAL22V10|GAL20RA10)", path, doc.Gal)
+		fail("gal names unknown device %q (want GAL16V8|GAL20V8|GAL22V10|GAL20RA10)", doc.Gal)
 	}
 
 	// partnumber: a GAL part (gal set) names a specific programmed part, with type
-	// giving only the device family and partnumber the unique identity & library
-	// key (FR-066b). The two go together: gal requires a partnumber, and a
-	// partnumber is meaningless without gal.
+	// giving only the device family and partnumber the display name (FR-066b). The
+	// two go together: gal requires a partnumber, and a partnumber is meaningless
+	// without gal.
 	if doc.Gal != "" && doc.PartNumber == "" {
-		return ComponentType{}, fmt.Errorf("%s: a gal part requires a 'partnumber' (the unique part identity; type names only the device family)", path)
+		fail("a gal part requires a 'partnumber' (the part's display name; type names only the device family)")
 	}
 	if doc.Gal == "" && doc.PartNumber != "" {
-		return ComponentType{}, fmt.Errorf("%s: 'partnumber' is only valid on a gal part (set 'gal:')", path)
+		if fail("'partnumber' is only valid on a gal part (set 'gal:')") {
+			return ComponentType{}, strictErr
+		}
 	}
 
 	// internal: buried registered-node names (FR-079c) — the same opaque-carry
@@ -262,14 +356,19 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		}
 		seen := make(map[string]bool, len(doc.Internal))
 		for _, name := range doc.Internal {
-			if !isSignalToken(name) {
-				return ComponentType{}, fmt.Errorf("%s: internal node %q is not a legal signal name (letters and digits only)", path, name)
-			}
-			if seen[name] {
-				return ComponentType{}, fmt.Errorf("%s: duplicate internal node name %q", path, name)
-			}
-			if pinSignals[name] {
-				return ComponentType{}, fmt.Errorf("%s: internal node %q collides with a pin signal (buried nodes and pins share one signal namespace)", path, name)
+			switch {
+			case !isSignalToken(name):
+				if fail("internal node %q is not a legal signal name (letters and digits only)", name) {
+					return ComponentType{}, strictErr
+				}
+			case seen[name]:
+				if fail("duplicate internal node name %q", name) {
+					return ComponentType{}, strictErr
+				}
+			case pinSignals[name]:
+				if fail("internal node %q collides with a pin signal (buried nodes and pins share one signal namespace)", name) {
+					return ComponentType{}, strictErr
+				}
 			}
 			seen[name] = true
 		}
@@ -283,13 +382,19 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 	if doc.Mem != nil {
 		m := doc.Mem
 		if m.Kind != "ram" && m.Kind != "rom" {
-			return ComponentType{}, fmt.Errorf("%s: mem.kind %q invalid (want ram|rom)", path, m.Kind)
+			if fail("mem.kind %q invalid (want ram|rom)", m.Kind) {
+				return ComponentType{}, strictErr
+			}
 		}
 		if m.AddressBits < 1 {
-			return ComponentType{}, fmt.Errorf("%s: mem.addressBits %d must be >= 1", path, m.AddressBits)
+			if fail("mem.addressBits %d must be >= 1", m.AddressBits) {
+				return ComponentType{}, strictErr
+			}
 		}
 		if m.DataWidth != 4 && m.DataWidth != 8 && m.DataWidth != 16 && m.DataWidth != 32 {
-			return ComponentType{}, fmt.Errorf("%s: mem.dataWidth %d invalid (want 4|8|16|32)", path, m.DataWidth)
+			if fail("mem.dataWidth %d invalid (want 4|8|16|32)", m.DataWidth) {
+				return ComponentType{}, strictErr
+			}
 		}
 		mem = &MemSpec{
 			Kind:        m.Kind,
@@ -304,10 +409,14 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 
 	// physical: (FR-062e) — exporter-only package metadata, carried verbatim
 	// like mem:. Presence triggers the physical-completeness validation (§6.3);
-	// nothing geometric or behavioral reads the block.
+	// nothing geometric or behavioral reads the block. A GAL part that fails it
+	// still carries the block, so the dialog can write it back (FR-066j).
 	physical, err := validatePhysical(path, doc.Physical, pins)
 	if err != nil {
-		return ComponentType{}, err
+		if failErr(err) {
+			return ComponentType{}, strictErr
+		}
+		physical = physicalSpecOf(doc.Physical)
 	}
 
 	// id (FR-066e) is the immutable library key, divorced from the free-form
@@ -321,25 +430,46 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 	for _, p := range pins {
 		pinByName[p.Name] = p
 	}
+	// A GAL part's bad group is left out of pinGroups (FR-066j): a group naming
+	// an unknown pin would break every consumer that resolves its members.
 	var groups []PinGroup
 	groupNames := make(map[string]bool, len(doc.Groups))
+groupLoop:
 	for _, g := range doc.Groups {
 		if groupNames[g.Name] {
-			return ComponentType{}, fmt.Errorf("%s: duplicate group name %q", path, g.Name)
+			if fail("duplicate group name %q", g.Name) {
+				return ComponentType{}, strictErr
+			}
+			continue
 		}
 		groupNames[g.Name] = true
+		if len(g.Pins) == 0 {
+			if fail("group %q has no members", g.Name) {
+				return ComponentType{}, strictErr
+			}
+			continue
+		}
 		for _, member := range g.Pins {
 			if member == ncPinName {
 				// A no-connect pin carries no signal, so it cannot be a bus lane
 				// (FR-062f) — and being non-unique it would not name one pin anyway.
-				return ComponentType{}, fmt.Errorf("%s: group %q names %q, which is a no-connect pin (FR-062f)", path, g.Name, member)
+				if fail("group %q names %q, which is a no-connect pin (FR-062f)", g.Name, member) {
+					return ComponentType{}, strictErr
+				}
+				continue groupLoop
 			}
 			if !pinNames[member] {
-				return ComponentType{}, fmt.Errorf("%s: group %q names unknown pin %q", path, g.Name, member)
+				if fail("group %q names unknown pin %q", g.Name, member) {
+					return ComponentType{}, strictErr
+				}
+				continue groupLoop
 			}
 		}
 		if err := validateGroupGeometry(path, g, pins, pinByName, subunit); err != nil {
-			return ComponentType{}, err
+			if failErr(err) {
+				return ComponentType{}, strictErr
+			}
+			continue
 		}
 		groups = append(groups, PinGroup{Name: g.Name, Pins: g.Pins})
 	}
@@ -350,61 +480,14 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		datasheet = &Datasheet{Vendor: d.Vendor, Title: d.Title, Rev: d.Rev, URL: d.URL}
 	}
 
-	if subunit {
-		if err := validateSubunit(path, doc.RenderAs, doc.NumUnits, pins); err != nil {
-			return ComponentType{}, err
-		}
-		// Outline/width/height are unused for subunits; the client symbol module
-		// (§6.8a) owns each unit's footprint and pin positions.
-		return ComponentType{
-			ID:          id,
-			Name:        doc.Type,
-			RenderType:  "subunit",
-			NumUnits:    doc.NumUnits,
-			RenderAs:    doc.RenderAs,
-			Pins:        pins,
-			PinGroups:   groups,
-			Delays:      doc.Delays,
-			Behavior:    doc.Behavior,
-			Clock:       doc.Clock,
-			Internal:    doc.Internal,
-			Gal:         doc.Gal,
-			PartNumber:  doc.PartNumber,
-			Description: doc.Description,
-			Notes:       doc.Notes,
-			Datasheet:   datasheet,
-			Mem:         mem,
-			Physical:    physical,
-		}, nil
+	var extra map[string]any
+	if lenient {
+		extra = extraTopKeys(data)
 	}
 
-	width, height, err := resolveOutline(doc.Outline, pins)
-	if err != nil {
-		return ComponentType{}, fmt.Errorf("%s: %w", path, err)
-	}
-
-	// Every pin must lie within the resolved outline (§6.3); only an explicit
-	// outline: smaller than the author-placed pins can violate this — a derived
-	// outline is sized to fit.
-	for _, p := range pins {
-		switch p.Side {
-		case "left", "right":
-			if p.Position > height {
-				return ComponentType{}, fmt.Errorf("%s: pin %q: pos %d exceeds outline height %d", path, p.Name, p.Position, height)
-			}
-		case "top", "bottom":
-			if p.Position > width {
-				return ComponentType{}, fmt.Errorf("%s: pin %q: pos %d exceeds outline width %d", path, p.Name, p.Position, width)
-			}
-		}
-	}
-
-	return ComponentType{
+	ct := ComponentType{
 		ID:          id,
 		Name:        doc.Type,
-		RenderType:  "unit",
-		Width:       width,
-		Height:      height,
 		Pins:        pins,
 		PinGroups:   groups,
 		Delays:      doc.Delays,
@@ -418,7 +501,123 @@ func ParseComponentBytes(data []byte, path string) (ComponentType, error) {
 		Datasheet:   datasheet,
 		Mem:         mem,
 		Physical:    physical,
-	}, nil
+		Extra:       extra,
+	}
+
+	if subunit {
+		if err := validateSubunit(path, doc.RenderAs, doc.NumUnits, pins); err != nil {
+			if failErr(err) {
+				return ComponentType{}, strictErr
+			}
+		}
+		// Outline/width/height are unused for subunits; the client symbol module
+		// (§6.8a) owns each unit's footprint and pin positions.
+		ct.RenderType = "subunit"
+		ct.NumUnits = doc.NumUnits
+		ct.RenderAs = doc.RenderAs
+		ct.LoadErrors = loadErrors
+		return ct, nil
+	}
+
+	width, height, err := resolveOutline(doc.Outline, pins)
+	if err != nil {
+		if fail("%v", err) {
+			return ComponentType{}, strictErr
+		}
+		width, height, _ = resolveOutline(nil, pins)
+	}
+
+	// Every pin must lie within the resolved outline (§6.3); only an explicit
+	// outline: smaller than the author-placed pins can violate this — a derived
+	// outline is sized to fit.
+	for _, p := range pins {
+		if p.Unplaced {
+			continue
+		}
+		switch p.Side {
+		case "left", "right":
+			if p.Position > height {
+				if fail("pin %q: pos %d exceeds outline height %d", p.Name, p.Position, height) {
+					return ComponentType{}, strictErr
+				}
+			}
+		case "top", "bottom":
+			if p.Position > width {
+				if fail("pin %q: pos %d exceeds outline width %d", p.Name, p.Position, width) {
+					return ComponentType{}, strictErr
+				}
+			}
+		}
+	}
+
+	ct.RenderType = "unit"
+	ct.Width = width
+	ct.Height = height
+	ct.LoadErrors = loadErrors
+	return ct, nil
+}
+
+// physicalSpecOf maps a physical: block onto a PhysicalSpec without validating
+// it — the fallback for a GAL part whose block fails validatePhysical, which is
+// carried anyway so an in-app save does not drop it (FR-066j).
+func physicalSpecOf(phys *yamlPhysical) *PhysicalSpec {
+	if phys == nil {
+		return nil
+	}
+	power := make([]PowerPin, 0, len(phys.Power))
+	for _, pw := range phys.Power {
+		n := 0
+		if pw.Number != nil {
+			n = *pw.Number
+		}
+		power = append(power, PowerPin{Name: pw.Name, Number: n})
+	}
+	return &PhysicalSpec{Package: phys.Package, PinCount: phys.PinCount, Power: power, NC: phys.NC}
+}
+
+// extraTopKeys decodes the document's top-level keys that yamlComponent does not
+// map (FR-066j), or nil when there are none. Values are made JSON-safe: yaml.v3
+// decodes a mapping with a non-string key as map[any]any, which encoding/json
+// cannot marshal, and one such key must not break the whole /components response.
+func extraTopKeys(data []byte) map[string]any {
+	var raw map[string]any
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+	var extra map[string]any
+	for k, v := range raw {
+		if knownTopKeys[k] {
+			continue
+		}
+		if extra == nil {
+			extra = make(map[string]any)
+		}
+		extra[k] = jsonSafe(v)
+	}
+	return extra
+}
+
+// jsonSafe rewrites map[any]any values (at any depth) as map[string]any.
+func jsonSafe(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, e := range t {
+			t[k] = jsonSafe(e)
+		}
+		return t
+	case map[any]any:
+		m := make(map[string]any, len(t))
+		for k, e := range t {
+			m[fmt.Sprint(k)] = jsonSafe(e)
+		}
+		return m
+	case []any:
+		for i, e := range t {
+			t[i] = jsonSafe(e)
+		}
+		return t
+	}
+	return v
 }
 
 // validatePhysical checks the optional exporter-only physical: block (FR-062e)

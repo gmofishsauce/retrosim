@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import {
   behaviorToTable,
   tableToBehavior,
-  tableIssues,
+  hasContent,
   cycleCell,
   newOutput,
   normalizeRows,
@@ -17,13 +17,13 @@ import {
 // 10 OLMC pins (14–23). `over` renames or re-roles individual pins by number.
 function pins(over = {}) {
   const list = [
-    { number: 1, name: "CLK", dir: "in", reg: false },
-    ...[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13].map((n) => ({ number: n, name: "I" + n, dir: "in", reg: false })),
+    { number: 1, name: "CLK", dir: "in", olmc: false },
+    ...[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13].map((n) => ({ number: n, name: "I" + n, dir: "in", olmc: false })),
     ...[14, 15, 16, 17, 18, 19, 20, 21, 22, 23].map((n) => ({
       number: n,
       name: "IO" + n,
       dir: "out",
-      reg: false,
+      olmc: true,
     })),
   ];
   return list.map((p) => ({ ...p, ...(over[p.number] ?? {}) }));
@@ -31,7 +31,7 @@ function pins(over = {}) {
 
 const roundTrip = (text, p = pins()) => {
   const r = behaviorToTable(text, p);
-  assert.equal(r.refuse, undefined, `unexpected refusal: ${r.refuse}`);
+  assert.deepEqual(r.kept, [], "nothing should have been kept as written");
   return tableToBehavior(r.table, p);
 };
 
@@ -101,20 +101,37 @@ test("polarity comes from the pin label: /ENF heads /ENF =, its literals read EN
   assert.equal(tableToBehavior(table, p), "/BEN = !ENF\n/ENF = I2\n");
 });
 
-test("a registered OLMC heads .R, and the continuation aligns under it (FR-066g)", () => {
-  const p = pins({ 14: { reg: true } });
-  const table = { 14: { mode: "eq", note: "", rows: [{ 2: "1" }, { 3: "1" }] } };
-  assert.equal(tableToBehavior(table, p), "IO14.R = I2\n       + I3\n");
+test("a registered output heads .R, and the continuation aligns under it (FR-066g)", () => {
+  const table = { 14: { mode: "eq", reg: true, note: "", rows: [{ 2: "1" }, { 3: "1" }] } };
+  assert.equal(tableToBehavior(table, pins()), "IO14.R = I2\n       + I3\n");
 });
 
-test("an NC output writes nothing, and an OLMC set to input writes nothing (FR-062f)", () => {
-  const p = pins({ 14: { name: "NC", dir: "in" }, 15: { dir: "in" } });
-  const table = {
-    14: { mode: "eq", note: "", rows: [{ 2: "1" }] },
-    15: { mode: "eq", note: "", rows: [{ 2: "1" }] },
-  };
-  // 15's rows are kept (they come back if it is made an output again) but unwritten.
+// The .R belongs to the output's equations, not to the pin: the OLMC type the
+// user declares is a separate fact that may disagree (FR-066i).
+test("reg comes from the output's own flag, never from the pin (FR-066i)", () => {
+  const table = { 14: { mode: "const1", reg: true, note: "", rows: [{}] }, 15: { mode: "eq", reg: false, note: "", rows: [{ 2: "1" }] } };
+  assert.equal(tableToBehavior(table, pins({ 15: { declReg: true } })), "IO14.R = VCC\nIO15 = I2\n");
+});
+
+test("an NC output writes nothing (FR-062f)", () => {
+  const p = pins({ 14: { name: "NC", dir: "in" } });
+  const table = { 14: { mode: "eq", note: "", rows: [{ 2: "1" }] } };
   assert.equal(tableToBehavior(table, p), "");
+});
+
+// What the dialog shows is what it saves (FR-066j): an OLMC switched to input
+// while it holds equations still writes them, and the definition-error check
+// reports the conflict. One with no content has nothing to write.
+test("an OLMC set to input writes the equations it holds, and nothing otherwise (FR-066g)", () => {
+  const p = pins({ 15: { dir: "in" }, 16: { dir: "in" } });
+  const table = {
+    15: { mode: "eq", note: "", rows: [{ 2: "1" }] },
+    16: { mode: "eq", note: "", rows: [{}] },
+  };
+  assert.equal(tableToBehavior(table, p), "IO15 = I2\n");
+  assert.equal(hasContent(table[15]), true);
+  assert.equal(hasContent(table[16]), false);
+  assert.equal(hasContent({ mode: "const0", rows: [{}] }), true);
 });
 
 test("a per-output note is written as a trailing comment on its first line (FR-066g)", () => {
@@ -157,7 +174,7 @@ test("a single always-false term is the hard-0 idiom and loads as always 0 (FR-0
   // examples/cpu/components/type-22V-DCD.yaml writes "S2 = F0 * !F0" for an
   // output deliberately held low; one cell cannot say it, the constant can.
   const r = behaviorToTable("IO14 = I2 * !I2\n", pins());
-  assert.equal(r.refuse, undefined);
+  assert.deepEqual(r.kept, []);
   assert.equal(r.table[14].mode, "const0");
   assert.equal(tableToBehavior(r.table, pins()), "IO14 = GND\n");
 });
@@ -166,9 +183,10 @@ test("a literal repeated in the same polarity collapses onto its one cell", () =
   assert.equal(roundTrip("IO14 = I2 * I2 * I3\n"), "IO14 = I2 * I3\n");
 });
 
-test("a registered equation round-trips with its .R (FR-066g)", () => {
-  const p = pins({ 14: { reg: true } });
-  assert.equal(roundTrip("IO14.R = I2 * I3\n", p), "IO14.R = I2 * I3\n");
+test("a registered equation round-trips with its .R, which sets the output's reg (FR-066g)", () => {
+  assert.equal(roundTrip("IO14.R = I2 * I3\n"), "IO14.R = I2 * I3\n");
+  assert.equal(behaviorToTable("IO14.R = I2\nIO15 = I3\n", pins()).table[14].reg, true);
+  assert.equal(behaviorToTable("IO14.R = I2\nIO15 = I3\n", pins()).table[15].reg, false);
 });
 
 test("an active-low pin's equation round-trips from its label (FR-066g)", () => {
@@ -185,76 +203,71 @@ test("relabeling a pin between parse and emit moves its literals (FR-066g)", () 
   assert.equal(tableToBehavior(r.table, after), "S0 = F0 * !F1\n");
 });
 
-// --- what the table declines to hold (FR-066f) ---
+// --- what the table cannot hold is kept as written (FR-066g/FR-066j) ---
 
-test("refuses the equation forms the table does not author (FR-066g)", () => {
-  const p = pins({ 14: { reg: true } });
-  assert.match(behaviorToTable("IO14.R = I2\nIO14.E = I3\n", p).refuse, /\.E/);
-  assert.match(behaviorToTable("AR = I2\n", p).refuse, /AR/);
-  assert.match(behaviorToTable("SP = I2\n", p).refuse, /SP/);
-  assert.match(behaviorToTable("IO14 = I2 :+: I3\n", pins()).refuse, /XOR/);
-  assert.match(behaviorToTable("IO14.T = I2\n", pins()).refuse, /\.T/);
-  assert.match(behaviorToTable("IO14.L = I2\n", pins()).refuse, /\.L/);
+test("the equation forms the table does not author are kept verbatim, in order (FR-066g)", () => {
+  const text = "IO14.R = I2\nIO14.E = I3\nAR = I4\nSP = I5\n";
+  const r = behaviorToTable(text, pins({ 14: { dir: "out" } }));
+  assert.equal(r.table[14].reg, true);
+  assert.deepEqual(r.kept, ["IO14.E = I3", "AR = I4", "SP = I5"]);
+  // Kept equations follow the table's, which keeps .E after its output.
+  assert.equal(tableToBehavior(r.table, pins(), r.kept), text);
+  for (const form of ["IO14 = I2 :+: I3", "IO14.T = I2", "IO14.L = I2", "IO14.G = I2"]) {
+    assert.deepEqual(behaviorToTable(form + "\n", pins()).kept, [form]);
+  }
 });
 
-test("refuses an LHS negation its pin label does not carry (FR-066g)", () => {
+test("an LHS negation its pin label does not carry is kept, not inverted (FR-066g)", () => {
   // examples/cpu/components/type-22V738.yaml: pin labeled OUTCMB, equation
-  // !OUTCMB = … . Loading it under the label rule and saving would invert the
-  // output, so the dialog declines rather than damaging it.
+  // !OUTCMB = … . Re-emitting it from the label would invert the output.
   const p = pins({ 14: { name: "OUTCMB" } });
   const r = behaviorToTable("!OUTCMB = I2 * I3\n", p);
-  assert.match(r.refuse, /labeled "OUTCMB"/);
-  assert.match(r.refuse, /"\/OUTCMB"/); // says exactly how to fix it
-
-  // The mirror case: a /-labeled pin whose equation is written active high.
-  const p2 = pins({ 14: { name: "/ENF" } });
-  assert.match(behaviorToTable("ENF = I2\n", p2).refuse, /labeled "\/ENF"/);
+  assert.deepEqual(r.table, {});
+  assert.deepEqual(r.kept, ["!OUTCMB = I2 * I3"]);
+  assert.deepEqual(behaviorToTable("ENF = I2\n", pins({ 14: { name: "/ENF" } })).kept, ["ENF = I2"]);
 });
 
-test("refuses self-feedback, which has no cell (FR-066g)", () => {
-  assert.match(behaviorToTable("IO14 = I2 * IO14\n", pins()).refuse, /reads itself back/);
+test("each equation the table cannot represent is kept on its own (FR-066g)", () => {
+  const cases = [
+    "IO14 = I2 * IO14", // self-feedback has no cell
+    "IO14 = I2 * !I2 + I3", // always-false term alongside others
+    "IO14 = NOSUCH", // unknown signal
+    "NOSUCH = I2", // not a pin
+    "I2 = I3", // a fixed input may head no equation
+    "IO14 = I2 $ I3", // not an equation at all
+  ];
+  for (const text of cases) {
+    const r = behaviorToTable(text + "\nIO15 = I4\n", pins());
+    assert.deepEqual(r.kept, [text], text);
+    assert.equal(tableToBehavior(r.table, pins()), "IO15 = I4\n", text);
+  }
 });
 
-test("refuses an always-false term alongside other terms (FR-066g)", () => {
-  const r = behaviorToTable("IO14 = I2 * !I2 + I3\n", pins());
-  assert.match(r.refuse, /both ways/);
-  assert.match(r.refuse, /always 0/);
+test("a second equation for an output already in the table is kept (FR-066g)", () => {
+  const r = behaviorToTable("IO14 = I2\nIO14 = I3\n", pins());
+  assert.deepEqual(r.kept, ["IO14 = I3"]);
+  assert.equal(tableToBehavior(r.table, pins(), r.kept), "IO14 = I2\nIO14 = I3\n");
 });
 
-test("refuses an equation naming a pin the part does not have", () => {
-  assert.match(behaviorToTable("IO14 = NOSUCH\n", pins()).refuse, /unknown signal NOSUCH/);
-  assert.match(behaviorToTable("NOSUCH = I2\n", pins()).refuse, /not a pin of this part/);
+test("a kept equation carries its continuation lines and comments (FR-066g)", () => {
+  const text = "; hold the register\nIO14.R = I2\n       + IO14 ; feedback\nIO15 = I3\n";
+  const r = behaviorToTable(text, pins());
+  assert.deepEqual(r.kept, ["; hold the register\nIO14.R = I2\n       + IO14 ; feedback"]);
+  assert.equal(tableToBehavior(r.table, pins(), r.kept), "IO15 = I3\n; hold the register\nIO14.R = I2\n       + IO14 ; feedback\n");
 });
 
-test("refuses an equation headed by an input pin", () => {
-  assert.match(behaviorToTable("I2 = I3\n", pins()).refuse, /not an output pin/);
+test("a block of nothing but comments is kept (FR-066g)", () => {
+  assert.deepEqual(behaviorToTable("; logic to come\n", pins()), { table: {}, kept: ["; logic to come"] });
 });
 
-test("refuses two equations for one output", () => {
-  assert.match(behaviorToTable("IO14 = I2\nIO14 = I3\n", pins()).refuse, /two equations/);
+test("an equation for an OLMC configured as an input is read into the table (FR-066g)", () => {
+  const p = pins({ 15: { dir: "in" } });
+  const r = behaviorToTable("IO15 = I2\n", p);
+  assert.deepEqual(r.kept, []);
+  assert.equal(tableToBehavior(r.table, p), "IO15 = I2\n");
 });
 
 test("an empty behavior block loads as an empty table", () => {
-  assert.deepEqual(behaviorToTable("", pins()).table, {});
-  assert.deepEqual(behaviorToTable("\n  \n", pins()).table, {});
-});
-
-// --- the clock rule (FR-066g) ---
-
-test("pin 1 may head a literal until an output is registered (FR-066g)", () => {
-  const table = { 14: { mode: "eq", note: "", rows: [{ 1: "1", 2: "1" }] } };
-  // No registered output: pin 1 is an ordinary input and the term is legal.
-  assert.equal(tableIssues(table, pins()), null);
-  assert.equal(tableToBehavior(table, pins()), "IO14 = CLK * I2\n");
-
-  // Register any output and the same term names the device's clock.
-  const p = pins({ 15: { reg: true } });
-  const issue = tableIssues(table, p);
-  assert.match(issue, /CLK \(pin 1\)/);
-  assert.match(issue, /IO14/);
-});
-
-test("the clock rule ignores a constant output's kept rows (FR-066g)", () => {
-  const table = { 14: { mode: "const0", note: "", rows: [{ 1: "1" }] } };
-  assert.equal(tableIssues(table, pins({ 15: { reg: true } })), null);
+  assert.deepEqual(behaviorToTable("", pins()), { table: {}, kept: [] });
+  assert.deepEqual(behaviorToTable("\n  \n", pins()), { table: {}, kept: [] });
 });

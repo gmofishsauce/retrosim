@@ -3,16 +3,16 @@
 
 import { listDir, loadDesign, loadVectorFile, saveVectorFile } from "../api.js";
 import { setAppState } from "./statusbar.js";
-import { compileBehavior } from "../engine/galasm.js";
 import {
   behaviorToTable,
   tableToBehavior,
-  tableIssues,
   cycleCell,
   newOutput,
   normalizeRows,
   signalOf,
+  hasContent,
 } from "../engine/galeq.js";
+import { galDefinitionErrors, designDefinitionErrors, definitionErrorsMessage } from "../engine/galerrors.js";
 import { loadRomContents } from "../engine/sim.js";
 import { flatten } from "../model/subdesign.js";
 import {
@@ -109,6 +109,40 @@ export function confirmSaveDialog(name) {
     }
     document.addEventListener("keydown", onKey, true);
     document.body.appendChild(overlay);
+  });
+}
+
+// definitionErrorsDialog is the modal refusal Run, Generate C…, and the
+// test-vector panel raise for a design containing a GAL part with definition
+// errors (FR-066m). `message` comes from definitionErrorsMessage. Resolves when
+// dismissed with OK, Enter, or Escape.
+export function definitionErrorsDialog(message) {
+  return new Promise((resolve) => {
+    const overlay = el("div", "dialog-overlay");
+    const box = el("div", "dialog");
+    overlay.appendChild(box);
+    box.appendChild(el("div", "dialog-title", "Component definition errors"));
+    box.appendChild(el("div", "defn-errors-msg", message));
+    const ok = button("OK", done);
+    const buttons = el("div", "dialog-buttons");
+    buttons.append(ok);
+    box.appendChild(buttons);
+
+    function done() {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      resolve();
+    }
+    function onKey(e) {
+      if (e.key === "Escape" || e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        done();
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+    ok.focus();
   });
 }
 
@@ -592,18 +626,38 @@ const GAL22V10 = {
 const NC_PIN_LABEL = "NC";
 
 // OLMC direction choices (FR-066c): input, combinational output, or registered
-// output. `dir` is the YAML pin direction; combinational and registered outputs
-// are both `out` pins (registered is expressed by a `.R` behavior equation).
+// output. `dir` is the YAML pin direction; both output kinds are `out` pins, and
+// which one the user declared is saved on its own, as the pin's `olmc` key
+// (FR-066i) — never inferred from the equations, which may not exist yet.
 const OLMC_DIRS = [
   { kind: "comb", label: "comb out", dir: "out" },
   { kind: "reg", label: "reg out", dir: "out" },
   { kind: "in", label: "input", dir: "in" },
 ];
 
-// galPartYaml serializes the authored part to component YAML (§7.3). Quoted
+// pinYaml writes one pin as a flow mapping, in the key order every GAL part file
+// uses. Quoted scalars use JSON.stringify (valid YAML 1.2 double-quoted form).
+function pinYaml({ name, side, pos, unit, dir, olmc, number, desc }) {
+  const f = [`name: ${JSON.stringify(name)}`, `side: ${side}`];
+  if (unit) f.push(`unit: ${JSON.stringify(unit)}`);
+  else f.push(`pos: ${pos}`);
+  f.push(`dir: ${dir}`);
+  if (olmc) f.push(`olmc: ${olmc}`);
+  if (number != null) f.push(`number: ${number}`);
+  if (desc) f.push(`desc: ${JSON.stringify(desc)}`);
+  return `  - { ${f.join(", ")} }`;
+}
+
+// galPartYaml serializes the authored part to component YAML (§7.6). Quoted
 // scalars use JSON.stringify (valid YAML 1.2 double-quoted form); the behavior is
 // emitted as a literal block scalar with each line indented two spaces.
-export function galPartYaml({ partnumber, description, notes, inputs, olmcs, groups, behavior, id }) {
+//
+// The declared intent is written explicitly (FR-066i): `clock` is the pin-1
+// checkbox, and every output-configured OLMC carries `olmc: reg|comb` whether or
+// not an equation exists for it. `kept` is what galPartFromType loaded but the
+// dialog does not model — {pins, keys, outline} — written back unchanged so an
+// in-app save never drops it (FR-066j).
+export function galPartYaml({ partnumber, description, notes, inputs, olmcs, groups, behavior, id, clock = false, kept = null }) {
   // Emit an explicit, immutable id (FR-066e) so the created part keys stably even
   // if its part-number display name is later edited; matches the library files
   // and the server's derive-when-absent rule (deriveComponentID). An edit passes
@@ -616,20 +670,27 @@ export function galPartYaml({ partnumber, description, notes, inputs, olmcs, gro
     `partnumber: ${JSON.stringify(partnumber)}`,
   ];
   if (description) lines.push(`description: ${JSON.stringify(description)}`);
-  if (olmcs.some((o) => o.kind === "reg")) {
-    lines.push(`clock: ${JSON.stringify(inputs[0].name)}`); // pin-1 clock
-  }
-  lines.push(`outline: [${GAL22V10.outline[0]}, ${GAL22V10.outline[1]}]`, `pins:`);
+  if (clock) lines.push(`clock: ${JSON.stringify(inputs[0].name)}`); // pin-1 clock
+  const outline = kept?.outline ?? GAL22V10.outline;
+  lines.push(`outline: [${outline[0]}, ${outline[1]}]`, `pins:`);
   for (const p of inputs) {
-    lines.push(`  - { name: ${JSON.stringify(p.name)}, side: left, pos: ${p.pos}, dir: in, number: ${p.number} }`);
+    lines.push(pinYaml({ name: p.name, side: "left", pos: p.pos, dir: "in", number: p.number, desc: p.desc }));
   }
   for (const o of olmcs) {
     // A pin labeled NC is a declared no-connect (FR-062f): it carries no signal
     // and can head no equation, so its OLMC direction is meaningless and it is
     // emitted as a plain input. The dialog disables the direction control to
     // match.
-    const dir = o.name === NC_PIN_LABEL ? "in" : OLMC_DIRS.find((d) => d.kind === o.kind).dir;
-    lines.push(`  - { name: ${JSON.stringify(o.name)}, side: right, pos: ${o.pos}, dir: ${dir}, number: ${o.number} }`);
+    const nc = o.name === NC_PIN_LABEL;
+    const dir = nc ? "in" : OLMC_DIRS.find((d) => d.kind === o.kind).dir;
+    const olmc = nc || o.kind === "in" ? null : o.kind;
+    lines.push(pinYaml({ name: o.name, side: "right", pos: o.pos, dir, olmc, number: o.number, desc: o.desc }));
+  }
+  // Pins the skeleton has no place for, exactly as they were loaded (FR-066j).
+  for (const p of kept?.pins ?? []) {
+    lines.push(
+      pinYaml({ name: p.name, side: p.side, pos: p.position ?? 0, unit: p.unit, dir: p.direction, olmc: p.olmc, number: p.number, desc: p.desc }),
+    );
   }
   // Pin groups (FR-066d/FR-063): members are stored by skeleton DIP number; emit
   // them resolved to current labels, ordered by physical pin layout (the bus bit
@@ -647,8 +708,14 @@ export function galPartYaml({ partnumber, description, notes, inputs, olmcs, gro
       lines.push(`  - { name: ${JSON.stringify(g.name)}, pins: [${members.join(", ")}] }`);
     }
   }
+  // Keys the dialog does not model, in JSON flow form — JSON being YAML.
+  for (const [key, value] of kept?.keys ?? []) lines.push(`${key}: ${JSON.stringify(value)}`);
   if (behavior.trim()) {
-    lines.push(`behavior: |`);
+    // A kept equation (FR-066g) may put an indented line first — its own
+    // continuation layout, say — and a bare `|` would then infer the block's
+    // indentation from it, the trap `notes` documents below. State it then.
+    const first = behavior.split("\n").find((l) => l.trim()) ?? "";
+    lines.push(/^\s/.test(first) ? `behavior: |2` : `behavior: |`);
     for (const ln of behavior.replace(/\s+$/, "").split("\n")) lines.push(`  ${ln}`);
   }
   // Free-form notes (FR-125a), a literal block scalar like `behavior` above and
@@ -658,14 +725,13 @@ export function galPartYaml({ partnumber, description, notes, inputs, olmcs, gro
   // non-empty, so a part without notes gains no key.
   //
   // The `2` is an explicit block **indentation indicator**, and it is load-bearing
-  // where `behavior`'s bare `|` is not. With a bare `|` YAML infers the block's
-  // indentation from its first non-empty line, so notes whose first line is itself
-  // indented — a pasted snippet, an indented list — would set the inferred indent
-  // too deep and every following line would read as less-indented: the parser then
-  // fails with "did not find expected key" and the app has written a part file it
-  // cannot load. Stating 2 makes any extra leading space *content*. `behavior`
-  // cannot reach this case (tableToBehavior always emits `NAME = …` at column 0),
-  // which is why it is left alone rather than churned.
+  // where `behavior`'s bare `|` usually is not. With a bare `|` YAML infers the
+  // block's indentation from its first non-empty line, so notes whose first line
+  // is itself indented — a pasted snippet, an indented list — would set the
+  // inferred indent too deep and every following line would read as
+  // less-indented: the parser then fails with "did not find expected key" and the
+  // app has written a part file it cannot load. Stating 2 makes any extra leading
+  // space *content*.
   //
   // Blank lines are emitted truly empty rather than as two spaces: an empty line
   // is valid inside a block scalar at any indentation, and trailing whitespace in
@@ -677,120 +743,142 @@ export function galPartYaml({ partnumber, description, notes, inputs, olmcs, gro
   return lines.join("\n") + "\n";
 }
 
-// GAL_DIALOG_KEYS are the ComponentType fields the New/Edit GAL part dialog
-// models. A part carrying anything else cannot be round-tripped — Save rewrites
-// the whole file from these fields, so an unmodelled key would be silently
-// dropped — and galPartFromType refuses it rather than reducing the definition
-// to what the dialog happens to understand (FR-066f).
-const GAL_DIALOG_KEYS = new Set([
-  "id", "name", "renderType", "width", "height", "pins", "pinGroups",
-  "behavior", "clock", "gal", "partnumber", "description", "notes", "projectLocal",
-]);
+// KEPT_FIELDS are the ComponentType fields a GAL part may carry that the dialog
+// does not model, with the YAML key each is written back under (FR-066j). The
+// server's `extra` map holds any other top-level key.
+const KEPT_FIELDS = [
+  ["delays", "delays"],
+  ["internal", "internal"],
+  ["datasheet", "datasheet"],
+  ["physical", "physical"],
+  ["mem", "mem"],
+];
 
-// REG_EQ_RE finds the outputs a behavior block registers (`IO14.R = …`), which
-// is the only thing distinguishing a "reg out" OLMC from a "comb out" one — both
-// emit `dir: out`, and the difference shows up solely in whether galPartYaml
-// emits the `clock:` line. A regex rather than compileBehavior so a part whose
-// equations no longer compile still opens for repair (the live validator, not
-// the loader, is what refuses to save it).
-const REG_EQ_RE = /(^|\n)\s*\/?\s*([A-Za-z][A-Za-z0-9]*)\s*\.\s*R\s*=/g;
+// REG_EQ_RE finds the outputs a behavior block registers (`IO14.R = …`), which is
+// how a pin with no `olmc` key — every part written before FR-066i — has its
+// declared type inferred. A regex rather than compileBehavior so a part whose
+// equations no longer compile still opens.
+const REG_EQ_RE = /(^|\n)\s*[/!]?\s*([A-Za-z][A-Za-z0-9]*)\s*\.\s*R\s*=/g;
 
-// galPartFromType maps a loaded GAL ComponentType back onto the dialog's fields
-// (FR-066f), the inverse of galPartYaml. Returns {partnumber, description,
-// inputs, olmcs, groups, behavior} — the exact shapes gather() produces, with
-// group members by skeleton DIP number so a rename cannot break a group — or
-// {refuse: reason} for a definition the dialog cannot reproduce exactly. Pure
-// (no DOM): the round trip type → fields → galPartYaml is unit-testable.
+// galPartFromType maps a loaded GAL ComponentType onto the dialog's fields
+// (FR-066f), the inverse of galPartYaml. It never refuses (FR-066j): it
+// populates the dialog as best it can, keeps whatever it cannot represent so
+// galPartYaml writes it back, and lists what it supplied, moved, or kept in
+// `loadNotes`. Group members come back by skeleton DIP number so a rename cannot
+// break a group. Pure (no DOM): the round trip type → fields → galPartYaml is
+// unit-testable.
 export function galPartFromType(type) {
+  const loadNotes = (type.loadErrors ?? []).map((e) => `the file as loaded: ${e}`);
   if (type.gal !== "GAL22V10") {
-    return { refuse: type.gal ? `this dialog edits GAL22V10 parts; ${type.name} is a ${type.gal}` : "not a GAL part" };
+    loadNotes.push(`the file names device ${type.gal || "(none)"}; this dialog writes a GAL22V10`);
   }
-  if ((type.renderType ?? "unit") !== "unit") return { refuse: `render type ${type.renderType}` };
-  const extra = Object.keys(type).filter((k) => !GAL_DIALOG_KEYS.has(k));
-  if (extra.length) {
-    return { refuse: `the definition carries ${extra.join(", ")}, which this dialog does not model and would drop` };
-  }
-  if (type.width !== GAL22V10.outline[0] || type.height !== GAL22V10.outline[1]) {
-    return { refuse: `a custom outline (${type.width}×${type.height}), which this dialog would overwrite` };
-  }
+  if ((type.renderType ?? "unit") !== "unit") loadNotes.push(`render type ${type.renderType} is written as unit`);
 
-  // Pins must map one-for-one onto the skeleton: same count, same DIP numbers,
-  // same sides. Anything else is a pinout this dialog cannot present.
-  const skeleton = [
-    ...GAL22V10.inputs.map((p) => ({ meta: p, side: "left" })),
-    ...GAL22V10.olmcs.map((p) => ({ meta: p, side: "right" })),
-  ];
-  const pins = type.pins ?? [];
-  if (pins.length !== skeleton.length) {
-    return { refuse: `${pins.length} pins; the GAL22V10 skeleton has ${skeleton.length}` };
-  }
+  // Pins match the skeleton by DIP number. One the skeleton has no slot for —
+  // unnumbered, off the device, or repeating a number — is kept as written.
+  const skeletonNumbers = new Set([...GAL22V10.inputs, ...GAL22V10.olmcs].map((m) => m.number));
   const byNumber = new Map();
-  for (const p of pins) {
-    if (p.unit || p.desc) return { refuse: `pin ${p.name} carries per-pin data this dialog does not model` };
-    if (p.number == null) return { refuse: `pin ${p.name} has no pin number` };
-    byNumber.set(p.number, p);
-  }
-  for (const s of skeleton) {
-    const p = byNumber.get(s.meta.number);
-    if (!p) return { refuse: `no pin numbered ${s.meta.number}` };
-    if (p.side !== s.side || p.position !== s.meta.pos) {
-      return { refuse: `pin ${p.name} (${s.meta.number}) is not where the skeleton puts it` };
+  const keptPins = [];
+  for (const p of type.pins ?? []) {
+    let why = null;
+    if (p.number == null) why = "has no pin number";
+    else if (!skeletonNumbers.has(p.number)) why = `(number ${p.number}) has no place on the GAL22V10`;
+    else if (byNumber.has(p.number)) why = `repeats pin number ${p.number}`;
+    if (why) {
+      keptPins.push(p);
+      loadNotes.push(`pin ${p.name} ${why}; kept as written`);
+    } else {
+      byNumber.set(p.number, p);
     }
   }
+  const seat = (meta, side) => {
+    const p = byNumber.get(meta.number);
+    if (!p) {
+      loadNotes.push(`no pin numbered ${meta.number}; supplied as ${meta.name}`);
+      return { ...meta };
+    }
+    if (p.unplaced || p.side !== side || p.position !== meta.pos) {
+      loadNotes.push(`pin ${p.name} (${meta.number}) moved to its GAL22V10 position`);
+    }
+    const f = { ...meta, name: p.name };
+    if (p.desc) f.desc = p.desc;
+    return f;
+  };
 
   const behavior = type.behavior ?? "";
   const registered = new Set();
   for (const m of behavior.matchAll(REG_EQ_RE)) registered.add(m[2]);
 
-  const inputs = GAL22V10.inputs.map((meta) => ({ ...meta, name: byNumber.get(meta.number).name }));
+  const inputs = GAL22V10.inputs.map((meta) => {
+    const p = byNumber.get(meta.number);
+    if (p && p.direction !== "in") {
+      loadNotes.push(`pin ${p.name} (${meta.number}) is a fixed input; dir ${p.direction} is written as in`);
+    }
+    return seat(meta, "left");
+  });
   const olmcs = GAL22V10.olmcs.map((meta) => {
     const p = byNumber.get(meta.number);
-    const kind =
-      p.direction === "in" ? "in" : registered.has(p.name) ? "reg" : "comb";
-    return { ...meta, name: p.name, kind };
+    let kind = "comb";
+    if (p?.direction === "in") kind = "in";
+    else if (p) kind = p.olmc ?? (registered.has(signalOf(p.name)) ? "reg" : "comb");
+    return { ...seat(meta, "right"), kind };
   });
 
-  // The clock declaration is derived, not authored (galPartYaml emits it iff some
-  // OLMC is registered, naming pin 1): one that disagrees would be rewritten.
-  const wantClock = olmcs.some((o) => o.kind === "reg") ? inputs[0].name : "";
-  if ((type.clock ?? "") !== wantClock) {
-    return {
-      refuse: wantClock
-        ? `clock: ${type.clock || "(none)"} — this dialog emits clock: ${wantClock} for a registered part`
-        : `clock: ${type.clock} on a part with no registered output`,
-    };
+  // The clock is pin 1 or nothing (FR-066i).
+  const clock = !!type.clock && type.clock === inputs[0].name;
+  if (type.clock && !clock) {
+    loadNotes.push(`clock: ${type.clock} is not pin 1, the GAL22V10's clock; loaded with the clock box clear`);
   }
 
   // Groups come back as skeleton DIP numbers (FR-066d), the representation the
   // pin-groups sub-dialog uses, so a label edit cannot orphan a member.
-  const numberOf = new Map(pins.map((p) => [p.name, p.number]));
+  const numberOf = new Map([...byNumber.values()].map((p) => [p.name, p.number]));
   const groups = [];
   for (const g of type.pinGroups ?? []) {
     const members = [];
     for (const label of g.pins ?? []) {
       const n = numberOf.get(label);
-      if (n == null) return { refuse: `pin group ${g.name} names ${label}, which is not a pin of this part` };
-      members.push(n);
+      if (n == null) loadNotes.push(`pin group ${g.name} names ${label}, which is not a skeleton pin; dropped from the group`);
+      else members.push(n);
     }
-    groups.push({ name: g.name, members });
+    if (members.length) groups.push({ name: g.name, members });
+    else loadNotes.push(`pin group ${g.name} has no members left; dropped`);
   }
 
-  // The behavior block is loaded by parsing it into the equation term table
-  // (FR-066g), which is a second refusal surface: a block using a form the table
-  // does not author is content the dialog would drop, exactly like an unmodelled
-  // key above. `behavior` comes back **normalized** — re-emitted from the table —
-  // so what the dialog opens with is what an unedited Save would write.
+  const keys = [];
+  for (const [field, key] of KEPT_FIELDS) {
+    if (type[field] == null) continue;
+    keys.push([key, type[field]]);
+    loadNotes.push(`${key} is kept as written (not editable here)`);
+  }
+  for (const [key, value] of Object.entries(type.extra ?? {})) {
+    keys.push([key, value]);
+    loadNotes.push(`${key} is kept as written (not editable here)`);
+  }
+  let outline = null;
+  if (type.width > 0 && type.height > 0 && (type.width !== GAL22V10.outline[0] || type.height !== GAL22V10.outline[1])) {
+    outline = [type.width, type.height];
+    loadNotes.push(`the outline ${type.width}×${type.height} is kept`);
+  }
+
+  // The behavior block is parsed into the equation term table (FR-066g); what
+  // the table cannot hold comes back as kept equations, written after it.
+  // `behavior` comes back **normalized** — re-emitted from the table — so what
+  // the dialog opens with is what an unedited Save would write.
   const tablePins = [
-    ...inputs.map((p) => ({ number: p.number, name: p.name, dir: "in", reg: false })),
+    ...inputs.map((p) => ({ number: p.number, name: p.name, dir: "in", olmc: false })),
     ...olmcs.map((o) => ({
       number: o.number,
       name: o.name,
       dir: o.name === NC_PIN_LABEL || o.kind === "in" ? "in" : "out",
-      reg: o.kind === "reg",
+      olmc: true,
     })),
   ];
   const parsed = behaviorToTable(behavior, tablePins);
-  if (parsed.refuse) return { refuse: `a behavior block the equation table cannot hold — ${parsed.refuse}` };
+  for (const k of parsed.kept) {
+    const line = k.split("\n").find((l) => l.replace(/;.*$/, "").trim()) ?? k.split("\n")[0];
+    loadNotes.push(`kept as written, the equation table cannot hold it: ${line.trim()}`);
+  }
 
   return {
     id: type.id,
@@ -799,9 +887,13 @@ export function galPartFromType(type) {
     notes: type.notes ?? "", // FR-125a: free-form prose, round-tripped verbatim
     inputs,
     olmcs,
+    clock,
     groups,
     table: parsed.table,
-    behavior: tableToBehavior(parsed.table, tablePins),
+    keptEquations: parsed.kept,
+    kept: { pins: keptPins, keys, outline },
+    loadNotes,
+    behavior: tableToBehavior(parsed.table, tablePins, parsed.kept),
   };
 }
 
@@ -975,13 +1067,14 @@ export function pinGroupsDialog({ pins, groups }) {
 
 // newGalPartDialog authors a new GAL22V10 part (FR-066c) and — opened with
 // `part`, the fields galPartFromType produced from an existing definition —
-// edits one (FR-066f). One dialog, one set of fields, one validation gate; the
-// two differ only in the title, the button label, and what the caller's submit
-// does with the YAML (create vs. update, FR-007a). It collects the part number,
-// description, per-pin labels, per-OLMC direction, groups, and behavior, then
-// calls submit(yaml) — which persists and returns the ComponentType. A submit
-// failure (duplicate part number, refused update, validation error) is shown
-// inline and the dialog stays open. Resolves to the created/updated component,
+// edits one (FR-066f). One dialog, one set of fields, one definition-error check;
+// the two differ only in the title, the button label, and what the caller's
+// submit does with the YAML (create vs. update, FR-007a). It collects the part
+// number, description, per-pin labels, per-OLMC direction, the pin-1 clock,
+// groups, and behavior, then calls submit(yaml) — which persists and returns the
+// ComponentType. Definition errors are reported on the Errors tab and never
+// block Save (FR-066j). A submit failure (an empty part number on Create, a
+// duplicate id, a refused update) is shown inline and the dialog stays open. Resolves to the created/updated component,
 // or null on cancel.
 export function newGalPartDialog({ submit, part = null }) {
   return new Promise((resolve) => {
@@ -998,27 +1091,22 @@ export function newGalPartDialog({ submit, part = null }) {
     // Tabs (FR-066h). The dialog had grown to eight stacked regions inside a 92vh
     // box — three of them scrolling and competing for the same height — and the
     // notes area of FR-125a is what made a single column untenable. Each surface
-    // now gets the full body height instead of a squeezed slice.
-    //
-    // This is presentation only: no field moved owner, and gather(), validate(),
-    // tablePins(), renderEq(), and behaviorText() are untouched. In particular the
-    // label/direction listeners still rebuild the grid from the Part tab while the
-    // Logic tab is hidden — they were never coupled to visibility.
+    // now gets the full body height instead of a squeezed slice. The Errors tab
+    // (FR-066k) lists the part's definition errors, which never block Save.
     const TAB_SPECS = [
       { key: "part", label: "Part" },
       { key: "logic", label: "Logic" },
       { key: "notes", label: "Notes" },
+      { key: "errors", label: "Errors" },
     ];
     const tabStrip = el("div", "galdlg-tabs");
     tabStrip.setAttribute("role", "tablist");
     const bodies = {};
     const tabBtns = {};
-    let activeTab = null;
     // selectTab shows one body and marks its tab. Hidden bodies keep their DOM —
     // and so their scroll positions, caret, and the grid — exactly as the dock's
     // hidden tabs do (FR-123).
     function selectTab(key) {
-      activeTab = key;
       for (const t of TAB_SPECS) {
         bodies[t.key].hidden = t.key !== key;
         tabBtns[t.key].classList.toggle("active", t.key === key);
@@ -1060,16 +1148,29 @@ export function newGalPartDialog({ submit, part = null }) {
     const pins = el("div", "dialog-list galdlg-pins");
     partTab.appendChild(pins);
 
+    // Pin 1's clock checkbox (FR-066i): set by the user alone, independent of
+    // whether any output is registered or any equation exists, and saved as
+    // `clock:` — so a clock net can be wired to a part whose logic is unwritten.
+    const clockBox = el("input");
+    clockBox.type = "checkbox";
+    clockBox.checked = editing ? !!part.clock : false;
+    clockBox.title = "pin 1 is the clock of this part's registered outputs";
+
     pins.appendChild(el("div", "galdlg-section", "Inputs (pins 1–13)"));
     const inputFields = GAL22V10.inputs.map((p, i) => {
       const row = el("div", "galdlg-row");
-      const tag = el("span", "galdlg-pin", `${p.number}${p.clock ? " CLK" : ""}`);
+      const tag = el("span", "galdlg-pin", String(p.number));
       const input = el("input", "dialog-name");
       input.type = "text";
       input.value = editing ? part.inputs[i].name : p.name;
       row.append(tag, input);
+      if (p.clock) {
+        const lbl = el("label", "galdlg-clock");
+        lbl.append(clockBox, document.createTextNode("clock"));
+        row.appendChild(lbl);
+      }
       pins.appendChild(row);
-      return { meta: p, input };
+      return { meta: editing ? part.inputs[i] : p, input };
     });
 
     pins.appendChild(el("div", "galdlg-section", "I/O — OLMC (pins 14–23)"));
@@ -1088,7 +1189,7 @@ export function newGalPartDialog({ submit, part = null }) {
       sel.value = editing ? part.olmcs[i].kind : "comb";
       row.append(tag, input, sel);
       pins.appendChild(row);
-      return { meta: o, input, sel };
+      return { meta: editing ? part.olmcs[i] : o, input, sel };
     });
 
     // Pin groups (FR-066d): edited in a sub-dialog; tracked by skeleton DIP number
@@ -1130,6 +1231,7 @@ export function newGalPartDialog({ submit, part = null }) {
       if (updated) {
         groups = updated;
         showGroups();
+        refreshEq();
       }
     });
     groupsRow.append(groupsBtn, groupsSummary);
@@ -1140,7 +1242,12 @@ export function newGalPartDialog({ submit, part = null }) {
     // term, from which the GALasm block is generated. There is no equation text
     // box — `galeq.js` owns both directions of the translation, and the model it
     // holds is keyed by skeleton DIP number so relabeling a pin carries its terms.
+    // `keptEqs` are the loaded equations the table cannot hold, written back after
+    // it (FR-066g); `kept` is the rest of what the dialog does not model (FR-066j).
     const table = editing ? (part.table ?? {}) : {};
+    const keptEqs = editing ? [...(part.keptEquations ?? [])] : [];
+    const kept = editing ? (part.kept ?? null) : null;
+    const loadNotes = editing ? (part.loadNotes ?? []) : [];
     logicTab.appendChild(el("div", "galdlg-section", "Logic — sum of products"));
     const eqWrap = el("div", "galeq-wrap");
     const eqTable = el("table", "galeq-table");
@@ -1150,14 +1257,17 @@ export function newGalPartDialog({ submit, part = null }) {
     eqWrap.appendChild(eqTable);
     logicTab.appendChild(eqWrap);
 
-    logicTab.appendChild(el("div", "galdlg-section", "GALasm this table writes"));
+    const keptWrap = el("div", "galeq-kept");
+    logicTab.appendChild(keptWrap);
+
+    logicTab.appendChild(el("div", "galdlg-section", "GALasm this part writes"));
     const preview = el("pre", "galeq-preview");
     logicTab.appendChild(preview);
 
     // Notes tab (FR-125a): one plain-text area over the part's `notes`, the same
-    // idiom as the schematic's Notes tab (§6.23). Notes are documentation, so they
-    // are outside the validation gate entirely — nothing here can make a part
-    // invalid, and refreshEq() is deliberately not called on input.
+    // idiom as the schematic's Notes tab (§6.23). Notes are documentation, so
+    // nothing here can produce a definition error, and refreshEq() is
+    // deliberately not called on input.
     const notesInput = el("textarea", "galdlg-notes");
     notesInput.spellcheck = false;
     notesInput.placeholder =
@@ -1166,23 +1276,32 @@ export function newGalPartDialog({ submit, part = null }) {
     if (editing) notesInput.value = part.notes ?? "";
     bodies.notes.appendChild(notesInput);
 
+    // Errors tab (FR-066k): the part's definition errors, recomputed live, then
+    // the load notes recorded when it was opened. Read-only.
+    const errorsText = el("textarea", "galdlg-errors");
+    errorsText.readOnly = true;
+    errorsText.spellcheck = false;
+    errorsText.setAttribute("aria-label", "Definition errors");
+    bodies.errors.appendChild(errorsText);
+
     // tablePins is the table's view of the pin fields above: current labels,
-    // resolved directions, and which OLMCs are registered. Everything the table
-    // does — columns, rows, emission, the clock rule — reads this.
+    // configured directions, and each OLMC's declared type. Everything the table
+    // does — columns, rows, emission — reads this.
     const tablePins = () => [
       ...inputFields.map((f) => ({
         number: f.meta.number,
         name: f.input.value.trim() || f.meta.name,
         dir: "in",
-        reg: false,
+        olmc: false,
+        declReg: false,
       })),
       ...olmcFields.map((f) => {
         const name = f.input.value.trim() || f.meta.name;
         const kind = name === NC_PIN_LABEL ? "in" : f.sel.value;
-        return { number: f.meta.number, name, dir: kind === "in" ? "in" : "out", reg: kind === "reg" };
+        return { number: f.meta.number, name, dir: kind === "in" ? "in" : "out", olmc: true, declReg: kind === "reg" };
       }),
     ];
-    const behaviorText = () => tableToBehavior(table, tablePins());
+    const behaviorText = () => tableToBehavior(table, tablePins(), keptEqs);
 
     // renderEq rebuilds the grid whole (labels, directions, and row counts all
     // change its shape). Rebuilding is safe because no state lives in the DOM:
@@ -1190,21 +1309,24 @@ export function newGalPartDialog({ submit, part = null }) {
     function renderEq() {
       const pins = tablePins();
       const cols = pins.filter((p) => p.name !== NC_PIN_LABEL);
-      const outs = cols.filter((p) => p.dir === "out");
-      // Pin 1 of a registered part is its clock and may head no literal (FR-066g).
-      const someReg = outs.some((p) => p.reg);
+      // An OLMC configured as an input still shows the equations it holds: they
+      // will be saved, so they are shown, and reported (FR-066g).
+      const outs = cols.filter((p) => p.dir === "out" || (p.olmc && hasContent(table[p.number])));
+      // A clock pin may head no literal (FR-066g).
+      const clockOn = clockBox.checked;
 
       eqHead.replaceChildren();
       const hr = el("tr");
       hr.append(
         el("th", "galeq-h galeq-out", "Output"),
         el("th", "galeq-h galeq-mode", "Drive"),
+        el("th", "galeq-h galeq-kind", "Kind"),
         el("th", "galeq-h galeq-note", "Note"),
       );
       for (const c of cols) {
         const th = el("th", "galeq-h galeq-col", signalOf(c.name));
         th.title = `pin ${c.number}`;
-        if (c.number === 1 && someReg) th.classList.add("galeq-blocked");
+        if (c.number === 1 && clockOn) th.classList.add("galeq-blocked");
         hr.appendChild(th);
       }
       hr.append(el("th", "galeq-h", ""), el("th", "galeq-h", ""));
@@ -1213,25 +1335,31 @@ export function newGalPartDialog({ submit, part = null }) {
       eqBody.replaceChildren();
       if (!outs.length) {
         const tr = el("tr");
-        const td = el("td", "galeq-empty", "No outputs yet — set an OLMC pin to an output above.");
-        td.colSpan = cols.length + 5;
+        const td = el("td", "galeq-empty", "No outputs yet — set an OLMC pin to an output on the Part tab.");
+        td.colSpan = cols.length + 6;
         tr.appendChild(td);
         eqBody.appendChild(tr);
         return;
       }
 
       outs.forEach((out, oi) => {
-        if (!table[out.number]) table[out.number] = newOutput();
+        if (!table[out.number]) table[out.number] = newOutput(out.declReg);
         const rec = normalizeRows(table[out.number]);
+        // An output with nothing written follows its declared type; once it has
+        // content its comb/reg control is its own (FR-066g).
+        if (!hasContent(rec)) rec.reg = out.declReg;
+        const asInput = out.dir !== "out";
         // A constant output shows one row in place of its terms, which are kept
         // and come back if the mode returns to "equation" (FR-066g).
         const rows = rec.mode === "eq" ? rec.rows : [null];
         rows.forEach((row, ri) => {
           const tr = el("tr", ri === 0 ? "galeq-firstrow" : null);
           if (ri === 0) {
-            const nameTd = el("td", "galeq-out", out.name);
+            const nameTd = el("td", "galeq-out" + (asInput ? " bad" : ""), out.name);
             nameTd.rowSpan = rows.length;
-            nameTd.title = `pin ${out.number}${out.reg ? " (registered — writes .R)" : ""}`;
+            nameTd.title = asInput
+              ? `pin ${out.number} is configured as an input but holds equations`
+              : `pin ${out.number}${rec.reg ? " (registered — writes .R)" : ""}`;
             const modeTd = el("td", "galeq-mode");
             modeTd.rowSpan = rows.length;
             const modeSel = el("select", "galeq-sel");
@@ -1247,6 +1375,29 @@ export function newGalPartDialog({ submit, part = null }) {
               refreshEq();
             });
             modeTd.appendChild(modeSel);
+            // Registered or combinational, per output (FR-066g): the equations'
+            // own flag, which may disagree with the pin's declared type (FR-066i).
+            const kindTd = el("td", "galeq-kind");
+            kindTd.rowSpan = rows.length;
+            const kindSel = el("select", "galeq-sel");
+            for (const [v, label] of [["comb", "comb"], ["reg", "reg"]]) {
+              const op = el("option", null, label);
+              op.value = v;
+              kindSel.appendChild(op);
+            }
+            kindSel.value = rec.reg ? "reg" : "comb";
+            if (!asInput && rec.reg !== out.declReg) {
+              kindSel.classList.add("mismatch");
+              kindSel.title = `pin ${out.name} is declared ${out.declReg ? "reg out" : "comb out"} on the Part tab`;
+            } else {
+              kindSel.title = "reg writes .R";
+            }
+            kindSel.addEventListener("change", () => {
+              rec.reg = kindSel.value === "reg";
+              renderEq();
+              refreshEq();
+            });
+            kindTd.appendChild(kindSel);
             const noteTd = el("td", "galeq-note");
             noteTd.rowSpan = rows.length;
             const noteInput = el("input", "galeq-noteinput");
@@ -1258,14 +1409,14 @@ export function newGalPartDialog({ submit, part = null }) {
               refreshEq();
             });
             noteTd.appendChild(noteInput);
-            tr.append(nameTd, modeTd, noteTd);
+            tr.append(nameTd, modeTd, kindTd, noteTd);
           }
 
           if (rec.mode !== "eq") {
             const td = el(
               "td",
               "galeq-const",
-              `writes ${out.name}${out.reg ? ".R" : ""} = ${rec.mode === "const1" ? "VCC" : "GND"}`,
+              `writes ${out.name}${rec.reg ? ".R" : ""} = ${rec.mode === "const1" ? "VCC" : "GND"}`,
             );
             td.colSpan = cols.length + 2;
             tr.appendChild(td);
@@ -1281,13 +1432,11 @@ export function newGalPartDialog({ submit, part = null }) {
             const self = c.number === out.number;
             // The clock column blocks a *new* literal but never traps one already
             // set: a stale cell stays clickable so it can be cycled back to X.
-            const clockBlocked = c.number === 1 && someReg && cur === undefined;
+            const clockBlocked = c.number === 1 && clockOn && cur === undefined;
             if (self || clockBlocked) {
               b.disabled = true;
               b.textContent = self ? "·" : "X";
-              b.title = self
-                ? "an output may not read itself back"
-                : "pin 1 is the clock of a registered part";
+              b.title = self ? "an output may not read itself back" : "pin 1 is this part's clock";
             } else {
               b.dataset.cell = `${out.number}:${ri}:${c.number}`;
               b.title = "X → 1 → 0";
@@ -1297,12 +1446,14 @@ export function newGalPartDialog({ submit, part = null }) {
                 else row[c.number] = nv;
                 b.textContent = nv ?? "X";
                 b.classList.toggle("set", nv !== undefined);
-                if (c.number === 1 && someReg) renderEq(); // may re-block the cell
+                // Content can appear or vanish: the reg control's follow rule and
+                // the clock column's blocking both depend on it.
+                renderEq();
                 refreshEq();
               });
             }
             if (cur !== undefined) b.classList.add("set");
-            if (cur !== undefined && c.number === 1 && someReg) b.classList.add("bad");
+            if (cur !== undefined && c.number === 1 && clockOn) b.classList.add("bad");
             td.appendChild(b);
             tr.appendChild(td);
           }
@@ -1352,6 +1503,26 @@ export function newGalPartDialog({ submit, part = null }) {
       });
     }
 
+    // renderKept lists the equations kept as written (FR-066g), each deletable.
+    function renderKept() {
+      keptWrap.replaceChildren();
+      keptWrap.hidden = keptEqs.length === 0;
+      if (!keptEqs.length) return;
+      keptWrap.appendChild(el("div", "galdlg-section", "Kept as written — the table cannot edit these"));
+      keptEqs.forEach((text, i) => {
+        const row = el("div", "galeq-keptrow");
+        const del = button("✕", () => {
+          keptEqs.splice(i, 1);
+          renderKept();
+          refreshEq();
+        });
+        del.title = "delete this equation";
+        del.classList.add("galeq-x");
+        row.append(el("pre", null, text), del);
+        keptWrap.appendChild(row);
+      });
+    }
+
     // focusCell puts the caret on the first live cell of a row, which is where
     // both drop-down choices leave it (FR-066g).
     function focusCell(outNumber, ri) {
@@ -1360,16 +1531,15 @@ export function newGalPartDialog({ submit, part = null }) {
       b?.focus();
     }
 
-    // refreshEq re-renders the preview and re-runs the live gate; the grid itself
-    // is rebuilt only when its shape changes.
+    // refreshEq re-renders the preview and re-runs the definition-error check;
+    // the grid itself is rebuilt only when its shape changes.
     function refreshEq() {
       preview.textContent = behaviorText() || "; no equations yet";
       validate();
     }
 
-    // Live strict-validation status (FR-066c): the same gate Run applies
-    // (compileBehavior + validateStrict, §6.13), so a part that fails here can't
-    // be created.
+    // The status line (FR-066h/FR-066k): the red one-line summary while the part
+    // has definition errors, visible from every tab.
     const valEl = el("div", "galdlg-validate");
     valEl.hidden = true;
     box.appendChild(valEl);
@@ -1389,10 +1559,10 @@ export function newGalPartDialog({ submit, part = null }) {
       for (const f of olmcFields) f.sel.disabled = f.input.value.trim() === NC_PIN_LABEL;
     }
 
-    // Re-validate live as labels, directions, or the equations change (FR-066c).
-    // A label or direction edit also reshapes the grid — a renamed pin re-labels
-    // its column, a direction change adds or removes an output's rows (FR-066g) —
-    // so those two rebuild it; a cell edit only refreshes the preview and gate.
+    // Re-check live as labels, directions, the clock, or the equations change. A
+    // label, direction, or clock edit also reshapes the grid — a renamed pin
+    // re-labels its column, a direction change adds or removes an output's rows
+    // (FR-066g), the clock blocks pin 1's column — so those rebuild it.
     const rebuildEq = () => {
       renderEq();
       refreshEq();
@@ -1405,70 +1575,88 @@ export function newGalPartDialog({ submit, part = null }) {
       });
       f.sel.addEventListener("change", rebuildEq);
     }
+    clockBox.addEventListener("change", rebuildEq);
     syncNcDirs();
     showGroups(); // an edited part arrives with its groups already defined
-    rebuildEq(); // initial grid, preview, and Create/Save-enabled state
+    renderKept();
+    rebuildEq(); // initial grid, preview, and error state
     selectTab("part"); // FR-066h: Part is selected on open, creating or editing
 
-    // gather reads the current field values into a part description.
+    // gather reads the current field values into a part description. The skeleton
+    // metadata of an edited part carries each pin's kept `desc` (FR-066j).
     function gather() {
       return {
         partnumber: pnInput.value.trim(),
         description: descInput.value.trim(),
         notes: notesInput.value, // FR-125a: verbatim, not trimmed of interior shape
+        clock: clockBox.checked,
         inputs: inputFields.map((f) => ({ ...f.meta, name: f.input.value.trim() })),
         olmcs: olmcFields.map((f) => ({ ...f.meta, name: f.input.value.trim(), kind: f.sel.value })),
       };
     }
 
-    // candidateTypeData assembles the in-memory ComponentType the strict gate
-    // validates — pins carry their resolved direction so behavior signal/output
-    // checks match what Run would see (§6.13).
+    // candidateTypeData assembles the in-memory ComponentType the definition-error
+    // check judges — what the server would return for the YAML Save would write
+    // (§6.14): pins with their direction and declared olmc type, the clock, and
+    // the whole behavior, kept equations included.
     function candidateTypeData(g, behavior) {
       const pins = [
         ...g.inputs.map((p) => ({ name: p.name, direction: "in" })),
-        ...g.olmcs.map((o) => ({
-          name: o.name,
-          direction: OLMC_DIRS.find((d) => d.kind === o.kind).dir,
-        })),
+        ...g.olmcs.map((o) => {
+          const nc = o.name === NC_PIN_LABEL;
+          return {
+            name: o.name,
+            direction: nc ? "in" : OLMC_DIRS.find((d) => d.kind === o.kind).dir,
+            olmc: nc || o.kind === "in" ? undefined : o.kind,
+          };
+        }),
+        ...(kept?.pins ?? []).map((p) => ({ name: p.name, direction: p.direction })),
       ];
-      const reg = g.olmcs.some((o) => o.kind === "reg");
       return {
-        name: g.partnumber || "22V10",
+        name: "22V10",
+        partnumber: g.partnumber || "part",
         gal: "GAL22V10",
         pins,
         behavior,
-        clock: reg ? g.inputs[0].name : undefined,
+        clock: g.clock ? g.inputs[0].name : undefined,
+        internal: kept?.keys.find(([k]) => k === "internal")?.[1],
       };
     }
 
-    // validate runs the strict gate live; an empty behavior is allowed (a part may
-    // be authored without logic). Returns whether the part may be created.
+    // pinLabelErrors are the structural faults the server would collect when it
+    // loads what Save writes (FR-066j) and that only the pin fields can cause: an
+    // empty label, or one label on two pins.
+    function pinLabelErrors(g) {
+      const errs = [];
+      const byLabel = new Map();
+      for (const p of [...g.inputs, ...g.olmcs]) {
+        if (!p.name) {
+          errs.push(`pin ${p.number} has no label`);
+          continue;
+        }
+        if (p.name === NC_PIN_LABEL) continue;
+        if (byLabel.has(p.name)) errs.push(`pins ${byLabel.get(p.name)} and ${p.number} are both labeled ${p.name}`);
+        else byLabel.set(p.name, p.number);
+      }
+      return errs;
+    }
+
+    // validate recomputes the definition errors (FR-066j) into the Errors tab and
+    // the status line. It gates nothing: Save always works.
     function validate() {
       errEl.hidden = true; // clear any stale submit error on edit
-      const pins = tablePins();
-      // The one rule the table can express but the device cannot (FR-066g).
-      const issue = tableIssues(table, pins);
-      if (issue) {
-        setStatus(issue, "err");
-        createBtn.disabled = true;
-        return false;
+      const g = gather();
+      const errs = [...pinLabelErrors(g), ...galDefinitionErrors(candidateTypeData(g, behaviorText()))];
+      const text = [errs.length ? errs.join("\n") : "No errors."];
+      if (loadNotes.length) {
+        text.push("", "Load notes — what the dialog supplied, moved, or kept when it opened this part (not errors):");
+        for (const n of loadNotes) text.push(`  ${n}`);
       }
-      const text = tableToBehavior(table, pins);
-      if (!text.trim()) {
+      errorsText.value = text.join("\n");
+      if (errs.length) {
+        setStatus(`This part definition contains ${errs.length} error${errs.length === 1 ? "" : "s"} — see the Errors tab`, "err");
+      } else {
         setStatus("", null);
-        createBtn.disabled = false;
-        return true;
-      }
-      try {
-        compileBehavior(candidateTypeData(gather(), text));
-        setStatus("✓ valid GAL22V10 behavior", "ok");
-        createBtn.disabled = false;
-        return true;
-      } catch (e) {
-        setStatus(e.message, "err");
-        createBtn.disabled = true;
-        return false;
       }
     }
     function setStatus(msg, kind) {
@@ -1479,19 +1667,15 @@ export function newGalPartDialog({ submit, part = null }) {
 
     async function onOk() {
       const g = gather();
-      // A refused submit selects the tab carrying the problem before reporting it
-      // (FR-066h), so a message never names a field the user cannot see. A submit
+      // Create's one local refusal (FR-066c): the part number names the part's
+      // id and file. It selects the tab carrying the problem (FR-066h). A submit
       // error from the server names no tab and moves no selection.
-      if (!g.partnumber) {
+      if (!editing && !g.partnumber) {
         selectTab("part");
         pnInput.focus();
         return showError("A part number is required.");
       }
-      if (!validate()) {
-        selectTab("logic"); // the only other gate is the behavior's (FR-079b)
-        return;
-      }
-      const yaml = galPartYaml({ ...g, groups, behavior: behaviorText(), id: part?.id });
+      const yaml = galPartYaml({ ...g, groups, behavior: behaviorText(), id: part?.id, kept });
       createBtn.disabled = true;
       try {
         const comp = await submit(yaml);
@@ -2730,6 +2914,13 @@ export function testVectorsPanel({ store, dataDir }) {
         // columns stay bound to the top sheet, whose components the FlatDesign
         // shares, and child ROMs are preloaded from the flat design.
         const flat = await flatten(design, loadDesign, { rootPath: store.state.savePath });
+        // A GAL part with definition errors refuses the run (FR-066m).
+        const refusal = definitionErrorsMessage("The test vectors cannot be run", designDefinitionErrors(flat, design));
+        if (refusal) {
+          clearHeld();
+          definitionErrorsDialog(refusal);
+          return;
+        }
         const romContent = await loadRomContents(flat);
         const res = runVectors(flat, doc, { romContent, through });
         runResults = res.rows;
@@ -2755,6 +2946,11 @@ export function testVectorsPanel({ store, dataDir }) {
       try {
         // Same flatten-first boundary as onRun (FR-102/FR-103, §6.14).
         const flat = await flatten(design, loadDesign, { rootPath: store.state.savePath });
+        const refusal = definitionErrorsMessage("The test vectors cannot be run", designDefinitionErrors(flat, design));
+        if (refusal) {
+          definitionErrorsDialog(refusal);
+          return;
+        }
         const romContent = await loadRomContents(flat);
         // Whole-table capture: an ordered pass for a sequential design (FR-115e),
         // independent rows for a combinational one.

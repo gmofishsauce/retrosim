@@ -2,6 +2,7 @@
 // read-only over the model and re-renders only when something requests it, to
 // stay responsive without busy-spinning (NFR-005).
 
+import { galDefinitionErrors } from "./galerrors.js";
 import {
   worldToScreen,
   screenToWorld,
@@ -584,9 +585,12 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
 
   // Body: a schematic symbol for subunit components (§6.8a), else the outline
   // rectangle. Both rotate about the instance origin and share the pin path below.
+  // A GAL part whose definition has errors draws red — in place of the
+  // selection color too; the heavier line still marks the selection (FR-066l).
+  const defective = galDefinitionErrors(td).length > 0;
   ctx.fillStyle = "#ffffff";
   ctx.lineWidth = selected ? 2 : 1;
-  ctx.strokeStyle = selected ? "#4a90d9" : "#333";
+  ctx.strokeStyle = defective ? CONFLICT_COLOR : selected ? "#4a90d9" : "#333";
   if (inst.broken) {
     drawBrokenBox(ctx, inst, vp, selected);
   } else if (td.renderType === "subunit") {
@@ -642,6 +646,7 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
   ctx.textBaseline = "middle";
   const marks = markedPins(inst); // FR-071i, empty for the overwhelming majority
   for (const pin of td.pins) {
+    if (pin.unplaced) continue; // no usable side/pos (FR-066j): nothing to draw
     // The pin RECORD, not its name: `NC` may repeat within a type (FR-062f),
     // and a name resolves to the first pin bearing it (§6.6).
     const pw = pinWorldPos(inst, pin);
@@ -739,7 +744,7 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
   ctx.textBaseline = "middle";
   const cr = rotateOffset(td.width / 2, td.height / 2, inst.rotation);
   const center = worldToScreen({ x: inst.x + cr.x, y: inst.y + cr.y }, vp);
-  ctx.fillStyle = "#111";
+  ctx.fillStyle = defective ? CONFLICT_COLOR : "#111";
   ctx.font = LABEL_FONT;
   if (td.renderType === "subunit") {
     ctx.fillText(inst.label ?? inst.refdes, center.x, center.y);

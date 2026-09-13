@@ -204,6 +204,27 @@ test("generateC: behavior-less type drives U and warns once (FR-080)", () => {
   assert.match(code, /rt_contrib\(\d+, RT_U, 0, \d+\); \/\* U2\.Y \*\//);
 });
 
+test("generateC: a GAL output pin with no equation drives U and warns once (FR-080)", () => {
+  const PARTIAL = {
+    name: "PARTIAL",
+    gal: "GAL22V10",
+    renderType: "unit",
+    pins: [
+      { name: "A", side: "left", position: 1, direction: "in" },
+      { name: "Y", side: "right", position: 1, direction: "out" },
+      { name: "Z", side: "right", position: 2, direction: "out" },
+    ],
+    behavior: "Y = A\n",
+  };
+  const d = mkDesign();
+  place(d, "U1", PARTIAL);
+  place(d, "U2", PARTIAL);
+  const { code, warnings } = generateC(d);
+  assert.match(code, /rt_contrib\(\d+, RT_U, 0, \d+\); \/\* U1\.Z: no equation \(FR-080\) \*\//);
+  assert.doesNotMatch(code, /U1\.Y: no equation/);
+  assert.equal(warnings.filter((w) => w.includes("no equation for Z")).length, 1);
+});
+
 test("generateC: pulls, unwired probes, and empty tables", () => {
   const d = mkDesign();
   place(d, "A-1", builtin("pullup"));

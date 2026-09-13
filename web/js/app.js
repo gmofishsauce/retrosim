@@ -8,6 +8,7 @@ import { flatten } from "./model/subdesign.js";
 import {
   newGalPartDialog,
   galPartFromType,
+  definitionErrorsDialog,
   memDeviceDialog,
   memDeviceYaml,
   testVectorsPanel,
@@ -17,6 +18,7 @@ import {
 } from "./chrome/dialogs.js";
 import { setPrimaryClockCmd, refreshTypesCmd } from "./commands.js";
 import { generateC } from "./engine/cgen.js";
+import { designDefinitionErrors, definitionErrorsMessage } from "./engine/galerrors.js";
 import { generateNDL } from "./engine/ndl.js";
 import { BUILTINS, PIN_MARK_TOOL, memDeviceType } from "./builtins.js";
 import { createDesign, typeIdentity } from "./model/design.js";
@@ -308,7 +310,7 @@ async function main() {
         // session opens with the edit rather than its pre-edit snapshot
         // (FR-066f). The tile hands over identity; the library owns the data.
         const type = library.find((t) => typeIdentity(t) === id);
-        if (!type?.gal || !type.projectLocal || store.isReadonly()) return;
+        if (type?.gal !== "GAL22V10" || !type.projectLocal || store.isReadonly()) return;
         openContextMenu(x, y, [
           { label: "Edit part definition…", onClick: () => onEditGalPart(type) },
         ]);
@@ -355,17 +357,10 @@ async function main() {
     };
     // Open the Edit GAL part dialog on an existing project-local part (FR-066f):
     // the same dialog the create flow uses, populated by galPartFromType, saving
-    // through the update endpoint (FR-007a). A definition the dialog cannot
-    // reproduce exactly is refused here rather than opened and silently reduced.
+    // through the update endpoint (FR-007a). It always opens (FR-066j): what the
+    // dialog cannot represent is kept and written back, never refused.
     const onEditGalPart = async (type) => {
       const part = galPartFromType(type);
-      if (part.refuse) {
-        postMessage(
-          `${type.partnumber || type.name}: cannot edit in the app — ${part.refuse}. ` +
-            `Edit the YAML directly, then use File ▸ Refresh Types.`,
-        );
-        return;
-      }
       const updated = await newGalPartDialog({
         part,
         submit: (yaml) => updateComponent(yaml, store.state.project?.dir),
@@ -508,7 +503,7 @@ async function main() {
     // closed, and a byte arriving while it is not frontmost raises the tab's
     // unread dot.
     const consolePanel = createConsolePanel({ store });
-    const sim = createSim({ store, renderer, consolePanel }); // slow simulator (§6.13)
+    const sim = createSim({ store, renderer, consolePanel, onRefusal: definitionErrorsDialog }); // slow simulator (§6.13)
     // The test-vector panel (FR-115b/§6.16), the other tab of the docked area;
     // opening it imposes the read-only lock (FR-115h), which holds while its tab
     // is open whether or not that tab is frontmost.
@@ -567,6 +562,12 @@ async function main() {
         const flat = await flatten(store.design, loadDesign, {
           rootPath: store.state.savePath,
         });
+        // A GAL part with definition errors refuses generation (FR-066m).
+        const refusal = definitionErrorsMessage("C code cannot be generated", designDefinitionErrors(flat, store.design));
+        if (refusal) {
+          definitionErrorsDialog(refusal);
+          return;
+        }
         out = generateC(flat, { columnsFrom: store.design });
       } catch (e) {
         postMessage(`cannot generate: ${e.message}`);

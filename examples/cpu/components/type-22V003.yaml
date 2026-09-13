@@ -18,13 +18,13 @@ pins:
   - { name: "NC", side: left, pos: 10, dir: in, number: 10 }
   - { name: "NC", side: left, pos: 11, dir: in, number: 11 }
   - { name: "NC", side: left, pos: 12, dir: in, number: 13 }
-  - { name: "ENA/", side: right, pos: 1, dir: out, number: 14 }
-  - { name: "ENB/", side: right, pos: 2, dir: out, number: 15 }
-  - { name: "IO16", side: right, pos: 3, dir: out, number: 16 }
-  - { name: "IO17", side: right, pos: 4, dir: out, number: 17 }
-  - { name: "IO18", side: right, pos: 5, dir: out, number: 18 }
-  - { name: "IO19", side: right, pos: 6, dir: out, number: 19 }
-  - { name: "IO20", side: right, pos: 7, dir: out, number: 20 }
-  - { name: "IO21", side: right, pos: 8, dir: out, number: 21 }
-  - { name: "IO22", side: right, pos: 9, dir: out, number: 22 }
-  - { name: "IO23", side: right, pos: 10, dir: out, number: 23 }
+  - { name: "ENA/", side: right, pos: 1, dir: out, olmc: reg, number: 14 }
+  - { name: "ENB/", side: right, pos: 2, dir: out, olmc: reg, number: 15 }
+  - { name: "IO16", side: right, pos: 3, dir: out, olmc: reg, number: 16 }
+  - { name: "IO17", side: right, pos: 4, dir: out, olmc: reg, number: 17 }
+  - { name: "IO18", side: right, pos: 5, dir: out, olmc: reg, number: 18 }
+  - { name: "IO19", side: right, pos: 6, dir: out, olmc: reg, number: 19 }
+  - { name: "IO20", side: right, pos: 7, dir: out, olmc: reg, number: 20 }
+  - { name: "IO21", side: right, pos: 8, dir: out, olmc: reg, number: 21 }
+  - { name: "IO22", side: right, pos: 9, dir: out, olmc: reg, number: 22 }
+  - { name: "IO23", side: right, pos: 10, dir: out, olmc: reg, number: 23 }

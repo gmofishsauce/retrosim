@@ -393,6 +393,55 @@ test("behavior-less type drives U and is reported once (FR-080)", () => {
   assert.equal(messages.filter((m) => m.includes("no behavior")).length, 1); // once per type
 });
 
+// A GAL part blocked out ahead of its logic (FR-066i): an output pin its
+// behavior writes no equation for is unknown, not undriven (FR-080).
+test("a GAL output pin with no equation drives U, reported once naming it (FR-080)", () => {
+  const PARTIAL = {
+    name: "PARTIAL",
+    gal: "GAL22V10",
+    renderType: "unit",
+    pins: [
+      { name: "A", side: "left", position: 1, direction: "in" },
+      { name: "Y", side: "right", position: 1, direction: "out" },
+      { name: "Z", side: "right", position: 2, direction: "out" },
+    ],
+    behavior: "Y = A\n",
+  };
+  const d = mkDesign();
+  place(d, "U1", PARTIAL);
+  place(d, "U2", PARTIAL);
+  place(d, "A-1", builtin("pullup"));
+  connect(d, ["U1", "Z"], ["A-1", "OUT"]);
+  place(d, "A-2", builtin("pullup"));
+  connect(d, ["U1", "Y"], ["A-2", "OUT"]);
+
+  const messages = [];
+  const sim = buildSimulation(d, { onMessage: (m) => messages.push(m) });
+  sim.step();
+  assert.equal(sim.valueOfPin("U1", "Z"), VU); // strong U beats the weak pull-up
+  assert.notEqual(sim.valueOfPin("U1", "Y"), VZ); // the written output is driven
+  assert.equal(messages.filter((m) => m.includes("no equation for Z")).length, 1); // once per type
+});
+
+test("a behavior block of nothing but comments is no behavior (FR-080)", () => {
+  const COMMENTS = {
+    name: "TODO",
+    renderType: "unit",
+    pins: [
+      { name: "A", side: "left", position: 1, direction: "in" },
+      { name: "Y", side: "right", position: 1, direction: "out" },
+    ],
+    behavior: "; logic to come\n",
+  };
+  const d = mkDesign();
+  place(d, "U1", COMMENTS);
+  const messages = [];
+  const sim = buildSimulation(d, { onMessage: (m) => messages.push(m) });
+  sim.step();
+  assert.equal(sim.valueOfPin("U1", "Y"), VU);
+  assert.equal(messages.filter((m) => m.includes("no behavior")).length, 1);
+});
+
 test("preflight: .R without clock: refuses to start (FR-062d)", () => {
   const BADDFF = { ...structuredClone(DFF), clock: undefined };
   const d = mkDesign();

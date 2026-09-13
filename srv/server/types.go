@@ -27,6 +27,15 @@ type ComponentType struct {
 	Gal        string             `json:"gal,omitempty"`        // optional GAL device selecting strict dialect (FR-066a); "" = extended (FR-079a)
 	PartNumber string             `json:"partnumber,omitempty"` // GAL parts only: free-form display name (FR-066b/FR-005b); not a key; "" for 74-series
 
+	// LoadErrors are the problems the parser found in a GAL part's file and
+	// collected rather than rejecting it (FR-066j, §6.3). Always empty for a
+	// non-GAL type, whose problems still reject the file.
+	LoadErrors []string `json:"loadErrors,omitempty"`
+	// Extra carries a GAL part's top-level YAML keys that map onto no field, so
+	// the Edit GAL part dialog can write them back instead of dropping them
+	// (FR-066j). Read by nothing else.
+	Extra map[string]any `json:"extra,omitempty"`
+
 	// Documentation (FR-104): optional, presentation-only. Copied through to the
 	// properties panel (FR-105); never affects geometry, pins, or simulation.
 	Description string     `json:"description,omitempty"` // one-line function summary
@@ -108,13 +117,15 @@ type Datasheet struct {
 
 // Pin is one connection point on a component's outline (FR-062, FR-062a).
 type Pin struct {
-	Name      string `json:"name"`             // e.g. "A0", "/Y3"
-	Side      string `json:"side"`             // "left" | "right" | "top" | "bottom" (FR-014)
-	Position  int    `json:"position"`         // unit only: grid units along the side from its origin
-	Unit      string `json:"unit,omitempty"`   // subunit only: unit letter this pin belongs to (FR-014a)
-	Direction string `json:"direction"`        // "in" | "out" | "bidir" | "tristate" (FR-062a)
-	Number    *int   `json:"number,omitempty"` // optional physical pin number (FR-062b)
-	Desc      string `json:"desc,omitempty"`   // optional pin role for documentation (FR-104)
+	Name      string `json:"name"`               // e.g. "A0", "/Y3"
+	Side      string `json:"side"`               // "left" | "right" | "top" | "bottom" (FR-014)
+	Position  int    `json:"position"`           // unit only: grid units along the side from its origin
+	Unit      string `json:"unit,omitempty"`     // subunit only: unit letter this pin belongs to (FR-014a)
+	Direction string `json:"direction"`          // "in" | "out" | "bidir" | "tristate" (FR-062a)
+	Number    *int   `json:"number,omitempty"`   // optional physical pin number (FR-062b)
+	Desc      string `json:"desc,omitempty"`     // optional pin role for documentation (FR-104)
+	OLMC      string `json:"olmc,omitempty"`     // GAL parts only: declared output type "reg" | "comb" (FR-066i)
+	Unplaced  bool   `json:"unplaced,omitempty"` // GAL parts only: side/pos unusable at load; not drawn or wired (FR-066j)
 }
 
 // PinGroup is a named, ordered set of pins forming a bus interface for

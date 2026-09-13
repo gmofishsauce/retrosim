@@ -140,6 +140,7 @@ function fullPart(over = {}) {
       number,
       kind: "comb",
     })),
+    clock: false,
     groups: [],
     behavior: "",
     ...over,
@@ -147,9 +148,9 @@ function fullPart(over = {}) {
 }
 
 // typeFor builds the ComponentType the server returns for galPartYaml(fields):
-// the same 22 pins, the derived outline, and the id/clock rules galPartYaml uses.
+// the same 22 pins with their declared olmc types (FR-066i), the outline, and
+// the id and clock galPartYaml writes.
 function typeFor(fields) {
-  const reg = fields.olmcs.some((o) => o.kind === "reg");
   const t = {
     id: fields.id ?? "type-" + fields.partnumber,
     name: "22V10",
@@ -162,17 +163,21 @@ function typeFor(fields) {
       ...fields.inputs.map((p) => ({
         name: p.name, side: "left", position: p.pos, direction: "in", number: p.number,
       })),
-      ...fields.olmcs.map((o) => ({
-        name: o.name,
-        side: "right",
-        position: o.pos,
-        direction: o.name === "NC" ? "in" : o.kind === "in" ? "in" : "out",
-        number: o.number,
-      })),
+      ...fields.olmcs.map((o) => {
+        const pin = {
+          name: o.name,
+          side: "right",
+          position: o.pos,
+          direction: o.name === "NC" || o.kind === "in" ? "in" : "out",
+          number: o.number,
+        };
+        if (pin.direction === "out") pin.olmc = o.kind;
+        return pin;
+      }),
     ],
   };
   if (fields.description) t.description = fields.description;
-  if (reg) t.clock = fields.inputs[0].name;
+  if (fields.clock) t.clock = fields.inputs[0].name;
   if (fields.behavior) t.behavior = fields.behavior;
   if (fields.groups.length) {
     const labelOf = new Map([...fields.inputs, ...fields.olmcs].map((p) => [p.number, p.name]));
@@ -181,10 +186,41 @@ function typeFor(fields) {
   return t;
 }
 
+const allReg = () =>
+  OLMC_NUMBERS.map((number, i) => ({ name: "IO" + number, pos: i + 1, number, kind: "reg" }));
+
+test("galPartYaml writes each output's declared type and the clock explicitly (FR-066i)", () => {
+  const fields = fullPart({ clock: true });
+  fields.olmcs[0].kind = "reg";
+  fields.olmcs[1].kind = "in";
+  fields.olmcs[2].name = "NC";
+  const yaml = galPartYaml(fields);
+  assert.match(yaml, /^clock: "CLK"$/m);
+  assert.match(yaml, /\{ name: "IO14", side: right, pos: 1, dir: out, olmc: reg, number: 14 \}/);
+  assert.match(yaml, /\{ name: "IO15", side: right, pos: 2, dir: in, number: 15 \}/);
+  assert.match(yaml, /\{ name: "NC", side: right, pos: 3, dir: in, number: 16 \}/);
+  assert.match(yaml, /\{ name: "IO17", side: right, pos: 4, dir: out, olmc: comb, number: 17 \}/);
+  // No clock box, no clock: line — whatever the outputs are.
+  assert.doesNotMatch(galPartYaml({ ...fields, clock: false }), /^clock:/m);
+});
+
+// The reported bug (FR-066i): "reg out" outputs and a clock with no equations
+// yet were lost on save, and the part then refused to reopen.
+test("a part with registered outputs, a clock, and no logic round-trips exactly (FR-066i)", () => {
+  const fields = fullPart({ clock: true, olmcs: allReg() });
+  const yaml = galPartYaml(fields);
+  const back = galPartFromType(typeFor(fields));
+  assert.equal(back.clock, true);
+  assert.deepEqual(back.olmcs.map((o) => o.kind), Array(10).fill("reg"));
+  assert.deepEqual(back.loadNotes, []);
+  assert.equal(galPartYaml(back), yaml);
+});
+
 // The strongest statement of the round trip (FR-066f): a definition loaded back
 // into the dialog and saved unedited must re-serialize to byte-identical YAML.
 test("galPartFromType round-trips a part to byte-identical YAML (FR-066f)", () => {
   const fields = fullPart({
+    clock: true,
     olmcs: OLMC_NUMBERS.map((number, i) => ({
       name: i === 0 ? "NC" : "IO" + number,
       pos: i + 1,
@@ -199,94 +235,109 @@ test("galPartFromType round-trips a part to byte-identical YAML (FR-066f)", () =
   });
   const yaml = galPartYaml(fields);
   const back = galPartFromType(typeFor(fields));
-  assert.equal(back.refuse, undefined);
   assert.equal(back.partnumber, "PC-DECODE-A");
   assert.equal(back.description, "program-counter address decode");
   assert.deepEqual(back.groups, [{ name: "ADDR", members: [2, 3, 4] }]);
   assert.equal(back.olmcs[0].name, "NC"); // the reserved no-connect label survives
-  assert.equal(back.olmcs[1].kind, "reg"); // recovered from the .R equation
-  assert.equal(back.olmcs[2].kind, "in"); // recovered from the pin direction
-  assert.equal(galPartYaml({ ...back, id: back.id }), yaml);
+  assert.equal(back.olmcs[1].kind, "reg"); // from the olmc key
+  assert.equal(back.olmcs[2].kind, "in"); // from the pin direction
+  assert.deepEqual(back.loadNotes, []);
+  assert.equal(galPartYaml(back), yaml);
 });
 
 // Renaming the part number must not move the definition: the id is immutable and
 // is what the update addresses and placed instances record (FR-066e/FR-066f).
 test("galPartFromType carries the id so a renamed part keeps its file (FR-066f)", () => {
-  const fields = fullPart();
-  const type = typeFor(fields);
-  const back = galPartFromType(type);
+  const back = galPartFromType(typeFor(fullPart()));
   const renamed = galPartYaml({ ...back, partnumber: "PC-DECODE-B" });
   assert.match(renamed, /id: "type-PC-DECODE-A"/);
   assert.match(renamed, /partnumber: "PC-DECODE-B"/);
 });
 
-test("galPartFromType refuses a device the dialog does not present (FR-066f)", () => {
-  const t = typeFor(fullPart());
-  t.gal = "GAL16V8";
-  assert.match(galPartFromType(t).refuse, /GAL22V10/);
-  assert.match(galPartFromType({ ...t, gal: undefined }).refuse, /not a GAL part/);
+// A part written before FR-066i has no olmc keys: its declared types are
+// inferred from .R, including on an active-low (slash-labeled) output.
+test("galPartFromType infers a type without olmc keys from its .R equations (FR-066i)", () => {
+  const fields = fullPart({ clock: true, behavior: "IO14.R = I2\n/LD.R = I3\n" });
+  fields.olmcs[1].name = "/LD";
+  const t = typeFor(fields);
+  for (const p of t.pins) delete p.olmc;
+  const back = galPartFromType(t);
+  assert.equal(back.olmcs[0].kind, "reg");
+  assert.equal(back.olmcs[1].kind, "reg");
+  assert.equal(back.olmcs[2].kind, "comb");
 });
 
-test("galPartFromType refuses an off-skeleton pinout (FR-066f)", () => {
+test("galPartFromType opens any GAL part, noting what it changed (FR-066j)", () => {
+  const other = typeFor(fullPart());
+  other.gal = "GAL16V8";
+  const back = galPartFromType(other);
+  assert.ok(back.loadNotes.some((n) => /GAL16V8/.test(n)));
+  assert.match(galPartYaml(back), /^gal: GAL22V10$/m);
+
+  const loaded = { ...typeFor(fullPart()), loadErrors: ['clock names unknown pin "CP"'] };
+  assert.ok(galPartFromType(loaded).loadNotes.some((n) => /the file as loaded: clock names unknown pin/.test(n)));
+
+  const wrongClock = { ...typeFor(fullPart()), clock: "I5" };
+  const wc = galPartFromType(wrongClock);
+  assert.equal(wc.clock, false);
+  assert.ok(wc.loadNotes.some((n) => /clock: I5 is not pin 1/.test(n)));
+});
+
+test("galPartFromType seats an off-skeleton pinout and keeps what has no slot (FR-066j)", () => {
   const short = typeFor(fullPart());
-  short.pins = short.pins.slice(0, 20);
-  assert.match(galPartFromType(short).refuse, /skeleton has 22/);
+  short.pins = short.pins.slice(0, 20); // no pins 22, 23
+  const s = galPartFromType(short);
+  assert.equal(s.olmcs[8].name, "IO22"); // supplied from the skeleton
+  assert.ok(s.loadNotes.some((n) => /no pin numbered 22/.test(n)));
 
   const moved = typeFor(fullPart());
   moved.pins[0] = { ...moved.pins[0], side: "right" };
-  assert.match(galPartFromType(moved).refuse, /not where the skeleton puts it/);
+  const m = galPartFromType(moved);
+  assert.equal(m.inputs[0].name, "CLK");
+  assert.ok(m.loadNotes.some((n) => /CLK \(1\) moved/.test(n)));
 
-  const unnumbered = typeFor(fullPart());
-  delete unnumbered.pins[3].number;
-  assert.match(galPartFromType(unnumbered).refuse, /no pin number/);
+  const extra = typeFor(fullPart());
+  extra.pins.push({ name: "SPARE", side: "left", position: 13, direction: "in" });
+  const e = galPartFromType(extra);
+  assert.ok(e.loadNotes.some((n) => /SPARE has no pin number; kept as written/.test(n)));
+  assert.match(galPartYaml(e), /\{ name: "SPARE", side: left, pos: 13, dir: in \}/);
 });
 
-// The refusal that matters most: content the dialog would silently drop when it
-// rewrites the file whole.
-test("galPartFromType refuses content it does not model (FR-066f)", () => {
-  const withDelays = { ...typeFor(fullPart()), delays: { tpd: 10 } };
-  assert.match(galPartFromType(withDelays).refuse, /delays/);
-
-  const withInternal = { ...typeFor(fullPart()), internal: ["Q0"] };
-  assert.match(galPartFromType(withInternal).refuse, /internal/);
-
-  const withPinDesc = typeFor(fullPart());
-  withPinDesc.pins[2] = { ...withPinDesc.pins[2], desc: "address bit 3" };
-  assert.match(galPartFromType(withPinDesc).refuse, /per-pin data/);
-
-  const outlined = { ...typeFor(fullPart()), width: 10 };
-  assert.match(galPartFromType(outlined).refuse, /custom outline/);
+// Content the dialog does not model is written back, never dropped (FR-066j).
+test("galPartFromType keeps content it does not model and galPartYaml writes it back (FR-066j)", () => {
+  const t = {
+    ...typeFor(fullPart()),
+    delays: { tpd: 10 },
+    internal: ["Q0"],
+    width: 10,
+    extra: { wip: { owner: "me" } },
+  };
+  t.pins[2] = { ...t.pins[2], desc: "address bit 3" };
+  const back = galPartFromType(t);
+  const yaml = galPartYaml(back);
+  assert.match(yaml, /^delays: \{"tpd":10\}$/m);
+  assert.match(yaml, /^internal: \["Q0"\]$/m);
+  assert.match(yaml, /^wip: \{"owner":"me"\}$/m);
+  assert.match(yaml, /^outline: \[10, 14\]$/m);
+  assert.match(yaml, /name: "I3", side: left, pos: 3, dir: in, number: 3, desc: "address bit 3"/);
+  assert.equal(back.loadNotes.length, 4); // delays, internal, wip, outline
 });
 
-// The clock line is derived (galPartYaml emits it iff an OLMC is registered,
-// naming pin 1), so one that disagrees would be silently rewritten.
-test("galPartFromType refuses a clock declaration it would rewrite (FR-066f)", () => {
-  const stray = { ...typeFor(fullPart()), clock: "CLK" }; // no registered output
-  assert.match(galPartFromType(stray).refuse, /no registered output/);
-
-  const regFields = fullPart({ behavior: "IO14.R = I2\n" });
-  regFields.olmcs[0].kind = "reg";
-  const wrongPin = { ...typeFor(regFields), clock: "I5" };
-  assert.match(galPartFromType(wrongPin).refuse, /clock: CLK/);
-});
-
-test("galPartFromType refuses a pin group naming an unknown pin (FR-066f)", () => {
+test("galPartFromType drops a group member naming no pin, with a note (FR-066j)", () => {
   const t = typeFor(fullPart());
   t.pinGroups = [{ name: "ADDR", pins: ["I2", "NOSUCH"] }];
-  assert.match(galPartFromType(t).refuse, /NOSUCH/);
+  const back = galPartFromType(t);
+  assert.deepEqual(back.groups, [{ name: "ADDR", members: [2] }]);
+  assert.ok(back.loadNotes.some((n) => /NOSUCH/.test(n)));
 });
 
-// The behavior block is loaded by parsing it into the equation term table
-// (FR-066g), so a block using a form the table does not author is content the
-// dialog would drop — the same refusal contract as an unmodelled key.
-test("galPartFromType refuses a behavior the equation table cannot hold (FR-066g)", () => {
-  const withEnable = fullPart({ behavior: "IO14.T = I2\nIO14.E = I3\n" });
-  assert.match(galPartFromType(typeFor(withEnable)).refuse, /equation table/);
-
-  // The dangerous one: polarity lives in the pin label, so an equation written
-  // the other way round would be inverted by an unedited Save.
-  const mismatched = fullPart({ behavior: "!IO14 = I2\n" });
-  assert.match(galPartFromType(typeFor(mismatched)).refuse, /labeled "IO14"/);
+// What the table cannot hold is kept as written and written after it (FR-066g).
+test("galPartFromType keeps equations the table cannot hold (FR-066g)", () => {
+  const fields = fullPart({ behavior: "IO14.R = I2\nIO14.E = I3\n!IO15 = I4\n" });
+  const back = galPartFromType(typeFor(fields));
+  assert.deepEqual(back.keptEquations, ["IO14.E = I3", "!IO15 = I4"]);
+  assert.equal(back.behavior, "IO14.R = I2\nIO14.E = I3\n!IO15 = I4\n");
+  assert.equal(back.loadNotes.length, 2);
 });
 
 // What the dialog opens with is what an unedited Save would write: the loaded
@@ -294,11 +345,8 @@ test("galPartFromType refuses a behavior the equation table cannot hold (FR-066g
 test("galPartFromType normalizes the behavior it loads (FR-066g)", () => {
   const fields = fullPart({ behavior: "IO14 =  I2*/I3\n  + I4 ; both ways\n" });
   const back = galPartFromType(typeFor(fields));
-  assert.equal(back.refuse, undefined);
   assert.equal(back.behavior, "IO14 = I2 * !I3 ; both ways\n     + I4\n");
 });
-
-// --- applySaveExt (save-dialog extension coercion) ---
 
 test("applySaveExt appends the default extension to a bare name", () => {
   assert.equal(applySaveExt("design", "json"), "design.json");
