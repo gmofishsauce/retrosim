@@ -15,7 +15,7 @@ KiCad-like.
 
 1. [Building and running](#1-building-and-running)
 2. [The workspace](#2-the-workspace)
-3. [Placing components](#3-placing-components) — including [Creating](#creating-a-custom-gal-part-22v10) and [editing](#editing-a-custom-gal-part) a custom GAL part — with [The logic table](#the-logic-table) — and [Creating a memory device](#creating-a-memory-device-ramrom)
+3. [Placing components](#3-placing-components) — including [Creating](#creating-a-custom-gal-part-22v10) and [editing](#editing-a-custom-gal-part) a custom GAL part — with [The logic table](#the-logic-table) and [Parts with errors](#parts-with-errors) — and [Creating a memory device](#creating-a-memory-device-ramrom)
 4. [Navigating the canvas](#4-navigating-the-canvas)
 5. [The selection model](#5-the-selection-model)
 6. [Wiring](#6-wiring)
@@ -228,9 +228,9 @@ part** dialog. It presents the chip's fixed 24-pin skeleton (pin 1 is the
 clock/input, pins 2–11 and 13 are inputs, pins 14–23 are the ten I/O "OLMC" pins,
 pins 12/24 are ground/power) and collects only what varies between parts.
 
-The dialog has three tabs — **Part**, **Logic**, and **Notes** — and opens on
-**Part**. The status line and the **Cancel**/**Create** buttons sit below the
-tabs and are visible from all three, because the check judges the whole part
+The dialog has four tabs — **Part**, **Logic**, **Notes**, and **Errors** — and
+opens on **Part**. The status line and the **Cancel**/**Create** buttons sit below
+the tabs and are visible from all four, because the check judges the whole part
 rather than the tab you happen to be looking at. What each tab collects:
 
 - **Part number** — a required name for this specific programmed part
@@ -244,7 +244,15 @@ rather than the tab you happen to be looking at. What each tab collects:
   never mentions it. `NC` is the one label you may repeat — use it on as many
   pins as the part leaves unused.
 - **Per-I/O direction** — for each OLMC pin: **comb out** (combinational output),
-  **reg out** (registered output, clocked by pin 1), or **input**.
+  **reg out** (registered output, clocked by pin 1), or **input**. This is what you
+  *intend* the pin to be, and it is saved as you set it whether or not the part has
+  any equations yet — so you can block out a part's pins and output types now and
+  write its logic later.
+- **Clock** — a checkbox beside pin 1. Check it to make pin 1 the clock of the
+  part's registered outputs. You set it yourself: choosing **reg out** does not
+  check it for you, and you may check it on a part that has no registered outputs,
+  or no logic at all, so a clock can be wired to a part whose logic is still to
+  come.
 - **Logic** (its own tab) — the part's equations, built by clicking a table
   rather than typed. It is described in [The logic table](#the-logic-table) below.
 - **Notes** (its own tab) — free-form prose about the part: why the equations are
@@ -258,16 +266,36 @@ rather than the tab you happen to be looking at. What each tab collects:
   all be on the **same side** of the part and **contiguous** (no non-member pin
   between them); the dialog refuses a group that breaks either rule and tells you
   why.
+- **Errors** (its own tab) — the part's problems, described next.
 
-On the Logic tab, below the table, a read-only pane shows **the GALasm the table will write** —
-exactly the text that lands in the part's file — and it updates as you click. That
-text is **validated live against the real GAL22V10**: the status line shows a green
-check when it is acceptable, or the specific problem otherwise, and **Create** is
-disabled until it passes. If you press Create while something is wrong, the dialog
-**switches to the tab the problem is on** before telling you about it, so a message
-never names a field you cannot see. This is the same strict check the simulator applies at
-Run, so a part you can create is one you could later produce on an actual device
-with GALasm.
+On the Logic tab, below the table, a read-only pane shows **the GALasm this part writes** —
+exactly the text that lands in the part's file — and it updates as you click.
+
+The dialog checks the whole part as you work and lists every problem, one per line,
+on the **Errors** tab. While there is any, a **red line** above the buttons says how
+many — for example *This part definition contains 2 errors — see the Errors tab* —
+whichever tab you are on. A problem is a *conflict* in the definition:
+
+- logic the real GAL22V10 would reject — the same strict check the simulator applies
+  at Run, so a part free of errors is one you could produce on an actual device with
+  GALasm;
+- an output declared **reg out** whose equation is not registered, or declared
+  **comb out** whose equation is (see **Kind** in [The logic table](#the-logic-table));
+- a registered output or equation on a part whose **clock** box is clear;
+- pin 1 used in an equation while it is the clock;
+- an equation for a pin set to **input**;
+- a pin with no label, or two pins with the same label.
+
+Something merely *missing* is not a problem. An output with no equation yet, or a
+part with no logic at all, is a normal part in progress; such an output just reads
+**U** when you run the design.
+
+Errors never stop you saving: **Create** and **Save** always work, so you can put a
+part down half-finished and come back to it. The one thing **Create** insists on is
+a **part number**, since the part's file is named after it — press Create without
+one and the dialog switches to the Part tab to say so. A part saved with errors,
+though, is drawn in **red** on the schematic, and a design containing one will not
+run — see [Parts with errors](#parts-with-errors).
 
 **Create** saves the part into the **current project's** `components/` folder (as a
 YAML file named after the part number) and adds its tile to the upper palette
@@ -297,11 +325,10 @@ Every cell is a button that cycles **X → 1 → 0 → X**:
 
 So a row reading `F0=0`, `F1=1`, `F2=0` is the term `!F0 * F1 * !F2`. Two kinds of
 cell are blocked. An output's own column in its own rows is inert — a part cannot
-read its own output back. And the pin-1 column greys out as soon as any output is
-set to **reg out**, because pin 1 is then the device's clock and may not appear in
-an equation; a literal already sitting there stays clickable so you can cycle it
-back to `X`, and until you do it shows red and the status line says which output to
-clear it from.
+read its own output back. And the pin-1 column greys out while pin 1's **clock**
+box is checked, because pin 1 is then the part's clock and may not appear in an
+equation; a literal already sitting there stays clickable so you can cycle it back
+to `X`, and until you do it shows red and the Errors tab says which output uses it.
 
 **Adding and removing terms.** The drop-down at the end of each row starts blank and
 offers **OR** and **done**. Choosing **OR** adds another row below for a further AND
@@ -313,14 +340,27 @@ end of a row deletes that term.
 
 **A row with every cell `X` is empty** and is simply left out of the equation — it
 is not "always true". That is what makes adding a row safe: a row you add and do not
-fill costs nothing. An output whose rows are all empty gets no equation at all and
-is left undriven.
+fill costs nothing. An output whose rows are all empty gets no equation at all, and
+reads **U** when you run the design.
 
 **Constant outputs.** Beside each output name is a drop-down reading **equation**,
 **always 0**, or **always 1**. The two constants drive the pin to a fixed level
 (writing `= GND` or `= VCC`), which is the way to hold an output low or high — an
 empty table cannot say it. Switching to a constant hides that output's rows but
 keeps them, so switching back to **equation** brings your terms back.
+
+**Kind: comb or reg.** Next to that is a **Kind** drop-down, **comb** or **reg**,
+saying whether *this output's equation* is registered (written with `.R` and clocked
+by pin 1). While an output has nothing in it, Kind simply follows the pin's
+direction on the Part tab, so declaring your pins first and filling in the logic
+later never trips anything. Once the output has terms, Kind is its own setting:
+changing the pin's direction afterwards leaves it alone, and if the two disagree the
+drop-down turns red and the Errors tab says so. Change whichever one is wrong.
+
+**An I/O pin set to input keeps its terms.** If you switch a pin to **input** while
+its output still has terms, those rows stay in the table with the output's name in
+red — they are still part of what gets saved — until you delete them or set the pin
+back to an output.
 
 **Active-low outputs.** An output's polarity comes from its **pin label**: label the
 pin `/ENF` and the equation is written `/ENF = …`, so the pin goes low when the
@@ -330,6 +370,27 @@ the whole story. On the right-hand side of an equation the slash is dropped, so
 
 **Notes.** Each output has a free-text **Note** field, written into the file as a
 comment on that output's first line and read back the next time you open the part.
+
+**Equations the table cannot edit.** A part whose file was written by hand can
+contain equations the table does not build. They are **kept exactly as written**:
+listed read-only below the table, each with a **✕** to delete it, shown in the GALasm
+pane, and written back after the table's own equations when you save. They are:
+
+- an equation form the table does not build — output enables (`.E`), transparent
+  latches (`.L`/`.G`), XOR (`:+:`), the per-output `.CLK`/`.ARST`/`.APRST` of other
+  devices, or the global `AR`/`SP`;
+- an equation whose polarity disagrees with its pin's label, such as `!OUT = …` on a
+  pin labeled `OUT`. The table writes the left-hand side *from the label*, so taking
+  it into the table would invert the output; relabel the pin `/OUT` and it becomes
+  editable the next time you open the part;
+- an output that reads itself back, which has no cell in the table;
+- a term naming one signal both ways (`F0 * !F0`) alongside other terms. As the only
+  term of an output it is simply a hard 0, and loads as **always 0**;
+- an equation headed by something other than an I/O pin, or a second equation for
+  an output the table already holds.
+
+Keeping an equation is not an error in itself; the Errors tab still checks what it
+says.
 
 When the part is saved, the equations are written in pin order with one AND term per
 line. A part you had hand-written earlier is therefore **reformatted** the first
@@ -350,10 +411,10 @@ two parts with similar numbers sit side by side looking much alike; the chip on 
 sheet is the one you are actually looking at, and there is nothing to pick wrong.
 
 Either way the dialog reopens with everything filled in — part number, description,
-pin labels, directions, pin groups, notes, and the logic table, its cells set from
-the part's existing equations — and its button now reads **Save**. Every field works as
-it does when creating a part, including the live GALasm check, so an edit that would
-break the device is refused before it can be saved.
+pin labels, directions, the clock box, pin groups, notes, and the logic table, its
+cells set from the part's existing equations — and its button now reads **Save**.
+Every field works as it does when creating a part, including the error check, and
+**Save** works whatever the Errors tab says.
 
 Two details worth knowing:
 
@@ -361,11 +422,12 @@ Two details worth knowing:
   label follow the new name, and nothing else changes: parts are tracked internally
   by an identifier that never changes, so placed instances stay attached and the
   definition file keeps its original name.
-- **Only your own project's parts are editable.** The menu item appears on a GAL
-  part stored in the current project's `components/` folder. Parts from the shared
+- **Only your own project's parts are editable.** The menu item appears on a
+  GAL22V10 part stored in the current project's `components/` folder. Parts from the shared
   library have no such item — they are shared with every project, so the app never
   writes them; edit those files directly and restart the server. Memory devices
-  (**NEW MEM**) have no editor yet, and the dialog only knows the GAL22V10. A chip
+  (**NEW MEM**) have no editor yet, and the dialog only knows the GAL22V10, so a
+  part of another GAL device offers no item. A chip
   on the sheet whose part is not in the current library — a design opened outside
   the project that defines its parts — offers no item either, since there is no
   definition loaded to edit.
@@ -385,30 +447,49 @@ Instances of the part in **other** designs are not touched until you open each o
 and run **File ▸ Refresh Types**. The part definition, not the copy stored inside a
 saved design, is the source of truth.
 
-If the dialog **refuses to open**, the message tray says why. Some reasons are about
-the part as a whole: it is a different GAL device, its pinout does not match the
-24-pin skeleton, or its file carries something the dialog does not model
-(propagation delays, buried nodes, per-pin documentation, a custom outline). The
-rest are about equations the logic table cannot hold:
+**The dialog always opens.** Whatever is in the part's file — even a file with
+mistakes in it — the dialog fills itself in as best it can and never sends you off
+to a text editor. **Save** rewrites the whole file, so anything the dialog cannot
+show you is kept and written back unchanged: equations the table cannot edit (see
+[The logic table](#the-logic-table)), settings it does not model such as propagation
+delays, buried nodes, datasheet or package information, a custom outline, or
+per-pin documentation, and pins that have no place on the 24-pin skeleton.
 
-- an equation form the table does not build — output enables (`.E`), transparent
-  latches (`.L`/`.G`), XOR (`:+:`), the per-output `.CLK`/`.ARST`/`.APRST` of other
-  devices, or the global `AR`/`SP`;
-- an equation whose polarity disagrees with its pin's label, such as `!OUT = …` on a
-  pin labeled `OUT`. Since the table writes the left-hand side *from the label*,
-  opening and saving that part would invert the output — so relabel the pin `/OUT`
-  and the part opens;
-- an output that reads itself back, which has no cell in the table;
-- a term naming one signal both ways (`F0 * !F0`), which no single cell can express.
-  As the only term of an output it is simply a hard 0, and loads as **always 0**;
-  mixed in with other terms it is refused.
+The **Errors** tab lists all of this under **Load notes**, together with anything the
+dialog had to fill in or move when it opened the part: a pin missing from the file,
+a pin at the wrong position, a clock naming a pin other than pin 1, a group member
+that is not a pin. Load notes are for your information — they are not errors and do
+not make the part red.
 
-This is deliberate: **Save** rewrites the whole file, so rather than quietly reduce
-your definition to the parts it understands, the dialog declines and leaves that
-file to your text editor. One kind of commentary does survive: the `;` comments
-inside the equations become the per-output **Note** fields and are written back.
-Every other YAML comment is lost on an in-app save, so a part whose file carries
-commentary you want to keep is best edited by hand.
+Kept settings are written back in JSON style — `delays: {"tpd":10}` — which is valid
+YAML but looks different from a hand-written file. One kind of commentary survives:
+the `;` comments inside the equations become the per-output **Note** fields, or
+travel with an equation that is kept as written. Every other YAML comment is lost on
+an in-app save, so a part whose file carries commentary you want to keep is best
+edited by hand.
+
+### Parts with errors
+
+A GAL part whose definition has errors — saved that way from the dialog, or a
+hand-edited file with a mistake in it — still loads, appears in the palette, and can
+be placed and wired. On the schematic its outline and labels are drawn in **red**
+(even while selected; the heavier outline still shows the selection), and hovering
+over it shows **component definition contains errors**. Open it with
+**Edit part definition…** to read the list on the Errors tab. The red goes away when
+a save fixes the part, because saving updates every instance of it in the open
+design; instances in other designs catch up when you open each one and run
+**File ▸ Refresh Types**.
+
+A design containing such a part **cannot be run**. **Run** opens a dialog naming the
+part at fault — for example *The design cannot be run because the definition of U6
+contains errors* — and the simulation does not start. A part inside a sub-design is
+reported by the sub-design it sits in (*…because sub-design X1 contains errors*),
+and several causes are listed one per line. **Tools ▸ Generate C…** and the
+test-vector panel's **Run**, **Run to Row**, and **Capture** refuse the same way.
+
+Only GAL parts behave like this. A 74-series or other library part whose YAML file
+has a mistake is still left out when the library loads, with a message in the
+message tray saying why.
 
 ### Creating a memory device (RAM/ROM)
 
@@ -1286,7 +1367,12 @@ directly on the editing canvas.
   dynamic-latch and precharged-bus tricks won't work; add a pull-up or pull-down
   as a keeper where you need retention.
 - A 74-series part whose YAML has no behavior block holds its outputs at U and is
-  reported once when the run starts.
+  reported once when the run starts. The same goes for a GAL part with no logic
+  yet, and for each output of a GAL part that has no equation: it reads U, and a
+  message when the run starts names those outputs. (A behavior block holding only
+  `;` comments counts as no behavior.)
+- A design containing a GAL part with definition errors does not start at all —
+  see [Parts with errors](#parts-with-errors).
 
 While simulating, the design is **read-only** and the **selection is locked**:
 placing, wiring, moving, rotating, deleting, overrides, paste, undo/redo, New,
@@ -1606,7 +1692,9 @@ exactly as the interactive simulator does; the columns still come only from the
 top sheet's own switches, clocks, indicators, and ports. One restriction: a
 **clock source inside an embedded child** — a clock generator, or a port marked
 as a clock source — can't be scripted by the table, so Run and Capture refuse
-such a design with a message. Keep clocks on the sheet under test.
+such a design with a message. Keep clocks on the sheet under test. A design
+containing a GAL part with definition errors is refused too, with the same dialog
+Run shows (see [Parts with errors](#parts-with-errors)).
 
 **Combinational designs** (no clock source): each row is one **independent**
 case — its inputs are applied, the circuit settles, and the outputs are compared.
@@ -1887,7 +1975,9 @@ saved. Registered (`.R`) parts, independent per-output clocks, and RAM/ROM
 devices — including persistent RAM — are all supported. One thing is refused,
 with a message naming the instance, because it runs only on the debug simulator
 for now: a design containing a **transmission gate or relay** (the bidirectional
-switch elements, see [Built-in components](#11-built-in-components)).
+switch elements, see [Built-in components](#11-built-in-components)). A design
+containing a GAL part with definition errors is refused as well, with the same
+dialog Run shows (see [Parts with errors](#parts-with-errors)).
 
 **Hierarchical designs** generate too: like Run and the test-vector panel,
 generation **flattens** the design first (see
