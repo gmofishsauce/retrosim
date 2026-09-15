@@ -916,73 +916,82 @@
             "side": "right",
             "position": 1,
             "direction": "out",
-            "number": 14
+            "number": 14,
+            "olmc": "reg"
           },
           {
             "name": "F1",
             "side": "right",
             "position": 2,
             "direction": "out",
-            "number": 15
+            "number": 15,
+            "olmc": "reg"
           },
           {
             "name": "F2",
             "side": "right",
             "position": 3,
             "direction": "out",
-            "number": 16
+            "number": 16,
+            "olmc": "reg"
           },
           {
             "name": "/LD",
             "side": "right",
             "position": 4,
             "direction": "out",
-            "number": 17
+            "number": 17,
+            "olmc": "reg"
           },
           {
             "name": "/MWE",
             "side": "right",
             "position": 5,
             "direction": "out",
-            "number": 18
+            "number": 18,
+            "olmc": "reg"
           },
           {
             "name": "CSRC",
             "side": "right",
             "position": 6,
             "direction": "out",
-            "number": 19
+            "number": 19,
+            "olmc": "reg"
           },
           {
             "name": "/RWE",
             "side": "right",
             "position": 7,
             "direction": "out",
-            "number": 20
+            "number": 20,
+            "olmc": "reg"
           },
           {
             "name": "/MRD",
             "side": "right",
             "position": 8,
             "direction": "out",
-            "number": 21
+            "number": 21,
+            "olmc": "reg"
           },
           {
             "name": "/ROE1",
             "side": "right",
             "position": 9,
             "direction": "out",
-            "number": 22
+            "number": 22,
+            "olmc": "reg"
           },
           {
             "name": "/ROE2",
             "side": "right",
             "position": 10,
             "direction": "out",
-            "number": 23
+            "number": 23,
+            "olmc": "reg"
           }
         ],
-        "behavior": "F0.R = !CY0 * !CY1 * !CY2 * !CY3 * !LD\nF1.R = IR13 * !IR14 * IR15\n     + !IR13 * IR14 * IR15\n/LD.R = !CY0 * !CY1 * !CY2 * !CY3\n",
         "clock": "CLK",
         "gal": "GAL22V10",
         "partnumber": "INS-DCD",
@@ -1662,70 +1671,80 @@
             "side": "right",
             "position": 1,
             "direction": "out",
-            "number": 14
+            "number": 14,
+            "olmc": "reg"
           },
           {
             "name": "S1",
             "side": "right",
             "position": 2,
             "direction": "out",
-            "number": 15
+            "number": 15,
+            "olmc": "reg"
           },
           {
             "name": "S2",
             "side": "right",
             "position": 3,
             "direction": "out",
-            "number": 16
+            "number": 16,
+            "olmc": "reg"
           },
           {
             "name": "FTAB",
             "side": "right",
             "position": 4,
             "direction": "out",
-            "number": 17
+            "number": 17,
+            "olmc": "reg"
           },
           {
             "name": "/ENF",
             "side": "right",
             "position": 5,
             "direction": "out",
-            "number": 18
+            "number": 18,
+            "olmc": "reg"
           },
           {
             "name": "FTF",
             "side": "right",
             "position": 6,
             "direction": "out",
-            "number": 19
+            "number": 19,
+            "olmc": "reg"
           },
           {
             "name": "/OE",
             "side": "right",
             "position": 7,
             "direction": "out",
-            "number": 20
+            "number": 20,
+            "olmc": "reg"
           },
           {
             "name": "Cin",
             "side": "right",
             "position": 8,
             "direction": "out",
-            "number": 21
+            "number": 21,
+            "olmc": "reg"
           },
           {
             "name": "IMM10/",
             "side": "right",
             "position": 9,
             "direction": "out",
-            "number": 22
+            "number": 22,
+            "olmc": "reg"
           },
           {
             "name": "IMM7/",
             "side": "right",
             "position": 10,
             "direction": "out",
-            "number": 23
+            "number": 23,
+            "olmc": "reg"
           }
         ],
         "clock": "CLK",
@@ -2606,7 +2625,7 @@
     {
       "refdes": "A-8",
       "type": "type-pullup",
-      "x": 38,
+      "x": 46,
       "y": 36,
       "rotation": 0,
       "typeData": {
@@ -4234,7 +4253,7 @@
       "refdes": "U31",
       "type": "type-22V003",
       "x": -82,
-      "y": 72,
+      "y": 67,
       "rotation": 0,
       "typeData": {
         "id": "type-22V003",
@@ -4251,153 +4270,164 @@
             "number": 1
           },
           {
-            "name": "I2",
+            "name": "CY0",
             "side": "left",
             "position": 2,
             "direction": "in",
             "number": 2
           },
           {
-            "name": "I3",
+            "name": "CY1",
             "side": "left",
             "position": 3,
             "direction": "in",
             "number": 3
           },
           {
-            "name": "I4",
+            "name": "CY2",
             "side": "left",
             "position": 4,
             "direction": "in",
             "number": 4
           },
           {
-            "name": "I5",
+            "name": "CY3",
             "side": "left",
             "position": 5,
             "direction": "in",
             "number": 5
           },
           {
-            "name": "I6",
+            "name": "IR13",
             "side": "left",
             "position": 6,
             "direction": "in",
             "number": 6
           },
           {
-            "name": "I7",
+            "name": "IR14",
             "side": "left",
             "position": 7,
             "direction": "in",
             "number": 7
           },
           {
-            "name": "I8",
+            "name": "IR15",
             "side": "left",
             "position": 8,
             "direction": "in",
             "number": 8
           },
           {
-            "name": "I9",
+            "name": "NC",
             "side": "left",
             "position": 9,
             "direction": "in",
             "number": 9
           },
           {
-            "name": "I10",
+            "name": "NC",
             "side": "left",
             "position": 10,
             "direction": "in",
             "number": 10
           },
           {
-            "name": "I11",
+            "name": "NC",
             "side": "left",
             "position": 11,
             "direction": "in",
             "number": 11
           },
           {
-            "name": "I13",
+            "name": "NC",
             "side": "left",
             "position": 12,
             "direction": "in",
             "number": 13
           },
           {
-            "name": "IO14",
+            "name": "ENA/",
             "side": "right",
             "position": 1,
             "direction": "out",
-            "number": 14
+            "number": 14,
+            "olmc": "reg"
           },
           {
-            "name": "IO15",
+            "name": "ENB/",
             "side": "right",
             "position": 2,
             "direction": "out",
-            "number": 15
+            "number": 15,
+            "olmc": "reg"
           },
           {
             "name": "IO16",
             "side": "right",
             "position": 3,
             "direction": "out",
-            "number": 16
+            "number": 16,
+            "olmc": "reg"
           },
           {
             "name": "IO17",
             "side": "right",
             "position": 4,
             "direction": "out",
-            "number": 17
+            "number": 17,
+            "olmc": "reg"
           },
           {
             "name": "IO18",
             "side": "right",
             "position": 5,
             "direction": "out",
-            "number": 18
+            "number": 18,
+            "olmc": "reg"
           },
           {
             "name": "IO19",
             "side": "right",
             "position": 6,
             "direction": "out",
-            "number": 19
+            "number": 19,
+            "olmc": "reg"
           },
           {
             "name": "IO20",
             "side": "right",
             "position": 7,
             "direction": "out",
-            "number": 20
+            "number": 20,
+            "olmc": "reg"
           },
           {
             "name": "IO21",
             "side": "right",
             "position": 8,
             "direction": "out",
-            "number": 21
+            "number": 21,
+            "olmc": "reg"
           },
           {
             "name": "IO22",
             "side": "right",
             "position": 9,
             "direction": "out",
-            "number": 22
+            "number": 22,
+            "olmc": "reg"
           },
           {
             "name": "IO23",
             "side": "right",
             "position": 10,
             "direction": "out",
-            "number": 23
+            "number": 23,
+            "olmc": "reg"
           }
         ],
+        "clock": "CLK",
         "gal": "GAL22V10",
         "partnumber": "22V003",
         "description": "Part of instruction decoder",
@@ -4691,6 +4721,10 @@
         },
         {
           "t": "node",
+          "v": "v522"
+        },
+        {
+          "t": "node",
           "v": "v60"
         }
       ]
@@ -4710,6 +4744,10 @@
           "t": "bend",
           "x": -85,
           "y": 1
+        },
+        {
+          "t": "node",
+          "v": "v524"
         },
         {
           "t": "bend",
@@ -4737,6 +4775,10 @@
         {
           "t": "node",
           "v": "v240"
+        },
+        {
+          "t": "node",
+          "v": "v526"
         },
         {
           "t": "bend",
@@ -4769,6 +4811,10 @@
           "t": "bend",
           "x": -87,
           "y": 47
+        },
+        {
+          "t": "node",
+          "v": "v528"
         },
         {
           "t": "node",
@@ -4819,6 +4865,10 @@
           "y": -24
         },
         {
+          "t": "node",
+          "v": "v530"
+        },
+        {
           "t": "bend",
           "x": -88,
           "y": 48
@@ -4852,6 +4902,10 @@
         },
         {
           "t": "node",
+          "v": "v532"
+        },
+        {
+          "t": "node",
           "v": "v72"
         }
       ]
@@ -4876,6 +4930,10 @@
           "t": "bend",
           "x": -90,
           "y": 50
+        },
+        {
+          "t": "node",
+          "v": "v534"
         },
         {
           "t": "node",
@@ -5868,7 +5926,7 @@
         },
         {
           "t": "bend",
-          "x": 39,
+          "x": 47,
           "y": 40
         },
         {
@@ -7235,11 +7293,193 @@
         {
           "t": "bend",
           "x": -97,
-          "y": 73
+          "y": 68
         },
         {
           "t": "node",
           "v": "v521"
+        }
+      ]
+    },
+    {
+      "id": "w274",
+      "path": [
+        {
+          "t": "node",
+          "v": "v523"
+        },
+        {
+          "t": "bend",
+          "x": -84,
+          "y": 69
+        },
+        {
+          "t": "node",
+          "v": "v522"
+        }
+      ]
+    },
+    {
+      "id": "w275",
+      "path": [
+        {
+          "t": "node",
+          "v": "v525"
+        },
+        {
+          "t": "bend",
+          "x": -85,
+          "y": 70
+        },
+        {
+          "t": "node",
+          "v": "v524"
+        }
+      ]
+    },
+    {
+      "id": "w276",
+      "path": [
+        {
+          "t": "node",
+          "v": "v527"
+        },
+        {
+          "t": "bend",
+          "x": -86,
+          "y": 71
+        },
+        {
+          "t": "node",
+          "v": "v526"
+        }
+      ]
+    },
+    {
+      "id": "w277",
+      "path": [
+        {
+          "t": "node",
+          "v": "v529"
+        },
+        {
+          "t": "bend",
+          "x": -87,
+          "y": 72
+        },
+        {
+          "t": "node",
+          "v": "v528"
+        }
+      ]
+    },
+    {
+      "id": "w278",
+      "path": [
+        {
+          "t": "node",
+          "v": "v531"
+        },
+        {
+          "t": "bend",
+          "x": -88,
+          "y": 73
+        },
+        {
+          "t": "node",
+          "v": "v530"
+        }
+      ]
+    },
+    {
+      "id": "w279",
+      "path": [
+        {
+          "t": "node",
+          "v": "v533"
+        },
+        {
+          "t": "bend",
+          "x": -89,
+          "y": 74
+        },
+        {
+          "t": "node",
+          "v": "v532"
+        }
+      ]
+    },
+    {
+      "id": "w280",
+      "path": [
+        {
+          "t": "node",
+          "v": "v535"
+        },
+        {
+          "t": "bend",
+          "x": -90,
+          "y": 75
+        },
+        {
+          "t": "node",
+          "v": "v534"
+        }
+      ]
+    },
+    {
+      "id": "w281",
+      "path": [
+        {
+          "t": "node",
+          "v": "v536"
+        },
+        {
+          "t": "bend",
+          "x": 45,
+          "y": 0
+        },
+        {
+          "t": "bend",
+          "x": 45,
+          "y": 6
+        },
+        {
+          "t": "bend",
+          "x": 45,
+          "y": 69
+        },
+        {
+          "t": "bend",
+          "x": -34,
+          "y": 69
+        },
+        {
+          "t": "node",
+          "v": "v537"
+        }
+      ]
+    },
+    {
+      "id": "w282",
+      "path": [
+        {
+          "t": "node",
+          "v": "v538"
+        },
+        {
+          "t": "bend",
+          "x": 44,
+          "y": 68
+        },
+        {
+          "t": "bend",
+          "x": 44,
+          "y": -1
+        },
+        {
+          "t": "node",
+          "v": "v539"
         }
       ]
     }
@@ -9832,7 +10072,7 @@
     {
       "id": "v312",
       "kind": "junction",
-      "x": 39,
+      "x": 47,
       "y": 39
     },
     {
@@ -10838,6 +11078,136 @@
       "pin": "CLK",
       "x": -83,
       "y": 73
+    },
+    {
+      "id": "v522",
+      "kind": "junction",
+      "x": -84,
+      "y": 44
+    },
+    {
+      "id": "v523",
+      "kind": "pin",
+      "ref": "U31",
+      "pin": "CY0",
+      "x": -82,
+      "y": 74
+    },
+    {
+      "id": "v524",
+      "kind": "junction",
+      "x": -85,
+      "y": 45
+    },
+    {
+      "id": "v525",
+      "kind": "pin",
+      "ref": "U31",
+      "pin": "CY1",
+      "x": -82,
+      "y": 75
+    },
+    {
+      "id": "v526",
+      "kind": "junction",
+      "x": -86,
+      "y": 46
+    },
+    {
+      "id": "v527",
+      "kind": "pin",
+      "ref": "U31",
+      "pin": "CY2",
+      "x": -82,
+      "y": 76
+    },
+    {
+      "id": "v528",
+      "kind": "junction",
+      "x": -87,
+      "y": 47
+    },
+    {
+      "id": "v529",
+      "kind": "pin",
+      "ref": "U31",
+      "pin": "CY3",
+      "x": -82,
+      "y": 77
+    },
+    {
+      "id": "v530",
+      "kind": "junction",
+      "x": -88,
+      "y": 48
+    },
+    {
+      "id": "v531",
+      "kind": "pin",
+      "ref": "U31",
+      "pin": "IR13",
+      "x": -82,
+      "y": 78
+    },
+    {
+      "id": "v532",
+      "kind": "junction",
+      "x": -89,
+      "y": 49
+    },
+    {
+      "id": "v533",
+      "kind": "pin",
+      "ref": "U31",
+      "pin": "IR14",
+      "x": -82,
+      "y": 79
+    },
+    {
+      "id": "v534",
+      "kind": "junction",
+      "x": -90,
+      "y": 50
+    },
+    {
+      "id": "v535",
+      "kind": "pin",
+      "ref": "U31",
+      "pin": "IR15",
+      "x": -82,
+      "y": 80
+    },
+    {
+      "id": "v536",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "/ENB",
+      "x": 57,
+      "y": 0
+    },
+    {
+      "id": "v537",
+      "kind": "pin",
+      "ref": "U31",
+      "pin": "ENB/",
+      "x": -74,
+      "y": 74
+    },
+    {
+      "id": "v538",
+      "kind": "pin",
+      "ref": "U31",
+      "pin": "ENA/",
+      "x": -74,
+      "y": 68
+    },
+    {
+      "id": "v539",
+      "kind": "pin",
+      "ref": "X1",
+      "pin": "/ENA",
+      "x": 57,
+      "y": -1
     }
   ],
   "refCounters": {
@@ -10989,11 +11359,13 @@
       "pins": [
         "U7.QA",
         "U6.CY0",
-        "U15.CY0"
+        "U15.CY0",
+        "U31.CY0"
       ],
       "members": [
         "w23",
-        "w111"
+        "w111",
+        "w274"
       ],
       "provenance": [],
       "name": "CY0"
@@ -11002,11 +11374,13 @@
       "pins": [
         "U7.QB",
         "U6.CY1",
-        "U15.CY1"
+        "U15.CY1",
+        "U31.CY1"
       ],
       "members": [
         "w24",
-        "w112"
+        "w112",
+        "w275"
       ],
       "provenance": [],
       "name": "CY1"
@@ -11015,11 +11389,13 @@
       "pins": [
         "U7.QC",
         "U6.CY2",
-        "U15.CY2"
+        "U15.CY2",
+        "U31.CY2"
       ],
       "members": [
         "w25",
-        "w113"
+        "w113",
+        "w276"
       ],
       "provenance": [],
       "name": "CY2"
@@ -11028,11 +11404,13 @@
       "pins": [
         "U7.QD",
         "U6.CY3",
-        "U15.CY3"
+        "U15.CY3",
+        "U31.CY3"
       ],
       "members": [
         "w26",
-        "w114"
+        "w114",
+        "w277"
       ],
       "provenance": [],
       "name": "CY3"
@@ -11060,11 +11438,13 @@
       "pins": [
         "X3.OUT13",
         "U6.IR13",
-        "U15.IR13"
+        "U15.IR13",
+        "U31.IR13"
       ],
       "members": [
         "w28",
-        "w115"
+        "w115",
+        "w278"
       ],
       "provenance": [],
       "name": "IR13"
@@ -11073,11 +11453,13 @@
       "pins": [
         "X3.OUT14",
         "U6.IR14",
-        "U15.IR14"
+        "U15.IR14",
+        "U31.IR14"
       ],
       "members": [
         "w29",
-        "w116"
+        "w116",
+        "w279"
       ],
       "provenance": [],
       "name": "IR14"
@@ -11086,11 +11468,13 @@
       "pins": [
         "X3.OUT15",
         "U6.IR15",
-        "U15.IR15"
+        "U15.IR15",
+        "U31.IR15"
       ],
       "members": [
         "w30",
-        "w117"
+        "w117",
+        "w280"
       ],
       "provenance": [],
       "name": "IR15"
@@ -11592,6 +11976,28 @@
       ],
       "provenance": [],
       "name": "WE/"
+    },
+    {
+      "pins": [
+        "X1./ENB",
+        "U31.ENB/"
+      ],
+      "members": [
+        "w281"
+      ],
+      "provenance": [],
+      "name": "ENB/"
+    },
+    {
+      "pins": [
+        "U31.ENA/",
+        "X1./ENA"
+      ],
+      "members": [
+        "w282"
+      ],
+      "provenance": [],
+      "name": "ENA/"
     },
     {
       "pins": [

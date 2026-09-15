@@ -11,9 +11,9 @@ pins:
   - { name: "CY1", side: left, pos: 3, dir: in, number: 3 }
   - { name: "CY2", side: left, pos: 4, dir: in, number: 4 }
   - { name: "CY3", side: left, pos: 5, dir: in, number: 5 }
-  - { name: "NC", side: left, pos: 6, dir: in, number: 6 }
-  - { name: "NC", side: left, pos: 7, dir: in, number: 7 }
-  - { name: "NC", side: left, pos: 8, dir: in, number: 8 }
+  - { name: "IR13", side: left, pos: 6, dir: in, number: 6 }
+  - { name: "IR14", side: left, pos: 7, dir: in, number: 7 }
+  - { name: "IR15", side: left, pos: 8, dir: in, number: 8 }
   - { name: "NC", side: left, pos: 9, dir: in, number: 9 }
   - { name: "NC", side: left, pos: 10, dir: in, number: 10 }
   - { name: "NC", side: left, pos: 11, dir: in, number: 11 }

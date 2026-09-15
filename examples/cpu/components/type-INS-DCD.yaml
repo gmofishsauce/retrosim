@@ -27,10 +27,5 @@ pins:
   - { name: "/MRD", side: right, pos: 8, dir: out, olmc: reg, number: 21 }
   - { name: "/ROE1", side: right, pos: 9, dir: out, olmc: reg, number: 22 }
   - { name: "/ROE2", side: right, pos: 10, dir: out, olmc: reg, number: 23 }
-behavior: |
-  F0.R = !CY0 * !CY1 * !CY2 * !CY3 * !LD
-  F1.R = IR13 * !IR14 * IR15
-       + !IR13 * IR14 * IR15
-  /LD.R = !CY0 * !CY1 * !CY2 * !CY3
 notes: |2
   The seven inputs are: the three higher order bits of the opcode and the cycle number within the instruction.
