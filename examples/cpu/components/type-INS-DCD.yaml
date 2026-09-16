@@ -13,8 +13,8 @@ pins:
   - { name: "IR13", side: left, pos: 6, dir: in, number: 6 }
   - { name: "IR14", side: left, pos: 7, dir: in, number: 7 }
   - { name: "IR15", side: left, pos: 8, dir: in, number: 8 }
-  - { name: "NC", side: left, pos: 9, dir: in, number: 9 }
-  - { name: "NC", side: left, pos: 10, dir: in, number: 10 }
+  - { name: "RESET", side: left, pos: 9, dir: in, number: 9 }
+  - { name: "Z", side: left, pos: 10, dir: in, number: 10 }
   - { name: "NC", side: left, pos: 11, dir: in, number: 11 }
   - { name: "NC", side: left, pos: 12, dir: in, number: 13 }
   - { name: "F0", side: right, pos: 1, dir: out, olmc: reg, number: 14 }
@@ -28,4 +28,90 @@ pins:
   - { name: "/ROE1", side: right, pos: 9, dir: out, olmc: reg, number: 22 }
   - { name: "/ROE2", side: right, pos: 10, dir: out, olmc: reg, number: 23 }
 notes: |2
-  The seven inputs are: the three higher order bits of the opcode and the cycle number within the instruction.
+  Nine inputs: the three high-order opcode bits (IR15..IR13), the four-bit cycle
+  number within the instruction (CY3..CY0), the ALU zero flag Z (which gates
+  beq's branch, and reaches only this one of the three decoders), and RESET.
+behavior: |
+  ; U6 -- instruction decoder part 1: PC function, fetch, bus and
+  ; register-file control.  Generated from the shared microcode table that also
+  ; produces U15 and U31, so the three parts cannot drift apart.
+  ; ------------------------------------------------------------------------
+  ; TIMING FRAME.  Every output here is registered (olmc: reg) on CLK, as is
+  ; the cycle counter U7.  So the control word in force while the counter
+  ; reads n was latched from counter value n-1: a term written against CY=k
+  ; produces the word ACTIVE during cycle k+1.  The fetch word (active during
+  ; cycle 0) is emitted at CY = the instruction's last cycle, which is why it
+  ; carries opcode literals even though every opcode produces the same word.
+  ;
+  ; CYCLE LAYOUT (instructions are NOT all the same length):
+  ;   cycle 0  fetch   /LD: IR <- ROM[PC].  Common to every instruction.
+  ;   cycle 1  setup   PC := PC+1, and pre-load R[rB] into the ALU B register.
+  ;                    Emitted at CY=0, when the IR still holds the PREVIOUS
+  ;                    instruction, so these terms carry NO opcode literals.
+  ;   cycle 2+ execute opcode-dependent.  The last cycle asserts /CYCLR, so
+  ;                    the counter is back at 0 for the next fetch.
+  ;   jalr ends at cycle 2 (3 clocks); add/addi/lui/sw at cycle 3 (4 clocks);
+  ;   nand/lw/beq at cycle 4 (5 clocks).
+  ;
+  ; RESET.  Every term is gated with /RESET, so an output with no reset term
+  ; of its own idles during reset (active-low pins deassert, active-high pins
+  ; read 0).  The reset word is F=1 (PC := 0, an ALU CLEAR that needs no
+  ; operand and so resolves an undefined PC) plus /LD (IR <- ROM[PC]).  It
+  ; deliberately does NOT assert /CYCLR: that is what lets the counter walk
+  ; 0 -> 1 at reset release rather than being cleared again, so the machine
+  ; enters the setup cycle of the instruction at address 0 and location 0
+  ; executes exactly once.  U7./LOAD is held by the reset built-in meanwhile,
+  ; which is what makes the counter defined while /CYCLR is still powering up.
+  ;
+  ; Opcodes (IR15 IR14 IR13): 000 add  001 addi  010 nand  011 lui
+  ;                           100 sw   101 lw    110 beq   111 jalr
+  ; ------------------------------------------------------------------------
+
+  ; PC function bit 0
+  F0.R = RESET
+       + /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13
+
+  ; PC function bit 1
+  F1.R = /RESET * /CY0 * /CY1 * /CY2 * /CY3
+       + /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13
+
+  ; PC function bit 2
+  F2.R = /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13 * Z
+
+  ; load IR from ROM[PC] (the fetch)
+  /LD.R = RESET
+        + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13
+        + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR14 * /IR13
+        + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13
+        + /RESET * /CY0 * /CY1 * CY2 * /CY3 * IR14 * /IR13
+        + /RESET * /CY0 * /CY1 * CY2 * /CY3 * IR15 * /IR14 * IR13
+
+  ; main RAM write
+  /MWE.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * /IR13
+
+  ; register address select: 0 = rC/rB, 1 = rA/rA
+  CSRC.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13
+         + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR14 * /IR13
+         + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13
+         + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13
+         + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13
+
+  ; ALU result onto the A-bus
+  /RWE.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13
+         + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR14
+         + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15
+         + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13
+         + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13
+
+  ; main RAM output enable
+  /MRD.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13
+
+  ; register file port B onto the B-bus
+  /ROE1.R = /RESET * /CY0 * /CY1 * /CY2 * /CY3
+          + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14
+          + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15 * /IR13
+          + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * /IR13
+
+  ; register file port A onto the A-bus
+  /ROE2.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR14 * /IR13
+          + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15 * /IR13
