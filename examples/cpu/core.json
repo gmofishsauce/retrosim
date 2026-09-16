@@ -992,7 +992,7 @@
             "olmc": "reg"
           }
         ],
-        "behavior": "; U6 -- instruction decoder part 1: PC function, fetch, bus and\n; register-file control.  Generated from the shared microcode table that also\n; produces U15 and U31, so the three parts cannot drift apart.\n; ------------------------------------------------------------------------\n; TIMING FRAME.  Every output here is registered (olmc: reg) on CLK, as is\n; the cycle counter U7.  So the control word in force while the counter\n; reads n was latched from counter value n-1: a term written against CY=k\n; produces the word ACTIVE during cycle k+1.  The fetch word (active during\n; cycle 0) is emitted at CY = the instruction's last cycle, which is why it\n; carries opcode literals even though every opcode produces the same word.\n;\n; CYCLE LAYOUT (instructions are NOT all the same length):\n;   cycle 0  fetch   /LD: IR <- ROM[PC].  Common to every instruction.\n;   cycle 1  setup   PC := PC+1, and pre-load R[rB] into the ALU B register.\n;                    Emitted at CY=0, when the IR still holds the PREVIOUS\n;                    instruction, so these terms carry NO opcode literals.\n;   cycle 2+ execute opcode-dependent.  The last cycle asserts /CYCLR, so\n;                    the counter is back at 0 for the next fetch.\n;   jalr ends at cycle 2 (3 clocks); add/addi/lui/sw at cycle 3 (4 clocks);\n;   nand/lw/beq at cycle 4 (5 clocks).\n;\n; RESET.  Every term is gated with /RESET, so an output with no reset term\n; of its own idles during reset (active-low pins deassert, active-high pins\n; read 0).  The reset word is F=1 (PC := 0, an ALU CLEAR that needs no\n; operand and so resolves an undefined PC) plus /LD (IR <- ROM[PC]).  It\n; deliberately does NOT assert /CYCLR: that is what lets the counter walk\n; 0 -> 1 at reset release rather than being cleared again, so the machine\n; enters the setup cycle of the instruction at address 0 and location 0\n; executes exactly once.  U7./LOAD is held by the reset built-in meanwhile,\n; which is what makes the counter defined while /CYCLR is still powering up.\n;\n; Opcodes (IR15 IR14 IR13): 000 add  001 addi  010 nand  011 lui\n;                           100 sw   101 lw    110 beq   111 jalr\n; ------------------------------------------------------------------------\n\n; PC function bit 0\nF0.R = RESET\n     + /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13\n\n; PC function bit 1\nF1.R = /RESET * /CY0 * /CY1 * /CY2 * /CY3\n     + /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13\n\n; PC function bit 2\nF2.R = /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13 * Z\n\n; load IR from ROM[PC] (the fetch)\n/LD.R = RESET\n      + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13\n      + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR14 * /IR13\n      + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13\n      + /RESET * /CY0 * /CY1 * CY2 * /CY3 * IR14 * /IR13\n      + /RESET * /CY0 * /CY1 * CY2 * /CY3 * IR15 * /IR14 * IR13\n\n; main RAM write\n/MWE.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * /IR13\n\n; register address select: 0 = rC/rB, 1 = rA/rA\nCSRC.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR14 * /IR13\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13\n       + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n       + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n\n; ALU result onto the A-bus\n/RWE.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR14\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15\n       + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n       + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n\n; main RAM output enable\n/MRD.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n\n; register file port B onto the B-bus\n/ROE1.R = /RESET * /CY0 * /CY1 * /CY2 * /CY3\n        + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14\n        + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15 * /IR13\n        + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * /IR13\n\n; register file port A onto the A-bus\n/ROE2.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR14 * /IR13\n        + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15 * /IR13\n",
+        "behavior": "; U6 -- instruction decoder part 1: PC function, fetch, bus and\n; register-file control.  Generated from the shared microcode table that also\n; produces U15 and U31, so the three parts cannot drift apart.\n; ------------------------------------------------------------------------\n; TIMING FRAME.  Every output here is registered (olmc: reg) on CLK, as is\n; the cycle counter U7.  So the control word in force while the counter\n; reads n was latched from counter value n-1: a term written against CY=k\n; produces the word ACTIVE during cycle k+1.  The fetch word (active during\n; cycle 0) is emitted at CY = the instruction's last cycle, which is why it\n; carries opcode literals even though every opcode produces the same word.\n;\n; CYCLE LAYOUT (instructions are NOT all the same length):\n;   cycle 0  fetch   /LD: IR <- ROM[PC].  Common to every instruction.\n;   cycle 1  setup   PC := PC+1, and pre-load R[rB] into the ALU B register.\n;                    Emitted at CY=0, when the IR still holds the PREVIOUS\n;                    instruction, so these terms carry NO opcode literals.\n;   cycle 2+ execute opcode-dependent.  The last cycle asserts /CYCLR, so\n;                    the counter is back at 0 for the next fetch.\n;   jalr ends at cycle 2 (3 clocks); add/addi/lui/sw at cycle 3 (4 clocks);\n;   nand/lw/beq at cycle 4 (5 clocks).\n;\n; RESET.  Every term is gated with /RESET, so an output with no reset term\n; of its own idles during reset (active-low pins deassert, active-high pins\n; read 0).  The reset word is F=1 (PC := 0, an ALU CLEAR that needs no\n; operand and so resolves an undefined PC) plus /LD (IR <- ROM[PC]).  It\n; deliberately does NOT assert /CYCLR: that is what lets the counter walk\n; 0 -> 1 at reset release rather than being cleared again, so the machine\n; enters the setup cycle of the instruction at address 0 and location 0\n; executes exactly once.  U7./LOAD is held by the reset built-in meanwhile,\n; which is what makes the counter defined while /CYCLR is still powering up.\n;\n; Opcodes (IR15 IR14 IR13): 000 add  001 addi  010 nand  011 lui\n;                           100 sw   101 lw    110 beq   111 jalr\n; ------------------------------------------------------------------------\n\n; PC function bit 0\nF0.R = RESET\n     + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13\n\n; PC function bit 1\nF1.R = /RESET * /CY0 * /CY1 * /CY2 * /CY3\n     + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13\n\n; PC function bit 2\nF2.R = /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13 * Z\n\n; load IR from ROM[PC] (the fetch)\n/LD.R = RESET\n      + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR14 * /IR13\n      + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13\n      + /RESET * /CY0 * /CY1 * CY2 * /CY3 * IR14 * /IR13\n      + /RESET * /CY0 * /CY1 * CY2 * /CY3 * IR15 * IR13\n\n; main RAM write\n/MWE.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * /IR13\n\n; register address select: 0 = rC/rB, 1 = rA/rA\nCSRC.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR14 * /IR13\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR14 * IR13\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13\n       + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n       + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n\n; ALU result onto the A-bus\n/RWE.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR13\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR14\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15\n       + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR13\n       + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n\n; main RAM output enable\n/MRD.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n\n; register file port B onto the B-bus\n/ROE1.R = /RESET * /CY0 * /CY1 * /CY2 * /CY3\n        + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14\n        + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15 * /IR13\n        + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * /IR13\n\n; register file port A onto the A-bus\n/ROE2.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR14 * /IR13\n        + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15 * /IR13\n",
         "clock": "CLK",
         "gal": "GAL22V10",
         "partnumber": "INS-DCD",
@@ -1293,8 +1293,8 @@
     {
       "refdes": "A-6",
       "type": "type-pulldown",
-      "x": 32,
-      "y": -5,
+      "x": 29,
+      "y": -3,
       "rotation": 0,
       "typeData": {
         "id": "type-pulldown",
@@ -1748,7 +1748,7 @@
             "olmc": "reg"
           }
         ],
-        "behavior": "; U15 -- instruction decoder part 2: ALU function, operand and immediate\n; control.  Generated from the shared microcode table that also produces U6\n; and U31, so the three parts cannot drift apart.\n; ------------------------------------------------------------------------\n; TIMING FRAME.  Every output here is registered (olmc: reg) on CLK, as is\n; the cycle counter U7.  So the control word in force while the counter\n; reads n was latched from counter value n-1: a term written against CY=k\n; produces the word ACTIVE during cycle k+1.  The fetch word (active during\n; cycle 0) is emitted at CY = the instruction's last cycle, which is why it\n; carries opcode literals even though every opcode produces the same word.\n;\n; CYCLE LAYOUT (instructions are NOT all the same length):\n;   cycle 0  fetch   /LD: IR <- ROM[PC].  Common to every instruction.\n;   cycle 1  setup   PC := PC+1, and pre-load R[rB] into the ALU B register.\n;                    Emitted at CY=0, when the IR still holds the PREVIOUS\n;                    instruction, so these terms carry NO opcode literals.\n;   cycle 2+ execute opcode-dependent.  The last cycle asserts /CYCLR, so\n;                    the counter is back at 0 for the next fetch.\n;   jalr ends at cycle 2 (3 clocks); add/addi/lui/sw at cycle 3 (4 clocks);\n;   nand/lw/beq at cycle 4 (5 clocks).\n;\n; RESET.  Every term is gated with /RESET, so an output with no reset term\n; of its own idles during reset (active-low pins deassert, active-high pins\n; read 0).  The reset word is F=1 (PC := 0, an ALU CLEAR that needs no\n; operand and so resolves an undefined PC) plus /LD (IR <- ROM[PC]).  It\n; deliberately does NOT assert /CYCLR: that is what lets the counter walk\n; 0 -> 1 at reset release rather than being cleared again, so the machine\n; enters the setup cycle of the instruction at address 0 and location 0\n; executes exactly once.  U7./LOAD is held by the reset built-in meanwhile,\n; which is what makes the counter defined while /CYCLR is still powering up.\n;\n; Opcodes (IR15 IR14 IR13): 000 add  001 addi  010 nand  011 lui\n;                           100 sw   101 lw    110 beq   111 jalr\n; ------------------------------------------------------------------------\n\n; ALU function select bit 0\nS0.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR13\n     + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14\n     + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n     + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n\n; ALU function select bit 1\nS1.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR13\n     + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14\n     + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15\n     + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n     + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13\n\n; ALU function select bit 2\nS2.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n\n; 1 = operands from the buses, 0 = from the input registers\nFTAB.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14\n       + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n\n; load the ALU F (result) register\n/ENF.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14\n       + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n\n; 1 = OUT is the combinational result, 0 = the F register\nFTF.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13\n      + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13\n\n; ALU OUT enable (also what makes Z valid)\n/OE.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13\n      + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR13\n      + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR14\n      + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15\n      + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n      + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n\n; ALU carry in\nCin.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13\n\n; imm10<<6 onto the A-bus\n/IMM10.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15 * IR14 * IR13\n\n; sign-extended imm7 onto the A-bus\n/IMM7.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14 * IR13\n        + /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * /IR14\n        + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13\n",
+        "behavior": "; U15 -- instruction decoder part 2: ALU function, operand and immediate\n; control.  Generated from the shared microcode table that also produces U6\n; and U31, so the three parts cannot drift apart.\n; ------------------------------------------------------------------------\n; TIMING FRAME.  Every output here is registered (olmc: reg) on CLK, as is\n; the cycle counter U7.  So the control word in force while the counter\n; reads n was latched from counter value n-1: a term written against CY=k\n; produces the word ACTIVE during cycle k+1.  The fetch word (active during\n; cycle 0) is emitted at CY = the instruction's last cycle, which is why it\n; carries opcode literals even though every opcode produces the same word.\n;\n; CYCLE LAYOUT (instructions are NOT all the same length):\n;   cycle 0  fetch   /LD: IR <- ROM[PC].  Common to every instruction.\n;   cycle 1  setup   PC := PC+1, and pre-load R[rB] into the ALU B register.\n;                    Emitted at CY=0, when the IR still holds the PREVIOUS\n;                    instruction, so these terms carry NO opcode literals.\n;   cycle 2+ execute opcode-dependent.  The last cycle asserts /CYCLR, so\n;                    the counter is back at 0 for the next fetch.\n;   jalr ends at cycle 2 (3 clocks); add/addi/lui/sw at cycle 3 (4 clocks);\n;   nand/lw/beq at cycle 4 (5 clocks).\n;\n; RESET.  Every term is gated with /RESET, so an output with no reset term\n; of its own idles during reset (active-low pins deassert, active-high pins\n; read 0).  The reset word is F=1 (PC := 0, an ALU CLEAR that needs no\n; operand and so resolves an undefined PC) plus /LD (IR <- ROM[PC]).  It\n; deliberately does NOT assert /CYCLR: that is what lets the counter walk\n; 0 -> 1 at reset release rather than being cleared again, so the machine\n; enters the setup cycle of the instruction at address 0 and location 0\n; executes exactly once.  U7./LOAD is held by the reset built-in meanwhile,\n; which is what makes the counter defined while /CYCLR is still powering up.\n;\n; Opcodes (IR15 IR14 IR13): 000 add  001 addi  010 nand  011 lui\n;                           100 sw   101 lw    110 beq   111 jalr\n; ------------------------------------------------------------------------\n\n; ALU function select bit 0\nS0.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR13\n     + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14\n     + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n     + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n     + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13\n\n; ALU function select bit 1\nS1.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR13\n     + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14\n     + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15\n     + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n     + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13\n     + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13\n\n; ALU function select bit 2\nS2.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n\n; 1 = operands from the buses, 0 = from the input registers\nFTAB.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR13\n       + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14\n       + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n\n; load the ALU F (result) register\n/ENF.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR13\n       + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14\n       + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n\n; 1 = OUT is the combinational result, 0 = the F register\nFTF.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13\n      + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13\n\n; ALU OUT enable (also what makes Z valid)\n/OE.R = /RESET * /CY0 * CY1 * /CY2 * /CY3\n      + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR13\n      + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n\n; ALU carry in\nCin.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13\n\n; imm10<<6 onto the A-bus\n/IMM10.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15 * IR14 * IR13\n\n; sign-extended imm7 onto the A-bus\n/IMM7.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14 * IR13\n        + /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * /IR14\n        + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13\n",
         "clock": "CLK",
         "gal": "GAL22V10",
         "partnumber": "22VDCD2",
@@ -4387,7 +4387,7 @@
             "olmc": "reg"
           },
           {
-            "name": "IO22",
+            "name": "/PCOE",
             "side": "right",
             "position": 9,
             "direction": "out",
@@ -4403,7 +4403,7 @@
             "olmc": "reg"
           }
         ],
-        "behavior": "; U31 -- instruction decoder part 3: ALU input registers, bus enables and\n; the cycle-counter clear.  Generated from the shared microcode table that\n; also produces U6 and U15, so the three parts cannot drift apart.\n; ------------------------------------------------------------------------\n; TIMING FRAME.  Every output here is registered (olmc: reg) on CLK, as is\n; the cycle counter U7.  So the control word in force while the counter\n; reads n was latched from counter value n-1: a term written against CY=k\n; produces the word ACTIVE during cycle k+1.  The fetch word (active during\n; cycle 0) is emitted at CY = the instruction's last cycle, which is why it\n; carries opcode literals even though every opcode produces the same word.\n;\n; CYCLE LAYOUT (instructions are NOT all the same length):\n;   cycle 0  fetch   /LD: IR <- ROM[PC].  Common to every instruction.\n;   cycle 1  setup   PC := PC+1, and pre-load R[rB] into the ALU B register.\n;                    Emitted at CY=0, when the IR still holds the PREVIOUS\n;                    instruction, so these terms carry NO opcode literals.\n;   cycle 2+ execute opcode-dependent.  The last cycle asserts /CYCLR, so\n;                    the counter is back at 0 for the next fetch.\n;   jalr ends at cycle 2 (3 clocks); add/addi/lui/sw at cycle 3 (4 clocks);\n;   nand/lw/beq at cycle 4 (5 clocks).\n;\n; RESET.  Every term is gated with /RESET, so an output with no reset term\n; of its own idles during reset (active-low pins deassert, active-high pins\n; read 0).  The reset word is F=1 (PC := 0, an ALU CLEAR that needs no\n; operand and so resolves an undefined PC) plus /LD (IR <- ROM[PC]).  It\n; deliberately does NOT assert /CYCLR: that is what lets the counter walk\n; 0 -> 1 at reset release rather than being cleared again, so the machine\n; enters the setup cycle of the instruction at address 0 and location 0\n; executes exactly once.  U7./LOAD is held by the reset built-in meanwhile,\n; which is what makes the counter defined while /CYCLR is still powering up.\n;\n; Opcodes (IR15 IR14 IR13): 000 add  001 addi  010 nand  011 lui\n;                           100 sw   101 lw    110 beq   111 jalr\n; ------------------------------------------------------------------------\n\n; load the ALU A input register\n/ENA.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13\n\n; load the ALU B input register\n/ENB.R = /RESET * /CY0 * /CY1 * /CY2 * /CY3\n\n; ALU result onto the B-bus\n/BOE.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * /IR14\n       + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n       + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n\n; register file write\n/REGWE.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13\n         + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * /IR14\n         + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n         + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n\n; memory-read buffers onto the A-bus (unused by this microcode)\n; Never asserted by this microcode, but the pin is wired, so it is held\n; deasserted explicitly rather than left with no equation (which reads U).\n/MBUF.R = GND\n\n; ALU operand select A\nOSA.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14\n      + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15\n      + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR14 * /IR13\n\n; ALU operand select B\nOSB.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14\n      + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15 * /IR13\n      + /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR13\n      + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n      + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13\n\n; clear the cycle counter (asserted on each instruction's last cycle)\n/CYCLR.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13\n         + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR14 * /IR13\n         + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13\n         + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR14 * /IR13\n         + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n",
+        "behavior": "; U31 -- instruction decoder part 3: ALU input registers, bus enables and\n; the cycle-counter clear.  Generated from the shared microcode table that\n; also produces U6 and U15, so the three parts cannot drift apart.\n; ------------------------------------------------------------------------\n; TIMING FRAME.  Every output here is registered (olmc: reg) on CLK, as is\n; the cycle counter U7.  So the control word in force while the counter\n; reads n was latched from counter value n-1: a term written against CY=k\n; produces the word ACTIVE during cycle k+1.  The fetch word (active during\n; cycle 0) is emitted at CY = the instruction's last cycle, which is why it\n; carries opcode literals even though every opcode produces the same word.\n;\n; CYCLE LAYOUT (instructions are NOT all the same length):\n;   cycle 0  fetch   /LD: IR <- ROM[PC].  Common to every instruction.\n;   cycle 1  setup   PC := PC+1, and pre-load R[rB] into the ALU B register.\n;                    Emitted at CY=0, when the IR still holds the PREVIOUS\n;                    instruction, so these terms carry NO opcode literals.\n;   cycle 2+ execute opcode-dependent.  The last cycle asserts /CYCLR, so\n;                    the counter is back at 0 for the next fetch.\n;   jalr ends at cycle 2 (3 clocks); add/addi/lui/sw at cycle 3 (4 clocks);\n;   nand/lw/beq at cycle 4 (5 clocks).\n;\n; RESET.  Every term is gated with /RESET, so an output with no reset term\n; of its own idles during reset (active-low pins deassert, active-high pins\n; read 0).  The reset word is F=1 (PC := 0, an ALU CLEAR that needs no\n; operand and so resolves an undefined PC) plus /LD (IR <- ROM[PC]).  It\n; deliberately does NOT assert /CYCLR: that is what lets the counter walk\n; 0 -> 1 at reset release rather than being cleared again, so the machine\n; enters the setup cycle of the instruction at address 0 and location 0\n; executes exactly once.  U7./LOAD is held by the reset built-in meanwhile,\n; which is what makes the counter defined while /CYCLR is still powering up.\n;\n; Opcodes (IR15 IR14 IR13): 000 add  001 addi  010 nand  011 lui\n;                           100 sw   101 lw    110 beq   111 jalr\n; ------------------------------------------------------------------------\n\n; load the ALU A input register\n/ENA.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13\n\n; load the ALU B input register\n/ENB.R = /RESET * /CY0 * /CY1 * /CY2 * /CY3\n\n; ALU result onto the B-bus\n/BOE.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR14 * IR13\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13\n       + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * /IR14\n       + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n       + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n\n; register file write\n/REGWE.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR14 * IR13\n         + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13\n         + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * /IR14\n         + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13\n         + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n\n; memory-read buffers onto the A-bus (unused by this microcode)\n; Never asserted by this microcode, but the pin is wired, so it is held\n; deasserted explicitly rather than left with no equation (which reads U).\n/MBUF.R = GND\n\n; ALU operand select A\nOSA.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR13\n      + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14\n      + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15\n      + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR14 * /IR13\n\n; ALU operand select B\nOSB.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14\n      + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15 * /IR13\n      + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13\n      + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13\n      + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13\n\n; clear the cycle counter (asserted on each instruction's last cycle)\n/CYCLR.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR14 * /IR13\n         + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13\n         + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR14 * /IR13\n         + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR13\n\n; PC onto the A-bus through the U32/U33 buffers (jalr's link)\n/PCOE.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13\n",
         "clock": "CLK",
         "gal": "GAL22V10",
         "partnumber": "22V003",
@@ -4448,6 +4448,438 @@
             "default": 3
           }
         ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "U32",
+      "type": "type-74541",
+      "x": 71,
+      "y": -31,
+      "rotation": 90,
+      "typeData": {
+        "id": "type-74541",
+        "name": "74541",
+        "renderType": "unit",
+        "width": 8,
+        "height": 14,
+        "pins": [
+          {
+            "name": "D0",
+            "side": "left",
+            "position": 2,
+            "direction": "in",
+            "number": 2,
+            "desc": "data input 1"
+          },
+          {
+            "name": "D1",
+            "side": "left",
+            "position": 3,
+            "direction": "in",
+            "number": 3,
+            "desc": "data input 2"
+          },
+          {
+            "name": "D2",
+            "side": "left",
+            "position": 4,
+            "direction": "in",
+            "number": 4,
+            "desc": "data input 3"
+          },
+          {
+            "name": "D3",
+            "side": "left",
+            "position": 5,
+            "direction": "in",
+            "number": 5,
+            "desc": "data input 4"
+          },
+          {
+            "name": "D4",
+            "side": "left",
+            "position": 6,
+            "direction": "in",
+            "number": 6,
+            "desc": "data input 5"
+          },
+          {
+            "name": "D5",
+            "side": "left",
+            "position": 7,
+            "direction": "in",
+            "number": 7,
+            "desc": "data input 6"
+          },
+          {
+            "name": "D6",
+            "side": "left",
+            "position": 8,
+            "direction": "in",
+            "number": 8,
+            "desc": "data input 7"
+          },
+          {
+            "name": "D7",
+            "side": "left",
+            "position": 9,
+            "direction": "in",
+            "number": 9,
+            "desc": "data input 8"
+          },
+          {
+            "name": "Q0",
+            "side": "right",
+            "position": 2,
+            "direction": "tristate",
+            "number": 18,
+            "desc": "3-state output 1"
+          },
+          {
+            "name": "Q1",
+            "side": "right",
+            "position": 3,
+            "direction": "tristate",
+            "number": 17,
+            "desc": "3-state output 2"
+          },
+          {
+            "name": "Q2",
+            "side": "right",
+            "position": 4,
+            "direction": "tristate",
+            "number": 16,
+            "desc": "3-state output 3"
+          },
+          {
+            "name": "Q3",
+            "side": "right",
+            "position": 5,
+            "direction": "tristate",
+            "number": 15,
+            "desc": "3-state output 4"
+          },
+          {
+            "name": "Q4",
+            "side": "right",
+            "position": 6,
+            "direction": "tristate",
+            "number": 14,
+            "desc": "3-state output 5"
+          },
+          {
+            "name": "Q5",
+            "side": "right",
+            "position": 7,
+            "direction": "tristate",
+            "number": 13,
+            "desc": "3-state output 6"
+          },
+          {
+            "name": "Q6",
+            "side": "right",
+            "position": 8,
+            "direction": "tristate",
+            "number": 12,
+            "desc": "3-state output 7"
+          },
+          {
+            "name": "Q7",
+            "side": "right",
+            "position": 9,
+            "direction": "tristate",
+            "number": 11,
+            "desc": "3-state output 8"
+          },
+          {
+            "name": "/OE1",
+            "side": "left",
+            "position": 11,
+            "direction": "in",
+            "number": 1,
+            "desc": "active-low output enable 1"
+          },
+          {
+            "name": "/OE2",
+            "side": "left",
+            "position": 12,
+            "direction": "in",
+            "number": 19,
+            "desc": "active-low output enable 2"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "D",
+            "pins": [
+              "D0",
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5",
+              "D6",
+              "D7"
+            ]
+          },
+          {
+            "name": "Q",
+            "pins": [
+              "Q0",
+              "Q1",
+              "Q2",
+              "Q3",
+              "Q4",
+              "Q5",
+              "Q6",
+              "Q7"
+            ]
+          }
+        ],
+        "delays": {
+          "tdis": 15,
+          "ten": 15,
+          "tpd": 11
+        },
+        "behavior": "; 74541 — octal non-inverting 3-state buffer.\n; Both active-low enables must be LOW for the outputs to drive.\n; Otherwise all outputs are high impedance.\n\nQ0.T = D0\nQ0.E = /OE1 * /OE2\nQ1.T = D1\nQ1.E = /OE1 * /OE2\nQ2.T = D2\nQ2.E = /OE1 * /OE2\nQ3.T = D3\nQ3.E = /OE1 * /OE2\nQ4.T = D4\nQ4.E = /OE1 * /OE2\nQ5.T = D5\nQ5.E = /OE1 * /OE2\nQ6.T = D6\nQ6.E = /OE1 * /OE2\nQ7.T = D7\nQ7.E = /OE1 * /OE2\n",
+        "description": "Octal non-inverting buffer/line driver, 3-state, dual active-low enables",
+        "datasheet": {
+          "vendor": "Nexperia",
+          "title": "74HC540; 74HCT540 Octal buffer/line driver; 3-state; inverting",
+          "rev": "Rev. 6",
+          "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT540.pdf"
+        },
+        "physical": {
+          "package": "DIP-20",
+          "pincount": 20,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 20
+            },
+            {
+              "name": "GND",
+              "number": 10
+            }
+          ]
+        }
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "U33",
+      "type": "type-74541",
+      "x": 89,
+      "y": -31,
+      "rotation": 90,
+      "typeData": {
+        "id": "type-74541",
+        "name": "74541",
+        "renderType": "unit",
+        "width": 8,
+        "height": 14,
+        "pins": [
+          {
+            "name": "D0",
+            "side": "left",
+            "position": 2,
+            "direction": "in",
+            "number": 2,
+            "desc": "data input 1"
+          },
+          {
+            "name": "D1",
+            "side": "left",
+            "position": 3,
+            "direction": "in",
+            "number": 3,
+            "desc": "data input 2"
+          },
+          {
+            "name": "D2",
+            "side": "left",
+            "position": 4,
+            "direction": "in",
+            "number": 4,
+            "desc": "data input 3"
+          },
+          {
+            "name": "D3",
+            "side": "left",
+            "position": 5,
+            "direction": "in",
+            "number": 5,
+            "desc": "data input 4"
+          },
+          {
+            "name": "D4",
+            "side": "left",
+            "position": 6,
+            "direction": "in",
+            "number": 6,
+            "desc": "data input 5"
+          },
+          {
+            "name": "D5",
+            "side": "left",
+            "position": 7,
+            "direction": "in",
+            "number": 7,
+            "desc": "data input 6"
+          },
+          {
+            "name": "D6",
+            "side": "left",
+            "position": 8,
+            "direction": "in",
+            "number": 8,
+            "desc": "data input 7"
+          },
+          {
+            "name": "D7",
+            "side": "left",
+            "position": 9,
+            "direction": "in",
+            "number": 9,
+            "desc": "data input 8"
+          },
+          {
+            "name": "Q0",
+            "side": "right",
+            "position": 2,
+            "direction": "tristate",
+            "number": 18,
+            "desc": "3-state output 1"
+          },
+          {
+            "name": "Q1",
+            "side": "right",
+            "position": 3,
+            "direction": "tristate",
+            "number": 17,
+            "desc": "3-state output 2"
+          },
+          {
+            "name": "Q2",
+            "side": "right",
+            "position": 4,
+            "direction": "tristate",
+            "number": 16,
+            "desc": "3-state output 3"
+          },
+          {
+            "name": "Q3",
+            "side": "right",
+            "position": 5,
+            "direction": "tristate",
+            "number": 15,
+            "desc": "3-state output 4"
+          },
+          {
+            "name": "Q4",
+            "side": "right",
+            "position": 6,
+            "direction": "tristate",
+            "number": 14,
+            "desc": "3-state output 5"
+          },
+          {
+            "name": "Q5",
+            "side": "right",
+            "position": 7,
+            "direction": "tristate",
+            "number": 13,
+            "desc": "3-state output 6"
+          },
+          {
+            "name": "Q6",
+            "side": "right",
+            "position": 8,
+            "direction": "tristate",
+            "number": 12,
+            "desc": "3-state output 7"
+          },
+          {
+            "name": "Q7",
+            "side": "right",
+            "position": 9,
+            "direction": "tristate",
+            "number": 11,
+            "desc": "3-state output 8"
+          },
+          {
+            "name": "/OE1",
+            "side": "left",
+            "position": 11,
+            "direction": "in",
+            "number": 1,
+            "desc": "active-low output enable 1"
+          },
+          {
+            "name": "/OE2",
+            "side": "left",
+            "position": 12,
+            "direction": "in",
+            "number": 19,
+            "desc": "active-low output enable 2"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "D",
+            "pins": [
+              "D0",
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5",
+              "D6",
+              "D7"
+            ]
+          },
+          {
+            "name": "Q",
+            "pins": [
+              "Q0",
+              "Q1",
+              "Q2",
+              "Q3",
+              "Q4",
+              "Q5",
+              "Q6",
+              "Q7"
+            ]
+          }
+        ],
+        "delays": {
+          "tdis": 15,
+          "ten": 15,
+          "tpd": 11
+        },
+        "behavior": "; 74541 — octal non-inverting 3-state buffer.\n; Both active-low enables must be LOW for the outputs to drive.\n; Otherwise all outputs are high impedance.\n\nQ0.T = D0\nQ0.E = /OE1 * /OE2\nQ1.T = D1\nQ1.E = /OE1 * /OE2\nQ2.T = D2\nQ2.E = /OE1 * /OE2\nQ3.T = D3\nQ3.E = /OE1 * /OE2\nQ4.T = D4\nQ4.E = /OE1 * /OE2\nQ5.T = D5\nQ5.E = /OE1 * /OE2\nQ6.T = D6\nQ6.E = /OE1 * /OE2\nQ7.T = D7\nQ7.E = /OE1 * /OE2\n",
+        "description": "Octal non-inverting buffer/line driver, 3-state, dual active-low enables",
+        "datasheet": {
+          "vendor": "Nexperia",
+          "title": "74HC540; 74HCT540 Octal buffer/line driver; 3-state; inverting",
+          "rev": "Rev. 6",
+          "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT540.pdf"
+        },
+        "physical": {
+          "package": "DIP-20",
+          "pincount": 20,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 20
+            },
+            {
+              "name": "GND",
+              "number": 10
+            }
+          ]
+        }
       },
       "overrides": {}
     }
@@ -6221,7 +6653,7 @@
         },
         {
           "t": "bend",
-          "x": 33,
+          "x": 30,
           "y": -21
         },
         {
@@ -7674,6 +8106,110 @@
           "v": "v611"
         }
       ]
+    },
+    {
+      "id": "w325",
+      "path": [
+        {
+          "t": "node",
+          "v": "v620"
+        },
+        {
+          "t": "bend",
+          "x": 78,
+          "y": -37
+        },
+        {
+          "t": "bend",
+          "x": 77,
+          "y": -37
+        },
+        {
+          "t": "node",
+          "v": "v625"
+        },
+        {
+          "t": "node",
+          "v": "v621"
+        }
+      ]
+    },
+    {
+      "id": "w326",
+      "path": [
+        {
+          "t": "node",
+          "v": "v622"
+        },
+        {
+          "t": "node",
+          "v": "v624"
+        },
+        {
+          "t": "bend",
+          "x": 60,
+          "y": -37
+        },
+        {
+          "t": "bend",
+          "x": 59,
+          "y": -37
+        },
+        {
+          "t": "node",
+          "v": "v626"
+        },
+        {
+          "t": "node",
+          "v": "v623"
+        }
+      ]
+    },
+    {
+      "id": "w327",
+      "path": [
+        {
+          "t": "node",
+          "v": "v624"
+        },
+        {
+          "t": "node",
+          "v": "v625"
+        }
+      ]
+    },
+    {
+      "id": "w330",
+      "path": [
+        {
+          "t": "node",
+          "v": "v626"
+        },
+        {
+          "t": "bend",
+          "x": 39,
+          "y": -37
+        },
+        {
+          "t": "bend",
+          "x": 39,
+          "y": 99
+        },
+        {
+          "t": "bend",
+          "x": -66,
+          "y": 99
+        },
+        {
+          "t": "bend",
+          "x": -66,
+          "y": 76
+        },
+        {
+          "t": "node",
+          "v": "v634"
+        }
+      ]
     }
   ],
   "buses": [
@@ -7683,6 +8219,10 @@
         {
           "t": "node",
           "v": "v9"
+        },
+        {
+          "t": "node",
+          "v": "v637"
         },
         {
           "t": "node",
@@ -7756,6 +8296,10 @@
         {
           "t": "node",
           "v": "v11"
+        },
+        {
+          "t": "node",
+          "v": "v638"
         },
         {
           "t": "node",
@@ -9018,6 +9562,252 @@
         {
           "vertex": "v609",
           "instance": "U27",
+          "group": "Q",
+          "bitMap": [
+            "Q0",
+            "Q1",
+            "Q2",
+            "Q3",
+            "Q4",
+            "Q5",
+            "Q6",
+            "Q7"
+          ]
+        }
+      ],
+      "bitNames": [
+        "Q0",
+        "Q1",
+        "Q2",
+        "Q3",
+        "Q4",
+        "Q5",
+        "Q6",
+        "Q7"
+      ]
+    },
+    {
+      "id": "b64",
+      "path": [
+        {
+          "t": "node",
+          "v": "v616"
+        },
+        {
+          "t": "bend",
+          "x": -101,
+          "y": -17
+        },
+        {
+          "t": "bend",
+          "x": -101,
+          "y": -61
+        },
+        {
+          "t": "bend",
+          "x": 66,
+          "y": -61
+        },
+        {
+          "t": "node",
+          "v": "v617"
+        }
+      ],
+      "width": 8,
+      "name": null,
+      "groupConnections": [
+        {
+          "vertex": "v616",
+          "instance": "X3",
+          "group": "PC-HI",
+          "bitMap": [
+            "PC-HI0",
+            "PC-HI1",
+            "PC-HI2",
+            "PC-HI3",
+            "PC-HI4",
+            "PC-HI5",
+            "PC-HI6",
+            "PC-HI7"
+          ]
+        },
+        {
+          "vertex": "v617",
+          "instance": "U32",
+          "group": "D",
+          "bitMap": [
+            "D0",
+            "D1",
+            "D2",
+            "D3",
+            "D4",
+            "D5",
+            "D6",
+            "D7"
+          ]
+        }
+      ],
+      "bitNames": [
+        "PC-HI0",
+        "PC-HI1",
+        "PC-HI2",
+        "PC-HI3",
+        "PC-HI4",
+        "PC-HI5",
+        "PC-HI6",
+        "PC-HI7"
+      ]
+    },
+    {
+      "id": "b65",
+      "path": [
+        {
+          "t": "node",
+          "v": "v618"
+        },
+        {
+          "t": "bend",
+          "x": -95,
+          "y": -9
+        },
+        {
+          "t": "bend",
+          "x": -95,
+          "y": -68
+        },
+        {
+          "t": "bend",
+          "x": 84,
+          "y": -68
+        },
+        {
+          "t": "node",
+          "v": "v619"
+        }
+      ],
+      "width": 8,
+      "name": null,
+      "groupConnections": [
+        {
+          "vertex": "v618",
+          "instance": "X3",
+          "group": "PC-LO",
+          "bitMap": [
+            "PC-LO0",
+            "PC-LO1",
+            "PC-LO2",
+            "PC-LO3",
+            "PC-LO4",
+            "PC-LO5",
+            "PC-LO6",
+            "PC-LO7"
+          ]
+        },
+        {
+          "vertex": "v619",
+          "instance": "U33",
+          "group": "D",
+          "bitMap": [
+            "D0",
+            "D1",
+            "D2",
+            "D3",
+            "D4",
+            "D5",
+            "D6",
+            "D7"
+          ]
+        }
+      ],
+      "bitNames": [
+        "PC-LO0",
+        "PC-LO1",
+        "PC-LO2",
+        "PC-LO3",
+        "PC-LO4",
+        "PC-LO5",
+        "PC-LO6",
+        "PC-LO7"
+      ]
+    },
+    {
+      "id": "b70",
+      "path": [
+        {
+          "t": "node",
+          "v": "v615"
+        },
+        {
+          "t": "bend",
+          "x": 83,
+          "y": -15
+        },
+        {
+          "t": "bend",
+          "x": 37,
+          "y": -15
+        },
+        {
+          "t": "node",
+          "v": "v638"
+        }
+      ],
+      "width": 8,
+      "groupConnections": [
+        {
+          "vertex": "v615",
+          "instance": "U33",
+          "group": "Q",
+          "bitMap": [
+            "Q0",
+            "Q1",
+            "Q2",
+            "Q3",
+            "Q4",
+            "Q5",
+            "Q6",
+            "Q7"
+          ]
+        }
+      ],
+      "bitNames": [
+        "Q0",
+        "Q1",
+        "Q2",
+        "Q3",
+        "Q4",
+        "Q5",
+        "Q6",
+        "Q7"
+      ]
+    },
+    {
+      "id": "b71",
+      "path": [
+        {
+          "t": "node",
+          "v": "v613"
+        },
+        {
+          "t": "bend",
+          "x": 65,
+          "y": -20
+        },
+        {
+          "t": "bend",
+          "x": 34,
+          "y": -20
+        },
+        {
+          "t": "node",
+          "v": "v637"
+        }
+      ],
+      "width": 8,
+      "groupConnections": [
+        {
+          "vertex": "v613",
+          "instance": "U32",
           "group": "Q",
           "bitMap": [
             "Q0",
@@ -11473,10 +12263,116 @@
       "kind": "junction",
       "x": -94,
       "y": 43
+    },
+    {
+      "id": "v613",
+      "kind": "free",
+      "x": 65,
+      "y": -21
+    },
+    {
+      "id": "v615",
+      "kind": "free",
+      "x": 83,
+      "y": -21
+    },
+    {
+      "id": "v616",
+      "kind": "free",
+      "x": -103,
+      "y": -17
+    },
+    {
+      "id": "v617",
+      "kind": "free",
+      "x": 66,
+      "y": -33
+    },
+    {
+      "id": "v618",
+      "kind": "free",
+      "x": -103,
+      "y": -9
+    },
+    {
+      "id": "v619",
+      "kind": "free",
+      "x": 84,
+      "y": -33
+    },
+    {
+      "id": "v620",
+      "kind": "pin",
+      "ref": "U33",
+      "pin": "/OE1",
+      "x": 78,
+      "y": -31
+    },
+    {
+      "id": "v621",
+      "kind": "pin",
+      "ref": "U33",
+      "pin": "/OE2",
+      "x": 77,
+      "y": -31
+    },
+    {
+      "id": "v622",
+      "kind": "pin",
+      "ref": "U32",
+      "pin": "/OE1",
+      "x": 60,
+      "y": -31
+    },
+    {
+      "id": "v623",
+      "kind": "pin",
+      "ref": "U32",
+      "pin": "/OE2",
+      "x": 59,
+      "y": -31
+    },
+    {
+      "id": "v624",
+      "kind": "junction",
+      "x": 60,
+      "y": -37
+    },
+    {
+      "id": "v625",
+      "kind": "junction",
+      "x": 77,
+      "y": -37
+    },
+    {
+      "id": "v626",
+      "kind": "junction",
+      "x": 59,
+      "y": -37
+    },
+    {
+      "id": "v634",
+      "kind": "pin",
+      "ref": "U31",
+      "pin": "/PCOE",
+      "x": -74,
+      "y": 76
+    },
+    {
+      "id": "v637",
+      "kind": "junction",
+      "x": 34,
+      "y": 4
+    },
+    {
+      "id": "v638",
+      "kind": "junction",
+      "x": 37,
+      "y": 12
     }
   ],
   "refCounters": {
-    "U": 32,
+    "U": 34,
     "A": 12,
     "N": 6,
     "X": 4
@@ -12346,6 +13242,23 @@
     },
     {
       "pins": [
+        "U33./OE1",
+        "U33./OE2",
+        "U32./OE1",
+        "U32./OE2",
+        "U31./PCOE"
+      ],
+      "members": [
+        "w325",
+        "w326",
+        "w327",
+        "w330"
+      ],
+      "provenance": [],
+      "name": "/PCOE"
+    },
+    {
+      "pins": [
         "X1.Ain-high0",
         "U3.D0",
         "U19.Q0",
@@ -12353,7 +13266,8 @@
         "X3.A-398",
         "U21.A8",
         "U25.Q0",
-        "U27.Q0"
+        "U27.Q0",
+        "U32.Q0"
       ],
       "members": [
         "b5",
@@ -12362,7 +13276,8 @@
         "b51",
         "b57",
         "b59",
-        "b61"
+        "b61",
+        "b71"
       ],
       "provenance": [
         {
@@ -12399,6 +13314,11 @@
           "bus": "b61",
           "bit": 0,
           "name": "Q0"
+        },
+        {
+          "bus": "b71",
+          "bit": 0,
+          "name": "Q0"
         }
       ],
       "name": "Ain-high0"
@@ -12412,7 +13332,8 @@
         "X3.A-399",
         "U21.A9",
         "U25.Q1",
-        "U27.Q1"
+        "U27.Q1",
+        "U32.Q1"
       ],
       "members": [
         "b5",
@@ -12421,7 +13342,8 @@
         "b51",
         "b57",
         "b59",
-        "b61"
+        "b61",
+        "b71"
       ],
       "provenance": [
         {
@@ -12458,6 +13380,11 @@
           "bus": "b61",
           "bit": 1,
           "name": "Q1"
+        },
+        {
+          "bus": "b71",
+          "bit": 1,
+          "name": "Q1"
         }
       ],
       "name": "Ain-high1"
@@ -12471,7 +13398,8 @@
         "X3.A-3910",
         "U21.A10",
         "U25.Q2",
-        "U27.Q2"
+        "U27.Q2",
+        "U32.Q2"
       ],
       "members": [
         "b5",
@@ -12480,7 +13408,8 @@
         "b51",
         "b57",
         "b59",
-        "b61"
+        "b61",
+        "b71"
       ],
       "provenance": [
         {
@@ -12517,6 +13446,11 @@
           "bus": "b61",
           "bit": 2,
           "name": "Q2"
+        },
+        {
+          "bus": "b71",
+          "bit": 2,
+          "name": "Q2"
         }
       ],
       "name": "Ain-high2"
@@ -12530,7 +13464,8 @@
         "X3.A-3911",
         "U21.A11",
         "U25.Q3",
-        "U27.Q3"
+        "U27.Q3",
+        "U32.Q3"
       ],
       "members": [
         "b5",
@@ -12539,7 +13474,8 @@
         "b51",
         "b57",
         "b59",
-        "b61"
+        "b61",
+        "b71"
       ],
       "provenance": [
         {
@@ -12576,6 +13512,11 @@
           "bus": "b61",
           "bit": 3,
           "name": "Q3"
+        },
+        {
+          "bus": "b71",
+          "bit": 3,
+          "name": "Q3"
         }
       ],
       "name": "Ain-high3"
@@ -12589,7 +13530,8 @@
         "X3.A-3912",
         "U21.A12",
         "U25.Q4",
-        "U27.Q4"
+        "U27.Q4",
+        "U32.Q4"
       ],
       "members": [
         "b5",
@@ -12598,7 +13540,8 @@
         "b51",
         "b57",
         "b59",
-        "b61"
+        "b61",
+        "b71"
       ],
       "provenance": [
         {
@@ -12635,6 +13578,11 @@
           "bus": "b61",
           "bit": 4,
           "name": "Q4"
+        },
+        {
+          "bus": "b71",
+          "bit": 4,
+          "name": "Q4"
         }
       ],
       "name": "Ain-high4"
@@ -12648,7 +13596,8 @@
         "X3.A-3913",
         "U21.A13",
         "U25.Q5",
-        "U27.Q5"
+        "U27.Q5",
+        "U32.Q5"
       ],
       "members": [
         "b5",
@@ -12657,7 +13606,8 @@
         "b51",
         "b57",
         "b59",
-        "b61"
+        "b61",
+        "b71"
       ],
       "provenance": [
         {
@@ -12694,6 +13644,11 @@
           "bus": "b61",
           "bit": 5,
           "name": "Q5"
+        },
+        {
+          "bus": "b71",
+          "bit": 5,
+          "name": "Q5"
         }
       ],
       "name": "Ain-high5"
@@ -12707,7 +13662,8 @@
         "X3.A-3914",
         "U21.A14",
         "U25.Q6",
-        "U27.Q6"
+        "U27.Q6",
+        "U32.Q6"
       ],
       "members": [
         "b5",
@@ -12716,7 +13672,8 @@
         "b51",
         "b57",
         "b59",
-        "b61"
+        "b61",
+        "b71"
       ],
       "provenance": [
         {
@@ -12753,6 +13710,11 @@
           "bus": "b61",
           "bit": 6,
           "name": "Q6"
+        },
+        {
+          "bus": "b71",
+          "bit": 6,
+          "name": "Q6"
         }
       ],
       "name": "Ain-high6"
@@ -12766,7 +13728,8 @@
         "X3.A-3915",
         "U21.A15",
         "U25.Q7",
-        "U27.Q7"
+        "U27.Q7",
+        "U32.Q7"
       ],
       "members": [
         "b5",
@@ -12775,7 +13738,8 @@
         "b51",
         "b57",
         "b59",
-        "b61"
+        "b61",
+        "b71"
       ],
       "provenance": [
         {
@@ -12812,6 +13776,11 @@
           "bus": "b61",
           "bit": 7,
           "name": "Q7"
+        },
+        {
+          "bus": "b71",
+          "bit": 7,
+          "name": "Q7"
         }
       ],
       "name": "Ain-high7"
@@ -12825,7 +13794,8 @@
         "U22.Q0",
         "X3.A-390",
         "U26.Q0",
-        "U28.Q0"
+        "U28.Q0",
+        "U33.Q0"
       ],
       "members": [
         "b6",
@@ -12834,7 +13804,8 @@
         "b49",
         "b50",
         "b58",
-        "b60"
+        "b60",
+        "b70"
       ],
       "provenance": [
         {
@@ -12871,6 +13842,11 @@
           "bus": "b60",
           "bit": 0,
           "name": "Q0"
+        },
+        {
+          "bus": "b70",
+          "bit": 0,
+          "name": "Q0"
         }
       ],
       "name": "Ain-low0"
@@ -12884,7 +13860,8 @@
         "U22.Q1",
         "X3.A-391",
         "U26.Q1",
-        "U28.Q1"
+        "U28.Q1",
+        "U33.Q1"
       ],
       "members": [
         "b6",
@@ -12893,7 +13870,8 @@
         "b49",
         "b50",
         "b58",
-        "b60"
+        "b60",
+        "b70"
       ],
       "provenance": [
         {
@@ -12930,6 +13908,11 @@
           "bus": "b60",
           "bit": 1,
           "name": "Q1"
+        },
+        {
+          "bus": "b70",
+          "bit": 1,
+          "name": "Q1"
         }
       ],
       "name": "Ain-low1"
@@ -12943,7 +13926,8 @@
         "U22.Q2",
         "X3.A-392",
         "U26.Q2",
-        "U28.Q2"
+        "U28.Q2",
+        "U33.Q2"
       ],
       "members": [
         "b6",
@@ -12952,7 +13936,8 @@
         "b49",
         "b50",
         "b58",
-        "b60"
+        "b60",
+        "b70"
       ],
       "provenance": [
         {
@@ -12989,6 +13974,11 @@
           "bus": "b60",
           "bit": 2,
           "name": "Q2"
+        },
+        {
+          "bus": "b70",
+          "bit": 2,
+          "name": "Q2"
         }
       ],
       "name": "Ain-low2"
@@ -13002,7 +13992,8 @@
         "U22.Q3",
         "X3.A-393",
         "U26.Q3",
-        "U28.Q3"
+        "U28.Q3",
+        "U33.Q3"
       ],
       "members": [
         "b6",
@@ -13011,7 +14002,8 @@
         "b49",
         "b50",
         "b58",
-        "b60"
+        "b60",
+        "b70"
       ],
       "provenance": [
         {
@@ -13048,6 +14040,11 @@
           "bus": "b60",
           "bit": 3,
           "name": "Q3"
+        },
+        {
+          "bus": "b70",
+          "bit": 3,
+          "name": "Q3"
         }
       ],
       "name": "Ain-low3"
@@ -13061,7 +14058,8 @@
         "U22.Q4",
         "X3.A-394",
         "U26.Q4",
-        "U28.Q4"
+        "U28.Q4",
+        "U33.Q4"
       ],
       "members": [
         "b6",
@@ -13070,7 +14068,8 @@
         "b49",
         "b50",
         "b58",
-        "b60"
+        "b60",
+        "b70"
       ],
       "provenance": [
         {
@@ -13107,6 +14106,11 @@
           "bus": "b60",
           "bit": 4,
           "name": "Q4"
+        },
+        {
+          "bus": "b70",
+          "bit": 4,
+          "name": "Q4"
         }
       ],
       "name": "Ain-low4"
@@ -13120,7 +14124,8 @@
         "U22.Q5",
         "X3.A-395",
         "U26.Q5",
-        "U28.Q5"
+        "U28.Q5",
+        "U33.Q5"
       ],
       "members": [
         "b6",
@@ -13129,7 +14134,8 @@
         "b49",
         "b50",
         "b58",
-        "b60"
+        "b60",
+        "b70"
       ],
       "provenance": [
         {
@@ -13166,6 +14172,11 @@
           "bus": "b60",
           "bit": 5,
           "name": "Q5"
+        },
+        {
+          "bus": "b70",
+          "bit": 5,
+          "name": "Q5"
         }
       ],
       "name": "Ain-low5"
@@ -13179,7 +14190,8 @@
         "U22.Q6",
         "X3.A-396",
         "U26.Q6",
-        "U28.Q6"
+        "U28.Q6",
+        "U33.Q6"
       ],
       "members": [
         "b6",
@@ -13188,7 +14200,8 @@
         "b49",
         "b50",
         "b58",
-        "b60"
+        "b60",
+        "b70"
       ],
       "provenance": [
         {
@@ -13225,6 +14238,11 @@
           "bus": "b60",
           "bit": 6,
           "name": "Q6"
+        },
+        {
+          "bus": "b70",
+          "bit": 6,
+          "name": "Q6"
         }
       ],
       "name": "Ain-low6"
@@ -13238,7 +14256,8 @@
         "U22.Q7",
         "X3.A-397",
         "U26.Q7",
-        "U28.Q7"
+        "U28.Q7",
+        "U33.Q7"
       ],
       "members": [
         "b6",
@@ -13247,7 +14266,8 @@
         "b49",
         "b50",
         "b58",
-        "b60"
+        "b60",
+        "b70"
       ],
       "provenance": [
         {
@@ -13282,6 +14302,11 @@
         },
         {
           "bus": "b60",
+          "bit": 7,
+          "name": "Q7"
+        },
+        {
+          "bus": "b70",
           "bit": 7,
           "name": "Q7"
         }
@@ -14263,6 +15288,278 @@
         }
       ],
       "name": "D7"
+    },
+    {
+      "pins": [
+        "X3.PC-HI0",
+        "U32.D0"
+      ],
+      "members": [
+        "b64"
+      ],
+      "provenance": [
+        {
+          "bus": "b64",
+          "bit": 0,
+          "name": "PC-HI0"
+        }
+      ],
+      "name": "PC-HI0"
+    },
+    {
+      "pins": [
+        "X3.PC-HI1",
+        "U32.D1"
+      ],
+      "members": [
+        "b64"
+      ],
+      "provenance": [
+        {
+          "bus": "b64",
+          "bit": 1,
+          "name": "PC-HI1"
+        }
+      ],
+      "name": "PC-HI1"
+    },
+    {
+      "pins": [
+        "X3.PC-HI2",
+        "U32.D2"
+      ],
+      "members": [
+        "b64"
+      ],
+      "provenance": [
+        {
+          "bus": "b64",
+          "bit": 2,
+          "name": "PC-HI2"
+        }
+      ],
+      "name": "PC-HI2"
+    },
+    {
+      "pins": [
+        "X3.PC-HI3",
+        "U32.D3"
+      ],
+      "members": [
+        "b64"
+      ],
+      "provenance": [
+        {
+          "bus": "b64",
+          "bit": 3,
+          "name": "PC-HI3"
+        }
+      ],
+      "name": "PC-HI3"
+    },
+    {
+      "pins": [
+        "X3.PC-HI4",
+        "U32.D4"
+      ],
+      "members": [
+        "b64"
+      ],
+      "provenance": [
+        {
+          "bus": "b64",
+          "bit": 4,
+          "name": "PC-HI4"
+        }
+      ],
+      "name": "PC-HI4"
+    },
+    {
+      "pins": [
+        "X3.PC-HI5",
+        "U32.D5"
+      ],
+      "members": [
+        "b64"
+      ],
+      "provenance": [
+        {
+          "bus": "b64",
+          "bit": 5,
+          "name": "PC-HI5"
+        }
+      ],
+      "name": "PC-HI5"
+    },
+    {
+      "pins": [
+        "X3.PC-HI6",
+        "U32.D6"
+      ],
+      "members": [
+        "b64"
+      ],
+      "provenance": [
+        {
+          "bus": "b64",
+          "bit": 6,
+          "name": "PC-HI6"
+        }
+      ],
+      "name": "PC-HI6"
+    },
+    {
+      "pins": [
+        "X3.PC-HI7",
+        "U32.D7"
+      ],
+      "members": [
+        "b64"
+      ],
+      "provenance": [
+        {
+          "bus": "b64",
+          "bit": 7,
+          "name": "PC-HI7"
+        }
+      ],
+      "name": "PC-HI7"
+    },
+    {
+      "pins": [
+        "X3.PC-LO0",
+        "U33.D0"
+      ],
+      "members": [
+        "b65"
+      ],
+      "provenance": [
+        {
+          "bus": "b65",
+          "bit": 0,
+          "name": "PC-LO0"
+        }
+      ],
+      "name": "PC-LO0"
+    },
+    {
+      "pins": [
+        "X3.PC-LO1",
+        "U33.D1"
+      ],
+      "members": [
+        "b65"
+      ],
+      "provenance": [
+        {
+          "bus": "b65",
+          "bit": 1,
+          "name": "PC-LO1"
+        }
+      ],
+      "name": "PC-LO1"
+    },
+    {
+      "pins": [
+        "X3.PC-LO2",
+        "U33.D2"
+      ],
+      "members": [
+        "b65"
+      ],
+      "provenance": [
+        {
+          "bus": "b65",
+          "bit": 2,
+          "name": "PC-LO2"
+        }
+      ],
+      "name": "PC-LO2"
+    },
+    {
+      "pins": [
+        "X3.PC-LO3",
+        "U33.D3"
+      ],
+      "members": [
+        "b65"
+      ],
+      "provenance": [
+        {
+          "bus": "b65",
+          "bit": 3,
+          "name": "PC-LO3"
+        }
+      ],
+      "name": "PC-LO3"
+    },
+    {
+      "pins": [
+        "X3.PC-LO4",
+        "U33.D4"
+      ],
+      "members": [
+        "b65"
+      ],
+      "provenance": [
+        {
+          "bus": "b65",
+          "bit": 4,
+          "name": "PC-LO4"
+        }
+      ],
+      "name": "PC-LO4"
+    },
+    {
+      "pins": [
+        "X3.PC-LO5",
+        "U33.D5"
+      ],
+      "members": [
+        "b65"
+      ],
+      "provenance": [
+        {
+          "bus": "b65",
+          "bit": 5,
+          "name": "PC-LO5"
+        }
+      ],
+      "name": "PC-LO5"
+    },
+    {
+      "pins": [
+        "X3.PC-LO6",
+        "U33.D6"
+      ],
+      "members": [
+        "b65"
+      ],
+      "provenance": [
+        {
+          "bus": "b65",
+          "bit": 6,
+          "name": "PC-LO6"
+        }
+      ],
+      "name": "PC-LO6"
+    },
+    {
+      "pins": [
+        "X3.PC-LO7",
+        "U33.D7"
+      ],
+      "members": [
+        "b65"
+      ],
+      "provenance": [
+        {
+          "bus": "b65",
+          "bit": 7,
+          "name": "PC-LO7"
+        }
+      ],
+      "name": "PC-LO7"
     }
   ]
 }

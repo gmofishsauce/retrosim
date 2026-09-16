@@ -69,6 +69,7 @@ behavior: |
        + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14
        + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13
        + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13
+       + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13
 
   ; ALU function select bit 1
   S1.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR13
@@ -76,33 +77,33 @@ behavior: |
        + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15
        + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13
        + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13
+       + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13
 
   ; ALU function select bit 2
   S2.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13
 
   ; 1 = operands from the buses, 0 = from the input registers
-  FTAB.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14
+  FTAB.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR13
+         + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14
          + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15
          + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13
          + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13
 
   ; load the ALU F (result) register
-  /ENF.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14
+  /ENF.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR13
+         + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14
          + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15
          + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13
          + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13
 
   ; 1 = OUT is the combinational result, 0 = the F register
-  FTF.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13
-        + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13
+  FTF.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13
+        + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13
 
   ; ALU OUT enable (also what makes Z valid)
-  /OE.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13
-        + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR13
-        + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR14
-        + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15
+  /OE.R = /RESET * /CY0 * CY1 * /CY2 * /CY3
+        + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR13
         + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13
-        + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13
 
   ; ALU carry in
   Cin.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13

@@ -26,7 +26,7 @@ pins:
   - { name: "OSA", side: right, pos: 6, dir: out, olmc: reg, number: 19 }
   - { name: "OSB", side: right, pos: 7, dir: out, olmc: reg, number: 20 }
   - { name: "/CYCLR", side: right, pos: 8, dir: out, olmc: reg, number: 21 }
-  - { name: "IO22", side: right, pos: 9, dir: out, olmc: reg, number: 22 }
+  - { name: "/PCOE", side: right, pos: 9, dir: out, olmc: reg, number: 22 }
   - { name: "IO23", side: right, pos: 10, dir: out, olmc: reg, number: 23 }
 behavior: |
   ; U31 -- instruction decoder part 3: ALU input registers, bus enables and
@@ -71,13 +71,15 @@ behavior: |
   /ENB.R = /RESET * /CY0 * /CY1 * /CY2 * /CY3
 
   ; ALU result onto the B-bus
-  /BOE.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13
+  /BOE.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR14 * IR13
+         + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13
          + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * /IR14
          + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13
          + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13
 
   ; register file write
-  /REGWE.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13
+  /REGWE.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR14 * IR13
+           + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13
            + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * /IR14
            + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13
            + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13
@@ -88,20 +90,23 @@ behavior: |
   /MBUF.R = GND
 
   ; ALU operand select A
-  OSA.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14
+  OSA.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR13
+        + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14
         + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15
         + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR14 * /IR13
 
   ; ALU operand select B
   OSB.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR14
         + /RESET * CY0 * /CY1 * /CY2 * /CY3 * /IR15 * /IR13
-        + /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR13
         + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13
         + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13
+        + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13
 
   ; clear the cycle counter (asserted on each instruction's last cycle)
-  /CYCLR.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13
-           + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR14 * /IR13
+  /CYCLR.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR14 * /IR13
            + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13
            + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR14 * /IR13
-           + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13
+           + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR13
+
+  ; PC onto the A-bus through the U32/U33 buffers (jalr's link)
+  /PCOE.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13

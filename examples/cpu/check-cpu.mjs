@@ -45,8 +45,10 @@ const NAMES = { 0: "add", 1: "addi", 2: "nand", 3: "lui", 4: "sw", 5: "lw", 6: "
 //   5: lw   r5, r1, 0  r5 = Mem[0x40] = 0x0081
 //   6: beq  r3, r5, 1  equal, so address 7 is skipped
 //   7: lui  r1, 0      must NOT execute
-//   8: jalr r0, r2     PC := r2 = 0x0041
-const PROG = [0x6401, 0x2881, 0x0c82, 0x5081, 0x8c80, 0xb480, 0xce81, 0x6400, 0xe100];
+//   8: jalr r6, r2     r6 = PC+1 = 0x0009, then PC := r2 = 0x0041
+//  41: add  r7, r6, r6  r7 = 9+9 = 0x0012 -- proves the link value reached r6
+const PROG = { 0: 0x6401, 1: 0x2881, 2: 0x0c82, 3: 0x5081, 4: 0x8c80, 5: 0xb480,
+               6: 0xce81, 7: 0x6400, 8: 0xf900, 0x41: 0x1f06 };
 const BEQ_NOT_TAKEN = 0xcc81; // beq r3, r1, 1 -- 0x0081 != 0x0040
 
 async function run(prog, maxClocks) {
@@ -54,7 +56,10 @@ async function run(prog, maxClocks) {
   const flat = await flatten(design, async (p) => JSON.parse(readFileSync(p, "utf8")), { rootPath: PATH });
 
   const bytes = new Uint8Array(512);
-  prog.forEach((w, i) => { bytes[2 * i] = w & 0xff; bytes[2 * i + 1] = w >> 8; });
+  for (const [addr, w] of Object.entries(prog)) {
+    bytes[2 * addr] = w & 0xff;
+    bytes[2 * addr + 1] = w >> 8;
+  }
   const romContent = new Map();
   for (const inst of flat.components ?? [])
     if (inst.typeData?.mem?.kind === "rom") romContent.set(inst.typeData.mem.romFile, bytes);
@@ -110,7 +115,7 @@ const ok = (cond, msg) => {
   if (!cond) failed = 1;
 };
 
-const rows = await run(PROG, 40);
+const rows = await run(PROG, 48);
 const fetches = fetchesOf(rows);
 const seen = [];
 for (let k = 0; k + 1 < fetches.length; k++) {
@@ -132,7 +137,9 @@ const EXPECT = [
   { pc: 4, name: "sw", clocks: 4, f: 0x0040 },   // F holds the store address
   { pc: 5, name: "lw", clocks: 5, f: 0x0081 },   // the word sw wrote, read back
   { pc: 6, name: "beq", clocks: 5, f: 0x0081 },
-  { pc: 8, name: "jalr", clocks: 3, f: 0x0081 }, // fetched from 8: 7 was skipped
+  { pc: 8, name: "jalr", clocks: 5, f: 0x0009 },   // fetched from 8: 7 was skipped;
+                                                   // F holds the link value PC+1
+  { pc: 0x41, name: "add", clocks: 4, f: 0x0012 }, // r6+r6 = 9+9: the link landed
 ];
 EXPECT.forEach((w, k) => {
   const s = seen[k];
@@ -148,7 +155,7 @@ const afterReset = rows.slice(fetches[0].i);
 ok(!afterReset.some((r, i) => i > 0 && r.cy === 0 && afterReset[i - 1].cy === 0),
    "cycle counter never repeats 0 (address 0 executes once)");
 
-const rows2 = await run([...PROG.slice(0, 6), BEQ_NOT_TAKEN, ...PROG.slice(7)], 40);
+const rows2 = await run({ ...PROG, 6: BEQ_NOT_TAKEN }, 40);
 const f2 = fetchesOf(rows2);
 ok(rows2[f2[6]?.i]?.pc === 6 && rows2[f2[7]?.i]?.pc === 7,
    `beq not taken: falls through to 0007 (got ${hex(rows2[f2[7]?.i]?.pc)})`);

@@ -69,22 +69,21 @@ behavior: |
 
   ; PC function bit 0
   F0.R = RESET
-       + /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13
+       + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13
 
   ; PC function bit 1
   F1.R = /RESET * /CY0 * /CY1 * /CY2 * /CY3
-       + /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13
+       + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13
 
   ; PC function bit 2
   F2.R = /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13 * Z
 
   ; load IR from ROM[PC] (the fetch)
   /LD.R = RESET
-        + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13
         + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR14 * /IR13
         + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13
         + /RESET * /CY0 * /CY1 * CY2 * /CY3 * IR14 * /IR13
-        + /RESET * /CY0 * /CY1 * CY2 * /CY3 * IR15 * /IR14 * IR13
+        + /RESET * /CY0 * /CY1 * CY2 * /CY3 * IR15 * IR13
 
   ; main RAM write
   /MWE.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * /IR13
@@ -92,16 +91,17 @@ behavior: |
   ; register address select: 0 = rC/rB, 1 = rA/rA
   CSRC.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * /IR13
          + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR14 * /IR13
+         + /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR14 * IR13
          + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR13
          + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13
          + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13
 
   ; ALU result onto the A-bus
-  /RWE.R = /RESET * CY0 * /CY1 * /CY2 * /CY3 * IR15 * IR14 * IR13
+  /RWE.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR13
          + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR14
          + /RESET * /CY0 * CY1 * /CY2 * /CY3 * /IR15
+         + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * IR13
          + /RESET * CY0 * CY1 * /CY2 * /CY3 * /IR15 * IR14 * /IR13
-         + /RESET * CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13
 
   ; main RAM output enable
   /MRD.R = /RESET * /CY0 * CY1 * /CY2 * /CY3 * IR15 * /IR14 * IR13
