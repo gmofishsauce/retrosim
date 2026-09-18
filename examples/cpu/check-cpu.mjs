@@ -13,7 +13,8 @@
 // simulator, and this covers an example design.  Run it by hand after changing
 // the decoder equations in components/*.yaml or the wiring in core.json:
 //
-//     node examples/cpu/check-cpu.mjs
+//     node examples/cpu/check-cpu.mjs                  # the built-in image
+//     node examples/cpu/check-cpu.mjs risc16test.hex   # an assembled image
 //
 // It exits nonzero on any failure.  The ROM image is injected, so the design's
 // own cpurom.bin is neither read nor written.
@@ -50,6 +51,15 @@ const NAMES = { 0: "add", 1: "addi", 2: "nand", 3: "lui", 4: "sw", 5: "lw", 6: "
 const PROG = { 0: 0x6401, 1: 0x2881, 2: 0x0c82, 3: 0x5081, 4: 0x8c80, 5: 0xb480,
                6: 0xce81, 7: 0x6400, 8: 0xf900, 0x41: 0x1f06 };
 const BEQ_NOT_TAKEN = 0xcc81; // beq r3, r1, 1 -- 0x0081 != 0x0040
+
+// risc16test.asm in the repo root is the assembly source for PROG above.  With
+// no argument the built-in table is used, so this check stays self-contained;
+// given a hex file (one 16-bit word per line, as asm/a writes it) the image is
+// read from there instead, which is how the two are kept from drifting apart.
+const IMAGE = process.argv[2]
+  ? Object.fromEntries(readFileSync(process.argv[2], "utf8").trim().split("\n")
+      .map((line, addr) => [addr, parseInt(line, 16)]))
+  : PROG;
 
 async function run(prog, maxClocks) {
   const design = deserializeDesign(JSON.parse(readFileSync(PATH, "utf8")));
@@ -115,7 +125,7 @@ const ok = (cond, msg) => {
   if (!cond) failed = 1;
 };
 
-const rows = await run(PROG, 48);
+const rows = await run(IMAGE, 48);
 const fetches = fetchesOf(rows);
 const seen = [];
 for (let k = 0; k + 1 < fetches.length; k++) {
@@ -155,7 +165,7 @@ const afterReset = rows.slice(fetches[0].i);
 ok(!afterReset.some((r, i) => i > 0 && r.cy === 0 && afterReset[i - 1].cy === 0),
    "cycle counter never repeats 0 (address 0 executes once)");
 
-const rows2 = await run({ ...PROG, 6: BEQ_NOT_TAKEN }, 40);
+const rows2 = await run({ ...IMAGE, 6: BEQ_NOT_TAKEN }, 40);
 const f2 = fetchesOf(rows2);
 ok(rows2[f2[6]?.i]?.pc === 6 && rows2[f2[7]?.i]?.pc === 7,
    `beq not taken: falls through to 0007 (got ${hex(rows2[f2[7]?.i]?.pc)})`);
