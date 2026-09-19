@@ -50,8 +50,8 @@ behavior: |
   ;                    instruction, so these terms carry NO opcode literals.
   ;   cycle 2+ execute opcode-dependent.  The last cycle asserts /CYCLR, so
   ;                    the counter is back at 0 for the next fetch.
-  ;   jalr ends at cycle 2 (3 clocks); add/addi/lui/sw at cycle 3 (4 clocks);
-  ;   nand/lw/beq at cycle 4 (5 clocks).
+  ;   add/addi/lui/sw end at cycle 3 (4 clocks); nand/lw/beq/jalr at cycle 4
+  ;   (5 clocks).  jalr was 3 clocks until it grew the link write-back.
   ;
   ; RESET.  Every term is gated with /RESET, so an output with no reset term
   ; of its own idles during reset (active-low pins deassert, active-high pins

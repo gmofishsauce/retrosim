@@ -19,6 +19,12 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-09-19 — examples/cpu: correct the stale jalr cycle count in the decoder comments
+What: the TIMING FRAME header in all three decoder sources said `jalr ends at cycle 2 (3 clocks)`, which has been wrong since `jalr` grew its link write-back and became 5 clocks. Now `add/addi/lui/sw end at cycle 3 (4 clocks); nand/lw/beq/jalr at cycle 4 (5 clocks)`, with a note that jalr used to be 3. The same text is embedded three more times in `core.json` as FR-057 `typeData` snapshots, so those were corrected too — otherwise the editor would still display the old text.
+Why: found while tracing `jalr`'s per-cycle control word out of the running simulator for the user. **Comments only — no equation, no behavior change.** Verified by reading the signals off the simulator rather than deriving them from the GAL algebra: `jalr` is fetch, setup, link (F := PC+1 via `/PCOE`), write-back (r[rA] via `/REGWE`), jump (PC := B register via `/RWE`) — five cycles, matching `check-cpu.mjs`'s EXPECT.
+Notes: `core.json` was patched as raw strings rather than by a JSON round-trip, which would have reformatted the whole file; the edit was checked inert by confirming the parsed structure differs only in those strings. A `File > Refresh Types` and save will now regenerate identical text from the YAML. Also observed: `U31.IO23` reads U, but it is a spare pin in no net, so unlike the earlier `/MBUF` fault it drives nothing.
+Touches: nothing in `requirements.md` or `design.md`. Files: `examples/cpu/components/type-INS-DCD.yaml`, `type-22VDCD2.yaml`, `type-22V003.yaml`, `examples/cpu/core.json`.
+
 ## 2026-09-18 — risc16test.asm: the check-cpu program as assembly source
 What: `risc16test.asm` (repo root) is the assembly source for the ROM image `examples/cpu/check-cpu.mjs` has carried as its hand-built `PROG` hex table. Assembling it with `asm/a` reproduces that table word for word, verified across all 66 words 0000..0041. `check-cpu.mjs` gains one optional argument: with none it uses the built-in table exactly as before, and given a hex file (one 16-bit word per line, the format `asm/a` writes) it reads the image from there instead. `/risc16test.hex` is gitignored as generated output.
 Why: requested by the user, and it exercises the newly-compiling assembler against a real target. **Content only — no system behavior changes, so no FR or design section is affected.** The hex table was unreadable as a program and had no source; now the two can be checked against each other instead of drifting silently.
