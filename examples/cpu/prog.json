@@ -1,7 +1,7 @@
 {
   "formatVersion": 3,
   "name": "prog",
-  "notes": "RD/ is the output enable for the current instruction, active low\nLD/ is the clock enable for the instruction register\nF2..F0 encode the operation for this clock:\n0 - hold. No change to PC\n1 - init PC to 0.\n2 - increment PC.\n3 - Load al 16 bits of PC from bus\n4 - add signed 16 bit value from bus to PC\n",
+  "notes": "RD/ is the output enable for the current instruction, active low\nLD/ is the clock enable for the instruction register\nF2..F0 encode the operation for this clock:\n0 - hold. No change to PC\n1 - init PC to 0.\n2 - increment PC.\n3 - Load al 16 bits of PC from bus\n4 - add signed 16 bit value from bus to PC\nThe output result (\"F\") register in the embeddedL4C381 (\"X1\") serves\nas the program counter.",
   "components": [
     {
       "refdes": "N-1",
