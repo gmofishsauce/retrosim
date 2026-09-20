@@ -21,6 +21,7 @@ import {
   breakoutBit,
   getVertex,
   refreshInstance,
+  derivedRamFile,
   rigidWiring,
   shiftWiring,
   busGroupBrace,
@@ -975,4 +976,69 @@ test("a bus group holding a marked pin is refused whole, not partially (FR-071i)
     () => snapBusGroup(d, bus.id, bus.path[1].v, inst.refdes, "A"),
     /no-connect pin A1/,
   );
+});
+
+// --- RAM save files are per instance (FR-114h) ---
+
+function ramMemTy(ramFile, ramLoad = true) {
+  return {
+    name: "RAM 256×8",
+    width: 4,
+    height: 8,
+    pins: [
+      { name: "A0", side: "left", position: 1, direction: "in" },
+      { name: "D0", side: "right", position: 1, direction: "bidir" },
+    ],
+    mem: { kind: "ram", addressBits: 8, dataWidth: 8, locations: 256, ramFile, ramLoad },
+  };
+}
+
+test("derivedRamFile: directory, extension, and collision handling (FR-114h)", () => {
+  assert.equal(derivedRamFile("/proj/regram.bin", "U57"), "/proj/regram-U57.bin");
+  assert.equal(derivedRamFile("regram.hex", "U57"), "regram-U57.hex");
+  assert.equal(derivedRamFile("/p/regram-U57.bin", "U61"), "/p/regram-U61.bin");
+  assert.equal(derivedRamFile("/p/regram-A-3.bin", "A-9"), "/p/regram-A-9.bin");
+  // a dotless name keeps its shape; a dotted directory is not mistaken for an ext
+  assert.equal(derivedRamFile("/p/regram", "U2"), "/p/regram-U2");
+  assert.equal(
+    derivedRamFile("/p/regram.bin", "U2", new Set(["/p/regram-U2.bin", "/p/regram-U2-2.bin"])),
+    "/p/regram-U2-3.bin",
+  );
+});
+
+test("each placed RAM gets its own save file, derived from its refdes (FR-114h)", () => {
+  const d = createDesign("t");
+  const a = addInstance(d, ramMemTy("/proj/regram.bin"), 0, 0, 0); // U1
+  const b = addInstance(d, ramMemTy("/proj/regram.bin"), 10, 0, 0); // U2
+
+  assert.equal(a.typeData.mem.ramFile, "/proj/regram-U1.bin");
+  assert.equal(b.typeData.mem.ramFile, "/proj/regram-U2.bin");
+  // load-on-start rides along untouched
+  assert.equal(b.typeData.mem.ramLoad, true);
+});
+
+test("placing a RAM whose type has no save file leaves it alone (FR-114h)", () => {
+  const d = createDesign("t");
+  const noFile = addInstance(d, ramMemTy(undefined, false), 0, 0, 0); // U1
+  assert.equal(noFile.typeData.mem.ramFile, undefined);
+
+  // a ROM's content file is shared read-only content and is never derived
+  const romTy = ramMemTy(undefined);
+  romTy.mem = { kind: "rom", addressBits: 8, dataWidth: 8, locations: 256, romFile: "/proj/cpurom.bin" };
+  const rom = addInstance(d, romTy, 10, 0, 0); // U2
+  assert.equal(rom.typeData.mem.romFile, "/proj/cpurom.bin");
+});
+
+test("Refresh Types keeps an instance's derived save file (FR-088/FR-114h)", () => {
+  const d = createDesign("t");
+  const libType = ramMemTy("/proj/regram.bin");
+  libType.id = "type-RAM";
+  const inst = addInstance(d, libType, 0, 0, 0); // U1 → regram-U1.bin
+  assert.equal(inst.typeData.mem.ramFile, "/proj/regram-U1.bin");
+
+  const r = refreshInstance(d, inst, libType);
+  assert.ok(r.ok);
+  // not re-adopted from the metatype, which would put every instance on one file
+  assert.equal(inst.typeData.mem.ramFile, "/proj/regram-U1.bin");
+  assert.equal(inst.typeData.mem.ramLoad, true);
 });

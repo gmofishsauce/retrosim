@@ -547,6 +547,38 @@ for example to keep a scratchpad or to preload a fixed pattern.
   another. So you can prepare a file by hand and check **Load at start-up** to
   guarantee the RAM's initial contents.
 
+**Each RAM gets its own save file.** The path you choose when creating the device is
+a *starting point*, not a shared destination: every placed instance derives its own
+file name from its designator, so dropping `RAM 256×8` twice gives you
+`regram-U12.bin` and `regram-U13.bin`, and pasting a RAM gives the copy
+`regram-U57.bin` rather than pointing it at the original's file. Two RAMs writing
+one file would silently overwrite each other's contents at Stop, which is why this
+happens automatically. A message in the status bar names the file each new instance
+got, and the properties panel shows it from then on (see
+[Memory files in the properties panel](#memory-files-in-the-properties-panel)).
+
+A copy's derived file does not exist until that instance's first Stop writes it, so
+if **Load at start-up** is on, the first run after a paste starts blank and says so
+— normal, and it fixes itself once the file has been written. Opening an existing
+design never re-derives anything: the paths saved in the file are used exactly as
+they are, so a design that already shares a file keeps sharing it until you change
+it in the properties panel.
+
+#### Memory files in the properties panel
+
+Select a placed RAM or ROM and the properties panel shows a **Memory** section: the
+device's kind and size, and its file binding — **save file** plus **load at start**
+for a RAM, **content file** for a ROM. Each has a **Choose…** button opening the
+same file browser the creation dialog uses, and a RAM's also has **Clear**, which
+ends persistence for that instance (and unchecks load-at-start with it). The full
+path is shown under the buttons.
+
+These edits apply to **that instance only** — not to other instances of the same
+device, and not to the part's YAML on disk — and each is a single undo step. This
+is also where you check which file a RAM actually writes, since the status-bar
+message naming a derived file scrolls away. Like the panel's other edits, the
+section is disabled while a simulation is running.
+
 A few details worth knowing:
 
 - A cell that was never written (or holds an undefined value) is saved as **0** — the
@@ -659,7 +691,10 @@ This is the heart of the editor and follows KiCad's conventions.
   ghost follows the cursor, and the next click places it, snapped to grid. The
   pasted parts get fresh reference designators (new `U`/`A` numbers; a multi-unit
   package takes one new `U` number), keep their interior wiring, overrides, and
-  switch states, and become the new selection. Press **Esc** (or pick another tool)
+  switch states, and become the new selection. A pasted **RAM with a save file** is
+  the one thing not copied verbatim: it gets its own file, named after its new
+  designator, so the copy cannot overwrite the original's contents (see
+  [Persistent RAM](#persistent-ram)). Press **Esc** (or pick another tool)
   to cancel a pending paste. Copy selecting a single subunit copies its whole
   package. The clipboard lasts for the session (it survives New/Open) and is not
   the operating-system clipboard.
@@ -809,6 +844,11 @@ built-in's declared properties (e.g. a clock's `period`) — **for that instance
 only**. Overrides do not affect other instances or the underlying YAML, and are
 saved with the design.
 
+A placed **memory device** additionally shows a **Memory** section for its file
+binding — a ROM's content file, a RAM's save file and load-at-start setting — also
+per instance; see
+[Memory files in the properties panel](#memory-files-in-the-properties-panel).
+
 The panel also has an editable **designator** field — the `U`/`A` number drawn on
 the canvas. You may set it to any text, with no restrictions: it need not follow
 the `U`/`A` numbering and may even duplicate another component's designator. The
@@ -831,7 +871,9 @@ The **File ▸ Refresh Types** menu item re-copies type data from the **currentl
 loaded** component library into every placed instance whose type still exists —
 74-series parts from the library, built-ins from the app's registry. For each
 refreshed instance it preserves position, rotation, reference designator, wiring
-(with the one exception below), and your per-instance overrides; an override that no
+(with the one exception below), your per-instance overrides, and a memory device's
+file binding — its ROM content file, or its RAM save file and load-at-start setting,
+which are per instance (see [Persistent RAM](#persistent-ram)); an override that no
 longer matches any delay or property in the new definition is dropped.
 
 If the new definition **no longer has a pin** that a wire or bus was using — you

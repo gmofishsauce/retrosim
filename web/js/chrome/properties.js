@@ -1,10 +1,19 @@
 // Properties panel (§6.11, FR-020a, FR-020b): shows the selected component
 // instance's type data (read-only) and lets the user override its propagation
-// delays and declared properties for that instance only (FR-058). Edits
-// dispatch setOverrideCmd through the store; the panel re-renders on every
-// store notification.
+// delays and declared properties for that instance only (FR-058), and edit a
+// memory device's file bindings (FR-114i). Edits dispatch setOverrideCmd /
+// setMemFileCmd through the store; the panel re-renders on every store
+// notification.
 
-import { setOverrideCmd, setSwitchStateCmd, setPortPropsCmd, setLabelCmd, setBusNameCmd } from "../commands.js";
+import {
+  setOverrideCmd,
+  setSwitchStateCmd,
+  setPortPropsCmd,
+  setLabelCmd,
+  setBusNameCmd,
+  setMemFileCmd,
+} from "../commands.js";
+import { openFileDialog } from "./dialogs.js";
 import { getVertex } from "../model/design.js";
 import { portDirection } from "../model/subdesign.js";
 import { V0, V1, VU } from "../engine/galasm.js";
@@ -405,6 +414,95 @@ export function initProperties({ container, store, renderer = null }) {
       });
       row.appendChild(select);
       container.appendChild(row);
+    }
+
+    // Memory file bindings (FR-114i): a generated memory device's content file
+    // (ROM) or save file + load-on-start (RAM), editable for THIS instance —
+    // the edit writes inst.typeData.mem, the per-instance copy, so it touches
+    // neither another instance nor the part's YAML. Also the only standing view
+    // of the save file placement/paste derived for this instance (FR-114h); the
+    // tray line announcing it was momentary.
+    if (td.mem) {
+      const mem = td.mem;
+      const isRam = mem.kind === "ram";
+      container.appendChild(el("div", "prop-section", "Memory"));
+      container.append(
+        infoRow("kind", isRam ? "RAM" : "ROM"),
+        infoRow("size", `${mem.locations} × ${mem.dataWidth}`),
+      );
+
+      // fileRow builds a label + buttons row, then the path BELOW it on its own
+      // full-width line. The path cannot share the row: a filesystem path has no
+      // break opportunities, so as a flex item it either forces the panel wide or
+      // (wrapping anywhere) collapses to one character per line. On its own line
+      // it has the panel's full width to wrap into. `onPick` runs the file
+      // browser; `onClear`, when given, adds a Clear button.
+      const fileRow = (label, path, placeholder, onPick, onClear) => {
+        const row = el("div", "prop-row");
+        row.appendChild(el("label", "prop-label", label));
+        const choose = el("button", "prop-reset", "Choose…");
+        choose.disabled = locked;
+        choose.addEventListener("click", onPick);
+        row.appendChild(choose);
+        if (onClear) {
+          const clear = el("button", "prop-reset", "Clear");
+          clear.disabled = locked || !path;
+          clear.addEventListener("click", onClear);
+          row.appendChild(clear);
+        }
+        container.appendChild(row);
+
+        const value = el("div", path ? "prop-file" : "prop-file prop-file-none",
+          path ?? placeholder);
+        value.title = path ?? ""; // the full path, for a path wrapped across lines
+        container.appendChild(value);
+      };
+
+      const startPath = store.state.project?.dir ?? undefined;
+      if (isRam) {
+        fileRow(
+          "save file",
+          mem.ramFile ?? null,
+          "none (not persistent)",
+          async () => {
+            const res = await openFileDialog({
+              mode: "save",
+              startPath,
+              title: "Choose RAM save file (.bin / .hex)",
+              exts: ["bin", "hex"],
+              saveExt: "bin",
+              saveExts: ["bin", "hex"],
+            });
+            if (res) store.dispatch(setMemFileCmd(inst.refdes, { ramFile: res.path }));
+          },
+          // Clearing ends persistence, and load-on-start has no meaning without a
+          // file — both in one command, so one undo restores both (FR-114i).
+          () => store.dispatch(setMemFileCmd(inst.refdes, { ramFile: null, ramLoad: false })),
+        );
+
+        const loadRow = el("div", "prop-row");
+        loadRow.appendChild(el("label", "prop-label", "load at start"));
+        const loadChk = el("input", "prop-check");
+        loadChk.type = "checkbox";
+        loadChk.checked = !!mem.ramLoad;
+        loadChk.disabled = locked || !mem.ramFile;
+        loadChk.addEventListener("change", () => {
+          store.dispatch(setMemFileCmd(inst.refdes, { ramLoad: loadChk.checked }));
+        });
+        loadRow.appendChild(loadChk);
+        container.appendChild(loadRow);
+      } else {
+        // A ROM has no Clear: with no content file it reads U (FR-114e).
+        fileRow("content file", mem.romFile ?? null, "none (reads U)", async () => {
+          const res = await openFileDialog({
+            mode: "open",
+            startPath,
+            title: "Choose ROM content file (.bin / .hex)",
+            exts: ["bin", "hex"],
+          });
+          if (res) store.dispatch(setMemFileCmd(inst.refdes, { romFile: res.path }));
+        });
+      }
     }
 
     // Port interface fields (FR-094, §6.14): a port carries an editable signal

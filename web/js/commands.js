@@ -27,6 +27,7 @@ import {
   setOverride,
   noteSize,
   refreshInstance,
+  ramFileOf,
   shiftWiring,
   rigidWiring,
   selectedConductorWiring,
@@ -163,8 +164,11 @@ export function placeComponent(type, x, y, rotation = 0) {
   let created = null; // plain-data clones of the instances, captured on first apply
   let refdes = null; // their reference designators
   let prevPrimary; // design.primaryClock before first apply (FR-076b)
-  return {
+  const cmd = {
     label: `Place ${type.name}`,
+    // The save files placement derived for any RAM among the new instances
+    // (FR-114h), for the caller to report; empty for everything else.
+    ramRenames: [],
     apply(design) {
       if (created === null) {
         prevPrimary = design.primaryClock;
@@ -176,6 +180,15 @@ export function placeComponent(type, x, y, rotation = 0) {
             : [addInstance(design, type, x, y, rotation)];
         refdes = made.map((inst) => inst.refdes);
         created = structuredClone(made);
+        // addInstance rewrote the type's one save-file path into this
+        // instance's own (FR-114h); report it against the path it came from.
+        cmd.ramRenames = made
+          .filter((inst) => ramFileOf(inst) && ramFileOf(inst) !== type.mem?.ramFile)
+          .map((inst) => ({
+            refdes: inst.refdes,
+            from: type.mem.ramFile,
+            to: ramFileOf(inst),
+          }));
       } else {
         for (const inst of created) design.components.push(structuredClone(inst));
       }
@@ -192,6 +205,7 @@ export function placeComponent(type, x, y, rotation = 0) {
       else design.primaryClock = prevPrimary;
     },
   };
+  return cmd;
 }
 
 // placeSubDesign embeds a child design as a sub-design instance (FR-098, §6.14).
@@ -229,14 +243,19 @@ export function placeSubDesign(opts, x, y) {
 // captures everything the paste appended (components, wires, buses, vertices,
 // and the post-paste internal id counters) and redo replays it verbatim. The
 // command exposes the pasted components' refdeses (`created`, set on apply) so
-// the caller can select them (FR-112).
+// the caller can select them (FR-112), and the RAM save-file rewrites the paste
+// made (`ramRenames`, FR-112a) so it can report them. Replaying `made` verbatim
+// keeps the derived paths stable across undo/redo, since they are part of the
+// captured components.
 export function pasteFragmentCmd(fragment, dx, dy) {
   let snap = null;
   let made = null; // additions captured on first apply, replayed on redo
   let ids = null; // post-paste internal id counters
+  let ramRenames = []; // FR-112a rewrites, captured on first apply
   const cmd = {
     label: "Paste",
     created: [],
+    ramRenames: [],
     apply(design) {
       if (snap === null) {
         snap = snapshotConnectivity(design);
@@ -253,6 +272,8 @@ export function pasteFragmentCmd(fragment, dx, dy) {
           nextVertexId: design.nextVertexId,
         };
         cmd.created = res.components.map((c) => c.refdes);
+        ramRenames = res.ramFiles;
+        cmd.ramRenames = ramRenames;
       } else {
         design.components.push(...structuredClone(made.components));
         design.wires.push(...structuredClone(made.wires));
@@ -261,6 +282,7 @@ export function pasteFragmentCmd(fragment, dx, dy) {
         design.nextWireId = ids.nextWireId;
         design.nextBusId = ids.nextBusId;
         design.nextVertexId = ids.nextVertexId;
+        cmd.ramRenames = ramRenames;
       }
     },
     revert(design) {
@@ -588,6 +610,32 @@ export function setPortPropsCmd(refdes, patch) {
     },
     revert(design) {
       Object.assign(findInstance(design, refdes), old);
+    },
+  };
+}
+
+// setMemFileCmd patches a memory instance's file bindings (FR-114i): the keys
+// supplied in `patch` — a ROM's `romFile`, a RAM's `ramFile`/`ramLoad` — are set
+// on that instance's own `typeData.mem`, never on the library type, so one
+// instance's binding cannot disturb another's or the part on disk. The prior
+// values of just those keys are captured once, so undo restores them; clearing a
+// RAM's save file therefore travels as one command ({ramFile: null,
+// ramLoad: false}) and one undo puts both back.
+export function setMemFileCmd(refdes, patch) {
+  let captured = false;
+  const old = {};
+  return {
+    label: "Edit memory file",
+    apply(design) {
+      const mem = findInstance(design, refdes).typeData.mem;
+      if (!captured) {
+        for (const k of Object.keys(patch)) old[k] = mem[k];
+        captured = true;
+      }
+      Object.assign(mem, patch);
+    },
+    revert(design) {
+      Object.assign(findInstance(design, refdes).typeData.mem, old);
     },
   };
 }

@@ -186,7 +186,7 @@
           "addressBits": 3,
           "dataWidth": 16,
           "locations": 8,
-          "ramFile": "regram.bin"
+          "ramFile": "regram-U3.bin"
         },
         "projectLocal": true
       },
@@ -375,7 +375,7 @@
           "addressBits": 3,
           "dataWidth": 16,
           "locations": 8,
-          "ramFile": "regram.bin"
+          "ramFile": "regram-U4.bin"
         },
         "projectLocal": true
       },

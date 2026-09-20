@@ -19,6 +19,27 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-09-20 — Memory file bindings are visible and editable in the properties panel (FR-114i)
+What: the properties panel gains a **Memory** section for any instance with a `mem` block — kind and geometry, a ROM's content file, a RAM's save file and load-on-start checkbox, with Choose…/Clear buttons driving the same `openFileDialog` the New memory device dialog uses. Edits go through a new `setMemFileCmd`, writing the selected instance's `typeData.mem` only, one undoable action, disabled while simulating.
+Why: user noticed a RAM's save file was nowhere in the UI. FR-114g had said the save file and load-on-start flag were "editable per placed instance" since 2026-07-08, but no editor was ever built — the specs were ahead of the code, and this closes the gap. The ROM's content file was silent on editing; the user asked for it to be editable too, so FR-114e now grants it. The section also makes FR-114h's derived paths inspectable: the creation-time tray line is momentary, the panel is permanent.
+Touches: FR-114i (new), FR-114e (per-instance editability), FR-114g (names the panel); design §6.11, traceability table
+
+## 2026-09-20 — examples/cpu: split the register RAMs onto their own save files
+What: `core.json`'s U3 and U4 both named `regram.bin`; they now name `regram-U3.bin` and `regram-U4.bin`, the paths FR-114h would derive today. Patched as raw strings rather than by a JSON round-trip, which would reformat the whole file; the parsed structure was checked to differ only in those two values. The `.gitignore` rule widened from `/examples/cpu/regram.bin` to `/examples/cpu/regram*.bin` to cover the pair.
+Why: FR-114h derives per-instance paths only when an instance is created, never at load, so this design kept the shared path that prompted the bug report. Harmless in practice here — neither instance sets `ramLoad`, so nothing ever read the shared file; the two only wrote it, with identical data.
+Touches: nothing in `requirements.md` or `design.md`. Files: `examples/cpu/core.json`, `.gitignore`.
+
+## 2026-09-20 — Every RAM instance gets its own save file, derived from its refdes (FR-114h)
+What: generalized the morning's paste-only rule (FR-112a) into FR-114h — a RAM save-file path is now derived from the instance's reference designator wherever an instance is created: **placement** (a palette drop of a save-file RAM type) as well as paste. The type's `regram.bin` placed as `U12` becomes `regram-U12.bin`. `derivedRamFile`/`ramFileOf`/`takenRamFiles` moved to `model/design.js` beside `addInstance`, and `clipboard.js` now imports them instead of owning them. Refresh Types (FR-088) preserves an instance's `ramFile`/`ramLoad`, as it already did `romFile` — otherwise a refresh would put every instance back onto the metatype's one path. Loading a design never re-derives: stored paths are honored as saved, since the data lives in the file the design names.
+Why: user request after the paste fix — "always derive the file name from the refdes". Placement had the identical bug: `addInstance` does `typeData: structuredClone(type)`, so two drops of one save-file RAM type produced two instances writing the same file.
+Touches: FR-114h (new), FR-112a (reduced to a pointer), FR-114g, FR-088; design §6.6, §6.15, traceability table
+
+## 2026-09-20 — Paste gives a copied RAM its own save file (FR-112a)
+What: pasting a RAM whose `mem` block has a save-file path (FR-114g) now derives a fresh path from the new refdes — `regram.bin` pasted as `U57` → `regram-U57.bin`, same directory and extension, an existing `-U<n>` stem suffix replaced rather than appended to, a numeric `-2`/`-3` added if the derived name is already taken by another RAM. `ramLoad` carries over unchanged and a ROM's `romFile` is never touched. Each rewrite is reported to the message tray.
+Why: user-reported bug. `pasteFragment` deep-cloned `typeData` verbatim, so a pasted RAM kept pointing at its source's save file and the two instances overwrote each other's contents at Stop. It happened to be harmless in the one design that exercised it — the CPU's parallel register RAMs, always written with identical data — and is not harmless in general.
+Notes: also corrected a stale sentence in design §6.15 that described `pasteFragmentCmd`'s redo as re-running `pasteFragment`; it has replayed the first apply verbatim since the FR-011c high-water allocator landed (the code comment in `commands.js` had it right).
+Touches: FR-112 (pointer), FR-112a (new), FR-114g (cross-reference); design §6.15, traceability table
+
 ## 2026-09-20 — Fit to Screen keyboard accelerator (bare `f`)
 What: View ▸ Fit to Screen now has an accelerator, shown in its menu row and bound in the global keydown handler above the simulation lock (live while simulating, like the zoom keys). Supersedes FR-004b/FR-022a's former "Fit to Screen has no accelerator".
 Why: requested as `Cmd+F`, which was implemented and **does not work** — Chrome holds `Cmd/Ctrl+F` for its find bar and never delivers it to the page, so `preventDefault` gets no chance to run. Rebound the same day to the unmodified `f`, chosen by the user: it matches the editor's existing menu-less canvas keys (`w`/`b`/`r`, FR-004c), involves the browser not at all, and leaves `Cmd/Ctrl+F` meaning find. This is the first accelerator with no modifier, so `accelLabel` grew a `plain` descriptor flag that renders the bare key.

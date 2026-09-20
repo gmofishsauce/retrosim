@@ -3,7 +3,14 @@
 // and ids (§6.15, FR-111/FR-112). Pure data operations — the session clipboard
 // itself and the paste interaction live in the interaction layer (§6.9).
 
-import { packageSiblings, allocRefNum, getVertex } from "./design.js";
+import {
+  packageSiblings,
+  allocRefNum,
+  getVertex,
+  derivedRamFile,
+  ramFileOf,
+  takenRamFiles,
+} from "./design.js";
 
 // interiorConductors returns the whole wires and buses whose conductor network's
 // component connections are *all* to components in `refSet` (the FR-018c interior
@@ -116,9 +123,11 @@ const REFDES_SERIES = [
 // siblings sharing one new U-number and keeping their letters — and every vertex,
 // wire, and bus gets a fresh id; interior connectivity (bus group connections and
 // bit names included) is reproduced among the pasted objects. A pasted port whose
-// label is still its original refdes (the default) adopts its new refdes. Returns
-// the created { components, wires, buses } so the caller can select them. The
-// input fragment is not mutated.
+// label is still its original refdes (the default) adopts its new refdes, and a
+// pasted RAM's save file is re-derived from its new refdes (FR-114h). Returns the
+// created { components, wires, buses } plus the save-file rewrites (`ramFiles`,
+// [{refdes, from, to}]) so the caller can select and report them. The input
+// fragment is not mutated.
 export function pasteFragment(design, fragment, dx, dy) {
   const f = structuredClone(fragment);
 
@@ -145,12 +154,29 @@ export function pasteFragment(design, fragment, dx, dy) {
   }
 
   // --- apply to components ---
+  // Save-file paths already spoken for: every RAM in the target design, joined
+  // by each one this paste derives, so a paste of several RAMs cannot collide
+  // with itself (FR-114h).
+  const taken = takenRamFiles(design);
+  const ramFiles = [];
   for (const c of f.components) {
     const oldRefdes = c.refdes;
     const newRefdes = refMap.get(oldRefdes);
     // A default-labelled port (label === its own refdes) re-anchors to its new
     // refdes so it forms its own net; a custom label is kept (FR-112).
     if (c.typeData?.renderType === "port" && c.label === oldRefdes) c.label = newRefdes;
+    // A copied RAM gets its own save file, never the source's (FR-114h) — the
+    // same derivation placement applies. The load-on-start flag rides along
+    // untouched: the derived file does not exist until this instance's first
+    // Stop writes it, and FR-114g makes that first load a non-fatal all-U
+    // power-up.
+    const from = ramFileOf(c);
+    if (from) {
+      const to = derivedRamFile(from, newRefdes, taken);
+      taken.add(to);
+      c.typeData.mem.ramFile = to;
+      ramFiles.push({ refdes: newRefdes, from, to });
+    }
     c.refdes = newRefdes;
     c.x += dx;
     c.y += dy;
@@ -185,5 +211,5 @@ export function pasteFragment(design, fragment, dx, dy) {
   design.wires.push(...f.wires);
   design.buses.push(...f.buses);
   design.components.push(...f.components);
-  return { components: f.components, wires: f.wires, buses: f.buses };
+  return { components: f.components, wires: f.wires, buses: f.buses, ramFiles };
 }

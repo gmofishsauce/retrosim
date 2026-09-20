@@ -177,3 +177,81 @@ test("pasteFragment does not mutate the source fragment (re-pasteable)", () => {
   );
   assert.equal(frag.components[0].x, 0);
 });
+
+// --- RAM save-file derivation on paste (FR-114h) ---
+
+function ramTy(ramFile, ramLoad = true) {
+  return {
+    name: "RAM 256×8",
+    width: 4,
+    height: 8,
+    pins: [
+      { name: "A0", side: "left", position: 1, direction: "in" },
+      { name: "D0", side: "right", position: 1, direction: "bidir" },
+    ],
+    mem: { kind: "ram", addressBits: 8, dataWidth: 8, locations: 256, ramFile, ramLoad },
+  };
+}
+
+function ramFileOfRefdes(design, refdes) {
+  return design.components.find((c) => c.refdes === refdes).typeData.mem.ramFile;
+}
+
+test("a pasted RAM gets its own save file, derived from its new refdes (FR-114h)", () => {
+  const d = createDesign("t");
+  addInstance(d, ramTy("/proj/regram.bin"), 0, 0, 0); // U1, itself derived at placement
+
+  const res = pasteFragment(d, extractFragment(d, ["U1"]), 10, 10); // U2
+  assert.equal(res.components[0].refdes, "U2");
+  assert.equal(ramFileOfRefdes(d, "U2"), "/proj/regram-U2.bin");
+  // the source is untouched, and load-on-start rides along
+  assert.equal(ramFileOfRefdes(d, "U1"), "/proj/regram-U1.bin");
+  assert.equal(d.components[1].typeData.mem.ramLoad, true);
+  // the rewrite is reported to the caller
+  assert.deepEqual(res.ramFiles, [
+    { refdes: "U2", from: "/proj/regram-U1.bin", to: "/proj/regram-U2.bin" },
+  ]);
+});
+
+test("a copy of a copy replaces the designator suffix instead of compounding (FR-114h)", () => {
+  const d = createDesign("t");
+  addInstance(d, ramTy("/proj/regram.bin"), 0, 0, 0); // U1
+  pasteFragment(d, extractFragment(d, ["U1"]), 10, 10); // U2 → regram-U2.bin
+  pasteFragment(d, extractFragment(d, ["U2"]), 20, 20); // U3, copied from U2
+
+  assert.equal(ramFileOfRefdes(d, "U3"), "/proj/regram-U3.bin");
+});
+
+test("pasting several RAMs at once gives each a distinct save file (FR-114h)", () => {
+  const d = createDesign("t");
+  addInstance(d, ramTy("/proj/regram.bin"), 0, 0, 0); // U1
+  addInstance(d, ramTy("/proj/regram.bin"), 10, 0, 0); // U2 — the parallel pair
+
+  // Placement already gave U1/U2 their own files; the paste gives U3/U4 theirs.
+  const res = pasteFragment(d, extractFragment(d, ["U1", "U2"]), 0, 20); // U3, U4
+  assert.deepEqual(
+    res.ramFiles.map((r) => r.to),
+    ["/proj/regram-U3.bin", "/proj/regram-U4.bin"],
+  );
+});
+
+test("a derived name already taken by another RAM takes a numeric suffix (FR-114h)", () => {
+  const d = createDesign("t");
+  addInstance(d, ramTy("/proj/regram.bin"), 0, 0, 0); // U1
+  const squatter = addInstance(d, ramTy("/other.bin"), 10, 0, 0); // U2
+  squatter.typeData.mem.ramFile = "/proj/regram-U3.bin"; // e.g. a hand-edited design
+
+  const res = pasteFragment(d, extractFragment(d, ["U1"]), 0, 20); // U3
+  assert.equal(res.ramFiles[0].to, "/proj/regram-U3-2.bin");
+});
+
+test("paste leaves a ROM's content file alone (FR-114h/FR-114e)", () => {
+  const d = createDesign("t");
+  const rom = ramTy(undefined);
+  rom.mem = { kind: "rom", addressBits: 8, dataWidth: 8, locations: 256, romFile: "/proj/cpurom.bin" };
+  addInstance(d, rom, 0, 0, 0); // U1
+
+  const res = pasteFragment(d, extractFragment(d, ["U1"]), 10, 10); // U2
+  assert.equal(d.components[1].typeData.mem.romFile, "/proj/cpurom.bin");
+  assert.deepEqual(res.ramFiles, []);
+});

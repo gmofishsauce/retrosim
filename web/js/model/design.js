@@ -135,6 +135,55 @@ export function typeIdentity(type) {
 // designator and a private copy of the type data (FR-011, FR-057). Built-in
 // objects (FR-067) use a separate A-<n> series (FR-011a); ICs use U<n>, ignoring
 // any trailing subunit letter so "U5A" counts as 5.
+// --- RAM save files (FR-114h) ---
+// A RAM's save file is per instance and never shared. These three helpers are
+// the whole rule, and they live here because placement (addInstance, below) is
+// one of its two application points; paste (model/clipboard.js, §6.15) imports
+// them for the other, rather than keeping a second copy that could drift.
+
+// A designator already tacked onto a save-file stem by an earlier derivation —
+// the suffix derivedRamFile appends. Matched so a copy of a copy replaces it
+// rather than growing another one.
+const REFDES_FILE_SUFFIX = /-(?:U\d+[A-Z]*|A-\d+|N-\d+|X\d+)$/;
+
+// ramFileOf returns a component's RAM save-file path, or null when it is not a
+// RAM or has no save file. A ROM's romFile is deliberately excluded: its content
+// is read-only and meant to be shared by every instance (FR-114e).
+export function ramFileOf(inst) {
+  const mem = inst?.typeData?.mem;
+  return mem?.kind === "ram" && mem.ramFile ? mem.ramFile : null;
+}
+
+// takenRamFiles collects the save files already spoken for in a design, so a
+// derivation can avoid them.
+export function takenRamFiles(design) {
+  const taken = new Set();
+  for (const c of design.components) {
+    const file = ramFileOf(c);
+    if (file) taken.add(file);
+  }
+  return taken;
+}
+
+// derivedRamFile builds one instance's own save-file path from the path it would
+// otherwise inherit (the type's, or the source instance's on a paste): same
+// directory and extension, stem rebuilt from the refdes, so `/p/regram.bin`
+// created as U57 becomes `/p/regram-U57.bin`. A collision with `taken` gets a
+// numeric suffix. Without this every instance of a save-file RAM type points at
+// one file and they overwrite each other's contents at Stop (FR-114g).
+export function derivedRamFile(path, refdes, taken = new Set()) {
+  const cut = path.lastIndexOf("/");
+  const dir = cut < 0 ? "" : path.slice(0, cut + 1);
+  const base = path.slice(cut + 1);
+  const dot = base.lastIndexOf(".");
+  const ext = dot <= 0 ? "" : base.slice(dot); // a leading dot is a name, not an ext
+  const stem = (dot <= 0 ? base : base.slice(0, dot)).replace(REFDES_FILE_SUFFIX, "");
+  const root = `${dir}${stem}-${refdes}`;
+  let candidate = `${root}${ext}`;
+  for (let n = 2; taken.has(candidate); n++) candidate = `${root}-${n}${ext}`;
+  return candidate;
+}
+
 export function addInstance(design, type, x, y, rotation) {
   // A text note (FR-071f) is a pure annotation: it consumes neither a U- nor an
   // A-number and shows no designator, but still needs a unique internal key for
@@ -175,6 +224,14 @@ export function addInstance(design, type, x, y, rotation) {
   if (type.renderType === "portN") {
     inst.label = refdes;
     inst.width = type.pins.length;
+  }
+  // A RAM's save file is per instance (FR-114h): this instance takes its own
+  // path, derived from its refdes, rather than the one path the type carries —
+  // otherwise two placements of the same RAM type write the same file and
+  // overwrite each other at Stop. `ramLoad` rides along untouched.
+  const inherited = ramFileOf(inst);
+  if (inherited) {
+    inst.typeData.mem.ramFile = derivedRamFile(inherited, refdes, takenRamFiles(design));
   }
   seedNcMarks(inst);
   design.components.push(inst);
@@ -333,6 +390,14 @@ export function refreshInstance(design, inst, libType, { noDrop = false } = {}) 
   // library metatype's creation-time path (FR-088).
   if (td.mem && inst.typeData.mem?.romFile != null) {
     td.mem.romFile = inst.typeData.mem.romFile;
+  }
+  // A RAM's save file is per-instance for a stronger reason (FR-114h): the
+  // instance's path was derived from its refdes at placement or paste, so
+  // adopting the metatype's would put every refreshed instance back onto one
+  // shared file. The load-on-start flag travels with it.
+  if (td.mem && inst.typeData.mem?.ramFile != null) {
+    td.mem.ramFile = inst.typeData.mem.ramFile;
+    td.mem.ramLoad = inst.typeData.mem.ramLoad;
   }
 
   // A multi-bit port's bit width is the other piece of per-instance state riding

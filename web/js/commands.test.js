@@ -19,6 +19,7 @@ import {
   composite,
   translateWiring,
   pasteFragmentCmd,
+  setMemFileCmd,
   setPrimaryClockCmd,
 } from "./commands.js";
 import { extractFragment } from "./model/clipboard.js";
@@ -688,6 +689,90 @@ test("pasteFragmentCmd redo replays the first-apply designators despite monotoni
   // A fresh placement after the redo continues past the high-water mark.
   store.dispatch(placeComponent(tyPins(), 90, 0, 0));
   assert.ok(store.design.components.some((c) => c.refdes === "U3"));
+});
+
+function ramTyPins() {
+  const ram = tyPins();
+  ram.mem = {
+    kind: "ram",
+    addressBits: 8,
+    dataWidth: 8,
+    locations: 256,
+    ramFile: "/proj/regram.bin",
+    ramLoad: true,
+  };
+  return ram;
+}
+
+test("setMemFileCmd edits one instance's binding, undoably (FR-114i)", () => {
+  const store = newStore();
+  store.dispatch(placeComponent(ramTyPins(), 0, 0, 0)); // U1 → regram-U1.bin
+  store.dispatch(placeComponent(ramTyPins(), 40, 0, 0)); // U2 → regram-U2.bin
+  const memOf = (refdes) =>
+    store.design.components.find((c) => c.refdes === refdes).typeData.mem;
+
+  store.dispatch(setMemFileCmd("U1", { ramFile: "/proj/chosen.bin", ramLoad: true }));
+  assert.equal(memOf("U1").ramFile, "/proj/chosen.bin");
+  assert.equal(memOf("U1").ramLoad, true);
+  // the sibling instance is untouched: the edit is per instance (FR-114i)
+  assert.equal(memOf("U2").ramFile, "/proj/regram-U2.bin");
+
+  // Clearing travels as one command, so one undo restores both keys.
+  store.dispatch(setMemFileCmd("U1", { ramFile: null, ramLoad: false }));
+  assert.equal(memOf("U1").ramFile, null);
+  assert.equal(memOf("U1").ramLoad, false);
+  store.undo();
+  assert.equal(memOf("U1").ramFile, "/proj/chosen.bin");
+  assert.equal(memOf("U1").ramLoad, true);
+  store.undo();
+  assert.equal(memOf("U1").ramFile, "/proj/regram-U1.bin");
+  assert.equal(memOf("U1").ramLoad, true);
+});
+
+test("placeComponent derives a dropped RAM's own save file and reports it (FR-114h)", () => {
+  const store = newStore();
+  const cmd = placeComponent(ramTyPins(), 0, 0, 0);
+  store.dispatch(cmd); // U1
+
+  const memOf = (refdes) =>
+    store.design.components.find((c) => c.refdes === refdes).typeData.mem;
+  assert.equal(memOf("U1").ramFile, "/proj/regram-U1.bin");
+  assert.deepEqual(cmd.ramRenames, [
+    { refdes: "U1", from: "/proj/regram.bin", to: "/proj/regram-U1.bin" },
+  ]);
+
+  // A second drop of the same type does not land on the first one's file.
+  store.dispatch(placeComponent(ramTyPins(), 40, 0, 0)); // U2
+  assert.equal(memOf("U2").ramFile, "/proj/regram-U2.bin");
+
+  // Redo re-pushes the captured instance, so the derived path does not drift.
+  store.undo();
+  store.redo();
+  assert.equal(memOf("U2").ramFile, "/proj/regram-U2.bin");
+});
+
+test("pasteFragmentCmd reports a copied RAM's derived save file, stable across undo/redo (FR-114h)", () => {
+  const store = newStore();
+  addInstance(store.design, ramTyPins(), 0, 0, 0); // U1 → regram-U1.bin at placement
+  const frag = extractFragment(store.design, ["U1"]);
+
+  const cmd = pasteFragmentCmd(frag, 50, 50);
+  store.dispatch(cmd); // U2
+  const memOf = (refdes) =>
+    store.design.components.find((c) => c.refdes === refdes).typeData.mem;
+  assert.equal(memOf("U2").ramFile, "/proj/regram-U2.bin");
+  assert.equal(memOf("U1").ramFile, "/proj/regram-U1.bin"); // source untouched
+  assert.deepEqual(cmd.ramRenames, [
+    { refdes: "U2", from: "/proj/regram-U1.bin", to: "/proj/regram-U2.bin" },
+  ]);
+
+  // Redo replays the captured components, so the derived path does not drift.
+  store.undo();
+  store.redo();
+  assert.equal(memOf("U2").ramFile, "/proj/regram-U2.bin");
+  assert.deepEqual(cmd.ramRenames, [
+    { refdes: "U2", from: "/proj/regram-U1.bin", to: "/proj/regram-U2.bin" },
+  ]);
 });
 
 // --- Primary clock maintenance (FR-076b) ---

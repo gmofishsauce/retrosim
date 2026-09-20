@@ -729,10 +729,12 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       }
       type = { ...placeType, ...portNFields(width) };
     }
-    store.dispatch(placeComponent(type, g.x, g.y, 0));
+    const placeCmd = placeComponent(type, g.x, g.y, 0);
+    store.dispatch(placeCmd);
     const placed = store.design.components[store.design.components.length - 1];
     setTool("select");
     select({ kind: "component", refdes: placed.refdes });
+    reportRamRenames(placeCmd.ramRenames);
     // A freshly placed note opens straight into text-entry (FR-071f).
     if (placed.typeData.renderType === "note") startNoteEdit(placed);
   }
@@ -898,6 +900,23 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     const created = cmd.created.map((refdes) => ({ kind: "component", refdes }));
     setTool("select"); // clears the ghost and disarms paste
     store.setSelection(created);
+    reportRamRenames(cmd.ramRenames);
+  }
+
+  // reportRamRenames announces the save files placement or paste derived for new
+  // RAM instances (FR-114h/FR-074) — the tray line is the user's only notice
+  // that the file is not the one named on the type. One line names the instance
+  // and its file; several are summarized, the tray being one line.
+  function reportRamRenames(renames) {
+    if (!renames?.length) return;
+    const fileName = (p) => p.slice(p.lastIndexOf("/") + 1);
+    postMessage(
+      renames.length === 1
+        ? `${renames[0].refdes}: RAM save file is now ${fileName(renames[0].to)} ` +
+          `(copied from ${fileName(renames[0].from)})`
+        : `${renames.length} RAMs were given their own save files: ` +
+          renames.map((r) => `${r.refdes} → ${fileName(r.to)}`).join(", "),
+    );
   }
 
   // wireTargetAt returns a wire endpoint spec for a click: a pin, or a branch on
