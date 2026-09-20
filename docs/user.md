@@ -107,7 +107,9 @@ The window has four regions plus a status bar:
   `Export…`, `Refresh Types`), the **Edit** menu (`Undo`, `Redo`, `Copy`, `Paste`),
   the **View** menu (`Zoom In`, `Zoom Out`, `Fit to Screen`, `Notes`, `Console`), and the **Tools**
   menu (`Test Vectors…`, `Generate C…`, `Design Rule Check`), followed by the tool buttons `Select`,
-  `Wire`, `Bus` and the `Run` button. Two more buttons appear when they apply:
+  **Wire** and **Bus** — the last two labelled with their tool's own cursor glyph
+  rather than text, so the button, the cursor and the conductor it draws all look
+  alike — and the `Run` button. Two more buttons appear when they apply:
   the pause/step controls while a clocked run is active
   ([Pausing and single-stepping](#pausing-and-single-stepping)), and `Probe`
   whenever the schematic is showing live values ([Probing a point](#probing-a-point)). Menu items with a standard keyboard shortcut
@@ -712,7 +714,10 @@ for a bus — the editable **name** field (see *Buses* below).
 
 Wires are single-bit nets, drawn as thin black lines.
 
-- Activate the **Wire** tool (the `Wire` button or press **`w`**). Click a **source pin**,
+- Activate the **Wire** tool (its toolbar button, or press **`w`**). The cursor
+  becomes the **wire cursor** — a thin black diagonal, like a wire, interrupted at
+  its middle by a small open dot marking the exact point you are drawing to.
+  Click a **source pin**,
   then a **destination pin**. As you move the cursor a rubber-band preview shows
   the proposed **Manhattan route**, which avoids passing under component bodies,
   avoids lying on top of existing wires and buses, prefers few corners, and meets
@@ -784,8 +789,12 @@ set of electrical nets independently of geometry.
 Buses carry N independent single-bit signals and are drawn as thick blue lines
 with a `/N` width annotation.
 
-- Use the **Bus** tool (or press **`b`**). Drawing, bends, branching, and
-  **locked waypoints** (click empty canvas to lock a corner) work just like wires.
+- Use the **Bus** tool (its toolbar button, or press **`b`**). The cursor becomes
+  the **bus cursor**: the wire cursor's counterpart, drawn thick and blue the way
+  a bus itself is, with the same open dot marking the point you are drawing to. So
+  the two cursors tell you which kind of conductor you are about to draw without
+  looking away from the canvas. Drawing, bends, branching, and **locked waypoints**
+  (click empty canvas to lock a corner) work just like wires.
   A bus is completed by clicking a pin group, an existing bus/wire, or a component
   body — **not** by clicking empty space, which adds a waypoint. (A bus may still
   *start* in empty space.)
