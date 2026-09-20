@@ -234,6 +234,36 @@ function conductorTarget(design, cond) {
     : { kind: "wire", id: cond.id };
 }
 
+// bodySnapTarget resolves a bus endpoint placed by clicking a component BODY to
+// the very same `kind:"group"` target the proximity path yields (FR-042b) — apex,
+// group name and claimed-block width — when exactly one of the component's pin
+// groups accepts the bus (FR-041a). Null for **zero** accepting groups (the
+// endpoint stays free at the clicked point, FR-043) and for **two or more** (the
+// user has not chosen yet, FR-041b, so the disambiguation stays at commit, where
+// there is finally something truthful to show).
+//
+// Resolving this at the placing click rather than at commit is what makes a bus
+// *source* honest: the rubber band then anchors at the apex the bus will connect
+// at, draws that group's brace (FR-042b), routes with the apex escape (FR-027c),
+// and adopts the block's width (FR-042c). Resolved late, the whole drag was
+// anchored wherever the body happened to be clicked and the commit moved the
+// endpoint to an apex that could be at the far end of the part. Exported for
+// testing.
+export function bodySnapTarget(design, inst, width) {
+  const accepting = groupsAcceptingBus(design, inst, width);
+  if (accepting.length !== 1) return null;
+  const { group, block } = accepting[0];
+  const brace = busGroupBrace(inst, block);
+  return {
+    kind: "group",
+    refdes: inst.refdes,
+    group: group.name,
+    x: brace.apex.x,
+    y: brace.apex.y,
+    busWidth: block.length,
+  };
+}
+
 // planBusEndpoint converts a bus endpoint target into an addBus endpoint spec, an
 // optional snap directive, and the list of accepting pin groups (FR-041/FR-041c).
 // A component target with exactly one accepting group auto-snaps (FR-041a); with
@@ -348,16 +378,31 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     return rotateOffset(out.x, out.y, inst.rotation);
   }
 
-  // routerEndpoint turns a wire endpoint spec into a router endpoint (§6.9a):
-  // a pin's on-grid point plus its escape direction; anything else its plain
-  // world point.
+  // routerEndpoint turns a conductor endpoint spec into a router endpoint
+  // (§6.9a). It is the single place an `escape` (facing direction) and an
+  // `owner` (the endpoint's component, for the search-bounds widening) are
+  // attached, so preview and commit always route from the same thing.
+  //
+  // A `pin` contributes its on-grid point plus the pin side's outward normal.
+  // A `group` — a bus endpoint snapped to a pin group — contributes the claimed
+  // block's brace apex plus the brace's outward normal (FR-027c/FR-042a), so
+  // the bus meets the point of the curly brace head-on rather than crossing its
+  // two splines broadside. Everything else (a free point, a waypoint, a branch
+  // onto an existing conductor) is a plain world point with no facing direction.
   function routerEndpoint(src) {
     if (src.kind === "pin") {
       const inst = store.design.components.find((c) => c.refdes === src.refdes);
       if (!inst) return null;
       const w = pinWorldPos(inst, src.pin);
       const escape = pinEscapeWorld(inst, src.pin);
-      return escape ? { ...w, escape } : w;
+      return escape ? { ...w, escape, owner: src.refdes } : { ...w, owner: src.refdes };
+    }
+    if (src.kind === "group") {
+      // Recomputed from current design state, so the apex is the one commitBus
+      // will place here and snapBusGroup will claim (FR-041c).
+      const brace = busBrace(src.refdes, src.group, src.busWidth);
+      if (brace) return { ...brace.apex, escape: brace.out, owner: src.refdes };
+      return { x: src.x, y: src.y }; // group gone: fall back to the bare point
     }
     return { x: src.x, y: src.y };
   }
@@ -377,7 +422,11 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     const from = routerEndpoint(srcSpec);
     let to = { x: g.x, y: g.y };
     let toVisual = null;
-    const ph = hitPin(store.design, world);
+    // Snapping to a hovered pin is WIRE-only (FR-027a): busTargetAt never yields
+    // a pin target, so in BUS mode this would draw a neat escaped approach to a
+    // pin the click cannot commit on. A bus's pin-group apex reaches the preview
+    // through busGroupHoverPreview instead.
+    const ph = store.state.tool === "bus" ? null : hitPin(store.design, world);
     if (ph) {
       const inst = store.design.components.find((c) => c.refdes === ph.refdes);
       if (inst) {
@@ -1020,6 +1069,10 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     }
     const comp = hitComponent(store.design, world);
     if (comp) {
+      // An unambiguous body click resolves to a group target right here rather
+      // than at commit (FR-041a); anything else stays a body target.
+      const snap = bodySnapTarget(store.design, comp, width);
+      if (snap) return snap;
       return { kind: "component", refdes: comp.refdes, type: comp.typeData, x: g.x, y: g.y };
     }
     return { kind: "free", x: g.x, y: g.y };
@@ -1050,7 +1103,13 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     }
     const a = planBusEndpoint(store.design, srcTarget, width);
     const b = planBusEndpoint(store.design, dstTarget, width);
+    // Two parallel endpoint specs. `specs` goes to the command, where a snapped
+    // end is a plain free point at the apex — the connection is recorded as the
+    // group binding, not as geometry (FR-042). `routeSpecs` goes to the router,
+    // where a snapped end keeps its group identity so routerEndpoint can recover
+    // the brace's outward normal and approach the apex head-on (FR-027c).
     const specs = { a: a.spec, b: b.spec };
+    const routeSpecs = { a: a.spec, b: b.spec };
     const snaps = [];
     for (const [end, plan] of [
       ["a", a],
@@ -1064,29 +1123,39 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       if (snap) {
         snaps.push({ end, ...snap });
         // Place the snapped endpoint at the brace apex (FR-042a) so the bus
-        // terminates there; the connection itself is the recorded group binding.
-        const apex = busApex(snap.refdes, snap.group, width);
-        if (apex) specs[end] = { kind: "free", x: apex.x, y: apex.y };
+        // terminates there. Recomputed from current design state to match the
+        // block snapBusGroup will claim (FR-041c).
+        const brace = busBrace(snap.refdes, snap.group, width);
+        if (brace) {
+          specs[end] = { kind: "free", x: brace.apex.x, y: brace.apex.y };
+          routeSpecs[end] = {
+            kind: "group",
+            refdes: snap.refdes,
+            group: snap.group,
+            busWidth: width,
+            x: brace.apex.x,
+            y: brace.apex.y,
+          };
+        }
       }
     }
     store.dispatch(
-      addBusCmd(specs.a, specs.b, width, snaps, prunedLegBends([specs.a, ...waypointSpecs(), specs.b]), offset),
+      addBusCmd(
+        specs.a,
+        specs.b,
+        width,
+        snaps,
+        prunedLegBends([routeSpecs.a, ...waypointSpecs(), routeSpecs.b]),
+        offset,
+      ),
     );
-  }
-
-  // busApex returns the brace apex (FR-042a) of the pack-low block a width-`width`
-  // bus would claim on a component's pin group — the attachment point the snapped
-  // bus endpoint is placed at. Recomputed from current design state to match the
-  // block snapBusGroup will claim (FR-041c).
-  function busApex(refdes, groupName, width) {
-    const brace = busBrace(refdes, groupName, width);
-    return brace ? brace.apex : null;
   }
 
   // busBrace returns the full group-snap brace ({a, b, apex}, FR-042a) of the
   // pack-low block a width-`width` bus would claim on a component's pin group, or
   // null if the group is gone or has no free block. Recomputed from current design
-  // state. Drives both busApex and the in-progress source-brace preview (FR-042b).
+  // state. Drives the snapped endpoint's placement and its routed apex escape
+  // (§6.9a), plus the in-progress source-brace preview (FR-042b).
   function busBrace(refdes, groupName, width) {
     const inst = store.design.components.find((c) => c.refdes === refdes);
     const group = inst && (inst.typeData.pinGroups ?? []).find((g) => g.name === groupName);
@@ -1112,7 +1181,10 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     const apex = near.brace.apex;
     if (!anchor) return { brace: near.brace }; // before the first click: brace only
     const from = routerEndpoint(srcSpec);
-    const route = from ? proposeRoute(store.design, from, apex) : null;
+    // The apex is a terminal with a facing direction (FR-027c/FR-042a): enter it
+    // along the brace's outward normal, not across the splines.
+    const to = { ...apex, escape: near.brace.out, owner: near.inst.refdes };
+    const route = from ? proposeRoute(store.design, from, to) : null;
     const points = route ? [...route] : [anchor, apex];
     points[0] = anchor; // draw from the live leg's (visual) anchor (FR-013d)
     points[points.length - 1] = apex; // terminate exactly at the apex

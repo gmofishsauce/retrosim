@@ -2,8 +2,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { proposeRoute, rerouteAttachedWires } from "./router.js";
+import { proposeRoute, rerouteAttachedConductors } from "./router.js";
 import { componentBBox } from "./hittest.js";
+import { busGroupBrace } from "../model/design.js";
 import { rotateOffset } from "../geometry.js";
 
 // comp builds a minimal component instance; only the outline matters here.
@@ -288,7 +289,7 @@ test("a bus is an obstacle to wire routing just like a wire (FR-027d)", () => {
   assert.ok(path.length > 2, "expected a detour around the bus");
 });
 
-// --- rerouteAttachedWires (FR-099c) ---
+// --- rerouteAttachedConductors (FR-099c) ---
 
 // A pinned instance pair with a simple wire carrying stale dog-leg bends, as a
 // re-laid-out sub-design leaves behind (§6.14).
@@ -321,27 +322,26 @@ function staleWireFixture() {
   return { d: { components: [x1, u9], wires: [w], buses: [], vertices: [va, vb] }, w };
 }
 
-test("rerouteAttachedWires replaces a simple wire's stale bends (FR-099c)", () => {
+test("rerouteAttachedConductors replaces a simple wire's stale bends (FR-099c)", () => {
   const { d, w } = staleWireFixture();
-  const n = rerouteAttachedWires(d, ["X1"]);
-  assert.equal(n, 1);
+  assert.deepEqual(rerouteAttachedConductors(d, ["X1"]), { wires: 1, buses: 0 });
   assert.equal(w.path[0].v, "va"); // endpoint node refs preserved (connectivity)
   assert.equal(w.path[w.path.length - 1].v, "vb");
   assert.ok(w.path.slice(1, -1).every((p) => p.t === "bend"));
   assert.ok(!w.path.some((p) => p.t === "bend" && p.y === 7), "stale bends replaced");
 });
 
-test("rerouteAttachedWires skips unrelated and tapped wires; routes dangling ends (FR-099c)", () => {
+test("rerouteAttachedConductors skips unrelated and tapped wires; routes dangling ends (FR-099c)", () => {
   const { d, w } = staleWireFixture();
   // Unrelated: neither endpoint on a listed instance.
-  assert.equal(rerouteAttachedWires(d, ["X2"]), 0);
+  assert.equal(rerouteAttachedConductors(d, ["X2"]).wires, 0);
   assert.equal(w.path.length, 4); // untouched
   // Tapped: an interior node (junction) disqualifies the wire.
   const before = JSON.stringify(w.path);
   const vj = { id: "vj", kind: "junction", x: 5, y: 3 };
   d.vertices.push(vj);
   w.path.splice(2, 0, { t: "node", v: "vj" });
-  assert.equal(rerouteAttachedWires(d, ["X1"]), 0);
+  assert.equal(rerouteAttachedConductors(d, ["X1"]).wires, 0);
   w.path.splice(2, 1);
   assert.equal(JSON.stringify(w.path), before);
   // A free (dangling) far endpoint keeps its own point but the wire still
@@ -353,6 +353,183 @@ test("rerouteAttachedWires skips unrelated and tapped wires; routes dangling end
     path: [{ t: "node", v: "va" }, { t: "bend", x: 1, y: 9 }, { t: "node", v: "vf" }],
   };
   d.wires.push(w2);
-  assert.equal(rerouteAttachedWires(d, ["X1"]), 2); // w and w2 both qualify
+  assert.equal(rerouteAttachedConductors(d, ["X1"]).wires, 2); // w and w2 both qualify
   assert.ok(!w2.path.some((p) => p.t === "bend" && p.y === 9));
+});
+
+// --- Endpoints that sit clear of their own body: the bus brace apex (§6.9a) ---
+
+// busPart builds an instance with a `width`-pin group down its right edge, the
+// shape busGroupBrace expects (FR-063a: one side, contiguous). The group's brace
+// apex is the bus attachment point (FR-042a) and sits BUS_BRACE_DEPTH clear of
+// the outline — unlike a pin's grid point, which lies on it.
+function busPart(x, y, w, h, bits, rotation = 0, refdes = "U1") {
+  const pins = [];
+  for (let i = 0; i < bits; i++) {
+    pins.push({ name: "D" + i, side: "right", position: i + 1, number: i + 1 });
+  }
+  return {
+    refdes,
+    x,
+    y,
+    rotation,
+    typeData: {
+      width: w,
+      height: h,
+      pins,
+      pinGroups: [{ name: "D", pins: pins.map((p) => p.name) }],
+    },
+  };
+}
+
+test("owner widens the bounds for an endpoint clear of its own body (§6.9a)", () => {
+  // A 10x10 part; both endpoints sit 2 units clear of it (as a brace apex does),
+  // on opposite sides, so the only route is around the top or the bottom. Without
+  // the owner the bounds are the endpoints' own row padded by SEARCH_PAD — a
+  // corridor the body blocks end to end — and no route exists.
+  const d = design(comp(0, 0, 10, 10));
+  const from = { x: -2, y: 5, escape: { x: -1, y: 0 } };
+  const to = { x: 12, y: 5, escape: { x: 1, y: 0 } };
+  assert.equal(proposeRoute(d, from, to), null, "no loop-around room without owner");
+
+  const path = proposeRoute(d, { ...from, owner: "U1" }, { ...to, owner: "U1" });
+  assertValid(path, from, to, d);
+  // It got around the part, not through it.
+  const ys = [...pointsAlong(path)].map((p) => p.y);
+  assert.ok(Math.min(...ys) < 0 || Math.max(...ys) > 10, "route never cleared the body");
+});
+
+// braceFixture returns a part, its group brace, and a source point offset along
+// the PIN ROW from the apex (the brace tangent). From there the cheap route is a
+// straight run that arrives across the brace's splines, so the fixture is what
+// distinguishes an enforced head-on approach from a lucky one.
+function braceFixture(rotation) {
+  const inst = busPart(20, 20, 10, 10, 4, rotation);
+  const brace = busGroupBrace(inst, ["D0", "D1", "D2", "D3"]);
+  const apex = { x: brace.apex.x, y: brace.apex.y };
+  const t = { x: -brace.out.y, y: brace.out.x }; // along the pin row
+  return {
+    d: design(inst),
+    inst,
+    brace,
+    apex,
+    from: { x: apex.x + 9 * t.x, y: apex.y + 9 * t.y },
+  };
+}
+
+// entersAlong reports whether the route's last step runs INTO the endpoint
+// against its outward normal — the bus coming down the brace's axis, not across it.
+function entersAlong(path, out) {
+  const [a, b] = [path[path.length - 2], path[path.length - 1]];
+  return sgn(b.x - a.x) === sgn(-out.x) && sgn(b.y - a.y) === sgn(-out.y);
+}
+
+test("a bus meets the brace apex head-on, along the brace normal (FR-027c/FR-042a)", () => {
+  for (const rotation of [0, 90, 180, 270]) {
+    const { d, inst, brace, apex, from } = braceFixture(rotation);
+    const to = { ...apex, escape: brace.out, owner: inst.refdes };
+    const path = proposeRoute(d, from, to);
+    assertValid(path, from, apex, d);
+    assert.ok(
+      entersAlong(path, brace.out),
+      `rotation ${rotation}: route did not enter the apex along the brace normal`,
+    );
+  }
+});
+
+test("without the apex escape the route arrives across the brace (FR-042a rationale)", () => {
+  // The same geometry with a bare apex: the router runs straight down the pin row
+  // and turns into the apex sideways — the artifact the escape exists to prevent.
+  // Guards the test above against passing vacuously.
+  const { d, brace, apex, from } = braceFixture(0);
+  const path = proposeRoute(d, from, apex);
+  assert.ok(
+    !entersAlong(path, brace.out),
+    "expected the unconstrained route to arrive off-axis",
+  );
+});
+
+// --- FR-099c: buses, and the endpoint re-seat (§6.14) ---
+
+// staleBusFixture is a group-snapped bus left where an interface change would
+// leave it: the binding still resolves, so the brace is drawn at the CURRENT
+// apex, but the endpoint vertex and the bends are those of the old layout.
+function staleBusFixture() {
+  const inst = busPart(20, 20, 10, 10, 4);
+  const brace = busGroupBrace(inst, ["D0", "D1", "D2", "D3"]);
+  const apex = brace.apex;
+  const va = { id: "va", kind: "free", x: apex.x, y: apex.y + 4 }; // stale: off the apex
+  const vb = { id: "vb", kind: "free", x: apex.x + 12, y: apex.y + 12 };
+  const bus = {
+    id: "b1",
+    width: 4,
+    path: [
+      { t: "node", v: "va" },
+      { t: "bend", x: apex.x, y: apex.y + 12 },
+      { t: "node", v: "vb" },
+    ],
+    groupConnections: [
+      { vertex: "va", instance: inst.refdes, group: "D", bitMap: ["D0", "D1", "D2", "D3"] },
+    ],
+  };
+  return {
+    d: { components: [inst], wires: [], buses: [bus], vertices: [va, vb] },
+    inst,
+    bus,
+    va,
+    vb,
+    brace,
+    apex,
+  };
+}
+
+test("a group-snapped bus is re-seated on the current apex and re-routed (FR-099c)", () => {
+  const { d, bus, va, brace, apex } = staleBusFixture();
+  assert.deepEqual(rerouteAttachedConductors(d, ["U1"]), { wires: 0, buses: 1 });
+  // Re-seated: the endpoint vertex is the apex the brace is drawn at now.
+  assert.deepEqual({ x: va.x, y: va.y }, { x: apex.x, y: apex.y });
+  // Connectivity untouched: same endpoint node refs, same binding.
+  assert.equal(bus.path[0].v, "va");
+  assert.equal(bus.path[bus.path.length - 1].v, "vb");
+  assert.equal(bus.groupConnections.length, 1);
+  assert.ok(bus.path.slice(1, -1).every((p) => p.t === "bend"));
+  // And it leaves the apex along the brace normal (FR-027c), not across it.
+  const byId = new Map(d.vertices.map((v) => [v.id, v]));
+  const world = bus.path.map((p) => (p.t === "bend" ? p : byId.get(p.v)));
+  assert.equal(sgn(world[1].x - world[0].x), sgn(brace.out.x));
+  assert.equal(sgn(world[1].y - world[0].y), sgn(brace.out.y));
+});
+
+test("an unroutable bus is still re-seated, keeping its old bends (FR-099c)", () => {
+  const { d, bus, va, apex, brace } = staleBusFixture();
+  // Wall off the apex's escape cell, so proposeRoute gives up (the escape step
+  // would run into a body).
+  d.components.push(comp(apex.x + brace.out.x, apex.y + brace.out.y, 1, 1, 0, "U2"));
+  const bendsBefore = JSON.stringify(bus.path);
+  assert.deepEqual(rerouteAttachedConductors(d, ["U1"]), { wires: 0, buses: 1 });
+  assert.deepEqual({ x: va.x, y: va.y }, { x: apex.x, y: apex.y }, "re-seated anyway");
+  assert.equal(JSON.stringify(bus.path), bendsBefore, "old bends kept");
+});
+
+test("buses not bound to a changed instance, and tapped buses, are left alone (FR-099c)", () => {
+  const { d, bus, va } = staleBusFixture();
+  const before = { x: va.x, y: va.y, path: JSON.stringify(bus.path) };
+  // Bound to U1, not to the instance that changed.
+  assert.deepEqual(rerouteAttachedConductors(d, ["X9"]), { wires: 0, buses: 0 });
+  assert.deepEqual({ x: va.x, y: va.y }, { x: before.x, y: before.y });
+  assert.equal(JSON.stringify(bus.path), before.path);
+  // A tap along the bus disqualifies it, exactly as it does a wire.
+  d.vertices.push({ id: "vj", kind: "junction", x: 0, y: 0, bit: 1 });
+  bus.path.splice(1, 0, { t: "node", v: "vj" });
+  assert.deepEqual(rerouteAttachedConductors(d, ["U1"]), { wires: 0, buses: 0 });
+  assert.deepEqual({ x: va.x, y: va.y }, { x: before.x, y: before.y });
+});
+
+test("a bus with no group connection is never touched (FR-099c)", () => {
+  // Nothing binds it to an instance, so no refdes list can select it.
+  const { d, bus, va } = staleBusFixture();
+  bus.groupConnections = [];
+  const before = JSON.stringify([va, bus.path]);
+  assert.deepEqual(rerouteAttachedConductors(d, ["U1"]), { wires: 0, buses: 0 });
+  assert.equal(JSON.stringify([va, bus.path]), before);
 });

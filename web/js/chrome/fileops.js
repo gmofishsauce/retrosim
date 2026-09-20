@@ -19,7 +19,7 @@ import { saveDesign as apiSave, loadDesign as apiLoad } from "../api.js";
 import { openFileDialog, chooseRenderDialog } from "./dialogs.js";
 import { isManifestName } from "./project.js";
 import { postMessage } from "./statusbar.js";
-import { rerouteAttachedWires } from "../engine/router.js";
+import { rerouteAttachedConductors } from "../engine/router.js";
 
 function toast(msg) {
   const el = document.createElement("div");
@@ -215,11 +215,13 @@ export function makeFileOps({
       }
       const { changed } = await resolveSubDesigns(loaded, (childPath) => apiLoad(childPath), toast);
       // A child whose interface changed since this parent was saved re-lays-out
-      // its pins; re-route the stale simple wires (FR-099c, load-time
+      // its pins; re-route the stale simple wires and buses (FR-099c, load-time
       // normalization — before replaceDesign, so no dirty mark and no undo).
       for (const refdes of changed) {
-        const n = rerouteAttachedWires(loaded, [refdes]);
-        toast(`sub-design ${refdes}: interface changed; ${n} wire${n === 1 ? "" : "s"} re-routed`);
+        const { wires, buses } = rerouteAttachedConductors(loaded, [refdes]);
+        const parts = [`${wires} wire${wires === 1 ? "" : "s"}`];
+        if (buses) parts.push(`${buses} bus${buses === 1 ? "" : "es"}`);
+        toast(`sub-design ${refdes}: interface changed; ${parts.join(" and ")} re-routed`);
       }
       // Immediately before the swap, so a Cancel abandons a fully-prepared load
       // rather than leaving a half-replaced canvas (FR-115m/OQ-002).

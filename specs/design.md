@@ -1800,6 +1800,21 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   FR-027a behavior. The destination click passes the *current* proposal's
   interior corners to `AddWire`/`AddBus` as initial bend points — thereafter
   they are indistinguishable from manually inserted bends (FR-031–FR-033).
+  **Destination snapping is tool-gated (FR-027a):** `previewRoute` re-targets the
+  live leg to a hovered **pin** — escape and visual attachment point and all — only
+  in `WIRE` (including the FR-027b select-mode wire), because only a wire can
+  commit there. In `BUS` it does not, since `busTargetAt` never yields a pin
+  target; the bus preview runs to the cursor, and a pin-group apex reaches it
+  through `busGroupHoverPreview` instead. Without the gate the bus preview drew a
+  neat escaped approach to any hovered pin while the click committed a
+  component-body or free target somewhere else entirely — the same
+  preview-promises-what-commit-produces rule the breakout taps already obey
+  (below). (Gate added 2026-09-20.)
+  `routerEndpoint` is the single place a spec becomes a router endpoint, and the
+  single place an `escape`/`owner` is attached (§6.9a): `kind:"pin"` yields the
+  pin grid point, `pinEscapeWorld`, and the pin's refdes; `kind:"group"` yields
+  the block's brace apex, `busGroupBrace().out`, and the group's refdes
+  (FR-042a); everything else stays a bare point.
 - **Locked waypoints (FR-027e):** the FSM holds `wireWaypoints` (an array of
   grid points) alongside `wireSource`, cleared by `resetInteraction`. While a
   conductor is in progress, an empty-canvas click (`wireTargetAt` → `null` for
@@ -1880,10 +1895,28 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     the **disambiguation dialog** (§6.11), choose by name (cancel → unconnected,
     FR-041b). Within one group the pack-low block is the single placement, so the
     dialog never disambiguates positions.
+    The **1** case is resolved by `bodySnapTarget` inside `busTargetAt`, not at
+    commit (FR-041a): the body target is rewritten to the same `kind:"group"`
+    target the proximity path yields — apex, group name and block width — so the
+    two ways of landing on a group are one code path downstream. Resolving it late was invisible for
+    a *destination* click (that click is the commit) but wrong for a **source**:
+    the rubber band anchored at the clicked point and routed from it for the whole
+    drag, then the commit moved the endpoint to an apex that could be at the far
+    end of the part. `planBusEndpoint` still handles the **0** and **≥2** cases at
+    commit — with two or more groups the user has not chosen yet, so there is
+    nothing truthful to preview. (Early resolution added 2026-09-20.)
   A snap stores a `groupConnection` whose `bitMap` is the claimed block (bit *i* →
   `block[i]`, FR-042) and, if the bus has no `bitNames`, adopts that block's pin
   names (FR-037b). The snapped endpoint is placed at the block's brace apex
-  (`busGroupBrace`, §6.8/FR-042a). `snapBusGroup` recomputes the pack-low block from
+  (`busGroupBrace`, §6.8/FR-042a), and **routed to along the brace's outward
+  normal** (FR-027c): `commitBus` rewrites a snapped endpoint's *command* spec to
+  a plain `kind:"free"` apex point — the command records the binding as group
+  metadata, not geometry — but hands `prunedLegBends` a parallel **router** spec
+  that keeps `kind:"group"`, so `routerEndpoint` can still recover the apex
+  escape. Preview and commit therefore route identically; `busGroupHoverPreview`
+  passes the apex with `escape: brace.out` directly. (Apex escape added
+  2026-09-20; supersedes routing to a bare apex point, which let the bus arrive
+  broadside through the brace glyph.) `snapBusGroup` recomputes the pack-low block from
   current design state, so it matches what the feedback showed and sequential snaps
   in one commit pack correctly.
 - **Breakout (FR-043a/FR-043b):** in WIRE mode, clicking a **bus** segment creates a
@@ -2036,13 +2069,33 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   - `proposeRoute(design, from, to) → [{x,y}, …] | null` — grid-unit world
     coordinates from `from` to `to` inclusive; interior points are the proposed
     corners. `from`/`to` carry an optional `escape` direction (a unit vector)
-    when the endpoint is a pin: the route's first/last step must leave the pin
-    in its facing direction, away from the component body (rotation-aware).
-    Returns `null` when no route is found — the caller falls back to the
-    straight line (FR-027c).
+    when the endpoint has a facing direction: the route's first/last step must
+    leave/enter the endpoint along it. Two kinds of endpoint supply one — a
+    **pin**, whose escape is its side's outward normal, away from the body
+    (rotation-aware), and a **bus endpoint snapped to a pin group**, whose
+    escape is the brace's outward normal `busGroupBrace().out` (§6.8, FR-042a),
+    so the bus meets the apex head-on instead of crossing the splines. The
+    router is agnostic about which: `escape` always points *away* from the
+    endpoint, and the route enters along its negation, so the apex needs no
+    sign flip. They also carry an optional **`owner`** — the refdes of the
+    instance the endpoint belongs to — used only to widen the search bounds
+    (see Algorithm). Returns `null` when no route is found — the caller falls
+    back to the straight line (FR-027c). (Escape extended beyond pins
+    2026-09-20, FR-027c/FR-042a.)
 - **Algorithm:** A* over grid cells restricted to the bounding box of
   `from`/`to` plus a fixed padding (a few grid units, enough to loop around an
-  endpoint's own component). Obstacle cells are the rotated bounding outlines
+  endpoint's own component), **unioned with the outline of each endpoint's own
+  component** so a route always has room to loop around the part it starts or
+  ends on. That component is identified by the endpoint's `owner` refdes when
+  the caller supplies one, and otherwise by `hitComponent` on the endpoint
+  point. The `owner` fallback exists because the point test only finds a
+  component the endpoint actually *sits on*: a pin's grid point lies on the
+  body outline and hits, but a **bus apex sits `BUS_BRACE_DEPTH` units clear of
+  it** and hits nothing, so a group-snapped bus got only the bare padding and
+  degraded to the straight fallback whenever it needed to loop around its own
+  part — the more so now that the apex escape further constrains the search.
+  (Owner-keyed widening added 2026-09-20; supersedes deriving the widening
+  solely from `hitComponent`.) Obstacle cells are the rotated bounding outlines
   of all component instances (the same rectangles hit-testing uses, §6.9), so
   routes never pass under a body; the route's own endpoints are always
   traversable so a pin on a body edge can escape. In addition (FR-027d), the
@@ -3447,7 +3500,7 @@ no sequential part could ever leave U.)
   `busGroupBrace` (§6.6) resolves every `bitMap` pin on **every frame**, a
   renamed multi-bit child port threw in the render loop and killed the
   application — the failure mode §7.4's drop-and-report rule exists to prevent.
-- **Interface-change re-route (FR-099c):** each instance carries `iface` — the `designInterface` array it was placed/last saved with (`addSubDesignInstance` sets it; §7.2 persists it; the comparison record FR-099c allows, never used for rendering or simulation). `resolveSubDesigns` deep-compares the freshly resolved interface against it: on a difference it updates `iface`, reports the instance, and returns the changed refdes list (`{ changed }`). `loadIntoStore` then calls `rerouteAttachedWires(design, changed)` (`engine/router.js`): for every **simple** wire — a two-point path whose ends are both `node` refs and which passes through no junction vertex — with an endpoint `pin`/`connector` vertex on a changed instance, propose a fresh route between the endpoints' derived world positions (escape vectors from the pins' rotated sides, as interaction's `routerEndpoint` does) and replace the wire's interior points, keeping the endpoint node refs; a null route keeps the old bends. Runs before `store.replaceDesign`, so like the FR-099b dangling rewrite it is load-time normalization — no command, no undo, no dirty mark. An instance with no stored `iface` (a pre-FR-099c file) skips the comparison and gains the field at the next save.
+- **Interface-change re-route (FR-099c):** each instance carries `iface` — the `designInterface` array it was placed/last saved with (`addSubDesignInstance` sets it; §7.2 persists it; the comparison record FR-099c allows, never used for rendering or simulation). `resolveSubDesigns` deep-compares the freshly resolved interface against it: on a difference it updates `iface`, reports the instance, and returns the changed refdes list (`{ changed }`). `loadIntoStore` then calls `rerouteAttachedConductors(design, changed)` (`engine/router.js`): for every **simple** conductor — a two-point path whose ends are both `node` refs and which passes through no junction vertex — attached to a changed instance, propose a fresh route between the endpoints' derived world positions and replace the interior points, keeping the endpoint node refs; a null route keeps the old bends. It returns `{ wires, buses }` so the tray line can name both. **Wires** attach through an endpoint `pin`/`connector` vertex, and their router endpoints come from the pins' rotated sides, as interaction's `routerEndpoint` does. **Buses** attach through a `groupConnection` naming the instance (FR-042); the endpoint vertex is a plain `free` vertex, so the binding — not the vertex — is what identifies the attachment, and the router endpoint is `busGroupBrace(inst, gc.bitMap).apex` plus that brace's `out` normal (the apex escape, §6.9a), recomputed from the **new** interface. Because that apex has moved, the endpoint vertex is **re-seated** on it, and re-seated even when the route comes back null: the brace is redrawn from the claimed pins every frame (FR-042a), so a vertex left behind draws the bus detached from its own connection indicator. Re-seating writes `v.x`/`v.y` only; `groupConnections` is untouched. Bindings whose pins did not survive were already dropped above, so every binding reached here still resolves. (Buses added 2026-09-20; the function was `rerouteAttachedWires`.) Runs before `store.replaceDesign`, so like the FR-099b dangling rewrite it is load-time normalization — no command, no undo, no dirty mark. An instance with no stored `iface` (a pre-FR-099c file) skips the comparison and gains the field at the next save.
 - **Persistence:** no Go change is needed — the server already stores designs as an opaque `json.RawMessage` (§6.5), so the new instance fields (`kind`/`childPath`/`render`/`iface`/`label`/`portDir`/`dirOverride`/`width`/`target`), the design-level `defaultRender`, and the `connector` vertex kind round-trip untouched (`iface` is additive-optional like `defaultRender`/`target` were — no `formatVersion` bump). Only the client model (`model/design.js`, `model/persist.js`) is typed; `persist.js`'s structural sanity pass (§7.4) validates a `connector` vertex's `ref`/`pin` exactly as it does a `pin` vertex. The in-memory `childPath` is absolute (FR-098); **`fileops.save` relativizes** each sub-design's `childPath` against the chosen save dir just before writing — and, by the same absolute-in-memory / relative-on-disk rule, each **in-project** mem data path via `relativizeDataPaths` (FR-121g, copy-on-write like the portDir stamping, so the live model keeps its absolute paths) — and **`loadIntoStore` absolutizes** on open — so the on-disk file stays relative/portable while the live model is absolute. `serializeDesign` itself round-trips `childPath` verbatim (a backup snapshot, §7.4, thus stores the absolute path, correct for same-session recovery). Child files are read through the existing `/api/v1/design/load` with client-resolved absolute paths.
 - **Dependencies:** `model/design.js`, `model/netlist.js`, `api.js`, store, `chrome/dialogs.js`, `engine/canvas.js`, `engine/sim.js`.
 
@@ -5563,7 +5616,7 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-094b, FR-094c, FR-094d, FR-094e | §6.6, §6.11, §6.14 | `subdesign.js`, `model/netlist.js`, `canvas.js`, `properties.js` |
 | FR-094f | §6.14, §6.16, §6.17, §7.2, §7.7 | `subdesign.js`, `properties.js`, `commands.js`, `engine/vectors.js`, `chrome/dialogs.js`, `engine/cgen.js`, `cgen/runtime.h`, `cgen/runtime.c` |
 | FR-094g | §6.8, §6.9, §6.10, §6.11, §6.13, §6.14 | `subdesign.js`, `builtins.js`, `sim.js`, `store.js`, `interaction.js`, `canvas.js` |
-| FR-099c | §6.9a, §6.14 | `subdesign.js`, `router.js`, `fileops.js` |
+| FR-099c | §6.9a, §6.14 | `subdesign.js`, `router.js`, `fileops.js`, `model/design.js` |
 | FR-121, FR-121a, FR-121b, FR-121c, FR-121d, FR-121e, FR-121f, FR-121g, FR-121h | §6.19, §6.4, §6.5a, §6.10, §6.11, §6.12, §6.14, §7.8, §8, §3.1 A8–A11 | `project.go`, `api.go`, `storage.go`, `chrome/project.js`, `chrome/fileops.js`, `chrome/dialogs.js`, `chrome/toolbar.js`, `store.js`, `app.js`, `api.js`, `model/persist.js`, `index.html`, `style.css` |
 | FR-121i | §6.19, §6.4, §6.5a, §6.2, §6.12 | `components.go`, `components_test.go`, `api.go`, `chrome/project.js`, `chrome/toolbar.js`, `api.js`, `app.js` |
 | FR-121j | §6.19, §6.4, §6.5a, §6.2, §6.11, §8 | `project.go`, `project_test.go`, `components.go`, `api.go`, `api_project_test.go`, `chrome/project.js`, `chrome/project.test.js`, `chrome/toolbar.js`, `api.js`, `model/persist.js` |

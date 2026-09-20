@@ -2,12 +2,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  bodySnapTarget,
   editableGalType,
   planBusEndpoint,
   probeClaimsClick,
   probeTarget,
   viewableNotesSubject,
 } from "./interaction.js";
+import { busGroupBrace } from "../model/design.js";
 
 // A type with a single 3-bit group "A".
 const typeA = {
@@ -89,6 +91,54 @@ test("planBusEndpoint snaps a proximity group target at the apex (FR-042a)", () 
   assert.deepEqual(plan.snap, { refdes: "A-1", group: "P" });
   assert.deepEqual(plan.spec, { kind: "free", x: -2, y: 4.5 });
   assert.deepEqual(plan.groups, []);
+});
+
+// --- body-click snap resolution (FR-041a, resolved at the placing click) ---
+
+// A placed instance of `type` on the grid, with its group's pins down one side so
+// busGroupBrace (which bodySnapTarget calls) has the geometry it expects.
+const placed = (type, refdes = "U1") => ({
+  refdes,
+  x: 10,
+  y: 10,
+  rotation: 0,
+  typeData: {
+    width: 6,
+    height: 6,
+    ...type,
+    pins: type.pins.map((p, i) => ({ ...p, side: "right", position: i + 1 })),
+  },
+});
+
+test("bodySnapTarget resolves a single accepting group to a group target (FR-041a)", () => {
+  const inst = placed(typeA);
+  const t = bodySnapTarget({ components: [inst], buses: [] }, inst, 3);
+  assert.equal(t.kind, "group"); // the same shape the proximity path yields
+  assert.equal(t.refdes, "U1");
+  assert.equal(t.group, "A");
+  // Placed at the brace apex, not at wherever the body was clicked.
+  const { apex } = busGroupBrace(inst, ["A0", "A1", "A2"]);
+  assert.deepEqual({ x: t.x, y: t.y }, { x: apex.x, y: apex.y });
+});
+
+test("bodySnapTarget adopts the claimed block's width for a fresh bus (FR-042c)", () => {
+  const inst = placed(typeA);
+  const d = { components: [inst], buses: [] };
+  // width == null is the first endpoint of a bus with no committed width: the
+  // whole free run is claimed and the bus takes its size, exactly as a proximity
+  // snap does — not the default width the body click used to fall back to.
+  assert.equal(bodySnapTarget(d, inst, null).busWidth, 3);
+  // A committed width claims a pack-low sub-block of that size (FR-041c).
+  assert.equal(bodySnapTarget(d, inst, 2).busWidth, 2);
+});
+
+test("bodySnapTarget declines zero and ≥2 accepting groups (FR-043/FR-041b)", () => {
+  const one = placed(typeA);
+  assert.equal(bodySnapTarget({ components: [one], buses: [] }, one, 8), null); // none fits
+  const two = placed(typeAB);
+  // Two candidates: the user has not chosen, so there is nothing truthful to
+  // preview and the disambiguation stays at commit.
+  assert.equal(bodySnapTarget({ components: [two], buses: [] }, two, 2), null);
 });
 
 // --- probe target resolution (FR-087c) ---
