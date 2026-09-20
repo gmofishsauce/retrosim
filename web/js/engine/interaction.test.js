@@ -5,6 +5,7 @@ import {
   bodySnapTarget,
   editableGalType,
   planBusEndpoint,
+  selectHotspotAt,
   probeClaimsClick,
   probeTarget,
   viewableNotesSubject,
@@ -139,6 +140,81 @@ test("bodySnapTarget declines zero and ≥2 accepting groups (FR-043/FR-041b)", 
   // Two candidates: the user has not chosen, so there is nothing truthful to
   // preview and the disambiguation stays at commit.
   assert.equal(bodySnapTarget({ components: [two], buses: [] }, two, 2), null);
+});
+
+// --- select-mode wire/bus hotspots (FR-027b) ---
+
+// hotspotDesign: a part with one pin, plus a dangling-ended wire and bus. Each
+// conductor's far end is a free vertex belonging to exactly one conductor, which
+// is what makes it dangling (FR-029).
+function hotspotDesign() {
+  const inst = {
+    refdes: "U1",
+    x: 0,
+    y: 0,
+    rotation: 0,
+    typeData: { width: 4, height: 4, renderType: "ic", pins: [{ name: "Y", side: "right", position: 1 }] },
+  };
+  const vp = { id: "vp", kind: "pin", ref: "U1", pin: "Y" };
+  const vw = { id: "vw", kind: "free", x: 20, y: 20 }; // dangling wire end
+  const vb = { id: "vb", kind: "free", x: 30, y: 30 }; // dangling bus end
+  const vb2 = { id: "vb2", kind: "free", x: 38, y: 30 };
+  return {
+    components: [inst],
+    vertices: [vp, vw, vb, vb2],
+    wires: [{ id: "w1", path: [{ t: "node", v: "vp" }, { t: "node", v: "vw" }] }],
+    buses: [
+      {
+        id: "b1",
+        width: 6,
+        groupConnections: [],
+        path: [{ t: "node", v: "vb2" }, { t: "node", v: "vb" }],
+      },
+    ],
+  };
+}
+
+test("a pin is a wire hotspot, arming WIRE from that pin (FR-027b)", () => {
+  const d = hotspotDesign();
+  const h = selectHotspotAt(d, { x: 4, y: 1 }, 0.6, 0.5);
+  assert.deepEqual(h, { tool: "wire", source: { kind: "pin", refdes: "U1", pin: "Y" } });
+});
+
+test("a dangling WIRE end arms the Wire tool from that end (FR-027b/FR-034c)", () => {
+  const d = hotspotDesign();
+  const h = selectHotspotAt(d, { x: 20.2, y: 20.1 }, 0.6, 0.5);
+  assert.equal(h.tool, "wire");
+  // The same `vertex` source the Wire tool's own start handler builds, so the
+  // new wire joins onto this end instead of branching a junction.
+  assert.deepEqual(h.source, { kind: "vertex", id: "vw", x: 20, y: 20 });
+});
+
+test("a dangling BUS end arms the Bus tool, carrying the bus's width (FR-027b)", () => {
+  const d = hotspotDesign();
+  const h = selectHotspotAt(d, { x: 30, y: 30 }, 0.6, 0.5);
+  assert.equal(h.tool, "bus"); // not "wire" — the tool matches the conductor
+  assert.deepEqual(h.source, { kind: "vertex", id: "vb", x: 30, y: 30, busWidth: 6 });
+});
+
+test("empty canvas is no hotspot, so the click keeps its select meaning (FR-016)", () => {
+  const d = hotspotDesign();
+  assert.equal(selectHotspotAt(d, { x: 12, y: 12 }, 0.6, 0.5), null);
+});
+
+test("a connected end is no hotspot — only a DANGLING one is (FR-029)", () => {
+  const d = hotspotDesign();
+  // Give the wire's far end a second conductor: the vertex is now shared, so it
+  // is a join/junction point rather than a dangling end, and offers no hotspot.
+  d.wires.push({ id: "w2", path: [{ t: "node", v: "vw" }, { t: "bend", x: 24, y: 24 }] });
+  assert.equal(selectHotspotAt(d, { x: 20, y: 20 }, 0.6, 0.5), null);
+});
+
+test("a group-snapped bus end is connected, so it offers no hotspot (FR-042)", () => {
+  const d = hotspotDesign();
+  // Its vertex kind stays "free", but the group binding is what makes it
+  // connected — and it draws a brace, not a red square.
+  d.buses[0].groupConnections = [{ vertex: "vb", instance: "U1", group: "G", bitMap: ["Y"] }];
+  assert.equal(selectHotspotAt(d, { x: 30, y: 30 }, 0.6, 0.5), null);
 });
 
 // --- probe target resolution (FR-087c) ---

@@ -302,3 +302,43 @@ test("setBusBitNamesCmd sets names; undo/redo restore", () => {
   store.redo();
   assert.deepEqual(store.design.buses[0].bitNames, ["C", "V"]);
 });
+
+// --- FR-034c: continuing a bus from a dangling end joins, leaving no mark ---
+
+test("a bus STARTED on a dangling end joins at equal width, removing the vertex (FR-034c)", () => {
+  const store = newStore();
+  store.dispatch(addBusCmd(free(0, 0), free(10, 0), 4));
+  const b1 = store.design.buses[0];
+  const endV = b1.path[b1.path.length - 1].v;
+
+  // The select-mode hotspot (FR-027b) arms exactly this: a `vertex` source
+  // carrying the dangling bus's own width, so the widths always match here.
+  const v = store.design.vertices.find((x) => x.id === endV);
+  store.dispatch(
+    addBusCmd({ kind: "vertex", id: endV, x: v.x, y: v.y }, free(10, 12), 4),
+  );
+
+  assert.equal(store.design.buses.length, 1); // merged into one bus
+  assert.ok(!store.design.vertices.some((x) => x.id === endV)); // no dangling mark
+  assert.ok(!store.design.vertices.some((x) => x.kind === "junction")); // and no dot
+  assert.equal(store.design.buses[0].width, 4);
+
+  store.undo(); // back to the one original bus, dangling end and all
+  assert.equal(store.design.buses.length, 1);
+  assert.equal(store.design.vertices.find((x) => x.id === endV)?.kind, "free");
+});
+
+test("an unequal-width bus join keeps a junction instead — and keeps no free end (FR-039b)", () => {
+  // The contrast case: widths differ, so the two buses stay distinct and the
+  // shared point becomes a junction dot. It is still not a dangling end.
+  const store = newStore();
+  store.dispatch(addBusCmd(free(0, 0), free(10, 0), 8));
+  const wide = store.design.buses[0];
+  const endV = wide.path[wide.path.length - 1].v;
+  const v = store.design.vertices.find((x) => x.id === endV);
+  store.dispatch(
+    addBusCmd({ kind: "vertex", id: endV, x: v.x, y: v.y }, free(10, 12), 2, [], [], 2),
+  );
+  assert.equal(store.design.buses.length, 2); // distinct conductors
+  assert.equal(store.design.vertices.find((x) => x.id === endV).kind, "junction");
+});

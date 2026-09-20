@@ -123,6 +123,27 @@ const WIRE_CURSOR =
   ) +
   "') 10 10, crosshair";
 
+// BUS_CURSOR is the bus-drawing cursor (FR-035a): the wire cursor's counterpart,
+// and a miniature of the conductor it draws just as that one is. Same
+// construction — a centered diagonal interrupted at its midpoint by a small open
+// dot marking the active point, hotspot at the image center per the FR-025 rule
+// — but drawn in a bus's own weight and colour (thick, #1565c0, FR-036). Weight
+// and colour are the whole distinction, exactly as they are on the canvas, so
+// the two cursors read as one idea at two weights. The dot is filled white so
+// the thick stroke cannot close it up. (A width-annotation slash tick was tried
+// and dropped: at 20px, against a 3px stroke, it reads as a blob or a cross
+// rather than a slash, and without its bit count it annotates nothing.)
+const BUS_CURSOR =
+  "url('data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">' +
+      '<g stroke="#1565c0" stroke-width="3.2" stroke-linecap="round" fill="none">' +
+      '<line x1="3" y1="3" x2="6.9" y2="6.9"/>' +
+      '<line x1="13.1" y1="13.1" x2="17" y2="17"/>' +
+      '<circle cx="10" cy="10" r="2.4" stroke-width="1.7" fill="#fff"/></g></svg>',
+  ) +
+  "') 10 10, crosshair";
+
 // PROBE_CURSOR is the probe-mode cursor (FR-087c): an arrow with a question
 // mark. Its hotspot is the image CENTRE, with the arrow's tip drawn exactly
 // there — the FR-025 rule, because cursor scaling preserves an image's centre,
@@ -234,6 +255,32 @@ function conductorTarget(design, cond) {
     : { kind: "wire", id: cond.id };
 }
 
+// selectHotspotAt answers what a SELECT-mode click at `world` would arm
+// (FR-027b): `{ tool, source }` for a wire/bus hotspot, or null for an ordinary
+// select. **Both** the hover cursor and the click go through it, so the cue a
+// hotspot shows can never disagree with what clicking it does.
+//
+// A **pin** arms the Wire tool (pins outrank the component body, so the click
+// does not select or drag the part). A **dangling end** — the red square on a
+// conductor's free, unconnected end (FR-029) — arms the tool matching its own
+// conductor, with the same `vertex` source those tools' start handlers build, so
+// the new conductor JOINS onto that end (FR-034c) instead of branching a
+// junction; a bus additionally carries the dangling bus's width. Because the
+// caller resolves this before the junction/bend/segment cases, a click on a
+// dangling end no longer selects the host conductor — its segments still do —
+// and nothing else is shadowed, an endpoint never being an interior junction or
+// bend. Exported for testing.
+export function selectHotspotAt(design, world, pinTol, bendTol) {
+  const ph = hitPin(design, world, pinTol);
+  if (ph) return { tool: "wire", source: { kind: "pin", refdes: ph.refdes, pin: ph.pin } };
+  const de = danglingEndAt(design, world, bendTol);
+  if (!de) return null;
+  const source = { kind: "vertex", id: de.vertex.id, x: de.vertex.x, y: de.vertex.y };
+  return de.isBus
+    ? { tool: "bus", source: { ...source, busWidth: de.width } }
+    : { tool: "wire", source };
+}
+
 // bodySnapTarget resolves a bus endpoint placed by clicking a component BODY to
 // the very same `kind:"group"` target the proximity path yields (FR-042b) — apex,
 // group name and claimed-block width — when exactly one of the component's pin
@@ -329,6 +376,21 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     return v ? { x: v.x, y: v.y } : null;
   }
 
+  // toolCursor is the cursor a tool shows (FR-025 wire, FR-087c probe). It is the
+  // one place a tool's cursor is named, shared by setTool and the select-mode
+  // hotspot hover (FR-027b) — a hotspot advertises itself with the cursor of the
+  // tool its click arms, so the cue cannot drift from the behavior.
+  const toolCursor = (tool) =>
+    tool === "select"
+      ? "default"
+      : tool === "wire"
+        ? WIRE_CURSOR
+        : tool === "bus"
+          ? BUS_CURSOR // FR-035a
+          : tool === "probe"
+            ? PROBE_CURSOR
+            : "crosshair"; // place, paste, markPin
+
   function setTool(tool, type = null) {
     commitNoteEdit(); // leaving for any tool commits an in-progress note (FR-071f)
     placeType = type;
@@ -345,14 +407,7 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       label.textContent =
         tool === "place" ? `place ${typeIdentity(type)}` : tool === "markPin" ? "no connect" : tool;
     }
-    canvas.style.cursor =
-      tool === "select"
-        ? "default"
-        : tool === "wire"
-          ? WIRE_CURSOR
-          : tool === "probe"
-            ? PROBE_CURSOR // FR-087c
-            : "crosshair";
+    canvas.style.cursor = toolCursor(tool);
     renderer.setPreview(null); // clear any in-progress rubber-band
     store.setTool(tool, type ? typeIdentity(type) : null); // notifies subscribers (toolbar highlight, armed tile)
   }
@@ -968,6 +1023,10 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     );
   }
 
+  // selectHotspot binds selectHotspotAt to the live design and the current
+  // zoom-dependent pick tolerances. Both the hover cursor and the click call it.
+  const selectHotspot = (world) => selectHotspotAt(store.design, world, pinTol(), bendTol());
+
   // wireTargetAt returns a wire endpoint spec for a click: a pin, or a branch on
   // an existing segment, or null (empty space — ignored).
   function wireTargetAt(e) {
@@ -1489,13 +1548,11 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
 
     // SELECT tool.
     const world = worldOf(e);
-    // A pin is a wire hotspot (FR-027b): clicking one arms WIRE from that pin
-    // (pins take priority over the component body, so this doesn't select/drag
-    // the component) and reuses the WIRE machinery for preview/completion.
-    const pinHit = hitPin(store.design, world, pinTol());
-    if (pinHit) {
-      setTool("wire"); // clears wireSource, sets wire cursor, highlights toolbar
-      wireSource = { kind: "pin", refdes: pinHit.refdes, pin: pinHit.pin };
+    // Wire/bus hotspots (FR-027b) outrank everything else a SELECT click means.
+    const hotspot = selectHotspot(world);
+    if (hotspot) {
+      setTool(hotspot.tool); // clears wireSource, sets the cursor, highlights the toolbar
+      wireSource = hotspot.source;
       return;
     }
     // A junction dot is draggable (FR-032a): the drag targets the shared vertex
@@ -1756,11 +1813,10 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
     if (!drag) {
       const world = worldOf(e);
       setHover(hitComponent(store.design, world));
-      // In select mode a pin is a wire hotspot (FR-027b): show the wire cursor
-      // while hovering one, else the default pointer.
+      // In select mode a hotspot advertises itself with the cursor of the tool a
+      // click there would arm (FR-027b); off any hotspot, the default pointer.
       if (store.state.tool === "select") {
-        const overPin = !!hitPin(store.design, world, pinTol());
-        canvas.style.cursor = overPin ? WIRE_CURSOR : "default";
+        canvas.style.cursor = toolCursor(selectHotspot(world)?.tool ?? "select");
       } else if (store.state.tool === "bus") {
         // Before the first click, still preview a group's brace when near it, so
         // the user can see (and click to start the bus at) a termination point.

@@ -223,3 +223,53 @@ test("deleteWireCmd without ifPresent still surfaces a stale id (FR-024a)", () =
   bare.dispatch(deleteWireCmd("w99"));
   assert.deepEqual(errs, ["no such wire w99"]);
 });
+
+// --- FR-034c: continuing from a dangling end joins, leaving no mark ---
+
+// danglingWire builds U1./Y0 → a free point, i.e. a wire with one connected end
+// and one dangling end. `endV` is the dangling end's vertex — what the red
+// square (FR-029) is drawn on, and what the select-mode hotspot arms from
+// (FR-027b).
+function danglingWire() {
+  const store = newStore();
+  store.dispatch(addWireCmd(pin("U1", "/Y0"), { kind: "free", x: 30, y: 26 }));
+  const w = store.design.wires[0];
+  const endV = w.path[w.path.length - 1].v;
+  assert.equal(getVertex(store.design, endV).kind, "free");
+  return { store, endV };
+}
+
+test("a wire STARTED on a dangling end joins: one wire, no vertex, no junction (FR-034c)", () => {
+  const { store, endV } = danglingWire();
+  const v = getVertex(store.design, endV);
+  // Exactly what the select-mode hotspot arms (FR-027b) — a `vertex` source.
+  store.dispatch(
+    addWireCmd({ kind: "vertex", id: endV, x: v.x, y: v.y }, pin("U2", "A0")),
+  );
+  // The two wires merged into one continuous wire...
+  assert.equal(store.design.wires.length, 1);
+  // ...the shared vertex is GONE, so nothing can draw a dangling mark there...
+  assert.equal(getVertex(store.design, endV), null);
+  assert.ok(!store.design.vertices.some((x) => x.id === endV));
+  // ...and no junction was created in its place.
+  assert.ok(!store.design.vertices.some((x) => x.kind === "junction"));
+  // The survivor runs pin-to-pin: both its ends are pin vertices, nothing free.
+  const ends = [0, -1].map((i) => store.design.wires[0].path.at(i));
+  assert.ok(ends.every((p) => p.t === "node" && getVertex(store.design, p.v).kind === "pin"));
+
+  store.undo(); // and the dangling end comes back
+  assert.equal(store.design.wires.length, 1);
+  assert.equal(getVertex(store.design, endV).kind, "free");
+});
+
+test("the join is the same whether the dangling end is the source or the target (FR-034c)", () => {
+  const { store, endV } = danglingWire();
+  const v = getVertex(store.design, endV);
+  // Target rather than source: the command joins on either endpoint.
+  store.dispatch(
+    addWireCmd(pin("U2", "A0"), { kind: "vertex", id: endV, x: v.x, y: v.y }),
+  );
+  assert.equal(store.design.wires.length, 1);
+  assert.equal(getVertex(store.design, endV), null);
+  assert.ok(!store.design.vertices.some((x) => x.kind === "junction"));
+});

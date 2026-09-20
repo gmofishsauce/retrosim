@@ -732,8 +732,21 @@ Wires are single-bit nets, drawn as thin black lines.
   or delete them like any other. A wire is completed only by clicking a **real
   target** (a pin or an existing wire/bus segment); an empty-canvas click always
   adds a waypoint.
-- **Pin hotspot:** in Select mode, hovering a pin shows the wire cursor; clicking
-  it starts a wire without switching tools.
+- **Hotspots:** some places start a conductor for you without switching tools
+  first. In Select mode, hovering one shows the cursor of the tool it would arm,
+  and clicking it begins that conductor there; it does **not** select what is
+  underneath. There are two:
+  - a **pin** — hovering shows the wire cursor, clicking starts a wire from it;
+  - a **dangling end** (the small red square on an unconnected end, left by
+    deleting a part or by a [sub-design's interface
+    changing](#12-sub-designs-and-ports)) — hovering shows the wire cursor for a
+    wire's end and the bus cursor for a bus's, and clicking **continues that
+    conductor**: the old and new conductors become one continuous conductor, with
+    no junction dot, and **the red square disappears** — the end is no longer
+    dangling, so it is no longer marked (see *Joining a dangling end* below). A
+    bus continued this way keeps its width, so its ends always match.
+
+  To select the wire or bus instead, click any of its segments away from the end.
 - **Bends:** in Select mode, **drag a wire segment** to insert a bend point at the
   nearest grid intersection and drag it; **drag an existing bend** to move it;
   **right-click a bend** → "Delete bend point" to remove it and merge the segments.
@@ -2243,6 +2256,8 @@ clear message until then, without losing your work.
 | Drag a selected component | Move the whole selection |
 | Drag a wire/bus segment | Insert and drag a bend point |
 | Drag a bend point / junction dot | Move it (the junction carries every wire that meets there) |
+| Left-click a pin | Start a wire from it (no need to pick the Wire tool first) |
+| Left-click a dangling end (red square) | Continue that conductor — a wire from a wire's end, a bus from a bus's — joining onto it |
 | Middle-drag / Space+left-drag | Pan |
 | Mouse wheel | Zoom to cursor |
 | Right-click empty | Recenter view on the cursor |

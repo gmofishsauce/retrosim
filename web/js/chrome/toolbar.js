@@ -17,6 +17,18 @@ const WIRE_ICON =
   '<line x1="12.6" y1="12.6" x2="17" y2="17"/>' +
   '<circle cx="10" cy="10" r="2.2" stroke-width="1.5"/></g></svg>';
 
+// BUS_ICON is the bus cursor's glyph (FR-035a) reused as the Bus button's label,
+// as WIRE_ICON is for Wire. Same construction at the bus stroke weight, but in
+// `currentColor` rather than the cursor's bus blue, so it themes with every other
+// toolbar icon and stays legible on the active button's blue highlight — leaving
+// weight alone to distinguish it from the wire icon, which at 18px it does.
+const BUS_ICON =
+  '<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true">' +
+  '<g stroke="currentColor" stroke-width="3.2" stroke-linecap="round" fill="none">' +
+  '<line x1="3" y1="3" x2="6.9" y2="6.9"/>' +
+  '<line x1="13.1" y1="13.1" x2="17" y2="17"/>' +
+  '<circle cx="10" cy="10" r="2.4" stroke-width="1.7"/></g></svg>';
+
 // Pause/step cluster glyphs (FR-076a): the conventional debugger set — pause
 // is two vertical bars, continue a right-pointing triangle, step-cycle an
 // arrow arcing over a dot (the "step over" idiom), step-unit an arrow dropping
@@ -57,8 +69,8 @@ function accelLabel({ key, shift, plain }) {
 export function initToolbar({ container, store, interaction, fileops, projectops, sim, library, reloadLibrary = async () => {}, onTestVectors, onConsole, onNotes, onGenerateC, onDesignRuleCheck, onExport, onDesignProperties, onReleaseHold = () => {} }) {
   const tools = [
     { tool: "select", label: "Select" },
-    { tool: "wire", icon: WIRE_ICON },
-    { tool: "bus", label: "Bus" },
+    { tool: "wire", label: "Wire", icon: WIRE_ICON },
+    { tool: "bus", label: "Bus", icon: BUS_ICON },
   ];
 
   // Open menus, tracked so closeMenus() (FR-004a) can dismiss them. Declared
@@ -195,19 +207,21 @@ export function initToolbar({ container, store, interaction, fileops, projectops
 
   // --- Buttons on the right: Select, Wire, Bus, then Run (FR-004a) ---
 
-  // Modal tools: the active one is highlighted (refresh); the Wire button
-  // shows the wire-cursor icon instead of a label (FR-025).
+  // Modal tools: the active one is highlighted (refresh); the Wire and Bus
+  // buttons show their tool's cursor glyph instead of a label (FR-025/FR-035a),
+  // so every tool carries a `label` whether or not it renders as one — an icon
+  // button still needs it for the accessible name and the tooltip.
   const toolEls = {};
   for (const t of tools) {
     const b = document.createElement("button");
     b.className = "tool-btn";
     if (t.icon) {
       b.innerHTML = t.icon;
-      b.setAttribute("aria-label", "Wire tool");
+      b.setAttribute("aria-label", `${t.label} tool`);
     } else {
       b.textContent = t.label;
     }
-    b.title = `${t.label ?? "Wire"} tool`;
+    b.title = `${t.label} tool`;
     b.addEventListener("click", () => interaction.setTool(t.tool));
     container.appendChild(b);
     toolEls[t.tool] = b;

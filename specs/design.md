@@ -1786,12 +1786,41 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   the original (5,5)-endpoint hotspot: any glyph whose visible mass sits off
   to one side of its active point reads as a "jump" the moment a rubber band
   exposes the true point.) It is set while `WIRE` is active, and in `SELECT`
-  while the pointer is over a pin (a wire hotspot, FR-027b). `BUS` keeps a
-  crosshair; `SELECT` off any pin uses the default pointer. **Select-mode wire
-  start:** clicking a pin in `SELECT` (pins take hit priority over component
-  bodies, so the click does not select/drag the component) arms `WIRE` from that
-  pin — reusing the WIRE machinery (rubber-band preview, destination click,
-  one-shot return to `SELECT` per FR-028) rather than duplicating it.
+  while the pointer is over a wire hotspot (FR-027b). **`BUS` has the matching
+  bus cursor (FR-035a):** the same diagonal-plus-centre-dot construction drawn at
+  the bus stroke weight in the bus blue `#1565c0` — a miniature of the conductor
+  it draws, as the wire cursor is of a wire, distinguished by exactly what
+  distinguishes the two on the canvas. The centre dot is filled white so the
+  thicker stroke cannot close it up. A width-annotation slash tick was drawn,
+  rendered and **rejected**: at a 20px cursor, against a 3px stroke, it reads as
+  a blob or a cross rather than a slash, and divorced from its bit count it
+  annotates nothing. The toolbar reuses the glyph as the Bus button's label
+  beside the Wire button's (FR-025), but in `currentColor`, not bus blue, so it
+  themes with every other toolbar icon and survives the active-button highlight;
+  stroke weight alone carries the distinction there, which at 18px it does. (The two icon buttons
+  also retired the button builder's hard-coded "Wire" `aria-label`/`title`
+  fallback, which would have labelled the Bus button "Wire tool" — each tool now
+  carries its own `label` whether or not it renders as an icon.) `SELECT` off
+  any hotspot uses the default pointer. Every tool's cursor is named in exactly
+  one place, `toolCursor(tool)`; anything not `select`/`wire`/`bus`/`probe`
+  (place, paste, markPin) keeps the generic crosshair. **Select-mode hotspots
+  (FR-027b):** a single helper, `selectHotspotAt(design, world, pinTol, bendTol)`, answers what a `SELECT`
+  click would arm — `{ tool, source }` or `null` — and **both** the hover cursor
+  and the click go through it, so the cue a hotspot shows cannot drift from what
+  clicking it does. A **pin** yields `WIRE` with a `pin` source (pins take hit
+  priority over component bodies, so the click does not select/drag the
+  component). A **dangling end** (FR-029, the red square; `danglingEndAt` at
+  `bendTol`) yields the tool matching its conductor — `WIRE` or `BUS`, the latter
+  carrying the end's width — with the same `kind:"vertex"` source those tools'
+  own start handlers build, so the new conductor **joins** onto that end (FR-034c)
+  instead of branching. Resolved before the junction/bend/segment cases, which is
+  what supersedes a dangling-end click selecting the host conductor; an end is
+  never an interior junction or bend, so nothing else is shadowed. Both arm their
+  tool through `setTool`, reusing its machinery (clears `wireSource`/waypoints,
+  sets the cursor, highlights the toolbar) and then the ordinary rubber-band
+  preview, destination click and one-shot return to `SELECT` (FR-028/FR-040).
+  The cursor a tool shows lives in one place, `toolCursor(tool)`, which `setTool`
+  and the hotspot hover share. (Dangling-end hotspot added 2026-09-20.)
 - **Route preview (FR-027a/FR-027c):** while a wire/bus awaits its destination,
   each mousemove calls the router (§6.9a) from the preview anchor
   (`previewAnchorWorld`, the FR-013d visual attachment point) to the snapped
@@ -5531,6 +5560,7 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-039, FR-040 | §6.9 | `interaction.js` |
 | FR-039a | §6.9 | `interaction.js`, `hittest.js` |
 | FR-041, FR-041a, FR-041b, FR-041c | §6.9, §6.11, A3 | `interaction.js`, `dialogs.js`, `model/design.js` |
+| FR-035a | §6.9, §6.11 | `interaction.js`, `chrome/toolbar.js` |
 | FR-042, FR-042a, FR-042b, FR-042c, FR-043 | §6.8, §6.9, §7.2 | `interaction.js`, `canvas.js`, `model/design.js` |
 | FR-043a, FR-043b | §6.6, §6.9, §7.1a | `interaction.js`, `model/design.js`, `commands.js`, `model/netlist.js` |
 | FR-044, FR-045 | §6.10, §6.12, §6.19 | `store.js`, `app.js`, `fileops.js`, `toolbar.js` |
