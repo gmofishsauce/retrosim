@@ -576,8 +576,10 @@ A few details worth knowing:
 - **Zoom:** mouse wheel (zooms toward the cursor), or the **View** menu's
   `Zoom In` / `Zoom Out` items — `Ctrl/Cmd+=` / `Ctrl/Cmd+-` — which zoom about
   the canvas center.
-- **Fit to Screen:** the **View** menu's `Fit to Screen` item sizes and centers
-  the view so the whole design fits the canvas. This also happens automatically
+- **Fit to Screen:** the **View** menu's `Fit to Screen` item — or the `f` key —
+  sizes and centers the view so the whole design fits the canvas. Note that the
+  key is a bare `f`, with no Ctrl or Cmd: `Ctrl/Cmd+F` belongs to the browser's
+  find bar, which never lets the editor see it. This also happens automatically
   whenever you load a design (Open, or stepping into or back out of a
   sub-design), so a freshly loaded design always arrives framed in the view.
 - **Pan:** drag with the **middle** mouse button, or hold **Space** and drag with
@@ -2212,6 +2214,7 @@ clear message until then, without losing your work.
 | `Ctrl/Cmd+S` | Save |
 | `Shift+Ctrl/Cmd+S` | Save As |
 | `Ctrl/Cmd+=` / `Ctrl/Cmd+-` | Zoom in / out (about the canvas center) |
+| `f` | Fit to Screen — zoom and pan so the whole design fits the canvas (no Ctrl/Cmd: the browser keeps `Ctrl/Cmd+F` for find) |
 | `Space` (hold) | Pan with left-drag |
 | `Enter` / `Shift+Enter` (editing a text note) | Commit the note / insert a line break |
 | `Esc` | Cancel the current gesture / tool / selection / pending paste (or commit a text note being edited); leaves [probe mode](#probing-a-point) |

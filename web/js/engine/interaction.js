@@ -1933,6 +1933,14 @@ export function initInteraction({ canvas, palette, store, renderer, library, fil
       zoomBy(0.8);
       return;
     }
+    // Fit to Screen (FR-022a) is the bare `f`, not Ctrl/Cmd+F: Chrome keeps
+    // Cmd+F for its find bar and never delivers it to the page. Requiring no
+    // modifier keeps Cmd/Ctrl+F meaning find, as users expect. A view command
+    // like the zoom keys, so it sits above the simulation lock.
+    if (!mod && !e.altKey && e.key.toLowerCase() === "f") {
+      fitToScreen();
+      return;
+    }
 
     // Read-only lock (FR-087/FR-115h): Space (pan) and Escape stay; every
     // shortcut below mutates the design or arms a mutating tool. Save (Ctrl/Cmd+S,

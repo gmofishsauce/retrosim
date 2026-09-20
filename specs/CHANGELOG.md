@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-09-20 — Fit to Screen keyboard accelerator (bare `f`)
+What: View ▸ Fit to Screen now has an accelerator, shown in its menu row and bound in the global keydown handler above the simulation lock (live while simulating, like the zoom keys). Supersedes FR-004b/FR-022a's former "Fit to Screen has no accelerator".
+Why: requested as `Cmd+F`, which was implemented and **does not work** — Chrome holds `Cmd/Ctrl+F` for its find bar and never delivers it to the page, so `preventDefault` gets no chance to run. Rebound the same day to the unmodified `f`, chosen by the user: it matches the editor's existing menu-less canvas keys (`w`/`b`/`r`, FR-004c), involves the browser not at all, and leaves `Cmd/Ctrl+F` meaning find. This is the first accelerator with no modifier, so `accelLabel` grew a `plain` descriptor flag that renders the bare key.
+Touches: FR-004b, FR-022a; design §6.11
+
 ## 2026-09-19 — examples/cpu: correct the stale jalr cycle count in the decoder comments
 What: the TIMING FRAME header in all three decoder sources said `jalr ends at cycle 2 (3 clocks)`, which has been wrong since `jalr` grew its link write-back and became 5 clocks. Now `add/addi/lui/sw end at cycle 3 (4 clocks); nand/lw/beq/jalr at cycle 4 (5 clocks)`, with a note that jalr used to be 3. The same text is embedded three more times in `core.json` as FR-057 `typeData` snapshots, so those were corrected too — otherwise the editor would still display the old text.
 Why: found while tracing `jalr`'s per-cycle control word out of the running simulator for the user. **Comments only — no equation, no behavior change.** Verified by reading the signals off the simulator rather than deriving them from the GAL algebra: `jalr` is fetch, setup, link (F := PC+1 via `/PCOE`), write-back (r[rA] via `/REGWE`), jump (PC := B register via `/RWE`) — five cycles, matching `check-cpu.mjs`'s EXPECT.

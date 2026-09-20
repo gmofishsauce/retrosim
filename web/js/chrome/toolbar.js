@@ -42,11 +42,13 @@ const STEP_UNIT_ICON =
   '<path d="M6.8 9 L13.2 9 L10 13.5 Z" fill="currentColor"/>' +
   '<circle cx="10" cy="16.5" r="2" fill="currentColor"/></svg>';
 
-// Keyboard-accelerator hint formatting (FR-004b). The modifier is always
+// Keyboard-accelerator hint formatting (FR-004b). The modifier is normally
 // Cmd (mac) / Ctrl (elsewhere); accelLabel renders the platform-appropriate text
-// for a descriptor {key, shift?}.
+// for a descriptor {key, shift?, plain?}. `plain` marks an unmodified key —
+// Fit to Screen's `f` (FR-022a) — whose hint is the bare key, no modifier glyph.
 const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
-function accelLabel({ key, shift }) {
+function accelLabel({ key, shift, plain }) {
+  if (plain) return key;
   return IS_MAC
     ? `${shift ? "⇧" : ""}⌘${key}`
     : `Ctrl+${shift ? "Shift+" : ""}${key}`;
@@ -134,8 +136,8 @@ export function initToolbar({ container, store, interaction, fileops, projectops
   const viewMenu = createMenu("View");
   addItem(viewMenu.panel, "Zoom In", "Zoom in", () => interaction.zoomBy(1.25), { key: "+" });
   addItem(viewMenu.panel, "Zoom Out", "Zoom out", () => interaction.zoomBy(0.8), { key: "-" });
-  addItem(viewMenu.panel, "Fit to Screen", "Fit the design to the canvas", () =>
-    interaction.fitToScreen(),
+  addItem(viewMenu.panel, "Fit to Screen", "Fit the design to the canvas (F)", () =>
+    interaction.fitToScreen(), { key: "F", plain: true },
   );
   // View ▸ Notes (FR-125): the same open/select/close rule as Console below, via
   // the same dock.menuInvoke, the Notes tab being an ordinary panel rather than a

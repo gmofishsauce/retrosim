@@ -2348,11 +2348,16 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
     `initInteraction` now also receives `fileops` so the handler can call it:
     `Ctrl/Cmd+O`→`fileops.open()`, `Ctrl/Cmd+S`→`fileops.save()`,
     `Shift+Ctrl/Cmd+S`→`fileops.save({saveAs})`, `Ctrl/Cmd+=`/`+`→`zoomBy(1.25)`,
-    `Ctrl/Cmd+-`→`zoomBy(0.8)`, each `preventDefault`-ing the browser default. Save
-    and the zoom keys sit *above* the simulation-lock early-return (live while
-    simulating, matching the menu, FR-087); Open sits *below* it (disabled while
-    simulating). New (`Ctrl/Cmd+N`, browser-reserved), Refresh Types, and Fit to
-    Screen (FR-022a) get no key and no hint. The **menu-less canvas keys**
+    `Ctrl/Cmd+-`→`zoomBy(0.8)`, each `preventDefault`-ing the browser default, plus
+    the modifier-less **`f`**→`fitToScreen()` (FR-022a), guarded by `!mod &&
+    !e.altKey` so it never fires on `Cmd/Ctrl+F` and needs no `preventDefault`
+    (a bare `f` has no browser default). `Ctrl/Cmd+F` was tried first and does not
+    work: Chrome keeps it for the find bar and the page never sees it. Its
+    descriptor carries `plain: true`, which makes `accelLabel` emit the bare key
+    with no ⌘/Ctrl glyph. Save, the zoom keys, and `f` sit *above* the
+    simulation-lock early-return (live while simulating, matching the menu,
+    FR-087); Open sits *below* it (disabled while simulating). New (`Ctrl/Cmd+N`,
+    browser-reserved) and Refresh Types get no key and no hint. The **menu-less canvas keys**
     (FR-004c) live in the same handler below the lock early-return: `w`/`b` arm
     the Wire/Bus tools from select mode, `r`/`Shift+r` rotate the selection
     (`rotateSelectionCmd`), Delete/Backspace delete it (Backspace pops a locked
