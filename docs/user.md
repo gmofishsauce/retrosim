@@ -715,10 +715,12 @@ Wires are single-bit nets, drawn as thin black lines.
 - Activate the **Wire** tool (the `Wire` button or press **`w`**). Click a **source pin**,
   then a **destination pin**. As you move the cursor a rubber-band preview shows
   the proposed **Manhattan route**, which avoids passing under component bodies,
-  avoids lying on top of existing wires and buses, and prefers few corners; the
-  route's corners become editable bend points. Wires may **cross** (meet at a
-  single point) but never run on top of one another, so a busy area pushes more
-  routes onto a straight (direct) line. If no clean route is found, the preview
+  avoids lying on top of existing wires and buses, prefers few corners, and meets
+  each pin **head-on** — running straight out of the pin along the direction it
+  faces, rather than arriving sideways across the part's edge; the route's corners
+  become editable bend points. Wires may **cross** (meet at a single point) but
+  never run on top of one another, so a busy area pushes more routes onto a
+  straight (direct) line. If no clean route is found, the preview
   falls back to that straight line. After a wire is placed the tool returns to
   Select.
 - **Steering the route (locked waypoints):** while drawing, **click on empty
@@ -787,12 +789,17 @@ with a `/N` width annotation.
     **not** need to click on the part body. A large **curly brace** appears,
     enclosing the group and opening toward its pins, with the bus running to the
     brace's **point** (the connection point). Click while the brace is showing to
-    start or finish the bus there. The same works at both ends.
+    start or finish the bus there. The same works at both ends. Just as a wire
+    meets a pin head-on, the bus runs **straight into the brace's point along the
+    direction the brace faces**, so it never arrives sideways across the brace's
+    two curves.
   - **A fresh bus takes its width from the group you start on.** Before you place
     the first end a new bus has no fixed width, so the brace appears for a group
     of **any** width — start on a 4-bit group (e.g. a `74157` input) and the bus
     becomes 4 bits wide. Once the first end is placed the width is fixed; the
-    **other** end then snaps to any group with a free block of that width.
+    **other** end then snaps to any group with a free block of that width. Starting
+    the bus by clicking the **part body** takes the width the same way, whenever
+    that click connects to a group without asking (see below).
   - **Filling part of a group (narrower buses):** a bus narrower than a group can
     connect to a contiguous block of the group's still-unconnected pins, provided
     that many pins are free in a row. The bus packs into the **lowest** free pins,
@@ -801,9 +808,14 @@ with a `/N` width annotation.
     claim. Once some pins are taken, a bus that no longer fits is refused — e.g. an
     8-bit bus won't connect to an 8-pin group after a 4-bit bus has claimed half.
   - If several groups are in range (e.g. the 574's `D` inputs and `Q` outputs) the
-    brace snaps to the group **nearest the cursor**. (Clicking the part body still
-    works too: one accepting group connects automatically; several prompt you to
-    choose; none connects nothing.)
+    brace snaps to the group **nearest the cursor**.
+  - **Clicking the part body** still works too, and you need not be near the group's
+    pins. If exactly one group can accept the bus, the connection is settled **as
+    you click**: the brace appears at once and the bus is anchored at its point, so
+    what you drag out is what you get. If **several** groups could accept it, you
+    are asked which one when the bus is finished — until you choose, the bus simply
+    follows the cursor. If **none** can, the end is left unconnected where you
+    clicked.
   - **Joining buses of different widths:** you can connect a narrower bus to a
     wider one — either by ending it on the wider bus's dangling end or by branching
     it onto the wider bus (a T-junction). Because the widths differ the two buses
@@ -1296,18 +1308,24 @@ the message tray — opening still succeeds.
 
 When a child's **interface has changed** since the parent was last saved (ports
 added, removed, or relabeled), the embedded block re-lays-out its pins on the
-next open — and the parent's wires to it are **automatically re-routed** so they
-don't keep the routes they had to the old pin positions. Only plain
-point-to-point wires are re-routed; wires carrying taps or junctions, and wires
-to pins that no longer exist (left **dangling**, per the message tray), are left
-for you to tidy. The message tray names each re-routed instance. Hand-tweaked
-routes elsewhere are never touched, and nothing about this marks the design
-modified.
+next open — and the parent's wires **and buses** to it are **automatically
+re-routed** so they don't keep the routes they had to the old pin positions. Only
+plain point-to-point conductors are re-routed; those carrying taps or junctions,
+and wires to pins that no longer exist (left **dangling**, per the message tray),
+are left for you to tidy. The message tray names each instance and counts what it
+re-routed. Hand-tweaked routes elsewhere are never touched, and nothing about
+this marks the design modified.
 
-A **bus** snapped to a multi-bit port of the child is treated the same way: if
-that port has been renamed or removed, the bus's connection to the block is
-dropped whole — never bit-by-bit, which would quietly change what the bus is
-wired to — and the bus is left dangling at that end, with a line in the message
+A **bus** snapped to a multi-bit port of the child is treated the same way, with
+one extra step: because the curly brace is redrawn from the pins it connects to,
+a changed interface moves the brace's point, so the bus's end is **moved back onto
+it** — otherwise the bus would be left visibly detached from its own brace and
+look disconnected when it is not. That happens whether or not a new route is
+found; if none is, the bus keeps its old corners but still ends on the brace.
+
+If instead that port has been renamed or removed, the bus's connection to the
+block is dropped whole — never bit-by-bit, which would quietly change what the bus
+is wired to — and the bus is left dangling at that end, with a line in the message
 tray naming the group. Re-snap it to the renamed port to reconnect. (Renaming a
 child's port is therefore a two-step change: rename it, then re-attach the
 parent's wires and buses.)
