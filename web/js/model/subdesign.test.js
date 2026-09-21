@@ -616,6 +616,46 @@ function parentEmbedding(child, n) {
   return { parent, sws };
 }
 
+// FR-121g: a mem data path inside the project is stored relative to its own
+// design's directory and resolved to absolute ON LOAD, and the run-time reads
+// must receive the absolute form. `flatten` is the only place a CHILD sheet is
+// ever loaded — api.loadDesign returns the file verbatim and fileops only
+// absolutizes the root — so if flatten skips the conversion the child's ROM
+// reaches the loader relative, the server refuses it, and the ROM reads U.
+// Found 2026-09-21: examples/cpu fetched U instructions forever, its ROM living
+// in the embedded prog.json.
+test("flatten absolutizes a child's mem data paths against the child's dir (FR-121g)", async () => {
+  const romTy = {
+    name: "ROM8",
+    renderType: "unit",
+    mem: { kind: "rom", addressBits: 8, dataWidth: 8, locations: 256, romFile: "cpurom.bin" },
+    pins: [{ name: "A0", side: "left", position: 1, direction: "in" }],
+  };
+  const ramTy = {
+    name: "RAM8",
+    renderType: "unit",
+    mem: { kind: "ram", addressBits: 8, dataWidth: 8, locations: 256, ramFile: "sub/save.bin" },
+    pins: [{ name: "A0", side: "left", position: 1, direction: "in" }],
+  };
+  const child = childClk(); // carries the CLK port parentEmbedding wires to
+  addInstance(child, romTy, 0, 10, 0);
+  addInstance(child, ramTy, 8, 10, 0);
+  const { parent } = parentEmbedding(child, 1);
+  // The instance's childPath says where the child lives; its data paths are
+  // relative to THAT directory, not the parent's.
+  parent.components.find((c) => c.kind === "subdesign").childPath = "/proj/sub/c.json";
+
+  const flat = await flatten(parent, async () => structuredClone(child));
+  const mems = flat.components.filter((c) => c.typeData?.mem).map((c) => c.typeData.mem);
+  assert.equal(mems.length, 2);
+  assert.equal(mems.find((m) => m.kind === "rom").romFile, "/proj/sub/cpurom.bin");
+  // The RAM's basename carries the per-instance suffix addInstance derives
+  // (FR-114g), so assert the directory the relative path resolved against.
+  const ram = mems.find((m) => m.kind === "ram").ramFile;
+  assert.equal(ram.slice(0, ram.lastIndexOf("/")), "/proj/sub/sub");
+  assert.ok(ram.endsWith(".bin"), ram);
+});
+
 test("flatten is an identity pass without sub-designs or targets (NFR-005)", async () => {
   const d = childClk(); // has ports but no sub-designs and no targets
   assert.equal(await flatten(d, async () => assert.fail("no load expected")), d);

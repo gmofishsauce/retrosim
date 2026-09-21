@@ -16,7 +16,7 @@ import { buildNets } from "./netlist.js";
 import { WEAK_DRIVERS } from "../builtins.js";
 // Circular with persist.js (it imports placeholderTypeFromWiring): safe — both
 // modules only call across the cycle at run time, never during evaluation.
-import { deserializeDesign } from "./persist.js";
+import { deserializeDesign, absolutizeDataPaths } from "./persist.js";
 
 // netContribDir inspects one net's non-port pins and reports the direction that
 // net contributes to a port on it (FR-094c): "bidir" if any pin is itself
@@ -527,6 +527,14 @@ async function loadSheet(absPath, loadChild, who) {
   for (const c of sheet.components) {
     if (c.kind === "subdesign" && c.childPath) c.childPath = absolutize(dir, c.childPath);
   }
+  // A child's mem data paths are stored relative to ITS own directory too
+  // (FR-121g), and this is the only place they are ever resolved: `loadChild`
+  // is api.loadDesign, which returns the file verbatim, and fileops'
+  // absolutizeDataPaths only ever sees the ROOT design. Without this the ROM of
+  // a sub-design reached the run-time loader still relative, the server refused
+  // it ("path must be a non-empty absolute path"), and the ROM read U — so an
+  // embedded CPU fetched U instructions forever.
+  absolutizeDataPaths(sheet, dir);
   return sheet;
 }
 
