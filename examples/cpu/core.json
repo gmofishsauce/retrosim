@@ -4882,6 +4882,390 @@
         }
       },
       "overrides": {}
+    },
+    {
+      "refdes": "A-12",
+      "type": "type-hexdisplay",
+      "x": 92,
+      "y": 110,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-hexdisplay",
+        "name": "hexdisplay",
+        "builtin": true,
+        "title": "hex display (2-digit)",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"4\" y=\"6\" width=\"28\" height=\"24\" rx=\"1.5\" fill=\"#fff\" stroke=\"#333\"/><polygon points=\"8.00,9.95 8.95,9.00 14.06,9.00 15.01,9.95 14.06,10.90 8.95,10.90\" fill=\"#222\"/><polygon points=\"16.05,10.99 17.00,11.94 17.00,16.00 16.05,16.95 15.10,16.00 15.10,11.94\" fill=\"#222\"/><polygon points=\"16.05,19.05 17.00,20.00 17.00,24.06 16.05,25.01 15.10,24.06 15.10,20.00\" fill=\"#222\"/><polygon points=\"8.00,26.05 8.95,25.10 14.06,25.10 15.01,26.05 14.06,27.00 8.95,27.00\" fill=\"#e0e0e0\"/><polygon points=\"6.95,19.05 7.90,20.00 7.90,24.06 6.95,25.01 6.00,24.06 6.00,20.00\" fill=\"#222\"/><polygon points=\"6.95,10.99 7.90,11.94 7.90,16.00 6.95,16.95 6.00,16.00 6.00,11.94\" fill=\"#222\"/><polygon points=\"8.00,18.00 8.95,17.05 14.06,17.05 15.01,18.00 14.06,18.95 8.95,18.95\" fill=\"#222\"/><polygon points=\"20.99,9.95 21.94,9.00 27.06,9.00 28.01,9.95 27.06,10.90 21.94,10.90\" fill=\"#222\"/><polygon points=\"29.05,10.99 30.00,11.94 30.00,16.00 29.05,16.95 28.10,16.00 28.10,11.94\" fill=\"#e0e0e0\"/><polygon points=\"29.05,19.05 30.00,20.00 30.00,24.06 29.05,25.01 28.10,24.06 28.10,20.00\" fill=\"#e0e0e0\"/><polygon points=\"20.99,26.05 21.94,25.10 27.06,25.10 28.01,26.05 27.06,27.00 21.94,27.00\" fill=\"#e0e0e0\"/><polygon points=\"19.95,19.05 20.90,20.00 20.90,24.06 19.95,25.01 19.00,24.06 19.00,20.00\" fill=\"#222\"/><polygon points=\"19.95,10.99 20.90,11.94 20.90,16.00 19.95,16.95 19.00,16.00 19.00,11.94\" fill=\"#222\"/><polygon points=\"20.99,18.00 21.94,17.05 27.06,17.05 28.01,18.00 27.06,18.95 21.94,18.95\" fill=\"#222\"/></svg>",
+        "renderType": "hexdisplay",
+        "width": 8,
+        "height": 9,
+        "pins": [
+          {
+            "name": "D0",
+            "side": "left",
+            "position": 1,
+            "direction": "in"
+          },
+          {
+            "name": "D1",
+            "side": "left",
+            "position": 2,
+            "direction": "in"
+          },
+          {
+            "name": "D2",
+            "side": "left",
+            "position": 3,
+            "direction": "in"
+          },
+          {
+            "name": "D3",
+            "side": "left",
+            "position": 4,
+            "direction": "in"
+          },
+          {
+            "name": "D4",
+            "side": "left",
+            "position": 5,
+            "direction": "in"
+          },
+          {
+            "name": "D5",
+            "side": "left",
+            "position": 6,
+            "direction": "in"
+          },
+          {
+            "name": "D6",
+            "side": "left",
+            "position": 7,
+            "direction": "in"
+          },
+          {
+            "name": "D7",
+            "side": "left",
+            "position": 8,
+            "direction": "in"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "D",
+            "pins": [
+              "D0",
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5",
+              "D6",
+              "D7"
+            ]
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-13",
+      "type": "type-hexdisplay",
+      "x": 78,
+      "y": 110,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-hexdisplay",
+        "name": "hexdisplay",
+        "builtin": true,
+        "title": "hex display (2-digit)",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"4\" y=\"6\" width=\"28\" height=\"24\" rx=\"1.5\" fill=\"#fff\" stroke=\"#333\"/><polygon points=\"8.00,9.95 8.95,9.00 14.06,9.00 15.01,9.95 14.06,10.90 8.95,10.90\" fill=\"#222\"/><polygon points=\"16.05,10.99 17.00,11.94 17.00,16.00 16.05,16.95 15.10,16.00 15.10,11.94\" fill=\"#222\"/><polygon points=\"16.05,19.05 17.00,20.00 17.00,24.06 16.05,25.01 15.10,24.06 15.10,20.00\" fill=\"#222\"/><polygon points=\"8.00,26.05 8.95,25.10 14.06,25.10 15.01,26.05 14.06,27.00 8.95,27.00\" fill=\"#e0e0e0\"/><polygon points=\"6.95,19.05 7.90,20.00 7.90,24.06 6.95,25.01 6.00,24.06 6.00,20.00\" fill=\"#222\"/><polygon points=\"6.95,10.99 7.90,11.94 7.90,16.00 6.95,16.95 6.00,16.00 6.00,11.94\" fill=\"#222\"/><polygon points=\"8.00,18.00 8.95,17.05 14.06,17.05 15.01,18.00 14.06,18.95 8.95,18.95\" fill=\"#222\"/><polygon points=\"20.99,9.95 21.94,9.00 27.06,9.00 28.01,9.95 27.06,10.90 21.94,10.90\" fill=\"#222\"/><polygon points=\"29.05,10.99 30.00,11.94 30.00,16.00 29.05,16.95 28.10,16.00 28.10,11.94\" fill=\"#e0e0e0\"/><polygon points=\"29.05,19.05 30.00,20.00 30.00,24.06 29.05,25.01 28.10,24.06 28.10,20.00\" fill=\"#e0e0e0\"/><polygon points=\"20.99,26.05 21.94,25.10 27.06,25.10 28.01,26.05 27.06,27.00 21.94,27.00\" fill=\"#e0e0e0\"/><polygon points=\"19.95,19.05 20.90,20.00 20.90,24.06 19.95,25.01 19.00,24.06 19.00,20.00\" fill=\"#222\"/><polygon points=\"19.95,10.99 20.90,11.94 20.90,16.00 19.95,16.95 19.00,16.00 19.00,11.94\" fill=\"#222\"/><polygon points=\"20.99,18.00 21.94,17.05 27.06,17.05 28.01,18.00 27.06,18.95 21.94,18.95\" fill=\"#222\"/></svg>",
+        "renderType": "hexdisplay",
+        "width": 8,
+        "height": 9,
+        "pins": [
+          {
+            "name": "D0",
+            "side": "left",
+            "position": 1,
+            "direction": "in"
+          },
+          {
+            "name": "D1",
+            "side": "left",
+            "position": 2,
+            "direction": "in"
+          },
+          {
+            "name": "D2",
+            "side": "left",
+            "position": 3,
+            "direction": "in"
+          },
+          {
+            "name": "D3",
+            "side": "left",
+            "position": 4,
+            "direction": "in"
+          },
+          {
+            "name": "D4",
+            "side": "left",
+            "position": 5,
+            "direction": "in"
+          },
+          {
+            "name": "D5",
+            "side": "left",
+            "position": 6,
+            "direction": "in"
+          },
+          {
+            "name": "D6",
+            "side": "left",
+            "position": 7,
+            "direction": "in"
+          },
+          {
+            "name": "D7",
+            "side": "left",
+            "position": 8,
+            "direction": "in"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "D",
+            "pins": [
+              "D0",
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5",
+              "D6",
+              "D7"
+            ]
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-14",
+      "type": "type-hexdisplay",
+      "x": -87,
+      "y": -81,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-hexdisplay",
+        "name": "hexdisplay",
+        "builtin": true,
+        "title": "hex display (2-digit)",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"4\" y=\"6\" width=\"28\" height=\"24\" rx=\"1.5\" fill=\"#fff\" stroke=\"#333\"/><polygon points=\"8.00,9.95 8.95,9.00 14.06,9.00 15.01,9.95 14.06,10.90 8.95,10.90\" fill=\"#222\"/><polygon points=\"16.05,10.99 17.00,11.94 17.00,16.00 16.05,16.95 15.10,16.00 15.10,11.94\" fill=\"#222\"/><polygon points=\"16.05,19.05 17.00,20.00 17.00,24.06 16.05,25.01 15.10,24.06 15.10,20.00\" fill=\"#222\"/><polygon points=\"8.00,26.05 8.95,25.10 14.06,25.10 15.01,26.05 14.06,27.00 8.95,27.00\" fill=\"#e0e0e0\"/><polygon points=\"6.95,19.05 7.90,20.00 7.90,24.06 6.95,25.01 6.00,24.06 6.00,20.00\" fill=\"#222\"/><polygon points=\"6.95,10.99 7.90,11.94 7.90,16.00 6.95,16.95 6.00,16.00 6.00,11.94\" fill=\"#222\"/><polygon points=\"8.00,18.00 8.95,17.05 14.06,17.05 15.01,18.00 14.06,18.95 8.95,18.95\" fill=\"#222\"/><polygon points=\"20.99,9.95 21.94,9.00 27.06,9.00 28.01,9.95 27.06,10.90 21.94,10.90\" fill=\"#222\"/><polygon points=\"29.05,10.99 30.00,11.94 30.00,16.00 29.05,16.95 28.10,16.00 28.10,11.94\" fill=\"#e0e0e0\"/><polygon points=\"29.05,19.05 30.00,20.00 30.00,24.06 29.05,25.01 28.10,24.06 28.10,20.00\" fill=\"#e0e0e0\"/><polygon points=\"20.99,26.05 21.94,25.10 27.06,25.10 28.01,26.05 27.06,27.00 21.94,27.00\" fill=\"#e0e0e0\"/><polygon points=\"19.95,19.05 20.90,20.00 20.90,24.06 19.95,25.01 19.00,24.06 19.00,20.00\" fill=\"#222\"/><polygon points=\"19.95,10.99 20.90,11.94 20.90,16.00 19.95,16.95 19.00,16.00 19.00,11.94\" fill=\"#222\"/><polygon points=\"20.99,18.00 21.94,17.05 27.06,17.05 28.01,18.00 27.06,18.95 21.94,18.95\" fill=\"#222\"/></svg>",
+        "renderType": "hexdisplay",
+        "width": 8,
+        "height": 9,
+        "pins": [
+          {
+            "name": "D0",
+            "side": "left",
+            "position": 1,
+            "direction": "in"
+          },
+          {
+            "name": "D1",
+            "side": "left",
+            "position": 2,
+            "direction": "in"
+          },
+          {
+            "name": "D2",
+            "side": "left",
+            "position": 3,
+            "direction": "in"
+          },
+          {
+            "name": "D3",
+            "side": "left",
+            "position": 4,
+            "direction": "in"
+          },
+          {
+            "name": "D4",
+            "side": "left",
+            "position": 5,
+            "direction": "in"
+          },
+          {
+            "name": "D5",
+            "side": "left",
+            "position": 6,
+            "direction": "in"
+          },
+          {
+            "name": "D6",
+            "side": "left",
+            "position": 7,
+            "direction": "in"
+          },
+          {
+            "name": "D7",
+            "side": "left",
+            "position": 8,
+            "direction": "in"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "D",
+            "pins": [
+              "D0",
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5",
+              "D6",
+              "D7"
+            ]
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-15",
+      "type": "type-hexdisplay",
+      "x": -111,
+      "y": -81,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-hexdisplay",
+        "name": "hexdisplay",
+        "builtin": true,
+        "title": "hex display (2-digit)",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"4\" y=\"6\" width=\"28\" height=\"24\" rx=\"1.5\" fill=\"#fff\" stroke=\"#333\"/><polygon points=\"8.00,9.95 8.95,9.00 14.06,9.00 15.01,9.95 14.06,10.90 8.95,10.90\" fill=\"#222\"/><polygon points=\"16.05,10.99 17.00,11.94 17.00,16.00 16.05,16.95 15.10,16.00 15.10,11.94\" fill=\"#222\"/><polygon points=\"16.05,19.05 17.00,20.00 17.00,24.06 16.05,25.01 15.10,24.06 15.10,20.00\" fill=\"#222\"/><polygon points=\"8.00,26.05 8.95,25.10 14.06,25.10 15.01,26.05 14.06,27.00 8.95,27.00\" fill=\"#e0e0e0\"/><polygon points=\"6.95,19.05 7.90,20.00 7.90,24.06 6.95,25.01 6.00,24.06 6.00,20.00\" fill=\"#222\"/><polygon points=\"6.95,10.99 7.90,11.94 7.90,16.00 6.95,16.95 6.00,16.00 6.00,11.94\" fill=\"#222\"/><polygon points=\"8.00,18.00 8.95,17.05 14.06,17.05 15.01,18.00 14.06,18.95 8.95,18.95\" fill=\"#222\"/><polygon points=\"20.99,9.95 21.94,9.00 27.06,9.00 28.01,9.95 27.06,10.90 21.94,10.90\" fill=\"#222\"/><polygon points=\"29.05,10.99 30.00,11.94 30.00,16.00 29.05,16.95 28.10,16.00 28.10,11.94\" fill=\"#e0e0e0\"/><polygon points=\"29.05,19.05 30.00,20.00 30.00,24.06 29.05,25.01 28.10,24.06 28.10,20.00\" fill=\"#e0e0e0\"/><polygon points=\"20.99,26.05 21.94,25.10 27.06,25.10 28.01,26.05 27.06,27.00 21.94,27.00\" fill=\"#e0e0e0\"/><polygon points=\"19.95,19.05 20.90,20.00 20.90,24.06 19.95,25.01 19.00,24.06 19.00,20.00\" fill=\"#222\"/><polygon points=\"19.95,10.99 20.90,11.94 20.90,16.00 19.95,16.95 19.00,16.00 19.00,11.94\" fill=\"#222\"/><polygon points=\"20.99,18.00 21.94,17.05 27.06,17.05 28.01,18.00 27.06,18.95 21.94,18.95\" fill=\"#222\"/></svg>",
+        "renderType": "hexdisplay",
+        "width": 8,
+        "height": 9,
+        "pins": [
+          {
+            "name": "D0",
+            "side": "left",
+            "position": 1,
+            "direction": "in"
+          },
+          {
+            "name": "D1",
+            "side": "left",
+            "position": 2,
+            "direction": "in"
+          },
+          {
+            "name": "D2",
+            "side": "left",
+            "position": 3,
+            "direction": "in"
+          },
+          {
+            "name": "D3",
+            "side": "left",
+            "position": 4,
+            "direction": "in"
+          },
+          {
+            "name": "D4",
+            "side": "left",
+            "position": 5,
+            "direction": "in"
+          },
+          {
+            "name": "D5",
+            "side": "left",
+            "position": 6,
+            "direction": "in"
+          },
+          {
+            "name": "D6",
+            "side": "left",
+            "position": 7,
+            "direction": "in"
+          },
+          {
+            "name": "D7",
+            "side": "left",
+            "position": 8,
+            "direction": "in"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "D",
+            "pins": [
+              "D0",
+              "D1",
+              "D2",
+              "D3",
+              "D4",
+              "D5",
+              "D6",
+              "D7"
+            ]
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-16",
+      "type": "type-indicator",
+      "x": -109,
+      "y": 86,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-17",
+      "type": "type-indicator",
+      "x": -103,
+      "y": 49,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
     }
   ],
   "wires": [
@@ -5276,6 +5660,10 @@
         {
           "t": "node",
           "v": "v67"
+        },
+        {
+          "t": "node",
+          "v": "v656"
         },
         {
           "t": "node",
@@ -7743,6 +8131,10 @@
         },
         {
           "t": "node",
+          "v": "v654"
+        },
+        {
+          "t": "node",
           "v": "v558"
         },
         {
@@ -8210,6 +8602,52 @@
           "v": "v645"
         }
       ]
+    },
+    {
+      "id": "w332",
+      "path": [
+        {
+          "t": "node",
+          "v": "v655"
+        },
+        {
+          "t": "bend",
+          "x": -108,
+          "y": 91
+        },
+        {
+          "t": "bend",
+          "x": -114,
+          "y": 91
+        },
+        {
+          "t": "node",
+          "v": "v654"
+        }
+      ]
+    },
+    {
+      "id": "w333",
+      "path": [
+        {
+          "t": "node",
+          "v": "v657"
+        },
+        {
+          "t": "bend",
+          "x": -102,
+          "y": 54
+        },
+        {
+          "t": "bend",
+          "x": -105,
+          "y": 54
+        },
+        {
+          "t": "node",
+          "v": "v656"
+        }
+      ]
     }
   ],
   "buses": [
@@ -8618,6 +9056,10 @@
           "v": "v275"
         },
         {
+          "t": "node",
+          "v": "v648"
+        },
+        {
           "t": "bend",
           "x": 83,
           "y": 89
@@ -8687,6 +9129,10 @@
         {
           "t": "node",
           "v": "v277"
+        },
+        {
+          "t": "node",
+          "v": "v646"
         },
         {
           "t": "bend",
@@ -9538,13 +9984,13 @@
         },
         {
           "t": "bend",
-          "x": -101,
+          "x": -83,
           "y": -17
         },
         {
           "t": "bend",
-          "x": -101,
-          "y": -61
+          "x": -83,
+          "y": -62
         },
         {
           "t": "bend",
@@ -9610,12 +10056,12 @@
         },
         {
           "t": "bend",
-          "x": -95,
+          "x": -81,
           "y": -9
         },
         {
           "t": "bend",
-          "x": -95,
+          "x": -81,
           "y": -68
         },
         {
@@ -9824,6 +10270,244 @@
         "A-3913",
         "A-3914",
         "A-3915"
+      ]
+    },
+    {
+      "id": "b75",
+      "path": [
+        {
+          "t": "node",
+          "v": "v647"
+        },
+        {
+          "t": "bend",
+          "x": 88,
+          "y": 114
+        },
+        {
+          "t": "node",
+          "v": "v646"
+        }
+      ],
+      "width": 8,
+      "name": null,
+      "groupConnections": [
+        {
+          "vertex": "v647",
+          "instance": "A-12",
+          "group": "D",
+          "bitMap": [
+            "D0",
+            "D1",
+            "D2",
+            "D3",
+            "D4",
+            "D5",
+            "D6",
+            "D7"
+          ]
+        }
+      ],
+      "bitNames": [
+        "D0",
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "D6",
+        "D7"
+      ]
+    },
+    {
+      "id": "b76",
+      "path": [
+        {
+          "t": "node",
+          "v": "v649"
+        },
+        {
+          "t": "bend",
+          "x": 71,
+          "y": 114
+        },
+        {
+          "t": "node",
+          "v": "v648"
+        }
+      ],
+      "width": 8,
+      "name": null,
+      "groupConnections": [
+        {
+          "vertex": "v649",
+          "instance": "A-13",
+          "group": "D",
+          "bitMap": [
+            "D0",
+            "D1",
+            "D2",
+            "D3",
+            "D4",
+            "D5",
+            "D6",
+            "D7"
+          ]
+        }
+      ],
+      "bitNames": [
+        "D0",
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "D6",
+        "D7"
+      ]
+    },
+    {
+      "id": "b77",
+      "path": [
+        {
+          "t": "node",
+          "v": "v650"
+        },
+        {
+          "t": "bend",
+          "x": -95,
+          "y": -77
+        },
+        {
+          "t": "bend",
+          "x": -95,
+          "y": -33
+        },
+        {
+          "t": "node",
+          "v": "v651"
+        }
+      ],
+      "width": 8,
+      "name": null,
+      "groupConnections": [
+        {
+          "vertex": "v650",
+          "instance": "A-14",
+          "group": "D",
+          "bitMap": [
+            "D0",
+            "D1",
+            "D2",
+            "D3",
+            "D4",
+            "D5",
+            "D6",
+            "D7"
+          ]
+        },
+        {
+          "vertex": "v651",
+          "instance": "X3",
+          "group": "OUT",
+          "bitMap": [
+            "OUT0",
+            "OUT1",
+            "OUT2",
+            "OUT3",
+            "OUT4",
+            "OUT5",
+            "OUT6",
+            "OUT7"
+          ]
+        }
+      ],
+      "bitNames": [
+        "D0",
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "D6",
+        "D7"
+      ]
+    },
+    {
+      "id": "b78",
+      "path": [
+        {
+          "t": "node",
+          "v": "v652"
+        },
+        {
+          "t": "bend",
+          "x": -101,
+          "y": -25
+        },
+        {
+          "t": "bend",
+          "x": -101,
+          "y": -68
+        },
+        {
+          "t": "bend",
+          "x": -117,
+          "y": -68
+        },
+        {
+          "t": "bend",
+          "x": -117,
+          "y": -77
+        },
+        {
+          "t": "node",
+          "v": "v653"
+        }
+      ],
+      "width": 8,
+      "name": null,
+      "groupConnections": [
+        {
+          "vertex": "v652",
+          "instance": "X3",
+          "group": "OUT",
+          "bitMap": [
+            "OUT8",
+            "OUT9",
+            "OUT10",
+            "OUT11",
+            "OUT12",
+            "OUT13",
+            "OUT14",
+            "OUT15"
+          ]
+        },
+        {
+          "vertex": "v653",
+          "instance": "A-15",
+          "group": "D",
+          "bitMap": [
+            "D0",
+            "D1",
+            "D2",
+            "D3",
+            "D4",
+            "D5",
+            "D6",
+            "D7"
+          ]
+        }
+      ],
+      "bitNames": [
+        "OUT8",
+        "OUT9",
+        "OUT10",
+        "OUT11",
+        "OUT12",
+        "OUT13",
+        "OUT14",
+        "OUT15"
       ]
     }
   ],
@@ -12363,11 +13047,87 @@
       "pin": "/R",
       "x": -132,
       "y": 77
+    },
+    {
+      "id": "v646",
+      "kind": "junction",
+      "x": 88,
+      "y": 105
+    },
+    {
+      "id": "v647",
+      "kind": "free",
+      "x": 90,
+      "y": 114
+    },
+    {
+      "id": "v648",
+      "kind": "junction",
+      "x": 71,
+      "y": 89
+    },
+    {
+      "id": "v649",
+      "kind": "free",
+      "x": 76,
+      "y": 114
+    },
+    {
+      "id": "v650",
+      "kind": "free",
+      "x": -89,
+      "y": -77
+    },
+    {
+      "id": "v651",
+      "kind": "free",
+      "x": -103,
+      "y": -33
+    },
+    {
+      "id": "v652",
+      "kind": "free",
+      "x": -103,
+      "y": -25
+    },
+    {
+      "id": "v653",
+      "kind": "free",
+      "x": -113,
+      "y": -77
+    },
+    {
+      "id": "v654",
+      "kind": "junction",
+      "x": -114,
+      "y": 76
+    },
+    {
+      "id": "v655",
+      "kind": "pin",
+      "ref": "A-16",
+      "pin": "IN",
+      "x": -108,
+      "y": 88
+    },
+    {
+      "id": "v656",
+      "kind": "junction",
+      "x": -105,
+      "y": 43
+    },
+    {
+      "id": "v657",
+      "kind": "pin",
+      "ref": "A-17",
+      "pin": "IN",
+      "x": -102,
+      "y": 51
     }
   ],
   "refCounters": {
     "U": 34,
-    "A": 12,
+    "A": 18,
     "N": 6,
     "X": 4
   },
@@ -12410,14 +13170,22 @@
         "X3.OUT0",
         "U5.1I0",
         "U26.D0",
-        "U28.D6"
+        "U28.D6",
+        "A-14.D0"
       ],
       "members": [
         "w5",
         "w180",
-        "w227"
+        "w227",
+        "b77"
       ],
-      "provenance": [],
+      "provenance": [
+        {
+          "bus": "b77",
+          "bit": 0,
+          "name": "D0"
+        }
+      ],
       "name": "D0"
     },
     {
@@ -12425,14 +13193,22 @@
         "X3.OUT1",
         "U5.2I0",
         "U26.D1",
-        "U28.D7"
+        "U28.D7",
+        "A-14.D1"
       ],
       "members": [
         "w6",
         "w181",
-        "w228"
+        "w228",
+        "b77"
       ],
-      "provenance": [],
+      "provenance": [
+        {
+          "bus": "b77",
+          "bit": 1,
+          "name": "D1"
+        }
+      ],
       "name": "D1"
     },
     {
@@ -12440,14 +13216,22 @@
         "X3.OUT2",
         "U5.3I0",
         "U26.D2",
-        "U27.D0"
+        "U27.D0",
+        "A-14.D2"
       ],
       "members": [
         "w7",
         "w182",
-        "w207"
+        "w207",
+        "b77"
       ],
-      "provenance": [],
+      "provenance": [
+        {
+          "bus": "b77",
+          "bit": 2,
+          "name": "D2"
+        }
+      ],
       "name": "D2"
     },
     {
@@ -12475,40 +13259,64 @@
       "pins": [
         "X3.OUT12",
         "U5.3I1",
-        "U13.3I1"
+        "U13.3I1",
+        "A-15.D4"
       ],
       "members": [
         "w13",
-        "w233"
+        "w233",
+        "b78"
       ],
-      "provenance": [],
-      "name": "3I1"
+      "provenance": [
+        {
+          "bus": "b78",
+          "bit": 4,
+          "name": "OUT12"
+        }
+      ],
+      "name": "OUT12"
     },
     {
       "pins": [
         "X3.OUT11",
         "U5.2I1",
-        "U13.2I1"
+        "U13.2I1",
+        "A-15.D3"
       ],
       "members": [
         "w14",
-        "w232"
+        "w232",
+        "b78"
       ],
-      "provenance": [],
-      "name": "2I1"
+      "provenance": [
+        {
+          "bus": "b78",
+          "bit": 3,
+          "name": "OUT11"
+        }
+      ],
+      "name": "OUT11"
     },
     {
       "pins": [
         "X3.OUT10",
         "U5.1I1",
-        "U13.1I1"
+        "U13.1I1",
+        "A-15.D2"
       ],
       "members": [
         "w15",
-        "w231"
+        "w231",
+        "b78"
       ],
-      "provenance": [],
-      "name": "1I1"
+      "provenance": [
+        {
+          "bus": "b78",
+          "bit": 2,
+          "name": "OUT10"
+        }
+      ],
+      "name": "OUT10"
     },
     {
       "pins": [
@@ -12578,7 +13386,8 @@
         "U7.CLK",
         "U15.CLK",
         "U31.CLK",
-        "X1.CLK"
+        "X1.CLK",
+        "A-17.IN"
       ],
       "members": [
         "w27",
@@ -12586,55 +13395,80 @@
         "w32",
         "w259",
         "w273",
-        "w323"
+        "w323",
+        "w333"
       ],
       "provenance": [],
-      "name": "OUT"
+      "name": "IN"
     },
     {
       "pins": [
         "X3.OUT13",
         "U6.IR13",
         "U15.IR13",
-        "U31.IR13"
+        "U31.IR13",
+        "A-15.D5"
       ],
       "members": [
         "w28",
         "w115",
-        "w278"
+        "w278",
+        "b78"
       ],
-      "provenance": [],
-      "name": "IR13"
+      "provenance": [
+        {
+          "bus": "b78",
+          "bit": 5,
+          "name": "OUT13"
+        }
+      ],
+      "name": "OUT13"
     },
     {
       "pins": [
         "X3.OUT14",
         "U6.IR14",
         "U15.IR14",
-        "U31.IR14"
+        "U31.IR14",
+        "A-15.D6"
       ],
       "members": [
         "w29",
         "w116",
-        "w279"
+        "w279",
+        "b78"
       ],
-      "provenance": [],
-      "name": "IR14"
+      "provenance": [
+        {
+          "bus": "b78",
+          "bit": 6,
+          "name": "OUT14"
+        }
+      ],
+      "name": "OUT14"
     },
     {
       "pins": [
         "X3.OUT15",
         "U6.IR15",
         "U15.IR15",
-        "U31.IR15"
+        "U31.IR15",
+        "A-15.D7"
       ],
       "members": [
         "w30",
         "w117",
-        "w280"
+        "w280",
+        "b78"
       ],
-      "provenance": [],
-      "name": "IR15"
+      "provenance": [
+        {
+          "bus": "b78",
+          "bit": 7,
+          "name": "OUT15"
+        }
+      ],
+      "name": "OUT15"
     },
     {
       "pins": [
@@ -12919,7 +13753,8 @@
         "U26.D6",
         "U26.D7",
         "X3.OUT6",
-        "U27.D4"
+        "U27.D4",
+        "A-14.D6"
       ],
       "members": [
         "w164",
@@ -12932,48 +13767,79 @@
         "w187",
         "w188",
         "w211",
-        "w247"
+        "w247",
+        "b77"
       ],
-      "provenance": [],
-      "name": "D0"
+      "provenance": [
+        {
+          "bus": "b77",
+          "bit": 6,
+          "name": "D6"
+        }
+      ],
+      "name": "D6"
     },
     {
       "pins": [
         "U26.D3",
         "X3.OUT3",
-        "U27.D1"
+        "U27.D1",
+        "A-14.D3"
       ],
       "members": [
         "w183",
-        "w208"
+        "w208",
+        "b77"
       ],
-      "provenance": [],
+      "provenance": [
+        {
+          "bus": "b77",
+          "bit": 3,
+          "name": "D3"
+        }
+      ],
       "name": "D3"
     },
     {
       "pins": [
         "U26.D4",
         "X3.OUT4",
-        "U27.D2"
+        "U27.D2",
+        "A-14.D4"
       ],
       "members": [
         "w184",
-        "w209"
+        "w209",
+        "b77"
       ],
-      "provenance": [],
+      "provenance": [
+        {
+          "bus": "b77",
+          "bit": 4,
+          "name": "D4"
+        }
+      ],
       "name": "D4"
     },
     {
       "pins": [
         "U26.D5",
         "X3.OUT5",
-        "U27.D3"
+        "U27.D3",
+        "A-14.D5"
       ],
       "members": [
         "w185",
-        "w210"
+        "w210",
+        "b77"
       ],
-      "provenance": [],
+      "provenance": [
+        {
+          "bus": "b77",
+          "bit": 5,
+          "name": "D5"
+        }
+      ],
       "name": "D5"
     },
     {
@@ -13018,40 +13884,64 @@
       "pins": [
         "X3.OUT7",
         "U27.D5",
-        "U13.1I0"
+        "U13.1I0",
+        "A-14.D7"
       ],
       "members": [
         "w212",
-        "w241"
+        "w241",
+        "b77"
       ],
-      "provenance": [],
-      "name": "1I0"
+      "provenance": [
+        {
+          "bus": "b77",
+          "bit": 7,
+          "name": "D7"
+        }
+      ],
+      "name": "D7"
     },
     {
       "pins": [
         "X3.OUT8",
         "U27.D6",
-        "U13.2I0"
+        "U13.2I0",
+        "A-15.D0"
       ],
       "members": [
         "w213",
-        "w240"
+        "w240",
+        "b78"
       ],
-      "provenance": [],
-      "name": "2I0"
+      "provenance": [
+        {
+          "bus": "b78",
+          "bit": 0,
+          "name": "OUT8"
+        }
+      ],
+      "name": "OUT8"
     },
     {
       "pins": [
         "X3.OUT9",
         "U27.D7",
-        "U13.3I0"
+        "U13.3I0",
+        "A-15.D1"
       ],
       "members": [
         "w214",
-        "w238"
+        "w238",
+        "b78"
       ],
-      "provenance": [],
-      "name": "3I0"
+      "provenance": [
+        {
+          "bus": "b78",
+          "bit": 1,
+          "name": "OUT9"
+        }
+      ],
+      "name": "OUT9"
     },
     {
       "pins": [
@@ -13169,12 +14059,14 @@
         "A-11.R",
         "U31.RESET",
         "U6.RESET",
-        "U15.RESET"
+        "U15.RESET",
+        "A-16.IN"
       ],
       "members": [
         "w296",
         "w297",
-        "w298"
+        "w298",
+        "w332"
       ],
       "provenance": [],
       "name": "R"
@@ -14903,11 +15795,13 @@
       "pins": [
         "U18.D0",
         "X1.OUT-LO0",
-        "U17.D0"
+        "U17.D0",
+        "A-13.D0"
       ],
       "members": [
         "b26",
-        "b55"
+        "b55",
+        "b76"
       ],
       "provenance": [
         {
@@ -14917,6 +15811,11 @@
         },
         {
           "bus": "b55",
+          "bit": 0,
+          "name": "D0"
+        },
+        {
+          "bus": "b76",
           "bit": 0,
           "name": "D0"
         }
@@ -14927,11 +15826,13 @@
       "pins": [
         "U18.D1",
         "X1.OUT-LO1",
-        "U17.D1"
+        "U17.D1",
+        "A-13.D1"
       ],
       "members": [
         "b26",
-        "b55"
+        "b55",
+        "b76"
       ],
       "provenance": [
         {
@@ -14941,6 +15842,11 @@
         },
         {
           "bus": "b55",
+          "bit": 1,
+          "name": "D1"
+        },
+        {
+          "bus": "b76",
           "bit": 1,
           "name": "D1"
         }
@@ -14951,11 +15857,13 @@
       "pins": [
         "U18.D2",
         "X1.OUT-LO2",
-        "U17.D2"
+        "U17.D2",
+        "A-13.D2"
       ],
       "members": [
         "b26",
-        "b55"
+        "b55",
+        "b76"
       ],
       "provenance": [
         {
@@ -14965,6 +15873,11 @@
         },
         {
           "bus": "b55",
+          "bit": 2,
+          "name": "D2"
+        },
+        {
+          "bus": "b76",
           "bit": 2,
           "name": "D2"
         }
@@ -14975,11 +15888,13 @@
       "pins": [
         "U18.D3",
         "X1.OUT-LO3",
-        "U17.D3"
+        "U17.D3",
+        "A-13.D3"
       ],
       "members": [
         "b26",
-        "b55"
+        "b55",
+        "b76"
       ],
       "provenance": [
         {
@@ -14989,6 +15904,11 @@
         },
         {
           "bus": "b55",
+          "bit": 3,
+          "name": "D3"
+        },
+        {
+          "bus": "b76",
           "bit": 3,
           "name": "D3"
         }
@@ -14999,11 +15919,13 @@
       "pins": [
         "U18.D4",
         "X1.OUT-LO4",
-        "U17.D4"
+        "U17.D4",
+        "A-13.D4"
       ],
       "members": [
         "b26",
-        "b55"
+        "b55",
+        "b76"
       ],
       "provenance": [
         {
@@ -15013,6 +15935,11 @@
         },
         {
           "bus": "b55",
+          "bit": 4,
+          "name": "D4"
+        },
+        {
+          "bus": "b76",
           "bit": 4,
           "name": "D4"
         }
@@ -15023,11 +15950,13 @@
       "pins": [
         "U18.D5",
         "X1.OUT-LO5",
-        "U17.D5"
+        "U17.D5",
+        "A-13.D5"
       ],
       "members": [
         "b26",
-        "b55"
+        "b55",
+        "b76"
       ],
       "provenance": [
         {
@@ -15037,6 +15966,11 @@
         },
         {
           "bus": "b55",
+          "bit": 5,
+          "name": "D5"
+        },
+        {
+          "bus": "b76",
           "bit": 5,
           "name": "D5"
         }
@@ -15047,11 +15981,13 @@
       "pins": [
         "U18.D6",
         "X1.OUT-LO6",
-        "U17.D6"
+        "U17.D6",
+        "A-13.D6"
       ],
       "members": [
         "b26",
-        "b55"
+        "b55",
+        "b76"
       ],
       "provenance": [
         {
@@ -15061,6 +15997,11 @@
         },
         {
           "bus": "b55",
+          "bit": 6,
+          "name": "D6"
+        },
+        {
+          "bus": "b76",
           "bit": 6,
           "name": "D6"
         }
@@ -15071,11 +16012,13 @@
       "pins": [
         "U18.D7",
         "X1.OUT-LO7",
-        "U17.D7"
+        "U17.D7",
+        "A-13.D7"
       ],
       "members": [
         "b26",
-        "b55"
+        "b55",
+        "b76"
       ],
       "provenance": [
         {
@@ -15087,6 +16030,11 @@
           "bus": "b55",
           "bit": 7,
           "name": "D7"
+        },
+        {
+          "bus": "b76",
+          "bit": 7,
+          "name": "D7"
         }
       ],
       "name": "D7"
@@ -15095,11 +16043,13 @@
       "pins": [
         "U19.D0",
         "X1.OUT-HI0",
-        "U16.D0"
+        "U16.D0",
+        "A-12.D0"
       ],
       "members": [
         "b27",
-        "b54"
+        "b54",
+        "b75"
       ],
       "provenance": [
         {
@@ -15109,6 +16059,11 @@
         },
         {
           "bus": "b54",
+          "bit": 0,
+          "name": "D0"
+        },
+        {
+          "bus": "b75",
           "bit": 0,
           "name": "D0"
         }
@@ -15119,11 +16074,13 @@
       "pins": [
         "U19.D1",
         "X1.OUT-HI1",
-        "U16.D1"
+        "U16.D1",
+        "A-12.D1"
       ],
       "members": [
         "b27",
-        "b54"
+        "b54",
+        "b75"
       ],
       "provenance": [
         {
@@ -15133,6 +16090,11 @@
         },
         {
           "bus": "b54",
+          "bit": 1,
+          "name": "D1"
+        },
+        {
+          "bus": "b75",
           "bit": 1,
           "name": "D1"
         }
@@ -15143,11 +16105,13 @@
       "pins": [
         "U19.D2",
         "X1.OUT-HI2",
-        "U16.D2"
+        "U16.D2",
+        "A-12.D2"
       ],
       "members": [
         "b27",
-        "b54"
+        "b54",
+        "b75"
       ],
       "provenance": [
         {
@@ -15157,6 +16121,11 @@
         },
         {
           "bus": "b54",
+          "bit": 2,
+          "name": "D2"
+        },
+        {
+          "bus": "b75",
           "bit": 2,
           "name": "D2"
         }
@@ -15167,11 +16136,13 @@
       "pins": [
         "U19.D3",
         "X1.OUT-HI3",
-        "U16.D3"
+        "U16.D3",
+        "A-12.D3"
       ],
       "members": [
         "b27",
-        "b54"
+        "b54",
+        "b75"
       ],
       "provenance": [
         {
@@ -15181,6 +16152,11 @@
         },
         {
           "bus": "b54",
+          "bit": 3,
+          "name": "D3"
+        },
+        {
+          "bus": "b75",
           "bit": 3,
           "name": "D3"
         }
@@ -15191,11 +16167,13 @@
       "pins": [
         "U19.D4",
         "X1.OUT-HI4",
-        "U16.D4"
+        "U16.D4",
+        "A-12.D4"
       ],
       "members": [
         "b27",
-        "b54"
+        "b54",
+        "b75"
       ],
       "provenance": [
         {
@@ -15205,6 +16183,11 @@
         },
         {
           "bus": "b54",
+          "bit": 4,
+          "name": "D4"
+        },
+        {
+          "bus": "b75",
           "bit": 4,
           "name": "D4"
         }
@@ -15215,11 +16198,13 @@
       "pins": [
         "U19.D5",
         "X1.OUT-HI5",
-        "U16.D5"
+        "U16.D5",
+        "A-12.D5"
       ],
       "members": [
         "b27",
-        "b54"
+        "b54",
+        "b75"
       ],
       "provenance": [
         {
@@ -15229,6 +16214,11 @@
         },
         {
           "bus": "b54",
+          "bit": 5,
+          "name": "D5"
+        },
+        {
+          "bus": "b75",
           "bit": 5,
           "name": "D5"
         }
@@ -15239,11 +16229,13 @@
       "pins": [
         "U19.D6",
         "X1.OUT-HI6",
-        "U16.D6"
+        "U16.D6",
+        "A-12.D6"
       ],
       "members": [
         "b27",
-        "b54"
+        "b54",
+        "b75"
       ],
       "provenance": [
         {
@@ -15253,6 +16245,11 @@
         },
         {
           "bus": "b54",
+          "bit": 6,
+          "name": "D6"
+        },
+        {
+          "bus": "b75",
           "bit": 6,
           "name": "D6"
         }
@@ -15263,11 +16260,13 @@
       "pins": [
         "U19.D7",
         "X1.OUT-HI7",
-        "U16.D7"
+        "U16.D7",
+        "A-12.D7"
       ],
       "members": [
         "b27",
-        "b54"
+        "b54",
+        "b75"
       ],
       "provenance": [
         {
@@ -15277,6 +16276,11 @@
         },
         {
           "bus": "b54",
+          "bit": 7,
+          "name": "D7"
+        },
+        {
+          "bus": "b75",
           "bit": 7,
           "name": "D7"
         }
