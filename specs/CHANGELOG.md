@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-09-21 — examples/cpu: a Fibonacci program, and cpurom.bin becomes it
+What: new `examples/cpu/fib.asm` — Fibonacci numbers below 2^15-1, written to data memory from 0x0100 with the count in Mem[0] — assembled into `examples/cpu/cpurom.bin`, which until now held a 64k word ramp (word[i] = i) rather than a program. Content only: no FR, no design section, no code outside `examples/`.
+Why: requested by the user, who wanted something worth watching when they press RUN on core.json now that it carries four hex displays. The limit test is the interesting part: the machine has no compare and no shift, but every Fibonacci number below 32767 has bit 15 clear and the first one that is not, 46368, has bit 15 set — so the test is two nands against 0x8000. The program also has to **create** its own zero: this machine's register file is a pair of plain 8×16 RAMs with nothing hardwiring r0, so r0 powers up undefined like the other seven and the first instruction is `lui r0, 0`. (That is why risc16test.asm uses only r1–r7. The first draft here assumed an architectural zero, and hung after 14 fetches with the PC undefined — a beq comparing U against U.) Verified on the flattened core.json through the slow simulator: 450 fetches, no undefined PC, Mem[0]=23 and Mem[0x0100..0x0116] holding 1..28657.
+Touches: nothing — `examples/cpu/fib.asm` (new), `examples/cpu/cpurom.bin` (regenerated)
+
 ## 2026-09-21 — The run button is capitalized: RUN / STOP (FR-076)
 What: the top bar's Run/Stop button is labeled **RUN** and **STOP** rather than "Run"/"Stop". The test-vector panel's own Run and Stop buttons are unchanged.
 Why: requested by the user, immediately after STEP arrived beside it (FR-076a). The two are the bar's only run-control words and sit adjacent, so a capitalized STEP next to a mixed-case Run read as an accident rather than a pair. Scoped to the top bar deliberately: the vector panel's buttons are a different control in a different place, and capitalizing them would spread a toolbar convention into a dialog that shares nothing else with it.
