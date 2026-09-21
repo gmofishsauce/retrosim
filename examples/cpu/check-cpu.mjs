@@ -170,5 +170,36 @@ const f2 = fetchesOf(rows2);
 ok(rows2[f2[6]?.i]?.pc === 6 && rows2[f2[7]?.i]?.pc === 7,
    `beq not taken: falls through to 0007 (got ${hex(rows2[f2[7]?.i]?.pc)})`);
 
+// --- r0 reads zero at power-on ---------------------------------------------
+//
+// KNOWN DEFECT -- THIS CHECK FAILS TODAY, and only this one should.
+//
+// Nothing in the register file hardwires register 0.  It is a pair of plain
+// 8x16 RAMs (U3/U4 in core.json), so r0 powers up undefined like the other
+// seven and stays undefined until something writes it.  That is why the program
+// above and risc16test.asm use only r1-r7, and why examples/cpu/fib.asm has to
+// open with `lui r0, 0` to make itself a zero.  The architecture says r0 reads
+// zero; the hardware does not yet implement it.  The check is here so the fix
+// announces itself, rather than being something to remember to re-test.
+//
+// The probe is two instructions that do nothing but read r0:
+//   0: add  r1, r0, r0   -> F = 0 + 0    = 0x0000
+//   1: nand r2, r0, r0   -> F = ~(0 & 0) = 0xffff
+// It watches the ALU F register, which is all the machinery above already
+// samples.  The nand is what makes a pass meaningful: a zero F could merely be
+// an F register that powers up clear, but only a real zero in r0 turns into
+// 0xffff.  An undefined r0 shows as ???? in both.
+const R0_PROBE = { 0: 0x0400, 1: 0x4800 };
+const rows3 = await run(R0_PROBE, 32);
+const f3 = fetchesOf(rows3);
+const probe = [0, 1].map((k) => {
+  const start = f3[k]?.i, end = f3[k + 1]?.i;
+  return start === undefined || end === undefined ? null : rows3[end - 1].f;
+});
+ok(probe[0] === 0x0000,
+   `r0 reads zero at power-on: add r1,r0,r0 gives 0000 (got ${hex(probe[0])})  [KNOWN DEFECT]`);
+ok(probe[1] === 0xffff,
+   `r0 reads zero at power-on: nand r2,r0,r0 gives ffff (got ${hex(probe[1])})  [KNOWN DEFECT]`);
+
 console.log(failed ? "\n  FAILURES\n" : "\n  all checks passed\n");
 process.exit(failed);
