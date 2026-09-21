@@ -1506,6 +1506,38 @@ test("advanceOneCycle steps just past the primary rising edge and settles (FR-07
   assert.equal(sim.simTime(), 17);
 });
 
+// FR-076a's reason for STEP starting the run: stepping from t = 0 walks the
+// power-on reset window (FR-071b) one cycle at a time instead of it flying past
+// under wall-clock pacing. With period 10 and cycles 3 the reset holds through
+// simTime < 30, so the first three steps land inside it and the fourth outside.
+test("stepping from t=0 walks the power-on reset window a cycle at a time (FR-076a)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("clock"), { props: { period: 10 } });
+  place(d, "A-2", builtin("reset"), { props: { cycles: 3 } });
+  place(d, "A-3", builtin("indicator"));
+  connect(d, ["A-2", "/R"], ["A-3", "IN"]);
+
+  const sim = buildSimulation(d);
+  const clocks = sim.clockInfo();
+  assert.equal(sim.valueOfPin("A-2", "/R"), VZ); // not yet stepped: nothing evaluated
+
+  // Reset asserted (/R low) for the first three cycles...
+  const seen = [];
+  for (let i = 0; i < 5; i++) {
+    advanceOneCycle(sim, 10, clocks);
+    seen.push({ t: sim.simTime(), r: sim.valueOfPin("A-2", "/R"), clk: sim.valueOfPin("A-1", "OUT") });
+  }
+  assert.deepEqual(
+    seen.map((x) => x.r),
+    [V0, V0, V0, V1, V1],
+  );
+  // ...and every step comes to rest past a rising edge of the FR-084 waveform
+  // (evaluated at t = 5 + 10k), so a click really is one cycle rather than a
+  // settling artifact: one step per period, clock high at each resting point.
+  assert.ok(seen.every((x) => x.clk === V1));
+  assert.deepEqual(seen.map((x) => x.t), [7, 17, 27, 37, 47]);
+});
+
 test("advanceOneCycle settle stops one unit before another clock's edge (FR-076a)", () => {
   const d = mkDesign();
   place(d, "A-1", builtin("clock"), { props: { period: 100 } });

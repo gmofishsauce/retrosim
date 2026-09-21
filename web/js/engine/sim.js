@@ -822,7 +822,12 @@ export function createSim({ store, renderer, consolePanel = null, onRefusal = po
   let starting = false; // a run is awaiting its async ROM preload (FR-114e)
   let paused = false; // sequential run paused (FR-076a); never set for combinational
 
-  async function run() {
+  // run({ paused }) starts a run (FR-076). `paused` starts it frozen at t = 0
+  // instead of wall-clock paced — the STEP entry (FR-076a): the pacing loop must
+  // never get a frame in before the first step, or the cycle the user asked to
+  // watch is gone before it is drawn. Ignored for a combinational design, which
+  // has no pacing to park.
+  async function run({ paused: startPaused = false } = {}) {
     if (sim || starting) return;
     starting = true;
     // Clear any stale editing-time message before the run; compile/start-up
@@ -874,7 +879,8 @@ export function createSim({ store, renderer, consolePanel = null, onRefusal = po
       postMessage(`cannot simulate: ${err.message}`);
       return;
     }
-    setAppState("simulating"); // FR-073/FR-076
+    paused = startPaused && sim.hasClocks(); // FR-076a: STEP starts a run paused
+    setAppState(paused ? "paused" : "simulating"); // FR-073/FR-076
     store.setSim({
       valueOfPin: sim.valueOfPin,
       valueOfLane: sim.valueOfLane, // conductor reads for the probe (FR-087c)
@@ -1013,13 +1019,6 @@ export function createSim({ store, renderer, consolePanel = null, onRefusal = po
     setAppState("simulating");
   }
 
-  // stepUnit advances exactly one unit step (FR-078) and stays paused.
-  function stepUnit() {
-    if (!sim || !paused) return;
-    sim.step();
-    renderer.requestRender();
-  }
-
   // primaryClock resolves the design's primary clock (FR-076b) against the
   // running sim's clock entities: the design-level reference when it names one,
   // else the lowest-refdes clock — the reconcilePrimaryClock ordering, covering
@@ -1036,13 +1035,23 @@ export function createSim({ store, renderer, consolePanel = null, onRefusal = po
       .sort((a, b) => aNum(a.refdes) - aNum(b.refdes) || (a.refdes < b.refdes ? -1 : 1))[0];
   }
 
-  // stepCycle advances just past the next rising edge of the primary clock and
-  // settles (FR-076a, semantics in advanceOneCycle above). Synchronous; stays
-  // paused throughout.
-  function stepCycle() {
-    if (!sim || !paused) return;
+  // stepCycle is the whole of the STEP button (FR-076a): it means "paused, one
+  // clock cycle later", from whatever state the application is in. With no run
+  // it starts one, paused; with a free-running one it pauses first; with a
+  // paused one it just advances. It is async only because the start is (flatten
+  // plus the ROM/RAM preloads) — the advance itself stays synchronous, a settle
+  // being bounded well inside a frame. The advance is advanceOneCycle above:
+  // just past the primary clock's next rising edge, then settle.
+  async function stepCycle() {
+    if (!sim) {
+      if (starting) return; // a start is already in flight; this click is a repeat
+      await run({ paused: true });
+      if (!sim) return; // the start was refused, failed, or was stopped mid-flight
+    } else if (!paused) {
+      pause();
+    }
     const clocks = sim.clockInfo();
-    if (clocks.length === 0) return;
+    if (clocks.length === 0) return; // combinational: no cycle to step (FR-076a)
     advanceOneCycle(sim, primaryClock(clocks).period, clocks, postMessage);
     renderer.requestRender();
   }
@@ -1051,13 +1060,12 @@ export function createSim({ store, renderer, consolePanel = null, onRefusal = po
     run,
     stop,
     isRunning: () => sim !== null,
-    // FR-076a: the toolbar's pause/step cluster is shown only for a sequential
-    // run and its step buttons only while paused.
+    // FR-076a: the toolbar's Pause toggle is shown only for a sequential run,
+    // and it is one of the two things that make STEP enabled.
     isSequentialRun: () => sim !== null && sim.hasClocks(),
     isPaused: () => paused,
     pause,
     resume,
-    stepUnit,
     stepCycle,
   };
 }

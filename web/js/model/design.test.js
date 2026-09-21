@@ -33,6 +33,7 @@ import {
   pinAcceptsConnection,
   pinHasConnection,
   setPinMark,
+  hasClockGenerator,
   NC_PIN,
 } from "./design.js";
 import { BUILTINS, portNFields } from "../builtins.js";
@@ -1041,4 +1042,31 @@ test("Refresh Types keeps an instance's derived save file (FR-088/FR-114h)", () 
   // not re-adopted from the metatype, which would put every instance on one file
   assert.equal(inst.typeData.mem.ramFile, "/proj/regram-U1.bin");
   assert.equal(inst.typeData.mem.ramLoad, true);
+});
+
+// hasClockGenerator (FR-076a/FR-086) answers over the design's OWN components —
+// what STEP's enablement and the primary-clock rules both key on. It is
+// deliberately blind to a clock inside an embedded sub-design: that one exists
+// only after flatten, and the toolbar covers it with the live run instead.
+test("hasClockGenerator sees the design's own clock generators (FR-076a)", () => {
+  const clock = BUILTINS.find((b) => b.name === "clock");
+  const indicator = BUILTINS.find((b) => b.name === "indicator");
+
+  const empty = createDesign();
+  assert.equal(hasClockGenerator(empty), false);
+
+  const combinational = createDesign();
+  addInstance(combinational, indicator, { x: 0, y: 0 });
+  assert.equal(hasClockGenerator(combinational), false);
+
+  const sequential = createDesign();
+  addInstance(sequential, indicator, { x: 0, y: 0 });
+  addInstance(sequential, clock, { x: 10, y: 0 });
+  assert.equal(hasClockGenerator(sequential), true);
+
+  // Tolerant of the states the toolbar actually calls it in: no design at all
+  // (no project, FR-121c) and a design with no components array yet.
+  assert.equal(hasClockGenerator(null), false);
+  assert.equal(hasClockGenerator(undefined), false);
+  assert.equal(hasClockGenerator({}), false);
 });

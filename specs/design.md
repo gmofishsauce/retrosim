@@ -2397,13 +2397,21 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   would claim the item reflects a panel's state, which it does not. It is disabled
   by the same predicate as Generate C… and Export… (`simulating || vectorHold`,
   FR-124). **Buttons:**
-  Select, Wire, Bus (modal tools), then **Run/Stop**, then — shown
-  only while a run of a sequential design is active — the **pause/step cluster**
-  (FR-076a):
-  a Pause/Continue toggle and Step-cycle / Step-unit buttons, each an inline-SVG
-  debugger glyph with a tooltip/aria-label (the Wire-icon pattern), the step
-  buttons enabled only while paused; they call the engine's
-  `pause()`/`resume()`/`stepUnit()`/`stepCycle()` (§6.13); and last, shown only
+  Select, Wire, Bus (modal tools), then **RUN/STOP** (capitalized to pair with
+  STEP, FR-076), then the permanent
+  **STEP** text button (FR-076a) — a `button()`, not an `iconButton()`, so it
+  reads as RUN's peer rather than as a member of the debugger cluster — then,
+  shown only while a run of a sequential design is active, the **Pause/Continue**
+  toggle, an inline-SVG debugger glyph with a tooltip/aria-label (the Wire-icon
+  pattern); they call the engine's `pause()`/`resume()`/`stepCycle()` (§6.13).
+  STEP's handler `await`s `stepCycle()` (it may start a run) and then calls
+  `refresh()` itself, exactly as the Pause handler does, because the paused flag
+  is engine-local and no store notification follows a pause. Its disabled
+  predicate is `noProject || vectorHold || !(hasClockGenerator(store.design) ||
+  seqRun)` — `hasClockGenerator` (§6.6, `model/design.js`) being the root
+  design's own clock-generator count, and the `seqRun` disjunct being what keeps
+  a design clocked only from an embedded child steppable once running (FR-076a);
+  the disabled tooltip names which clause refused. And last, shown only
   while the schematic carries live values (`simulating || vectorHold`), the
   **Probe** toggle (FR-087c), whose click calls
   `interaction.setTool(probing ? "select" : "probe")`, whose `active` class
@@ -2423,7 +2431,7 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   (Wire, Bus buttons; Undo, Redo, Paste, New, Open, Refresh Types, Test Vectors…,
   Generate C…, Export…, Design Properties…, and the three project items, FR-121b) are disabled —
   Save, Save As, the zoom items,
-  Select, and Run/Stop stay enabled (FR-087; the test-vector panel disabled the same
+  Select, and RUN/STOP stay enabled (FR-087; the test-vector panel disabled the same
   set through `isReadonly()` until 2026-08-02, when its lock was removed —
   §6.16/FR-115h — leaving `simulating` the only cause). The **Refresh
   Types** item (FR-088, tooltip "Re-copy type data from the loaded library into
@@ -3395,27 +3403,40 @@ no sequential part could ever leave U.)
   `stepCycle()` to advance to. A design clocked only through a marked port is
   therefore combinational *here* while being stateful to the vector runner
   (§6.16); that split is deliberate, not an oversight.
-- **Pause & single-step (FR-076a/FR-076b):** the sequential engine additionally
-  exposes `pause()`, `resume()`, `stepUnit()`, and `stepCycle()`, driven by the
-  toolbar's pause/step cluster (§6.11); a combinational run exposes none of
-  this (the cluster is not shown, FR-076a). `pause()` sets a paused flag read
-  by the rAF loop, which then advances 0 steps (simulated time freezes at a
-  unit-step boundary; the loop may equally cancel the rAF and re-request on
-  resume) and sets the state tray to `paused` (§6.11 `setAppState`). While
-  paused: `stepUnit()` advances exactly one unit step and renders;
-  `stepCycle()` computes the primary clock's next rising-edge time
-  `tEdge = min{ period/2 + k·period > simTime }` (the refdes from the
-  design-level `primaryClock` field, §7.2; effective period per FR-071a),
-  advances unit steps to `simTime = tEdge`, then keeps stepping until
+- **STEP & pause (FR-076a/FR-076b):** the engine exposes `pause()`, `resume()`,
+  and `stepCycle()`, driven by the toolbar's STEP button and Pause toggle
+  (§6.11). `pause()` sets a paused flag read by the rAF loop, which then
+  advances 0 steps (simulated time freezes at a unit-step boundary; the loop may
+  equally cancel the rAF and re-request on resume) and sets the state tray to
+  `paused` (§6.11 `setAppState`).
+  **`stepCycle()` is the whole of STEP, and is `async` because it may have to
+  start the run first.** It is a three-way entry rather than a paused-only
+  action (FR-076a): with no run it `await`s `run({ paused: true })` and returns
+  early if that start failed or was stopped mid-flight (the `starting` guard in
+  `run()` already swallows a double click, and `sim` is still null afterwards);
+  with a free-running sim it calls `pause()` first; with a paused sim it simply
+  proceeds. `run({ paused })` is the single new option on the existing start
+  path: it sets the paused flag *before* `startPaced()` and reports `paused`
+  rather than `simulating` to the tray, so the rAF loop parks on its first frame
+  instead of advancing — the wall-clock start must never get a frame in, or the
+  first cycle is gone before it is drawn. It is ignored for a combinational
+  design (no pacing to park), which STEP's disabled predicate keeps unreachable
+  anyway.
+  The advance itself is unchanged, and is `advanceOneCycle`: compute the primary
+  clock's next rising-edge time `tEdge = min{ period/2 + k·period > simTime }`
+  (the refdes from the design-level `primaryClock` field, §7.2; effective period
+  per FR-071a), advance unit steps to `simTime = tEdge`, then keep stepping until
   quiescence (`next` equals `curr`), stopping early at one unit before the
   next scheduled edge of **any** clock generator (min over all clocks of the
   next `k·period/2` boundary) and bounded by the FR-085 10,000-unit episode
-  bound (tray message once, remain paused); `resume()` clears the flag,
+  bound (tray message once, remain paused). `resume()` clears the flag,
   re-anchors the pacing baseline to the paused simTime (so the wall-clock rate
   math doesn't try to catch up the paused interval), and restores the
-  `simulating` tray text. Steps run synchronously (a step-cycle settle is at
+  `simulating` tray text. The advance runs synchronously (a settle is at
   most 10,000 units — well inside a frame). `stop()` while paused is the
   ordinary Stop path (FR-076, including the RAM write-back hook, FR-114g).
+  (Reworked 2026-09-21; supersedes the paused-only `stepCycle()` and the
+  `stepUnit()` single-evaluation-step entry, which is withdrawn with its button.)
 - **Interactive inputs (FR-087b):** the engine subscribes to the store's
   live-input channel (§6.10) for the duration of a run. `setLiveInput` (the
   non-dirtying sim-time run-time-state change behind a switch click, FR-087a) fires
@@ -5626,7 +5647,7 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-076, FR-087 | §6.9, §6.10, §6.11, §6.13 | `toolbar.js`, `store.js`, `interaction.js`, `sim.js`, `statusbar.js` |
 | FR-077, FR-081, FR-082, FR-083 | §6.8, §6.13 | `sim.js`, `galasm.js`, `canvas.js` |
 | FR-084, FR-085, FR-086 | §6.13 | `sim.js`, `builtins.js` |
-| FR-076a, FR-076b | §6.10, §6.11, §6.13, §7.2 | `toolbar.js`, `dialogs.js`, `statusbar.js`, `sim.js`, `store.js`, `model/design.js` |
+| FR-076a, FR-076b | §6.6, §6.10, §6.11, §6.13, §7.2 | `toolbar.js`, `dialogs.js`, `statusbar.js`, `sim.js`, `model/design.js`, `store.js`, `model/design.js` |
 | FR-071g, FR-071h, FR-083a | §6.11, §6.13, §6.17 (refusal), §6.18 (comment lines), §8 | `builtins.js`, `canvas.js`, `sim.js`, `cgen.js`, `ndl.js` |
 | FR-087b | §6.9, §6.10, §6.11, §6.13 | `interaction.js`, `store.js`, `builtins.js`, `sim.js` |
 | FR-087c | §6.8, §6.9, §6.10, §6.11, §6.13 | `interaction.js`, `properties.js`, `toolbar.js`, `canvas.js`, `sim.js`, `store.js`, `dialogs.js`, `style.css` |

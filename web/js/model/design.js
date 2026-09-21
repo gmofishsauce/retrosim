@@ -97,6 +97,16 @@ export function allocRefNum(design, series) {
 }
 
 // reconcilePrimaryClock maintains the design-level primary-clock reference
+// hasClockGenerator reports whether a design carries a clock generator of its
+// own (FR-086) — the root design's, not a flattened composition's, which is the
+// distinction that matters to the caller: STEP's enablement (FR-076a) and the
+// primary-clock rules (FR-076b) are both about clocks the user can see and name
+// on this sheet. A design whose only clock arrives inside an embedded sub-design
+// answers false here and is recognized as sequential only once its run is built.
+export function hasClockGenerator(design) {
+  return (design?.components ?? []).some((c) => c.typeData?.renderType === "clock");
+}
+
 // (FR-076b): when `design.primaryClock` is unset, or no longer names a clock
 // generator instance, it is reassigned to the lowest-refdes clock generator,
 // or cleared when the design has none. A valid reference is never touched.

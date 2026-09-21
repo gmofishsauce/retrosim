@@ -25,7 +25,7 @@ KiCad-like.
 10. [Projects and files](#10-projects-and-files) — including [Importing a block from another project](#importing-a-block-from-another-project), [Design notes](#design-notes) and [Reading a component's notes](#reading-a-components-notes)
 11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
-13. [Simulation](#13-simulation) — including [Driving a port by hand](#driving-a-port-by-hand), [Pausing and single-stepping](#pausing-and-single-stepping), [Probing a point](#probing-a-point), [The bottom panel area](#the-bottom-panel-area), [Console output](#console-output), [Test vectors](#test-vectors) — including [The panel's test-vector file](#the-panels-test-vector-file) and [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
+13. [Simulation](#13-simulation) — including [Driving a port by hand](#driving-a-port-by-hand), [Stepping and pausing](#stepping-and-pausing), [Probing a point](#probing-a-point), [The bottom panel area](#the-bottom-panel-area), [Console output](#console-output), [Test vectors](#test-vectors) — including [The panel's test-vector file](#the-panels-test-vector-file) and [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
 14. [Checking a design](#14-checking-a-design) — including [Reading the report](#reading-the-report), [Fixing what it finds](#fixing-what-it-finds), [Pins the check ignores](#pins-the-check-ignores), [Waiving a finding](#waiving-a-finding), and [What each rule means](#what-each-rule-means)
 15. [If the server disconnects](#15-if-the-server-disconnects)
 16. [Keyboard and mouse reference](#16-keyboard-and-mouse-reference)
@@ -109,9 +109,9 @@ The window has four regions plus a status bar:
   menu (`Test Vectors…`, `Generate C…`, `Design Rule Check`), followed by the tool buttons `Select`,
   **Wire** and **Bus** — the last two labelled with their tool's own cursor glyph
   rather than text, so the button, the cursor and the conductor it draws all look
-  alike — and the `Run` button. Two more buttons appear when they apply:
-  the pause/step controls while a clocked run is active
-  ([Pausing and single-stepping](#pausing-and-single-stepping)), and `Probe`
+  alike — then the `RUN` button and, beside it, `STEP`
+  ([Stepping and pausing](#stepping-and-pausing)). Two more buttons appear when
+  they apply: `Pause` while a clocked run is active, and `Probe`
   whenever the schematic is showing live values ([Probing a point](#probing-a-point)). Menu items with a standard keyboard shortcut
   show it in the menu (see [§16](#16-keyboard-and-mouse-reference)). Click a menu to open it; click an item to run it, or
   press `Esc` / click elsewhere to dismiss it. The current **project** name, the
@@ -482,7 +482,7 @@ a save fixes the part, because saving updates every instance of it in the open
 design; instances in other designs catch up when you open each one and run
 **File ▸ Refresh Types**.
 
-A design containing such a part **cannot be run**. **Run** opens a dialog naming the
+A design containing such a part **cannot be run**. **RUN** opens a dialog naming the
 part at fault — for example *The design cannot be run because the definition of U6
 contains errors* — and the simulation does not start. A part inside a sub-design is
 reported by the sub-design it sits in (*…because sub-design X1 contains errors*),
@@ -593,7 +593,7 @@ A few details worth knowing:
 - If **Load at start-up** is on but the file is missing or malformed, the run still
   starts (blank) and a message appears in the status bar — it is never an error. The
   file will then be created on the next Stop.
-- The save file is written only for an **interactive** Run/Stop. Running **test
+- The save file is written only for an **interactive** RUN/STOP. Running **test
   vectors** never reads or writes it.
 - The **standalone C simulator** (Generate C…) supports persistent RAM too. The
   save-file path and *Load at start-up* setting are baked into the generated
@@ -1277,7 +1277,7 @@ properties panel:
   the design **sequential** for vector runs, so rows run in order on persistent
   state. It changes nothing else: the port still drives nothing of its own, the
   netlist is untouched, and it has **no effect on the interactive simulator** —
-  a marked port carries no waveform and no period, so pressing **Run** on a
+  a marked port carries no waveform and no period, so pressing **RUN** on a
   design whose only clock is a marked port still gives you a combinational run,
   with nothing to pace and no cycle to step. (For a *paced* interactive run you
   still need a real clock generator — but you can always
@@ -1369,7 +1369,7 @@ the same **← back** path. Because the target names a file in this design's own
 folder, following from a never-saved design first prompts you to save it (so the
 name can be resolved and **back** has a sheet to return to).
 
-**Simulating a hierarchical design.** Pressing **Run** (or running
+**Simulating a hierarchical design.** Pressing **RUN** (or running
 [test vectors](#test-vectors)) **flattens** the design first: each sub-design
 instance is replaced, internally, by its child's contents — recursively, so
 children may embed children. You don't see the flattening; the schematic stays
@@ -1403,16 +1403,18 @@ as drawn. Things to know:
 retrosim ships with a **slow ("debug") simulator** that runs in the browser
 directly on the editing canvas.
 
-- **Run / Stop:** click **Run** to start; the button becomes **Stop** and the state
-  tray reads "simulating". A run continues until you click **Stop**.
+- **RUN / STOP:** click **RUN** to start; the button becomes **STOP** and the state
+  tray reads "simulating". A run continues until you click **STOP**. You can also
+  start a run with **STEP**, which starts it *paused* at the very beginning — see
+  [Stepping and pausing](#stepping-and-pausing).
 - **Stop clears the run from the screen.** Everything a run put on the canvas goes
   away together the moment you stop: indicators return to **?**, switches you
   clicked revert to their saved settings, red conflict strokes clear, and a probe
   reading is dropped. The schematic looks exactly as it did before you pressed
-  Run. Nothing from a finished run lingers — so what you see can never be values
+  RUN. Nothing from a finished run lingers — so what you see can never be values
   from one set of inputs shown beside a different set of switch positions. **Read
-  results while the run is still live:** pause or single-step it
-  ([below](#pausing-and-single-stepping)), let a combinational design settle and
+  results while the run is still live:** step or pause it
+  ([below](#stepping-and-pausing)), let a combinational design settle and
   read it at leisure (the run stays active and idle), or hold a test-vector run at
   a row (see [Holding a run to inspect it](#holding-a-run-to-inspect-it)).
 - **Values:** every net carries one of four values — **0**, **1**, **U**
@@ -1429,13 +1431,13 @@ directly on the editing canvas.
   which makes the circuit re-settle. They no longer stop on their own. If a
   settling pass doesn't reach a stable state within 10,000 units (a likely
   oscillation) that is reported in the message tray and evaluation pauses; press
-  Stop to end. Because an idle run is still a *live* run, a settled combinational
-  design is the natural place to read results: take as long as you like, then Stop
-  when you're done looking (Stop clears the display, as above).
+  STOP to end. Because an idle run is still a *live* run, a settled combinational
+  design is the natural place to read results: take as long as you like, then STOP
+  when you're done looking (STOP clears the display, as above).
 - **Sequential designs** (at least one clock) run continuously, paced at
-  `period × speed` simulated nanoseconds per real second, until you press Stop.
-  They can also be paused and stepped by the clock cycle or the unit — see
-  [Pausing and single-stepping](#pausing-and-single-stepping).
+  `period × speed` simulated nanoseconds per real second, until you press STOP.
+  They can also be walked one clock cycle at a time, from the very first cycle —
+  see [Stepping and pausing](#stepping-and-pausing).
 - **Conflicts:** when enabled drivers of a net disagree 0-vs-1, the net goes to U,
   every segment of that net turns **red** while the conflict lasts, and the message
   tray names the conflicting drivers. The simulation keeps running.
@@ -1548,36 +1550,53 @@ something else is driving shows gray while the net carries a real level — so a
 port is exactly the sort of place you turn the probe on to read. Leave probe mode
 and clicks go back to driving.
 
-### Pausing and single-stepping
+### Stepping and pausing
 
-While a **sequential** design (one with a clock generator) is running, three
-extra icon buttons appear beside Run/Stop — the conventional debugger controls:
+**STEP** sits permanently beside RUN, and means one thing wherever you press it:
+**"paused, one clock cycle later."**
 
-- **Pause / Continue** (two bars / a triangle) — Pause freezes simulated time
-  at a unit-step boundary; the state tray reads **"paused"** and the indicators
-  keep showing the frozen state. The run stays active: **Continue** resumes
-  wall-clock pacing from exactly where you paused (the paused interval is never
-  "caught up"), and **Stop** works normally, including writing back any
-  [persistent RAM](#persistent-ram).
-- **Step one clock cycle** (an arrow arcing over a dot) — enabled while paused.
-  Advances just past the **next rising edge of the primary clock** (see below)
-  and then keeps stepping until the circuit settles, so each click shows the
-  stable state produced by one more clock. Settling stops early one unit before
-  the next scheduled edge of any clock — a step never swallows an edge — and a
-  circuit that won't settle gets the usual 10,000-unit oscillation report and
-  stays paused.
-- **Step one unit** (an arrow dropping onto a dot) — enabled while paused.
-  Advances exactly one simulated nanosecond, for watching a value ripple
-  through logic one gate level at a time.
+- **Not running?** STEP starts the simulation *paused at the very beginning* and
+  advances it one cycle. This is the way to watch a design's
+  [power-on reset](#11-built-in-components) happen: with the default 3-cycle
+  reset, your first three clicks land inside the reset window and the fourth is
+  the first cycle of real work. Pressing RUN instead would have flung all of that
+  past in a fraction of a second.
+- **Free-running?** STEP pauses it first, then advances one cycle. You never have
+  to find Pause before stepping.
+- **Already paused?** STEP advances one cycle.
+
+Either way you end up paused, the state tray reads **"paused"**, and RUN reads
+**STOP** — a stepped run is an ordinary live run in every other respect, so the
+design is read-only and STOP ends it normally, including writing back any
+[persistent RAM](#persistent-ram).
+
+**What "one cycle" means.** STEP advances just past the **next rising edge of the
+primary clock** (see below) and then keeps stepping until the circuit settles, so
+each click shows you the stable state produced by one more clock rather than some
+half-propagated moment in between. Settling stops early one unit before the next
+scheduled edge of any clock — a step never swallows an edge — and a circuit that
+won't settle gets the usual 10,000-unit oscillation report and stays paused.
+
+**STEP is greyed out** when there is nothing to step: no design open, a
+test-vector run being [held](#holding-a-run-to-inspect-it) (release it first), or
+a design with no clock generator of its own. Hover it to see which. A design
+whose only clock comes from an embedded [sub-design](#12-sub-designs-and-ports)
+can't *start* with STEP, but becomes steppable once its run is going.
+
+**Pause / Continue** (two bars / a triangle) appears beside STEP while a
+sequential run is active. Pause freezes simulated time at a unit-step boundary,
+exactly as STEP does but without advancing; **Continue** resumes wall-clock
+pacing from exactly where you paused (the paused interval is never "caught up").
 
 Clicking an **input switch** while paused still flips it immediately (the
 switch redraws), but the new value reaches the circuit on the *next* step —
-nothing advances until you Step or Continue.
+nothing advances until you STEP or Continue.
 
-Combinational designs (no clock) show no pause/step controls; they already
-settle and idle on their own.
+Combinational designs (no clock) have no cycle to step and no pacing to pause:
+STEP is greyed out and no Pause button appears. They already settle and idle on
+their own.
 
-**The primary clock.** Step-cycle needs to know which clock defines "a cycle".
+**The primary clock.** STEP needs to know which clock defines "a cycle".
 The first clock generator placed in a design becomes its **primary clock**,
 which is saved with the design. If you delete the primary, the role passes to
 the lowest-numbered remaining clock (reported in the message tray). To pick a
@@ -1612,7 +1631,7 @@ conflicted net means something quite different from an ordinary `U`.
 
 The reading is **live**: it tracks the circuit as the simulation advances. During
 a fast paced run the value will change faster than you can read it — that is
-expected. The probe earns its keep while **paused** or single-stepping, on a
+expected. The probe earns its keep while **paused** or stepping, on a
 **settled** combinational design, and on a **held** vector run, which is where
 you can study a state at leisure.
 
@@ -1700,7 +1719,7 @@ state are session-only — they are **not** saved with the design.
 
 To try it: place a **UART**, wire an 8-bit value to `D0`–`D7` (a bus snaps to the
 whole `DATA` group at once), hold `CS/` and `CE/` low, drive `CLK` from a clock
-generator, press **Run**, and open **View ▸ Console** — before or after starting
+generator, press **RUN**, and open **View ▸ Console** — before or after starting
 the run, it makes no difference to what you see. In the [generated C
 simulator](#generating-a-standalone-c-simulator) the same bytes go to the
 program's real standard output instead.
@@ -1742,7 +1761,7 @@ longer do.) Two things follow from that, both automatic:
 The one restriction that remains is that a **vector run and a live simulation
 cannot overlap**: the panel's Run, Run to Row, and Capture are disabled while the
 interactive simulator is running, and while a vector run is *held* the toolbar's
-**Run/Stop** button is the **Stop** that releases the hold rather than a way to
+**RUN/STOP** button is the **STOP** that releases the hold rather than a way to
 start a run.
 
 The table's columns come from your design automatically:
@@ -1894,8 +1913,8 @@ Two details worth knowing:
   run ends with its final state visible.
 
 To release the hold, click **Stop** — either the one in the panel, or the main
-toolbar's **Run/Stop** button, which reads **Stop** while a run is held and goes
-back to **Run** once you release. The pass/fail results stay; only the schematic
+toolbar's **RUN/STOP** button, which reads **STOP** while a run is held and goes
+back to **RUN** once you release. The pass/fail results stay; only the schematic
 display is cleared. A hold is also released automatically when you **edit any
 cell**, add or delete a row, **Capture**, **Load** a file, **edit the design**, or
 close the tab — once the table or the circuit changes, the state on screen no
@@ -1938,7 +1957,7 @@ Bidirectional columns run in the interactive **Test Vectors** panel only; the
 them (it warns and omits any IO columns).
 
 Running test vectors **does not change your design** — it neither marks it modified
-nor disturbs an in-progress edit — and is separate from the **Run/Stop** button.
+nor disturbs an in-progress edit — and is separate from the **RUN/STOP** button.
 The **Test Vectors…** command is unavailable while a normal simulation is running;
 press Stop first.
 
@@ -2017,7 +2036,7 @@ and after the last cycle the program prints each observable point (the same
 column set) as a `LABEL=value` line — values `0`, `1`, `U`, or `Z`. This is
 the mode for letting a design — a ROM-driven circuit, a counter, eventually a
 CPU — simply run. Note that a port marked **clock source** is *not* driven in
-this mode — like the interactive **Run**, free-running needs a real clock
+this mode — like the interactive **RUN**, free-running needs a real clock
 generator, since a marked port has no waveform to produce. A design clocked
 only through a marked port free-runs with that net undriven; test-vector mode
 is where such a design is exercised.

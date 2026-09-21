@@ -1,11 +1,13 @@
 // Menu/tool bar (§6.11, FR-004a): File/Edit/View pull-down menus on the left,
-// then the modal tool buttons (Select/Wire/Bus) and Run/Stop on the right —
-// plus the pause/step cluster while a sequential run is active (FR-076a). Tool
+// then the modal tool buttons (Select/Wire/Bus), RUN/STOP and the permanent
+// STEP button on the right — plus the Pause toggle while a sequential run is
+// active (FR-076a). Tool
 // buttons set the active tool via the interaction FSM; the active tool is
 // highlighted by subscribing to the store. One menu is open at a time; an
 // outside click or Escape closes it.
 
 import { refreshTypesCmd } from "../commands.js";
+import { hasClockGenerator } from "../model/design.js";
 import { postMessage } from "./statusbar.js";
 
 // WIRE_ICON is the wire cursor's glyph (a centered diagonal line with an open
@@ -29,10 +31,11 @@ const BUS_ICON =
   '<line x1="13.1" y1="13.1" x2="17" y2="17"/>' +
   '<circle cx="10" cy="10" r="2.4" stroke-width="1.7"/></g></svg>';
 
-// Pause/step cluster glyphs (FR-076a): the conventional debugger set — pause
-// is two vertical bars, continue a right-pointing triangle, step-cycle an
-// arrow arcing over a dot (the "step over" idiom), step-unit an arrow dropping
-// onto a dot (the "step into" idiom, for the smallest possible step).
+// Pause/Continue glyphs (FR-076a): the conventional debugger pair — pause is
+// two vertical bars, continue a right-pointing triangle. STEP is deliberately
+// NOT a glyph: the step-over and step-into arrows that used to sit here do not
+// distinguish "one clock cycle" from "one evaluation step" at 18px, which is the
+// whole reason the control is now a word.
 const PAUSE_ICON =
   '<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" fill="currentColor">' +
   '<rect x="4.5" y="4" width="4" height="12" rx="1"/>' +
@@ -41,18 +44,6 @@ const PAUSE_ICON =
 const CONTINUE_ICON =
   '<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" fill="currentColor">' +
   '<path d="M6 4 L16 10 L6 16 Z"/></svg>';
-
-const STEP_CYCLE_ICON =
-  '<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true">' +
-  '<path d="M4 12 A 6 6 0 0 1 16 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
-  '<path d="M13.6 10.2 L18.8 10.2 L16.2 15 Z" fill="currentColor"/>' +
-  '<circle cx="9" cy="16" r="2" fill="currentColor"/></svg>';
-
-const STEP_UNIT_ICON =
-  '<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true">' +
-  '<line x1="10" y1="3" x2="10" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
-  '<path d="M6.8 9 L13.2 9 L10 13.5 Z" fill="currentColor"/>' +
-  '<circle cx="10" cy="16.5" r="2" fill="currentColor"/></svg>';
 
 // Keyboard-accelerator hint formatting (FR-004b). The modifier is normally
 // Cmd (mac) / Ctrl (elsewhere); accelLabel renders the platform-appropriate text
@@ -229,16 +220,27 @@ export function initToolbar({ container, store, interaction, fileops, projectops
 
   container.appendChild(el("span", "tool-sep"));
 
-  // Run/Stop toggles the slow simulator (FR-076); the label tracks
+  // RUN/STOP toggles the slow simulator (FR-076); the label tracks
   // store.state.simulating via refresh(). While a test-vector run is HELD
   // (FR-115l) the same button is the Stop that releases the hold — there is no
   // interactive simulation to stop in that state, so it never reaches sim.
-  const runBtn = button("Run", "Run the simulation", () => {
+  const runBtn = button("RUN", "Run the simulation", () => {
     if (store.state.vectorHold) onReleaseHold();
     else if (sim.isRunning()) sim.stop();
     else sim.run();
   });
   container.appendChild(runBtn);
+
+  // STEP (FR-076a): permanent, and a text button rather than an icon so it reads
+  // as Run's peer. One meaning in every state — "paused, one clock cycle later";
+  // the engine's stepCycle() owns the three-way entry (start / pause / advance).
+  // It is awaited because the start path is async, and refresh()es itself after:
+  // the paused flag is engine-local, so no store notification follows a pause.
+  const stepBtn = button("STEP", "", async () => {
+    await sim.stepCycle();
+    refresh();
+  });
+  container.appendChild(stepBtn);
 
   // Probe (FR-087c): shown only while the schematic carries live values — a
   // running simulation or a held vector run. It supplants Select rather than
@@ -247,21 +249,16 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     interaction.setTool(store.state.tool === "probe" ? "select" : "probe");
   });
 
-  // Pause/step cluster (FR-076a): shown only while a run of a sequential
-  // design is active; the step buttons work only while paused. Pause state is
-  // engine-local (not store state), so the toggle handler refreshes the bar
-  // itself — every other transition (start, stop) already flows through the
-  // store subscription.
+  // Pause/Continue (FR-076a): shown only while a run of a sequential design is
+  // active. Pause state is engine-local (not store state), so the toggle handler
+  // refreshes the bar itself — every other transition (start, stop) already
+  // flows through the store subscription.
   const pauseBtn = iconButton(PAUSE_ICON, "Pause the simulation", () => {
     if (sim.isPaused()) sim.resume();
     else sim.pause();
     refresh();
   });
-  const stepCycleBtn = iconButton(STEP_CYCLE_ICON, "Step one clock cycle", () =>
-    sim.stepCycle());
-  const stepUnitBtn = iconButton(STEP_UNIT_ICON, "Step one unit (1 ns)", () =>
-    sim.stepUnit());
-  container.append(pauseBtn, stepCycleBtn, stepUnitBtn, probeBtn);
+  container.append(pauseBtn, probeBtn);
 
   // Menu widget (FR-004a). createMenu builds a .menu (trigger + drop panel);
   // addItem appends a clickable item. Only one menu is open at a time; an
@@ -415,22 +412,36 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     notesItem.disabled = noProject;
     const holding = store.state.vectorHold;
     runBtn.disabled = noProject;
-    runBtn.textContent = simming || holding ? "Stop" : "Run";
+    // Capitalized to pair with STEP beside it (FR-076); the tooltips stay prose.
+    runBtn.textContent = simming || holding ? "STOP" : "RUN";
     runBtn.title = holding
       ? "Release the held test-vector state"
       : simming
         ? "Stop the simulation"
         : "Run the simulation";
-    // Pause/step cluster (FR-076a): visible only during a sequential run; the
-    // step buttons are enabled only while paused; the toggle swaps glyphs.
+    // Pause/Continue (FR-076a): visible only during a sequential run; the toggle
+    // swaps glyphs.
     const seqRun = simming && sim.isSequentialRun();
     const pausedNow = seqRun && sim.isPaused();
-    pauseBtn.hidden = stepCycleBtn.hidden = stepUnitBtn.hidden = !seqRun;
+    pauseBtn.hidden = !seqRun;
     pauseBtn.innerHTML = pausedNow ? CONTINUE_ICON : PAUSE_ICON;
     const pauseTitle = pausedNow ? "Continue the simulation" : "Pause the simulation";
     pauseBtn.title = pauseTitle;
     pauseBtn.setAttribute("aria-label", pauseTitle);
-    stepCycleBtn.disabled = stepUnitBtn.disabled = !pausedNow;
+    // STEP (FR-076a) is always present; what varies is whether there is a clock
+    // to step by. The design's own clock generators answer that while editing;
+    // `seqRun` covers the design clocked only from an embedded child, which is
+    // recognized as sequential only once its run is built. A vector hold is not
+    // a run and cannot be stepped.
+    const stepReason = noProject
+      ? "Open a design to step it"
+      : holding
+        ? "Release the held test-vector state before stepping"
+        : !(hasClockGenerator(store.design) || seqRun)
+          ? "This design has no clock generator, so it has no cycle to step"
+          : null;
+    stepBtn.disabled = stepReason !== null;
+    stepBtn.title = stepReason ?? "Advance one clock cycle, starting the simulation if it is not running";
     // Probe (FR-087c): present exactly while the schematic carries live values.
     // This is also where the toolbar learns a run ended, so it drops probe mode
     // back to Select there — the FR's "reverts when the run stops or the hold is
