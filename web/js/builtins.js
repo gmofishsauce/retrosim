@@ -110,6 +110,92 @@ const BARGRAPH_ICON =
     .join("") +
   "</svg>";
 
+// --- Seven-segment hex display (FR-071j) ---------------------------------
+//
+// HEX_SEGMENTS is the decode: for each nibble value 0..15, a bitmask of the
+// segments that light, bit 0 = a (top) through bit 6 = g (middle), in the
+// conventional a,b,c,d,e,f,g order that sevenSegPolys below returns. The letters
+// use the only seven-segment forms that stay distinct from digits — upper-case
+// A, C, E, F and lower-case b, d (an upper-case B is an 8 and an upper-case D is
+// a 0). The table is the whole of the display's behavior: it is combinational,
+// so there is nothing else to remember about it.
+export const HEX_SEGMENTS = [
+  0b0111111, // 0: abcdef
+  0b0000110, // 1: bc
+  0b1011011, // 2: abdeg
+  0b1001111, // 3: abcdg
+  0b1100110, // 4: bcfg
+  0b1101101, // 5: acdfg
+  0b1111101, // 6: acdefg
+  0b0000111, // 7: abc
+  0b1111111, // 8: all
+  0b1101111, // 9: abcdfg
+  0b1110111, // A: abcefg
+  0b1111100, // b: cdefg
+  0b0111001, // C: adef
+  0b1011110, // d: bcdeg
+  0b1111001, // E: adefg
+  0b1110001, // F: aefg
+];
+
+// ALL_SEGMENTS is the "value unknown" face (FR-071j): every segment lit, drawn in
+// the indicator's undriven gray — a gray 8, the ghost a real display shows when
+// it is off.
+export const ALL_SEGMENTS = 0b1111111;
+
+// sevenSegPolys returns the seven segment outlines of one digit occupying the
+// box (x0,y0,w,h), each as a list of [x,y] points in that same frame, in the
+// order a,b,c,d,e,f,g (matching HEX_SEGMENTS' bit order). `t` is the segment
+// thickness. Each segment is the classic tapered hexagon — a bar with 45° ends —
+// so neighboring segments meet at a mitre instead of overlapping. Frame-agnostic
+// and unit-free: the canvas passes grid units (drawn through fillLocalPoly, so
+// rotation and zoom come free) and the palette icon passes SVG user units, which
+// is what keeps the tile's glyph and the placed object's glyph the same shape.
+export function sevenSegPolys(x0, y0, w, h, t) {
+  const g = t * 0.55; // gap at each end, where two segments would otherwise meet
+  const h2 = t / 2;
+  const xl = x0 + h2;
+  const xr = x0 + w - h2;
+  const yt = y0 + h2;
+  const ym = y0 + h / 2;
+  const yb = y0 + h - h2;
+  const bar = (y, xa, xb) =>
+    [[xa, y], [xa + h2, y - h2], [xb - h2, y - h2], [xb, y], [xb - h2, y + h2], [xa + h2, y + h2]];
+  const post = (x, ya, yb2) =>
+    [[x, ya], [x + h2, ya + h2], [x + h2, yb2 - h2], [x, yb2], [x - h2, yb2 - h2], [x - h2, ya + h2]];
+  return [
+    bar(yt, xl + g, xr - g), // a — top
+    post(xr, yt + g, ym - g), // b — upper right
+    post(xr, ym + g, yb - g), // c — lower right
+    bar(yb, xl + g, xr - g), // d — bottom
+    post(xl, ym + g, yb - g), // e — lower left
+    post(xl, yt + g, ym - g), // f — upper left
+    bar(ym, xl + g, xr - g), // g — middle
+  ];
+}
+
+// HEXDISP_ICON: the two-digit display package showing "AF" — two hex letters, so
+// the tile says at a glance what the part decodes (FR-071j). Built from
+// sevenSegPolys and HEX_SEGMENTS, the same pair the canvas renderer draws from,
+// so the tile and the placed object cannot drift apart.
+const HEXDISP_ICON = (() => {
+  const digit = (x, mask) =>
+    sevenSegPolys(x, 9, 11, 18, 1.9)
+      .map(
+        (pts, i) =>
+          `<polygon points="${pts.map(([a, b]) => `${a.toFixed(2)},${b.toFixed(2)}`).join(" ")}"` +
+          ` fill="${(mask >> i) & 1 ? "#222" : "#e0e0e0"}"/>`,
+      )
+      .join("");
+  return (
+    '<svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true">' +
+    '<rect x="4" y="6" width="28" height="24" rx="1.5" fill="#fff" stroke="#333"/>' +
+    digit(6, HEX_SEGMENTS[0xa]) +
+    digit(19, HEX_SEGMENTS[0xf]) +
+    "</svg>"
+  );
+})();
+
 // TGATE_ICON: the conventional transmission-gate glyph — two overlapping
 // opposite-pointing triangles between the A and B terminals — with the EN lead
 // entering the top (FR-071g). Same glyph as drawTgate on the canvas.
@@ -287,6 +373,23 @@ const BUILTIN_DEFS = [
     // Eight input bits down the left edge (one grid row each), grouped so an
     // 8-bit bus snap-connects to all of them at once (FR-041/FR-042), adopting
     // D0..D7 as its bit names. Display-only, like the 1-wide indicator (FR-068).
+    pins: BIT_PINS("D", "left", "in"),
+    pinGroups: [{ name: "D", pins: BIT_NAMES("D") }],
+  },
+  {
+    name: "hexdisplay",
+    builtin: true,
+    title: "hex display (2-digit)", // FR-071j palette tooltip
+    icon: HEXDISP_ICON,
+    renderType: "hexdisplay",
+    // Wider than the other 8-bit built-ins: the body has to hold two digits.
+    // Height 9 for the same reason indicator8 is 9 — eight pin rows plus a
+    // one-unit margin top and bottom.
+    width: 8,
+    height: 9,
+    // Eight input bits down the left edge, grouped so an 8-bit bus snap-connects
+    // to all of them at once (FR-041/FR-042), adopting D0..D7 as its bit names.
+    // D0 is the LSB: D3..D0 decode to the right digit, D7..D4 to the left.
     pins: BIT_PINS("D", "left", "in"),
     pinGroups: [{ name: "D", pins: BIT_NAMES("D") }],
   },
@@ -521,6 +624,12 @@ const BEHAVIOR_DEFS = {
   // Display only, like the 1-wide indicator (FR-071d): drives nothing; the
   // renderer reads each bit's net value to light the bar-graph stripes.
   indicator8() {
+    return [];
+  },
+  // Display only, like the indicators (FR-071j): drives nothing, and keeps no
+  // state — the renderer decodes the eight live net values into two hex digits
+  // every frame, so "combinational" needs no machinery here at all.
+  hexdisplay() {
     return [];
   },
   // Multi-bit port (FR-071e): drives nothing on its own — it is an interface

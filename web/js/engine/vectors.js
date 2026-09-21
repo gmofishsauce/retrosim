@@ -150,8 +150,9 @@ export function defaultInputCell(col) {
 }
 
 // deriveColumns reads a design's bound I/O for the vector table (FR-115b): one
-// input column per input switch (its OUT pin), one output column per indicator
-// bit — a 1-wide indicator contributes its IN pin, an 8-wide contributes D0..D7.
+// input column per input switch (its OUT pin), one output column per display
+// bit — a 1-wide indicator contributes its IN pin; an 8-wide indicator and a hex
+// display (FR-071j) each contribute D0..D7.
 // Ports (FR-094 / multi-bit portN) are unioned in by effective direction
 // (FR-115f): an `in` port becomes an input column, an `out` port an output
 // column, each identified by the port's own (refdes, pin) — "P" for a 1-wide
@@ -185,7 +186,9 @@ export function deriveColumns(design) {
       });
     } else if (rt === "indicator") {
       outputs.push({ refdes: c.refdes, pin: "IN", label });
-    } else if (rt === "indicator8") {
+    } else if (rt === "indicator8" || rt === "hexdisplay") {
+      // Both 8-bit displays bind the same way (FR-071d/FR-071j): one output
+      // column per bit off their own D0..D7 pins.
       for (let i = 0; i < 8; i++) {
         // base/bit mark this column as one bit of a multi-bit instance, so the
         // panel can offer the group as a hex cell (FR-115k). Both are live-only

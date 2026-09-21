@@ -129,6 +129,24 @@ test("deriveColumns: switches → inputs, indicators → outputs, indicator8 exp
   assert.equal(bus[0].label, "BUS.D0");
 });
 
+// A hex display (FR-071j) binds exactly as an 8-wide indicator does: eight
+// output columns off its own D0..D7 pins, ready to be read as one hex cell
+// (FR-115k). It is display-only, so it contributes no input columns.
+test("deriveColumns: a hex display expands to eight output bits (FR-071j)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("hexdisplay"), { label: "ACC" });
+  const { inputs, outputs, io } = deriveColumns(d);
+  assert.deepEqual(inputs, []);
+  assert.deepEqual(io, []);
+  assert.deepEqual(
+    outputs.map((c) => c.pin),
+    ["D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7"],
+  );
+  assert.ok(outputs.every((c) => c.refdes === "A-1" && c.base === "ACC"));
+  assert.deepEqual(outputs.map((c) => c.bit), [0, 1, 2, 3, 4, 5, 6, 7]);
+  assert.equal(outputs[3].label, "ACC.D3");
+});
+
 test("deriveColumns: switch elements contribute no vector columns (FR-115b/FR-083a)", () => {
   const d = tgateVectorDesign();
   const { inputs, outputs } = deriveColumns(d);

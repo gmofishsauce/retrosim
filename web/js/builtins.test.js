@@ -4,9 +4,11 @@ import assert from "node:assert/strict";
 import {
   BUILTINS,
   BEHAVIORS,
+  HEX_SEGMENTS,
   INTERACTIONS,
   memDeviceType,
   portNFields,
+  sevenSegPolys,
   PORTN_MIN_WIDTH,
   PORTN_MAX_WIDTH,
   PORTN_DEFAULT_WIDTH,
@@ -82,6 +84,87 @@ test("wide built-ins drive nothing", () => {
   // BEHAVIORS is keyed by type id (FR-066e), e.g. "type-indicator8".
   assert.deepEqual(BEHAVIORS["type-indicator8"]({}), []);
   assert.deepEqual(BEHAVIORS["type-portN"]({}), []);
+});
+
+// --- Hex display (FR-071j) ---
+
+// Same grouped-bit wiring story as the other 8-bit built-ins, in a wider body:
+// D0..D7 down the left edge in one group D, so an 8-bit bus snaps to all of them.
+test("hex display exposes eight grouped input bits (FR-071j)", () => {
+  const t = find("hexdisplay");
+  assert.equal(t.width, 8);
+  assert.equal(t.height, 9);
+  assert.deepEqual(
+    t.pins.map((p) => p.name),
+    [0, 1, 2, 3, 4, 5, 6, 7].map((i) => "D" + i),
+  );
+  assert.ok(t.pins.every((p) => p.side === "left" && p.direction === "in"));
+  assert.deepEqual(
+    t.pins.map((p) => p.position),
+    [1, 2, 3, 4, 5, 6, 7, 8],
+  );
+  assert.deepEqual(t.pinGroups, [
+    { name: "D", pins: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => "D" + i) },
+  ]);
+  // Display-only, and stateless: it drives nothing and declares no properties.
+  assert.deepEqual(BEHAVIORS["type-hexdisplay"]({}), []);
+  assert.equal(t.properties, undefined);
+  assert.equal(INTERACTIONS["type-hexdisplay"], undefined);
+});
+
+// The decode itself (FR-071j). Spelled out segment-by-segment rather than by
+// repeating the bitmasks: the table is the component's whole behavior, so a
+// test that restates it in the same encoding would check nothing.
+test("HEX_SEGMENTS decodes every nibble to its hex glyph (FR-071j)", () => {
+  const NAMES = "abcdefg";
+  const lit = (mask) =>
+    [...NAMES].filter((_, i) => (mask >> i) & 1).join("");
+  const expected = [
+    "abcdef", // 0
+    "bc", // 1
+    "abdeg", // 2
+    "abcdg", // 3
+    "bcfg", // 4
+    "acdfg", // 5
+    "acdefg", // 6
+    "abc", // 7
+    "abcdefg", // 8
+    "abcdfg", // 9
+    "abcefg", // A
+    "cdefg", // b
+    "adef", // C
+    "bcdeg", // d
+    "adefg", // E
+    "aefg", // F
+  ];
+  assert.equal(HEX_SEGMENTS.length, 16);
+  expected.forEach((segs, v) => assert.equal(lit(HEX_SEGMENTS[v]), segs, `nibble ${v}`));
+  // Every glyph is distinct — the point of the lower-case b and d.
+  assert.equal(new Set(HEX_SEGMENTS).size, 16);
+});
+
+// sevenSegPolys is shared by the canvas renderer and the palette icon, so its
+// contract is the order (a..g, matching HEX_SEGMENTS' bits) and staying inside
+// the box it is given — both engines' glyphs depend on it.
+test("sevenSegPolys returns seven segments inside its box, in a..g order (FR-071j)", () => {
+  const [x0, y0, w, h, t] = [1, 2, 3, 6, 0.5];
+  const polys = sevenSegPolys(x0, y0, w, h, t);
+  assert.equal(polys.length, 7);
+  for (const pts of polys) {
+    assert.equal(pts.length, 6); // tapered hexagon
+    for (const [x, y] of pts) {
+      assert.ok(x >= x0 && x <= x0 + w, `x ${x} within [${x0}, ${x0 + w}]`);
+      assert.ok(y >= y0 && y <= y0 + h, `y ${y} within [${y0}, ${y0 + h}]`);
+    }
+  }
+  const midY = (pts) => pts.reduce((a, [, y]) => a + y, 0) / pts.length;
+  const midX = (pts) => pts.reduce((a, [x]) => a + x, 0) / pts.length;
+  const [a, b, c, d, e, f, g] = polys;
+  // a top, g middle, d bottom.
+  assert.ok(midY(a) < midY(g) && midY(g) < midY(d));
+  // b/c on the right, f/e on the left; b/f upper, c/e lower.
+  assert.ok(midX(b) > midX(f) && midX(c) > midX(e));
+  assert.ok(midY(b) < midY(c) && midY(f) < midY(e));
 });
 
 // --- memDeviceType (FR-114c) ---

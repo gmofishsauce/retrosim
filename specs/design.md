@@ -196,6 +196,15 @@ reworked.
   unmarking are undoable design edits (unlike a waiver, FR-124e). Its only effect
   is FR-124j. A mark naming a pin the type no longer has is dropped silently on
   load. (Added 2026-08-11.)
+- **FR-071j** — **Hex display (2-digit)**: 8×9, eight left-edge `in` pins
+  `D0`–`D7` in one pin group `D`; two seven-segment digits decoding the byte as
+  two hex characters (high nibble `D7`–`D4` left, low nibble `D3`–`D0` right),
+  glyph set `0`–`9`, `A`, `b`, `C`, `d`, `E`, `F`. Purely combinational — it
+  shows its inputs' present state and holds nothing. A nibble with any undriven
+  or undefined bit, and the whole display outside a run, shows a gray `8` (the
+  indicator's undriven color, FR-068/FR-085) rather than a character.
+  Display-only: drives nothing, no properties. Tooltip "hex display (2-digit)".
+  (Added 2026-09-21.)
 
 **Component Selection and Movement**
 - **FR-016** — In select mode, click a component to select it.
@@ -2529,7 +2538,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   right-center `bidir` pin `B`, top-center `in` pin `EN`, FR-071g — the
   renderType is `tgate`, not `switch`, which the input switch already owns);
   **relay** (`"relay"`, 4×4, top-edge `in` pin `COIL`, right-edge `bidir`
-  pins `NO`/`COM`/`NCC` top-to-bottom, FR-071h). The two switch elements'
+  pins `NO`/`COM`/`NCC` top-to-bottom, FR-071h); **hex display**
+  (`"hexdisplay"`, 8×9, eight left-edge `in` pins `D0`–`D7` in one pin group
+  `D`, FR-071j). The two switch elements'
   contact terminals are declared `bidir` — deliberately, since a switch
   terminal is genuinely directionless; a consequence is that a port whose net
   reaches a switch terminal derives direction **bidir** (FR-094c), the
@@ -2539,7 +2550,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   clicks — the engine realizes them as dedicated `kind:"pass"` entities
   (§6.13, FR-083a), the same pattern as memory's `kind:"memory"` escape from
   the source-only `BEHAVIORS` signature. The
-  8-wide indicator and the multi-bit port declare `pinGroups` so an N-bit bus
+  8-wide indicator, the hex display, the magic UART and the multi-bit port declare
+  `pinGroups` so an N-bit bus
   snap-connects to all N bits at once (FR-041/FR-042, `matchingGroups`). Unlike the
   fixed built-ins, `portN`'s pins/group/footprint are generated for its chosen
   width (the `port8` definition with its `type-port8` id is withdrawn; FR-071e); it
@@ -2574,7 +2586,18 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   stripes, each filled by its bit's value via `sim.valueOfPin(refdes,"D"+i)` with
   the same white/black/gray mapping as the 1-wide indicator, FR-071d), and
   `drawPortN` draws N narrow off-sheet pentagons, one centered on each bit
-  pin's row (FR-071e). Both port branches take the sim view: while a run lists the
+  pin's row (FR-071e). `drawHexDisplay` (FR-071j) draws the two-digit
+  seven-segment package: a body rectangle and, inside it, two digits, each of
+  seven segments built as tapered hexagons in the instance's local grid frame
+  (so rotation and zoom come free through `fillLocalPoly`). Each digit reads its
+  four bits with `sim.valueOfPin(refdes,"D"+i)` and lights the segments named by
+  `HEX_SEGMENTS[nibble]` — the decode table exported by `builtins.js`, shared
+  with the palette icon so the two cannot drift — filling lit segments black and
+  unlit ones near-white; if any of the four bits is not `V0`/`V1`, or there is no
+  run, all seven segments are filled the indicator's undriven gray instead (a
+  gray `8`, FR-068/FR-085). Being pure decode of the present net values it keeps
+  no state of its own, which is what makes Stop's dropping of the sim view
+  (§6.10) blank it for free. Both port branches take the sim view: while a run lists the
   instance in `sim.debugPorts`, each pentagon's body is filled from its bit's
   `portDrive` entry by that same white/black/gray mapping (with the label drawn in the
   contrasting color), and otherwise stays plain white as before (FR-094g, §6.14).
@@ -3269,7 +3292,9 @@ no sequential part could ever leave U.)
   {props, simTime, clockPeriod, state, drive}`: **clock** returns its FR-084 waveform —
   low for the first half of each `period`, high for the second, so the first
   rising edge lands half a period in; **pull-up/pull-down** return their constant
-  weak 1/0; **indicator** returns nothing (display only); **power-on reset**
+  weak 1/0; **indicator**, **8-wide indicator** and **hex display** (FR-071j)
+  return nothing (display only — the renderer reads their input nets directly);
+  **power-on reset**
   (FR-071b) drives `R` 1 and `/R` 0 while `simTime < cycles × clockPeriod`,
   the inverse afterward; **input switch** (FR-087a) strong-drives `OUT` to the
   logic value of `state` (`"1"`→V1, else V0); **port / portN** (FR-094g) return one
@@ -3567,7 +3592,7 @@ no sequential part could ever leave U.)
 - **Satisfies:** FR-115, FR-115a, FR-115b, FR-115c, FR-115d, FR-115e (sequential), FR-115f (port binding), FR-094f (clock-source ports), FR-115i (bidirectional bus columns), FR-115j (duplicate row), FR-115k (grouped hex cells), FR-115l (run through the selected row and hold), FR-115m (the panel edits an associated `.tv` document), FR-115o (cycling cell buttons), FR-115p (inactive-level input defaults), FR-115q (one sticky header row); extends FR-004a (new **Tools** menu, named **Simulate** until FR-124h). The panel's **tab** (FR-123), the area's **height**, and its draggable top edge (FR-115n) are §6.16a, which owns those rules for every docked tab. (FR-115g, the interim clocked-design guard, is superseded and removed.)
 
 **Pure runner & file model (`engine/vectors.js`, DOM-free, unit-tested in `vectors.test.js`).** A new module, deliberately free of any DOM so it tests like `validateMemSpec`/`memDeviceSpec`:
-  - `deriveColumns(design) → { inputs, outputs, io, warnings }`. Enumerates `design.components` (the same iteration the simulator uses, §6.13) filtered by `typeData.renderType`: `"switch"` → one **input** column `{ refdes, pin:"OUT", label }`; `"indicator"` → one **output** column `{ refdes, pin:"IN", label }`; `"indicator8"` → eight output columns `{ refdes, pin:"D0".."D7", label }`; and **ports** (`"port"`/`"portN"`, FR-115f) by their **effective direction** (`effectivePortDir`, §6.14, FR-094c/FR-094d): an effective-`in` port → input column(s), an effective-`out` port → output column(s), an effective-`bidir` port → a **bidirectional column** `{ refdes, pin, label, io:true }` collected into a third **`io`** group (FR-115i, superseding the former skip-with-warning; a 1-wide port yields one io column, a `portN` N per-bit io columns). A 1-wide port contributes one column `{ refdes, pin:"P", label }`; a `portN` of width N expands to **N one-bit columns** `{ refdes, pin:"P"+i, label:label+i }` (uniform per-bit, no whole-bus column). A port column is thus identified by the port's **own** `(refdes, pin)` — the natural, stable identity (FR-115f). `label` is the instance's display label (FR-011b) falling back to `refdes`; columns are sorted by refdes (numeric-aware, then pin) for stable order — port-derived columns **coexist** with any switch/indicator columns. `"clock"` (FR-115e) → one **input** column `{ refdes, pin:"OUT", label, kind:"clock" }` whose cells take `0`/`1`/`C`; `kind` is a live-only marker (the dialog's cell options and `validateVectors`' `C` legality key off it) and is **not** persisted in the `.tv` file — reconciliation stays pure `(refdes,pin)`. A **clock-source port** (FR-094f) takes the *same* marker: in the port branch, an input-bucket 1-wide port satisfying `isClockPort` (§6.14) is pushed as `{ refdes, pin:"P", label, kind:"clock" }` instead of a plain input column. Because `kind` is live-only, **the `.tv` format does not change and no `formatVersion` bump is needed** (§7.7): an existing file's column list and column order are untouched by marking a port, and only the cell alphabet of that one column widens from `0`/`1` to `0`/`1`/`C`. `isClock` set where it cannot be honored — on a `portN`, or on a port whose effective direction is not `in` — is **ignored with a non-fatal warning** into `cols.warnings` (FR-094f), surfacing in the panel's notice line beside the FR-115a reconciliation warnings.
+  - `deriveColumns(design) → { inputs, outputs, io, warnings }`. Enumerates `design.components` (the same iteration the simulator uses, §6.13) filtered by `typeData.renderType`: `"switch"` → one **input** column `{ refdes, pin:"OUT", label }`; `"indicator"` → one **output** column `{ refdes, pin:"IN", label }`; `"indicator8"` → eight output columns `{ refdes, pin:"D0".."D7", label }`; `"hexdisplay"` (FR-071j) → the same eight output columns off its own `D0`–`D7` pins; and **ports** (`"port"`/`"portN"`, FR-115f) by their **effective direction** (`effectivePortDir`, §6.14, FR-094c/FR-094d): an effective-`in` port → input column(s), an effective-`out` port → output column(s), an effective-`bidir` port → a **bidirectional column** `{ refdes, pin, label, io:true }` collected into a third **`io`** group (FR-115i, superseding the former skip-with-warning; a 1-wide port yields one io column, a `portN` N per-bit io columns). A 1-wide port contributes one column `{ refdes, pin:"P", label }`; a `portN` of width N expands to **N one-bit columns** `{ refdes, pin:"P"+i, label:label+i }` (uniform per-bit, no whole-bus column). A port column is thus identified by the port's **own** `(refdes, pin)` — the natural, stable identity (FR-115f). `label` is the instance's display label (FR-011b) falling back to `refdes`; columns are sorted by refdes (numeric-aware, then pin) for stable order — port-derived columns **coexist** with any switch/indicator columns. `"clock"` (FR-115e) → one **input** column `{ refdes, pin:"OUT", label, kind:"clock" }` whose cells take `0`/`1`/`C`; `kind` is a live-only marker (the dialog's cell options and `validateVectors`' `C` legality key off it) and is **not** persisted in the `.tv` file — reconciliation stays pure `(refdes,pin)`. A **clock-source port** (FR-094f) takes the *same* marker: in the port branch, an input-bucket 1-wide port satisfying `isClockPort` (§6.14) is pushed as `{ refdes, pin:"P", label, kind:"clock" }` instead of a plain input column. Because `kind` is live-only, **the `.tv` format does not change and no `formatVersion` bump is needed** (§7.7): an existing file's column list and column order are untouched by marking a port, and only the cell alphabet of that one column widens from `0`/`1` to `0`/`1`/`C`. `isClock` set where it cannot be honored — on a `portN`, or on a port whose effective direction is not `in` — is **ignored with a non-fatal warning** into `cols.warnings` (FR-094f), surfacing in the panel's notice line beside the FR-115a reconciliation warnings.
   - `runVectors(design, doc, { romContent, through }) → { rows:[{ cells:[{pass, actual}], pass }], passed, total, sim, through }`. Branches on `isStateful(design)` (below). **`through`** (FR-115l) is the 0-based index of the last row to run, clamped to the table and defaulting to the last row — so a plain Run is just `through` omitted, and the two actions share one code path. Only rows `0..through` are run and scored (`total` counts the rows *run*, not the table's length; the panel reads the table length itself for the "held at row X of Y" summary). **`sim`** is the retained simulation the run ended on — the combinational path's last per-row sim, or the sequential path's single long-lived one — whose net values are exactly the held row's post-sample state; the panel publishes it via `store.setSim` (§6.10) so the canvas draws it. Retaining it is only *not discarding* what the run already built: the throwaway clone is still never written back (FR-115c). **Combinational** (FR-115c), for each row independently: `structuredClone(design)`; for each input column drive it by the row's symbol (`"0"`/`"1"`) — a **switch** column sets that instance's `switchState`, a **port** column appends `{ refdes, pin, value }` (`V0`/`V1`) to a per-row **stimulus** list (FR-115f) — then `buildSimulation(clone, { romContent, stimulus })` (§6.13, the stimulus strong-drives each bound input-port net), drive the **settle loop** — `step()` until `!lastStepChanged()` or `SETTLE_BOUND` (10,000) units, the same bound and quiescence test as `settle()` in `sim.js` (FR-085) — and read each output via `sim.valueOfPin(refdes, pin)` (a port output reads straight off its own net, FR-094e). Compare per FR-115c: `H`↔`V1`, `L`↔`V0`, `X` passes always; `VU`/`VZ` never match. Each **io** column (FR-115i) is handled per row by its cell: `0`/`1` appends `{refdes,pin,value}` to the stimulus list (drive, like a port input); `H`/`L`/`X` contributes no stimulus and, for `H`/`L`, is read via `valueOfPin` and scored (release/observe) — drive iff the cell is `0`/`1`. The clone makes the run side-effect-free (FR-115c): the live `store.design` is never mutated, dirtied, or pushed to undo.
   - **Sequential path (FR-115e).** One `structuredClone(design)` and one `buildSimulation(clone, { romContent, scriptedClocks: true, stimulus: [] })` for the whole run; rows share the instance so register/net state persists. `runSequentialPass` takes a **`limit`** (the `through` row, FR-115l) and stops after that row's `onRow` callback, leaving the sim at that row's post-pulse state; it returns the sim so `runVectors` can hand it back. Because the pass always starts at the preamble, a hold is reproducible and independent of any earlier hold — there is no resume path to keep consistent. The runner owns the clock and reset nets via `sim.setStimulus(...)` (§6.13). **Clocks are addressed by column, not by component (FR-094f).** `runSequentialPass` takes its clock list from `inputs.filter(c => c.kind === "clock")` and drives each entry at its **own `(refdes, col.pin)`** — `"OUT"` for a generator, `"P"` for a clock-source port — rather than scanning the clone for `renderType === "clock"` and hardcoding `"OUT"`. This is the single generalization the whole feature turns on: `setStimulus` is already keyed by `(refdes, pin)` and a port's net is drivable by FR-094e, so one code path serves both kinds and every phase below (preamble, per-row level, pulse) is written once. Correspondingly the per-row pulse set is keyed by **`refdes.pin`**, not by refdes alone — the previous refdes-only set was safe only because every clock's pin was literally `"OUT"`. **Power-on preamble:** stimulus asserts every reset built-in (`R`=`V1`, `/R`=`V0` — two entries per instance) with all clocks at `V0`; settle; then `max(cycles)` scripted pulses (all clocks high, settle; low, settle), each reset instance switching to released (`R`=`V0`, `/R`=`V1`) once its own `cycles` (via `effectiveProps`-equivalent resolution, FR-020b) worth of pulses have elapsed; final settle. **Per row, in order:** set switch columns on the clone's instances (`switchState`, read live each step), rebuild the stimulus — ports per cell, resets released, each clock at its cell's level (`C` counts as low) — `setStimulus`, settle; if any clock cell is `C`, drive those clocks `V1`, settle, back to `V0`, settle (one shared pulse, FR-115e); then read and score outputs exactly as the combinational path. Every settle phase uses the same `SETTLE_BOUND` loop.
   - `captureVectors(design, { inputs, outputs, io }, rowsIn, { romContent }) → { out, io }` cell tables. Whole-table capture used by the dialog's Capture button: combinational designs capture each row independently (as `captureRow`); sequential designs run the same ordered pass as `runVectors` — preamble, then each row's inputs and pulses — recording each row's settled outputs in sequence (FR-115e). For **io** columns (FR-115i), Capture fills each **release** cell (`H`/`L`/`X`) with the settled value (`H`/`L`, `X` for U/Z) and preserves **drive** cells (`0`/`1`).
@@ -3751,7 +3776,7 @@ keeps one behavior for every caller rather than growing a per-tab branch. The **
   - **Combination ops:** `rt_and`, `rt_or`, `rt_not`, `rt_xor` implementing FR-077 selective pessimism (`0 AND x = 0`, `1 OR x = 1`, other U → U; Z reads as U), used by the generated evaluate functions.
   - **Contribution + resolution:** the generated per-step code deposits driver contributions (`rt_contrib(net, val, weak, label_index)`); `rt_resolve_nets()` re-expresses `resolveNet` from `sim.js` — enabled strong drivers win, weak pulls decide only when every strong driver is Z, 0-vs-1 disagreement → U with a conflict report to stderr naming both drivers on onset (FR-081–FR-083, FR-108/FR-118).
   - **Step/settle:** `rt_step()` (latch phase → contributions → resolve → swap, FR-078/FR-110) and `rt_settle()` (step to quiescence under `RT_SETTLE_BOUND` 10000, FR-085's bound).
-  - **Built-ins:** behaviors for clock, power-on reset, input switch, pulls, and memory (FR-116a), driven from generated instance tables; indicators and ports are observation entries in the column tables. In vector mode clocks/resets are scripted exactly as `scriptedClocks` mode (§6.13/FR-115e).
+  - **Built-ins:** behaviors for clock, power-on reset, input switch, pulls, and memory (FR-116a), driven from generated instance tables; indicators, hex displays and ports are observation entries in the column tables (a display lowers to no drive at all — it is a pure function of nets the runtime already has). In vector mode clocks/resets are scripted exactly as `scriptedClocks` mode (§6.13/FR-115e).
   - **Vector runner:** reads whitespace-separated rows from stdin (`0`/`1`/`C` inputs `|` `H`/`L`/`X` expected, positional against the baked columns, FR-117), branches combinational/sequential exactly as `runVectors` (§6.16) — independent rows vs. ordered rows with reset preamble and shared `C` pulses — and prints the per-row transcript + summary to stdout (FR-118); exit status 0 iff all rows passed. A **clock-source port** column (FR-094f) is a fourth input-column kind here, `RT_COL_PORT_CLOCK` (M8 below), pulsed by the same runner code that pulses a generator.
   - The runtime compiles standalone (a `RT_NO_GEN` test harness or equivalent), so its ops and resolver are natively unit-testable without a generated design.
 
@@ -3824,7 +3849,8 @@ keeps one behavior for every caller rather than growing a per-tab branch. The **
     the net is named. The `->` is documentation of intent (NDL §5.2); star
     orientation is why direction matters here at all.
   - **Virtual built-ins.** clock/switch/indicator/indicator8/pullup/pulldown/
-    reset — and, added 2026-07-07, tgate/relay (FR-071g/FR-071h) — instances
+    reset — and, added 2026-07-07, tgate/relay (FR-071g/FR-071h), and, added
+    2026-09-21, hexdisplay (FR-071j) — instances
     have no physical package: each emits a comment line in the
     circuit block (`# virtual: A-3 (clock) OUT -> U1.CP, …`) naming every net
     pin it drives or observes — for a switch element, its control pin's net and
@@ -5281,8 +5307,8 @@ read/written through the same `/api/v1/design/{load,save}` endpoints as a design
   file's own shape records the association, which is live state of the panel.
 - **Columns bind by `refdes`+`pin`**, never by label (FR-115a): relabeling a
   switch/indicator (FR-011b) does not break a file. `label` is a display cache,
-  refreshed from the live design on open. An 8-wide indicator (FR-071d) appears as
-  eight output columns with pins `D0`…`D7`.
+  refreshed from the live design on open. An 8-wide indicator (FR-071d) and a hex
+  display (FR-071j) each appear as eight output columns with pins `D0`…`D7`.
 - **Port columns (FR-115f)** are identified by the **port's own** `(refdes, pin)`:
   a 1-wide port as `(refdes, "P")`, a multi-bit portN as N columns `(refdes, "P"i)`.
   This is the natural, stable identity an author writes by hand and that reconciles
@@ -5544,6 +5570,7 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-067a, FR-071a, FR-071b | §6.11, §6.13, §7.1 | `builtins.js`, `sim.js`, `canvas.js` |
 | FR-071c, FR-087a | §6.8, §6.9, §6.11, §6.13, §7.2 | `builtins.js`, `canvas.js`, `interaction.js`, `sim.js`, `model/design.js` |
 | FR-071d, FR-071e | §6.8, §6.11 | `builtins.js`, `canvas.js`, `model/design.js` |
+| FR-071j | §6.8, §6.11, §6.16, §6.18 | `builtins.js`, `canvas.js`, `engine/vectors.js`, `engine/ndl.js`, `engine/cgen.js` |
 | FR-020c | §6.12, §7.2 | `properties.js`, `model/design.js`, `commands.js` |
 | FR-021 | §6.7, §6.8 | `geometry.js`, `canvas.js` |
 | FR-022, FR-023 | §6.8, §6.11 | `canvas.js`, `toolbar.js` |

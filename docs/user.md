@@ -803,7 +803,7 @@ with a `/N` width annotation.
   selected you can also press `+` / `-` to change the bus's width.)
 - **Snap-connect to a pin group:** the editor connects a bus to a **pin group** —
   a set of related pins (e.g. the 8 `D` inputs of a `74574`, or the 8 bits of an
-  8-wide port/indicator) — wiring each bus bit to the corresponding pin in declared
+  8-wide port, indicator, or hex display) — wiring each bus bit to the corresponding pin in declared
   bit order, so you don't wire bits one at a time. A bus connects when the group has
   a run of unconnected pins at least as long as the bus is wide (so a bus may be
   *narrower* than the group — see *Filling part of a group* below).
@@ -1063,8 +1063,8 @@ later does not reach the copy you imported.
   Each part's `physical:` YAML metadata (when present) supplies physical pin
   numbers, power pins, and no-connects — a synthetic **POWER** package carries
   the rails — and the design's ports become a connector package (`J1`). Built-ins
-  with no physical package (clocks, switches, indicators, pulls, resets,
-  transmission gates, relays) are recorded as comment lines so no connectivity
+  with no physical package (clocks, switches, indicators, hex displays, pulls,
+  resets, transmission gates, relays) are recorded as comment lines so no connectivity
   is silently dropped. Output is deterministic: exporting the same design twice
   gives byte-identical text, so exports diff cleanly. Unavailable while a
   simulation runs.
@@ -1179,6 +1179,7 @@ no behavior, and no designator — see below.)
 | **Power-on reset** | two outputs (`R` active-high, `/R` active-low, right) | Asserts reset (`R`=1, `/R`=0) for the first `cycles` clock periods of a run, then releases (inverse afterward). Property: `cycles` (default 3). |
 | **Input switch** | one output (`OUT`, right) | A user-set logic source with two states, **1** and **0**, drawn like the state indicator — a round value bubble (white **1** / black **0**) — with a small arrow toward its output pin. A **strong** driver: it overrides pull-ups/pull-downs on its net. The state saved with the design is its **setting** — the position every run starts from (a new switch starts at **0**), changed in the properties panel while editing. **Clicking it during a simulation** toggles **0 ↔ 1** for that run only: it does not change the setting, does not modify the design, and is undone when the run stops. |
 | **State indicator (8-wide)** | eight inputs (`D0`–`D7`, left) | An 8-bit display, drawn as an LED **bar-graph** (eight stripes). Display only — drives nothing. The eight pins form one pin group, so an 8-wide bus snap-connects to all bits at once (see [Buses](#7-buses)); each stripe shows its bit's value (white **1** / black **0** / gray **?**) during a run, and all eight go gray when it stops. |
+| **Hex display (2-digit)** | eight inputs (`D0`–`D7`, left) | An 8-bit display, drawn as two **seven-segment digits**. Display only — drives nothing, and holds nothing: it decodes whatever its inputs read *right now*. The high nibble (`D7`–`D4`) is the left digit, the low nibble (`D3`–`D0`) the right, so the byte reads the way you would write it; `D0` is the least significant bit. Digits show `0`–`9` and `A`, `b`, `C`, `d`, `E`, `F` (the letters use the lower-case forms where the upper-case one would look like a digit). The eight pins form one pin group, so an 8-wide bus snap-connects to all bits at once (see [Buses](#7-buses)). A digit whose four bits are not all a clean 0 or 1 shows a **gray `8`** instead of a character — the same "value unknown" gray the state indicator uses — and so does the whole display when no simulation is running. |
 | **Port / off-sheet connector (multi-bit)** | N pins (`P0`–`P(N-1)`, left) | A multi-bit interface port. When you drop it, a dialog asks for its **bit width** (2–16); that width is fixed for the life of the instance (to change it, delete and re-place). It is drawn as N narrow pentagons — one roughly aligned with each pin, each pointing off-sheet away from the pins. The N pins form one pin group so a matching-width bus snap-connects to all bits at once (see [Buses](#7-buses)). Like the 1-wide [port](#12-sub-designs-and-ports) it is part of the design's interface (it contributes a pin **group** when the design is embedded), with a direction derived from its wiring; it does not yet join to same-label or cross-file ports. During a run each pentagon is its own click target, so you can [drive the bits by hand](#driving-a-port-by-hand) one at a time. |
 | **Port / off-sheet connector** (1-bit) | one pin (flat back edge) | The pentagon "flag" that marks its net as part of the design's external interface for embedding. See [Sub-designs and ports](#12-sub-designs-and-ports). Drives nothing of its own — but while a simulation runs you can **click it to drive its net by hand**, which is how you exercise a design through its own edges; see [Driving a port by hand](#driving-a-port-by-hand). |
 | **Transmission gate** | `A` (left), `B` (right), `EN` (top) | An ideal **bidirectional switch**: `A` and `B` are interchangeable contact terminals — neither is an input or an output, and drivers on either side may come and go. While `EN` reads **1** the two sides are electrically **joined** (they resolve as one net); while it reads **0** they are isolated. An `EN` of U (or Z) means the switch position is unknown: both sides are forced to **U**. Drives nothing, stores nothing, no properties; see the switch-element notes in [Simulation](#13-simulation). |
@@ -1759,8 +1760,9 @@ The table's columns come from your design automatically:
   bus, e.g. a net driven through `74244`-style buffers — becomes an **IO** column
   instead (see *Bidirectional bus columns* below). To bind it as a plain input or
   output column, set its direction override in the properties panel.
-- one **output** column per [indicator](#11-built-in-components) — a single
-  indicator is one column, an 8-wide indicator becomes eight columns `D0`…`D7` —
+- one **output** column per [indicator or display](#11-built-in-components) — a
+  single indicator is one column; an 8-wide indicator and a hex display each
+  become eight columns `D0`…`D7` —
   holding the value you expect: **H** (logic 1), **L** (logic 0), or **X**
   (don't-test, i.e. ignore this output on this row).
 

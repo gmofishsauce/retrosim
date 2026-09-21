@@ -23,6 +23,7 @@ import {
   NOTE_FONT,
 } from "../model/design.js";
 import { drawSymbol, pinHasOwnBubble, pinLabelEdge } from "./symbols.js";
+import { HEX_SEGMENTS, sevenSegPolys } from "../builtins.js";
 import { V0, V1 } from "./galasm.js";
 import { sameRef } from "../store.js";
 
@@ -609,6 +610,8 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
     drawSwitch(ctx, inst, vp, selected, sim);
   } else if (td.renderType === "indicator8") {
     drawIndicator8(ctx, inst, vp, selected, sim);
+  } else if (td.renderType === "hexdisplay") {
+    drawHexDisplay(ctx, inst, vp, selected, sim);
   } else if (td.renderType === "portN") {
     drawPortN(ctx, inst, vp, selected, sim);
   } else if (td.renderType === "port") {
@@ -867,6 +870,71 @@ function drawIndicator8(ctx, inst, vp, selected, sim) {
       bit8Fill(sim, inst.refdes, "D" + i),
       "#333",
     );
+  }
+}
+
+// Seven-segment hex display geometry, in the instance's local grid units
+// (FR-071j). The two digits sit side by side inside the 8x9 body, vertically
+// centered; the left margin is the wider one so the digits stay clear of the
+// eight pin leads coming in on the left edge.
+const HEXDISP_DIGIT_W = 2.7;
+const HEXDISP_DIGIT_H = 5;
+const HEXDISP_SEG_T = 0.42; // segment thickness
+const HEXDISP_GAP = 0.6; // space between the two digits
+const HEXDISP_X0 = 1.1; // left edge of the left (high-nibble) digit
+const HEXDISP_Y0 = 2; // top of both digits (centered in the 9-unit body)
+
+const SEG_ON = "#111111"; // a lit segment
+const SEG_OFF = "#e8e8e8"; // an unlit segment: visible, but not part of the glyph
+const SEG_UNKNOWN = "#9a9a9a"; // every segment, when the nibble is not defined
+
+// hexNibble reads four consecutive bits of a hex display off the live sim view
+// and returns their value 0..15, or null when any of them is not a defined 0/1 —
+// the undriven/U/Z case the indicators show gray for (FR-068), and the no-run
+// case, which arrives here as a null `sim`. `lo` is the index of the low bit, so
+// 0 reads D3..D0 (the right digit) and 4 reads D7..D4 (the left).
+function hexNibble(sim, refdes, lo) {
+  if (!sim) return null;
+  let v = 0;
+  for (let i = 0; i < 4; i++) {
+    const b = sim.valueOfPin(refdes, "D" + (lo + i));
+    if (b === V1) v |= 1 << i;
+    else if (b !== V0) return null;
+  }
+  return v;
+}
+
+// drawHexDisplay renders the two-digit seven-segment hex display (FR-071j): the
+// package body, then each digit's seven segments filled from HEX_SEGMENTS'
+// decode of its nibble. The high nibble (D7..D4) is the left digit, the low
+// nibble (D3..D0) the right, so the byte reads the way it is written. A nibble
+// that is not fully defined lights all seven segments in the undriven gray — a
+// gray 8, distinct at a glance from a decoded character. The shared pin loop
+// draws the eight connection leads down the left edge.
+function drawHexDisplay(ctx, inst, vp, selected, sim) {
+  const td = inst.typeData;
+  const stroke = selected ? "#4a90d9" : "#333";
+  ctx.lineWidth = selected ? 2 : 1;
+  fillLocalPoly(
+    ctx,
+    inst,
+    vp,
+    [[0, 0], [td.width, 0], [td.width, td.height], [0, td.height]],
+    "#fff",
+    stroke,
+  );
+  // [x of the digit's left edge, index of its low bit]: high nibble first.
+  for (const [x, lo] of [
+    [HEXDISP_X0, 4],
+    [HEXDISP_X0 + HEXDISP_DIGIT_W + HEXDISP_GAP, 0],
+  ]) {
+    const n = hexNibble(sim, inst.refdes, lo);
+    const mask = n === null ? 0 : HEX_SEGMENTS[n];
+    const polys = sevenSegPolys(x, HEXDISP_Y0, HEXDISP_DIGIT_W, HEXDISP_DIGIT_H, HEXDISP_SEG_T);
+    polys.forEach((pts, i) => {
+      const fill = n === null ? SEG_UNKNOWN : (mask >> i) & 1 ? SEG_ON : SEG_OFF;
+      fillLocalPoly(ctx, inst, vp, pts, fill, null);
+    });
   }
 }
 

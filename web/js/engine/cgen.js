@@ -387,7 +387,14 @@ export function generateC(design, { columnsFrom = design } = {}) {
     } else if (inst.typeData.builtin) {
       const rt = inst.typeData.renderType;
       const refdes = inst.refdes;
-      if (rt === "note" || rt === "indicator" || rt === "indicator8" || rt === "port" || rt === "portN") {
+      if (
+        rt === "note" ||
+        rt === "indicator" ||
+        rt === "indicator8" ||
+        rt === "hexdisplay" ||
+        rt === "port" ||
+        rt === "portN"
+      ) {
         // Annotations and probes: no drive (ports/indicators become columns).
       } else if (rt === "uart") {
         // Magic UART (FR-122d): collect its data/CS//CE//CLK net indices; the
