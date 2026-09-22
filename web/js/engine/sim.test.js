@@ -1647,3 +1647,31 @@ test("a decoder's outputs follow its inputs by one unit (FR-071k/FR-078)", () =>
   sim.step();
   for (let i = 0; i < 8; i++) assert.equal(sim.valueOfPin("A-1", `/Y${i}`), V1, `/Y${i}`);
 });
+
+// A sub-1 Hz clock (FR-071a): `speed` is cycles of the simulated clock per real
+// second, so 1/n Hz is a pacing rate of period/n units per wall second. The
+// frame loop carries the fractional remainder between frames, so a rate that is
+// not a whole number of steps per frame still advances.
+test("a fractional speed paces at period × speed units per second (FR-071a/FR-084)", () => {
+  for (const n of [2, 3, 4, 5, 6, 7, 8, 9, 10]) {
+    const d = mkDesign();
+    place(d, "A-1", builtin("clock"), { props: { speed: 1 / n } });
+    const sim = buildSimulation(d);
+    // Default period 100 ns: one 100-unit cycle takes n real seconds, i.e. 1/n Hz.
+    // Compared with a tolerance because 100 * (1/n) and 100/n are not always the
+    // same double; what matters is the wall-clock time per cycle, not the bits.
+    const secondsPerCycle = 100 / sim.unitsPerSecond();
+    assert.ok(Math.abs(secondsPerCycle - n) < 1e-9, `1/${n} Hz → ${secondsPerCycle}s per cycle`);
+  }
+});
+
+// The pacing rate uses the EFFECTIVE period — the same clamp the waveform is
+// generated from (FR-084) — so pacing cannot be derived from a period the clock
+// behavior would round to something else.
+test("pacing uses the effective period, not the raw property (FR-084)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("clock"), { props: { period: 2.5, speed: 1 } });
+  const sim = buildSimulation(d);
+  assert.equal(sim.clockInfo()[0].period, 2); // floor, min 2
+  assert.equal(sim.unitsPerSecond(), 2); // and the pacing agrees with it
+});

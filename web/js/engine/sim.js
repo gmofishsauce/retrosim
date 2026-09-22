@@ -655,9 +655,16 @@ export function buildSimulation(
       return ids;
     },
     hasClocks: () => clocks.length > 0,
+    // Paced at period × speed units per wall second (FR-084), over the EFFECTIVE
+    // period — the same Math.max(2, floor(...)) clamp the clock behavior and
+    // clockInfo apply — so the pacing rate is derived from the waveform actually
+    // generated rather than from a raw property the behavior would round. `speed`
+    // may be fractional (FR-071a): 1/10 Hz on the default 100 ns period is a rate
+    // of 10 units per second, which the frame loop's fractional `due` accumulator
+    // carries across frames without needing whole steps each time.
     unitsPerSecond: () =>
       clocks.length
-        ? Math.max(...clocks.map((c) => c.props.period * c.props.speed))
+        ? Math.max(...clocks.map((c) => Math.max(2, Math.floor(c.props.period)) * c.props.speed))
         : 0,
     // clockInfo lists every clock generator with its effective period — the
     // same clamp the clock behavior applies (§6.11 builtins) — for the

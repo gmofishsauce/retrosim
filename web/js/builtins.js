@@ -395,10 +395,17 @@ const BUILTIN_DEFS = [
     height: 2,
     pins: [{ name: "OUT", side: "right", position: 1, direction: "out" }],
     // FR-071a: the simulator advances period × speed simulated ns per real
-    // second (defaults: 100 simulated ns per real second).
+    // second (defaults: 100 simulated ns per real second). `speed` is the
+    // perceived rate in cycles per real second and may be FRACTIONAL: 1/2 Hz is
+    // one cycle every two seconds, 1/10 Hz one every ten. Its minimum exists only
+    // to keep the property off zero and below, where the pacing rate is zero or
+    // negative and a run advances no simulated time with nothing on screen to
+    // explain it; 0.001 Hz is one cycle every ~17 minutes at the default period,
+    // far below any rate meant to be watched, and unlike a value such as 1e-6 it
+    // reads plainly in the field's tooltip.
     properties: [
-      { name: "period", unit: "ns", default: 100 }, // simulated clock period
-      { name: "speed", unit: "Hz", default: 1 }, // human-perceived clock rate
+      { name: "period", unit: "ns", default: 100, min: 2 }, // simulated clock period
+      { name: "speed", unit: "Hz", default: 1, min: 0.001 }, // human-perceived clock rate
     ],
   },
   {
@@ -414,7 +421,8 @@ const BUILTIN_DEFS = [
       { name: "/R", side: "right", position: 2, direction: "out" }, // active low
     ],
     // FR-071b: reset asserted for the first cycles × clockPeriod units of a run.
-    properties: [{ name: "cycles", unit: "cycles", default: 3 }],
+    // Zero is meaningful (no reset window at all); negative is not.
+    properties: [{ name: "cycles", unit: "cycles", default: 3, min: 0 }],
   },
   {
     name: "switch",

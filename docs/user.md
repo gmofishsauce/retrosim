@@ -23,7 +23,7 @@ KiCad-like.
 8. [Per-instance overrides](#8-per-instance-overrides)
 9. [Refreshing type data](#9-refreshing-type-data)
 10. [Projects and files](#10-projects-and-files) — including [Importing a block from another project](#importing-a-block-from-another-project), [Design notes](#design-notes) and [Reading a component's notes](#reading-a-components-notes)
-11. [Built-in components](#11-built-in-components) — including [Labeled decoders](#labeled-decoders) and [Text notes](#text-notes)
+11. [Built-in components](#11-built-in-components) — including [Slowing a clock down](#slowing-a-clock-down), [Labeled decoders](#labeled-decoders) and [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
 13. [Simulation](#13-simulation) — including [Driving a port by hand](#driving-a-port-by-hand), [Stepping and pausing](#stepping-and-pausing), [Probing a point](#probing-a-point), [The bottom panel area](#the-bottom-panel-area), [Console output](#console-output), [Test vectors](#test-vectors) — including [The panel's test-vector file](#the-panels-test-vector-file) and [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
 14. [Checking a design](#14-checking-a-design) — including [Reading the report](#reading-the-report), [Fixing what it finds](#fixing-what-it-finds), [Pins the check ignores](#pins-the-check-ignores), [Waiving a finding](#waiving-a-finding), and [What each rule means](#what-each-rule-means)
@@ -878,6 +878,23 @@ built-in's declared properties (e.g. a clock's `period`) — **for that instance
 only**. Overrides do not affect other instances or the underlying YAML, and are
 saved with the design.
 
+**Typing a value.** A value may be written as an ordinary decimal (`100`, `2.5`,
+`0.5`) or as a **fraction** (`1/3`, `2/7`, and spaces around the slash are fine).
+The fraction is just a way of writing the number — what gets stored is the
+quotient — but it lets you enter an exact ratio that has no tidy decimal, which
+is mostly what you want for a [slow clock speed](#11-built-in-components). The
+field shows a stored value back in whichever form is shorter, so something you
+typed as `1/3` still reads `1/3`, while `0.5` stays `0.5`.
+
+Some values have a **minimum** (the field's tooltip names it when they do), and a
+few have obvious ones anyway — a propagation delay may be zero but not negative.
+If you type something the field cannot read, or a value below its minimum, the
+edit is **rejected**: the field puts back what it was showing and nothing is
+stored. Nothing is silently rounded or half-accepted.
+
+Press the **↺** button beside a field to clear the override and go back to the
+type's default; typing the default value clears it too.
+
 A placed **memory device** additionally shows a **Memory** section for its file
 binding — a ROM's content file, a RAM's save file and load-at-start setting — also
 per instance; see
@@ -1175,7 +1192,7 @@ no behavior, and no designator — see below.)
 | **State indicator** | one input (`IN`, bottom) | Display only — drives nothing. Shows the value of the connected net (0 / 1 / U / Z); a gray "?" bubble when undriven or at rest. Use it to watch a signal during a run; when the run stops it goes back to "?" — a run's values are not kept on screen afterwards. |
 | **Pull-up** | one output (`OUT`, bottom) | A **weak** driver of logic **1**: sets the net to 1 only when no enabled strong driver is present; any strong driver overrides it silently. |
 | **Pull-down** | one output (`OUT`, top) | A **weak** driver of logic **0**, symmetric to the pull-up. A pull-up and pull-down on the same net with no strong driver is a conflict. |
-| **Clock** | one output (`OUT`, right) | A square wave, 50% duty cycle: low from t = 0 with the first rising edge half a period in. Properties: `period` (ns, default 100) and `speed` (Hz, default 1). A design with a clock is *sequential* and runs continuously; see [Simulation](#13-simulation). |
+| **Clock** | one output (`OUT`, right) | A square wave, 50% duty cycle: low from t = 0 with the first rising edge half a period in. Properties: `period` (ns, default 100, minimum 2) and `speed` (Hz, default 1). A design with a clock is *sequential* and runs continuously; see [Simulation](#13-simulation). To watch it tick over by eye, set `speed` below 1 — see **[Slowing a clock down](#slowing-a-clock-down)** below. |
 | **Power-on reset** | two outputs (`R` active-high, `/R` active-low, right) | Asserts reset (`R`=1, `/R`=0) for the first `cycles` clock periods of a run, then releases (inverse afterward). Property: `cycles` (default 3). |
 | **Input switch** | one output (`OUT`, right) | A user-set logic source with two states, **1** and **0**, drawn like the state indicator — a round value bubble (white **1** / black **0**) — with a small arrow toward its output pin. A **strong** driver: it overrides pull-ups/pull-downs on its net. The state saved with the design is its **setting** — the position every run starts from (a new switch starts at **0**), changed in the properties panel while editing. **Clicking it during a simulation** toggles **0 ↔ 1** for that run only: it does not change the setting, does not modify the design, and is undone when the run stops. |
 | **State indicator (8-wide)** | eight inputs (`D0`–`D7`, left) | An 8-bit display, drawn as an LED **bar-graph** (eight stripes). Display only — drives nothing. The eight pins form one pin group, so an 8-wide bus snap-connects to all bits at once (see [Buses](#7-buses)); each stripe shows its bit's value (white **1** / black **0** / gray **?**) during a run, and all eight go gray when it stops. |
@@ -1206,6 +1223,37 @@ rewrite them.
 drives can be clicked during a run to drive its net, on the same terms — run-time
 only, never saved, dropped at Stop. See
 [Driving a port by hand](#driving-a-port-by-hand).
+
+### Slowing a clock down
+
+A clock has two properties, and they do different jobs:
+
+- **`period`** is how long one cycle lasts in the *simulated* world, in
+  nanoseconds. It is part of the circuit — it decides how much settling time the
+  logic gets between edges, so changing it can change what the design does.
+- **`speed`** is how fast that simulated world runs against *your* clock, in
+  cycles per real second. It is purely how fast you watch; it changes nothing
+  about the circuit's behavior.
+
+So to slow a run down to something you can follow, change **`speed`**, not
+`period`. A speed of **1/n** runs the clock at one cycle every **n real
+seconds** — `1/2` for one every two seconds, `1/10` for one every ten. Type the
+fraction straight into the field (see [Per-instance
+overrides](#8-per-instance-overrides)); `1/3` is exact where `0.333` is only
+close.
+
+A slow clock pairs well with the **STEP** button and the pause toggle, which walk
+a run one clock cycle at a time regardless of speed — see [Stepping and
+pausing](#stepping-and-pausing). Use `speed` when you want to *watch* the design
+run, and STEP when you want to *inspect* each cycle.
+
+Speed is a wall-clock setting only: it has no effect in a test-vector run, and
+none in a [generated C program](#generating-a-standalone-c-simulator), both of
+which run as fast as they can.
+
+The field will not accept a speed of **0** or less. There is nothing subtle
+behind that — at zero the simulation advances no time at all, so the run would
+sit there looking broken with nothing to say why.
 
 ### Labeled decoders
 

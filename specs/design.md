@@ -2530,6 +2530,25 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   flex column: non-scrolling heading + scrolling grid). Lower-region tiles render an SVG icon (the object's
   glyph, e.g. the indicator bubble) with a descriptive `title`, and `dataset.type`
   set to the built-in type name; the armed-state subscription covers both regions.
+- **Property-value text (`quantity.js`)** — Satisfies FR-020b's entry and display
+  rules. Two pure, DOM-free functions, unit-tested under `node:test` like the
+  other pure modules, and the single definition of what a property value may look
+  like. `parseQuantity(text) → number | null` accepts a decimal or a fraction
+  `a/b` of two decimals (whitespace around the slash allowed) and returns `null`
+  for anything else — including a zero denominator, and including a **partial**
+  match like `"1abc"`, which is why it validates with a full-string regex instead
+  of calling `parseFloat` (the previous field's `parseFloat` read `"1abc"` as 1,
+  silently keeping half of what was typed). `formatQuantity(n) → string` renders
+  the shortest text that parses back to **exactly** `n`: an integer or a value
+  that survives rounding to `DECIMAL_DIGITS` (4) unchanged as that decimal — so a
+  2.5 ns delay reads `2.5` and not `5/2`, and someone who typed `0.5` does not
+  watch it become `1/2` — else the smallest `p/q` with `q ≤ FRACTION_LIMIT` (64)
+  satisfying `p / q === n`, else a rounded decimal. The fraction test is exact
+  equality rather than a tolerance **on purpose**: the string's job is to name the
+  value the field will parse back to, and only a quotient that round-trips bit for
+  bit does that. `1/3` qualifies because the double nearest 1/3 is exactly what
+  `1 / 3` evaluates to, which is what makes the visible round trip (type `1/3`,
+  re-render, still `1/3`) hold.
 - **Built-in objects (`builtins.js`)** — Satisfies FR-067–FR-071e. Exports a
   client-side array of synthetic `ComponentType`s (no server/YAML). Each carries
   `builtin: true`, an `icon` (inline-SVG palette glyph), a `title` (tooltip), plus
@@ -2786,14 +2805,28 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   count read-only, an **editable, free-form designator field** (FR-011b — its value
   dispatches an undoable `setLabelCmd(refdes, label)`, §6.10, with no uniqueness or
   format validation; a blank value clears the label back to the `refdes` default;
-  the note built-in shows no designator and so no field), plus one numeric field per `delays` entry
+  the note built-in shows no designator and so no field), plus one value field per `delays` entry
   for per-instance propagation-delay overrides and — when the type declares
-  `properties` (FR-020b) — a "Properties" section with one numeric field per
+  `properties` (FR-020b) — a "Properties" section with one value field per
   declared property, labeled with its unit (e.g. `period (ns)`), prefilled with
   the effective value (override or default). Both sections share the same
   mechanics: editing dispatches `setOverride` (model + command, §6.9/§6.10),
   generalized to take an override group (`delays` | `props`); entering the type
-  default or pressing the reset button clears the override. Overrides live in
+  default or pressing the reset button clears the override.
+  The field is an `<input type="text">` parsed by **`quantity.js`** (below), not
+  an `<input type="number">` — changed 2026-09-22 with FR-020b's fraction entry.
+  A number input cannot express `1/3` at all, and its spinner, whose implicit
+  `step` is 1, walks a sub-1 clock speed straight through **0** into negatives,
+  where the pacing rate is zero or less and the run silently stops advancing
+  (FR-071a). `overrideRow(group, key, label, def, unit, min)` therefore reads its
+  field with `parseQuantity` and rejects — by re-rendering, so the previous text
+  returns and nothing is stored — both unparseable text and a value below the
+  optional inclusive `min`. Delays pass `min` 0 (a delay may be zero but not
+  negative); a declared property passes its own `p.min` (absent ⇒ unbounded).
+  The bound is a **panel** rule, not an engine one: the simulator still clamps
+  what it is given (`Math.max(2, Math.floor(period))`, §6.13), so a value that
+  predates the bound or arrives from a hand-edited file is handled as before —
+  the field stops a new one being entered, it does not repair old ones. Overrides live in
   `inst.overrides.delays` / `inst.overrides.props` (§7.2) and persist via the
   full-instance save (FR-058). The panel re-renders on every store notification,
   which is why selection now flows through `store.setSelection` (notifying).
@@ -3447,9 +3480,22 @@ no sequential part could ever leave U.)
   (below) starts a fresh episode when an interactive input perturbs the design;
   the episode step counter is local so the bound is per-episode, not cumulative.
   Clock(s) present → sequential: target rate = max over clocks of effective
-  `period × speed` units per wall second; a `requestAnimationFrame` loop advances
-  `round(rate × dt)` steps per frame (capped to keep frames responsive), requests
-  a render when any net changed, and runs until `stop()` (FR-086). "Clock
+  `period × speed` units per wall second, the `period` there being the same
+  `Math.max(2, Math.floor(…))` effective value the clock behavior and `clockInfo`
+  use, so pacing is derived from the waveform actually generated (FR-084,
+  aligned 2026-09-22; `unitsPerSecond` previously multiplied the *raw* period,
+  which disagreed with the wave whenever the property was not already a whole
+  number ≥ 2). A `requestAnimationFrame` loop advances the whole steps due per
+  frame (capped to keep frames responsive), requests a render when any net
+  changed, and runs until `stop()` (FR-086). The rate may be **fractional** and
+  smaller than one step per frame — that is what a sub-1 Hz `speed` produces
+  (FR-071a: 1/10 Hz on the default period is 10 units per second, about 0.17 of a
+  step per 60 Hz frame) — so the loop keeps the **fractional remainder** in a
+  `due` accumulator across frames and spends only whole steps out of it. Nothing
+  else was needed to make slow clocks work: the accumulator predates them and
+  already had the right shape. A backlog beyond the per-frame cap is dropped
+  rather than accrued, and `due` is reset while paused so resuming never tries to
+  catch up the paused interval. "Clock
   instance placed" here means a clock-generator built-in and **only** that:
   `hasClocks()` counts `renderType === "clock"` entities and must **not** be
   extended to clock-source ports (FR-094f) — a marked port carries no waveform
@@ -5574,6 +5620,7 @@ web/
   js/connection.js          server heartbeat + reconnect (§6.12a)
   js/backup.js              localStorage snapshot + recovery (§6.12a)
   js/geometry.js            grid/viewport/rotation math (§6.7)
+  js/quantity.js            property-value text ↔ number, decimals and fractions (§6.11, FR-020b)  [CREATE]
   js/model/design.js        design ops (§6.6)
   js/model/clipboard.js     copy/paste fragment extract + instantiate (§6.15)
   js/model/netlist.js       buildNets union-find (§6.6)
@@ -5659,7 +5706,7 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-018b | §6.6, §6.11 | `model/design.js`, `dialogs.js`, `contextmenu.js` |
 | FR-019, FR-020 | §6.7, §6.9, §6.10 | `geometry.js`, `interaction.js`, `store.js` |
 | FR-020a | §6.11, §7.2 | `properties.js`, `store.js` |
-| FR-020b | §6.11, §7.1, §7.2 | `properties.js`, `builtins.js`, `model/design.js`, `commands.js` |
+| FR-020b | §6.11, §7.1, §7.2 | `properties.js`, `quantity.js`, `builtins.js`, `model/design.js`, `commands.js` |
 | FR-067a, FR-071a, FR-071b | §6.11, §6.13, §7.1 | `builtins.js`, `sim.js`, `canvas.js` |
 | FR-071c, FR-087a | §6.8, §6.9, §6.11, §6.13, §7.2 | `builtins.js`, `canvas.js`, `interaction.js`, `sim.js`, `model/design.js` |
 | FR-071d, FR-071e | §6.8, §6.11 | `builtins.js`, `canvas.js`, `model/design.js` |
@@ -5719,6 +5766,7 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-076, FR-087 | §6.9, §6.10, §6.11, §6.13 | `toolbar.js`, `store.js`, `interaction.js`, `sim.js`, `statusbar.js` |
 | FR-077, FR-081, FR-082, FR-083 | §6.8, §6.13 | `sim.js`, `galasm.js`, `canvas.js` |
 | FR-084, FR-085, FR-086 | §6.13 | `sim.js`, `builtins.js` |
+| FR-071, FR-071a | §6.11, §6.13 | `builtins.js`, `properties.js`, `quantity.js`, `sim.js` |
 | FR-076a, FR-076b | §6.6, §6.10, §6.11, §6.13, §7.2 | `toolbar.js`, `dialogs.js`, `statusbar.js`, `sim.js`, `model/design.js`, `store.js`, `model/design.js` |
 | FR-071g, FR-071h, FR-083a | §6.11, §6.13, §6.17 (refusal), §6.18 (comment lines), §8 | `builtins.js`, `canvas.js`, `sim.js`, `cgen.js`, `ndl.js` |
 | FR-071k, FR-020e | §6.8, §6.10, §6.11, §6.13, §6.17, §6.18, §7.2 | `builtins.js`, `canvas.js`, `commands.js`, `properties.js`, `model/design.js`, `sim.js`, `cgen.js`, `ndl.js`, `examples/decoder.*` |

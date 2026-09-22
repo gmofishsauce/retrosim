@@ -19,6 +19,7 @@ import { getVertex } from "../model/design.js";
 import { portDirection } from "../model/subdesign.js";
 import { V0, V1, VU } from "../engine/galasm.js";
 import { DECODER_LABEL_MAX } from "../builtins.js";
+import { parseQuantity, formatQuantity } from "../quantity.js";
 
 function el(tag, className, text) {
   const e = document.createElement(tag);
@@ -677,22 +678,32 @@ export function initProperties({ container, store, renderer = null }) {
 
     // overrideRow builds one editable numeric field whose value shadows the
     // type default via inst.overrides[group][key] (FR-020a/FR-020b/FR-058).
-    function overrideRow(group, key, label, def, unit) {
+    // `min`, when the property declares one (FR-020b), is an inclusive lower
+    // bound: a value below it is rejected like unparseable text. It exists
+    // because the values it guards are ones the engine cannot act on — a clock
+    // `speed` of 0 or less computes a pacing rate of zero and the run simply
+    // never advances, with nothing on screen to say why (FR-071a).
+    function overrideRow(group, key, label, def, unit, min) {
       const ov = inst.overrides?.[group]?.[key];
       const overridden = ov != null;
 
       const row = el("div", "prop-row" + (overridden ? " overridden" : ""));
       row.appendChild(el("label", "prop-label", label));
 
+      // A text field, not `type="number"`: a value may be written as a fraction
+      // (FR-020b), which a number input rejects outright, and whose spinner
+      // would in any case step a sub-1 rate straight through 0 (FR-071a).
       const input = el("input", "prop-input");
-      input.type = "number";
-      input.value = String(overridden ? ov : def);
-      input.title = `type default: ${def} ${unit}`;
+      input.type = "text";
+      input.value = formatQuantity(overridden ? ov : def);
+      input.title =
+        `type default: ${formatQuantity(def)} ${unit}` +
+        (min != null ? ` (minimum ${formatQuantity(min)})` : "");
       input.disabled = locked;
       input.addEventListener("change", () => {
-        const n = parseFloat(input.value);
-        if (!Number.isFinite(n)) {
-          render(); // reject invalid input, restore display
+        const n = parseQuantity(input.value);
+        if (n === null || (min != null && n < min)) {
+          render(); // reject an unreadable or out-of-range value, restore display
           return;
         }
         // Setting back to the type default clears the override.
@@ -718,7 +729,7 @@ export function initProperties({ container, store, renderer = null }) {
       container.appendChild(el("div", "prop-empty", "none defined for this type"));
     }
     for (const key of keys) {
-      container.appendChild(overrideRow("delays", key, key, delays[key], "ns"));
+      container.appendChild(overrideRow("delays", key, key, delays[key], "ns", 0));
     }
 
     // Declared properties (FR-020b), e.g. the clock's period/speed (FR-071a).
@@ -727,7 +738,7 @@ export function initProperties({ container, store, renderer = null }) {
       container.appendChild(el("div", "prop-section", "Properties"));
       for (const p of props) {
         container.appendChild(
-          overrideRow("props", p.name, `${p.name} (${p.unit})`, p.default, p.unit),
+          overrideRow("props", p.name, `${p.name} (${p.unit})`, p.default, p.unit, p.min),
         );
       }
     }
