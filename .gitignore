@@ -1,3 +1,4 @@
 /retrosim
 /risc16test.hex
 /examples/cpu/regram*.bin
+*.sw[a-p]
