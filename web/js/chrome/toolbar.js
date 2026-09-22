@@ -258,7 +258,18 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     else sim.pause();
     refresh();
   });
-  container.append(pauseBtn, probeBtn);
+  // States (FR-087d): view mode's toggle, immediately right of Probe. Shown only
+  // while a run WITH A CLOCK is active — a combinational run has no edge to
+  // sample. It is a display toggle, not a tool, so it touches neither the tool
+  // nor the probe: both modes can be on at once. The store flag drives the
+  // colours; the engine call arms the pre-edge sampling and the 1 Hz clock cap.
+  const statesBtn = button("States", "Colour every wire by its state at the clock edge", () => {
+    const on = !store.state.viewMode;
+    sim.setViewMode(on);
+    store.setViewMode(on); // notifies, which refreshes this bar and repaints
+  });
+
+  container.append(pauseBtn, probeBtn, statesBtn);
 
   // Menu widget (FR-004a). createMenu builds a .menu (trigger + drop panel);
   // addItem appends a clickable item. Only one menu is open at a time; an
@@ -450,6 +461,11 @@ export function initToolbar({ container, store, interaction, fileops, projectops
     probeBtn.hidden = !liveValues;
     probeBtn.classList.toggle("active", store.state.tool === "probe");
     if (!liveValues && store.state.tool === "probe") interaction.setTool("select");
+    // States (FR-087d): present only for a run with a clock to sample on. It
+    // needs no end-of-run cleanup of its own, unlike Probe — Stop's setSim(null)
+    // clears store.state.viewMode, and the sim carrying the cap is discarded.
+    statesBtn.hidden = !seqRun;
+    statesBtn.classList.toggle("active", store.state.viewMode);
   }
 
   store.subscribe(refresh);

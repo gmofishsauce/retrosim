@@ -25,7 +25,7 @@ KiCad-like.
 10. [Projects and files](#10-projects-and-files) — including [Importing a block from another project](#importing-a-block-from-another-project), [Design notes](#design-notes) and [Reading a component's notes](#reading-a-components-notes)
 11. [Built-in components](#11-built-in-components) — including [Slowing a clock down](#slowing-a-clock-down), [Labeled decoders](#labeled-decoders) and [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
-13. [Simulation](#13-simulation) — including [Driving a port by hand](#driving-a-port-by-hand), [Stepping and pausing](#stepping-and-pausing), [Probing a point](#probing-a-point), [The bottom panel area](#the-bottom-panel-area), [Console output](#console-output), [Test vectors](#test-vectors) — including [The panel's test-vector file](#the-panels-test-vector-file) and [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
+13. [Simulation](#13-simulation) — including [Driving a port by hand](#driving-a-port-by-hand), [Stepping and pausing](#stepping-and-pausing), [Probing a point](#probing-a-point), [Coloring every wire at once](#coloring-every-wire-at-once), [The bottom panel area](#the-bottom-panel-area), [Console output](#console-output), [Test vectors](#test-vectors) — including [The panel's test-vector file](#the-panels-test-vector-file) and [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
 14. [Checking a design](#14-checking-a-design) — including [Reading the report](#reading-the-report), [Fixing what it finds](#fixing-what-it-finds), [Pins the check ignores](#pins-the-check-ignores), [Waiving a finding](#waiving-a-finding), and [What each rule means](#what-each-rule-means)
 15. [If the server disconnects](#15-if-the-server-disconnects)
 16. [Keyboard and mouse reference](#16-keyboard-and-mouse-reference)
@@ -110,9 +110,11 @@ The window has four regions plus a status bar:
   **Wire** and **Bus** — the last two labelled with their tool's own cursor glyph
   rather than text, so the button, the cursor and the conductor it draws all look
   alike — then the `RUN` button and, beside it, `STEP`
-  ([Stepping and pausing](#stepping-and-pausing)). Two more buttons appear when
-  they apply: `Pause` while a clocked run is active, and `Probe`
-  whenever the schematic is showing live values ([Probing a point](#probing-a-point)). Menu items with a standard keyboard shortcut
+  ([Stepping and pausing](#stepping-and-pausing)). Three more buttons appear when
+  they apply: `Pause` while a clocked run is active, `Probe`
+  whenever the schematic is showing live values ([Probing a point](#probing-a-point)),
+  and `States` while a clocked run is active
+  ([Coloring every wire at once](#coloring-every-wire-at-once)). Menu items with a standard keyboard shortcut
   show it in the menu (see [§16](#16-keyboard-and-mouse-reference)). Click a menu to open it; click an item to run it, or
   press `Esc` / click elsewhere to dismiss it. The current **project** name, the
   current design name, and the tool mode are shown next to the buttons; an
@@ -1249,7 +1251,9 @@ run, and STEP when you want to *inspect* each cycle.
 
 Speed is a wall-clock setting only: it has no effect in a test-vector run, and
 none in a [generated C program](#generating-a-standalone-c-simulator), both of
-which run as fast as they can.
+which run as fast as they can. It is also what
+[view mode](#coloring-every-wire-at-once) temporarily caps at 1 Hz while it is
+on, for the same reason you would slow a clock down by hand.
 
 The field will not accept a speed of **0** or less. There is nothing subtle
 behind that — at zero the simulation advances no time at all, so the run would
@@ -1741,6 +1745,69 @@ Notes:
   its internals are not on this sheet. Registers a part keeps internally but
   exposes on no pin (like the 74HC165's hidden shift stages) cannot be probed,
   because the probe reads nets.
+
+### Coloring every wire at once
+
+The probe reads **one** point in detail. **View mode** does the opposite: it
+colors **every** wire and bus on the sheet at once, so you can read the state of
+the whole design at a glance instead of a net at a time.
+
+While a simulation with a clock is running, a **States** button appears in the
+top bar beside `Probe`. Click it and every conductor takes its color from the
+value it carries:
+
+| Color | Meaning |
+|---|---|
+| **Gold** | logic `1` |
+| **Black** | logic `0` |
+| **Gray** | `U` (undefined) or `Z` (nothing driving it) |
+| **Red** | a [bus conflict](#13-simulation) — as always, and it still wins over the color above |
+
+A **bus** is colored by the agreement of its bits: gold when every bit is `1`,
+black when every bit is `0`, and gray otherwise — which covers both "some bit is
+undefined" and "the bits disagree". Everything that is not a conductor keeps its
+usual appearance.
+
+**The colors are a snapshot taken just before each rising clock edge** — the
+values your registers actually see at the edge — and they **hold for the whole
+cycle**. That is the point of the mode. The simulator settles in one-nanosecond
+steps, so a live coloring would flicker through every intermediate gate delay and
+show you nothing; freezing the pre-edge state gives you a full cycle to read it.
+The picture updates once per cycle, and once per press of **STEP**.
+
+The sample is taken on the design's **primary clock** — the same clock `STEP`
+advances by, chosen under `Edit ▸ Design Properties…`. A design with no clock
+generator has no edge to sample and offers no `States` button, just as it offers
+no `STEP`.
+
+**Turning it on slows the clock to 1 Hz.** The mode is meant to be read by eye,
+which a clock ticking faster than about once a second defeats, so while view mode
+is on every clock's `speed` is capped at one cycle per real second. If that
+actually changed anything, the message tray says so, naming the clocks and the
+speed they were running at. A clock already slower than 1 Hz is left where it is.
+The cap is temporary and harmless in every sense that matters:
+
+- it does **not** edit your design, mark it modified, or get saved;
+- it lifts the moment you turn view mode off, or stop the run;
+- it changes only how fast you *watch*, never `period` — so the circuit computes
+  exactly what it would have computed at full speed. See [Slowing a clock
+  down](#slowing-a-clock-down) for the difference between the two properties.
+
+Notes:
+
+- **View mode and probe mode are independent.** View mode only changes how
+  conductors are drawn; it never changes what a click does. You can have both on
+  at once — the whole sheet colored, and one point read out in detail. Turning
+  either on leaves the other alone.
+- **Leaving view mode:** click `States` again, or stop the run. `Esc` does not
+  leave it (`Esc` still belongs to the probe and to gestures in progress).
+  Stopping the run clears the colors along with everything else the run put on
+  screen, so read them before you stop.
+- A `0` wire is black, which is what a wire looks like normally — in a design
+  sitting at all zeros the highlighted `States` button is your reminder the mode
+  is on.
+- View mode changes nothing about the design, is never saved, and has no effect
+  on test-vector runs or a [generated C program](#generating-a-standalone-c-simulator).
 
 ### The bottom panel area
 
@@ -2385,6 +2452,7 @@ clear message until then, without losing your work.
 | Left-click input switch (while simulating) | Toggle its state `0 ↔ 1` |
 | Left-click any other item (while simulating) | Selection is locked — status bar shows "Editor is locked while the simulator is running" |
 | Left-click any point (in [probe mode](#probing-a-point)) | Show that point's logic state in the properties panel; empty canvas clears it |
+| Left-click `States` (while a clocked run is active) | Toggle [view mode](#coloring-every-wire-at-once) — color every conductor by its state at the clock edge |
 | Left-click a row number (test-vector panel) | Select that row for **Run to Row**; click again to deselect |
 | Left-click a tab in the [bottom panel area](#the-bottom-panel-area) | Bring that tab forward; its **✕** closes it |
 | Drag the top edge of the bottom panel area | Resize the area against the schematic |

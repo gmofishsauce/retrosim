@@ -1472,8 +1472,8 @@ test("clockInfo lists clocks with the behavior's clamped effective period", () =
   place(d, "A-2", builtin("clock"), { props: { period: 1 } }); // clamped to 2
   const sim = buildSimulation(d);
   assert.deepEqual(sim.clockInfo(), [
-    { refdes: "A-1", period: 100 },
-    { refdes: "A-2", period: 2 },
+    { refdes: "A-1", period: 100, speed: 1 },
+    { refdes: "A-2", period: 2, speed: 1 },
   ]);
 });
 
@@ -1674,4 +1674,109 @@ test("pacing uses the effective period, not the raw property (FR-084)", () => {
   const sim = buildSimulation(d);
   assert.equal(sim.clockInfo()[0].period, 2); // floor, min 2
   assert.equal(sim.unitsPerSecond(), 2); // and the pacing agrees with it
+});
+
+// --- View mode: pre-edge sampling and the 1 Hz pacing cap (FR-087d) ---
+
+// The whole point of the mode is that the colours are what a REGISTER sees:
+// the state one unit before the rising edge takes effect, held for the whole
+// cycle rather than flickering through the intermediate unit steps.
+test("view sampling captures the pre-edge state and holds it between edges (FR-087d)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("clock"), { props: { period: 10 } }); // rising edge evaluated at t=5
+  place(d, "A-2", builtin("pullup"));
+  place(d, "U1", DFF);
+  place(d, "A-3", builtin("indicator"));
+  const wClk = connect(d, ["A-1", "OUT"], ["U1", "CP"]);
+  const wD = connect(d, ["A-2", "OUT"], ["U1", "D"]);
+  const wQ = connect(d, ["U1", "Q"], ["A-3", "IN"]);
+
+  const sim = buildSimulation(d);
+  const sampled = () => ({
+    clk: sim.sampledValueOfLane(`wire:${wClk}`),
+    d: sim.sampledValueOfLane(`wire:${wD}`),
+    q: sim.sampledValueOfLane(`wire:${wQ}`),
+  });
+
+  // Nothing sampled yet: every lane reads Z, which the renderer draws gray.
+  assert.deepEqual(sampled(), { clk: VZ, d: VZ, q: VZ });
+
+  sim.setViewSampling(10);
+  const clocks = sim.clockInfo();
+
+  // First edge (t=5): the snapshot is the state at the end of t=4 — clock still
+  // low, D pulled up, and Q still U, because this is the edge that latches it.
+  advanceOneCycle(sim, 10, clocks);
+  assert.deepEqual(sampled(), { clk: V0, d: V1, q: VU });
+  // Q went to 1 one unit after the edge, but the SNAPSHOT does not move until
+  // the next edge: that is what makes a value readable for a whole cycle.
+  assert.equal(sim.valueOfLane(`wire:${wQ}`), V1);
+  assert.equal(sampled().q, VU);
+
+  // Second edge (t=15): Q now reads 1 pre-edge, and the clock is low again
+  // (it fell at t=10), so a sampled clock line is black every cycle.
+  advanceOneCycle(sim, 10, clocks);
+  assert.deepEqual(sampled(), { clk: V0, d: V1, q: V1 });
+
+  // Disarming drops the snapshot entirely.
+  sim.setViewSampling(null);
+  assert.deepEqual(sampled(), { clk: VZ, d: VZ, q: VZ });
+});
+
+// sampleViewNow is what keeps the sheet from being blank for up to a second
+// after the button is pressed (FR-087d).
+test("sampleViewNow snapshots the current state immediately (FR-087d)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("clock"), { props: { period: 10 } });
+  place(d, "A-2", builtin("pullup"));
+  place(d, "A-3", builtin("indicator"));
+  const w = connect(d, ["A-2", "OUT"], ["A-3", "IN"]);
+
+  const sim = buildSimulation(d);
+  settle(sim);
+  assert.equal(sim.sampledValueOfLane(`wire:${w}`), VZ); // no snapshot yet
+  sim.sampleViewNow();
+  assert.equal(sim.sampledValueOfLane(`wire:${w}`), V1);
+});
+
+// The cap is pacing-only: it changes unitsPerSecond and nothing else, which is
+// why a view-mode run computes exactly what the uncapped run would (FR-087d).
+test("setSpeedCap caps the pacing rate without touching the waveform (FR-087d)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("clock"), { props: { period: 100, speed: 10 } });
+  const sim = buildSimulation(d);
+
+  assert.equal(sim.unitsPerSecond(), 1000); // 100 ns × 10 Hz
+  sim.setSpeedCap(1);
+  assert.equal(sim.unitsPerSecond(), 100); // 100 ns × 1 Hz
+  assert.equal(sim.clockInfo()[0].period, 100); // the waveform is untouched
+  sim.setSpeedCap(null);
+  assert.equal(sim.unitsPerSecond(), 1000);
+});
+
+// min(speed, 1), not "set to 1": a clock already crawling stays where it is.
+test("the view-mode cap leaves a clock slower than 1 Hz alone (FR-087d)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("clock"), { props: { period: 100, speed: 0.1 } });
+  const sim = buildSimulation(d);
+  assert.equal(sim.unitsPerSecond(), 10);
+  sim.setSpeedCap(1);
+  assert.equal(sim.unitsPerSecond(), 10);
+});
+
+// Several clocks: the cap applies to every one of them, and clockInfo carries
+// the declared speed so the toolbar can name the ones it actually capped.
+test("the cap applies to every clock, and clockInfo reports declared speeds (FR-087d)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("clock"), { props: { period: 10, speed: 50 } });
+  place(d, "A-2", builtin("clock"), { props: { period: 100, speed: 0.5 } });
+  const sim = buildSimulation(d);
+
+  assert.deepEqual(
+    sim.clockInfo().map((c) => c.speed),
+    [50, 0.5],
+  );
+  assert.equal(sim.unitsPerSecond(), 500); // max(10×50, 100×0.5)
+  sim.setSpeedCap(1);
+  assert.equal(sim.unitsPerSecond(), 50); // max(10×1, 100×0.5)
 });

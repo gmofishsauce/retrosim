@@ -49,6 +49,14 @@ const LABEL_T2 = 22;
 // Conflicted nets stroke red while the conflict persists (FR-082).
 const CONFLICT_COLOR = "#b00020";
 
+// View-mode conductor colours (FR-087d): the state each conductor carried at
+// the unit step just before the primary clock's rising edge. U and Z share the
+// gray, as they already do on the indicators (FR-068/FR-071d) — an undriven net
+// and an undefined one are equally "not a level".
+const VIEW_ONE = "#d4a017"; // gold
+const VIEW_ZERO = "#000000";
+const VIEW_UNKNOWN = "#9a9a9a";
+
 // Text-note dotted-outline color (FR-071f), matching the palette tile. The
 // note's layout constants (NOTE_PAD/NOTE_LINE/NOTE_FONT) are imported from the
 // model so the drawn text matches the auto-sized box; text scales with the grid
@@ -107,6 +115,9 @@ export function initCanvas(canvasEl, store) {
     // after a run until the next design edit (FR-085).
     const sim = store.state.sim;
     const conflicts = sim ? sim.conflictedConductors() : null;
+    // View mode (FR-087d): the sim to colour conductors from, or null when the
+    // mode is off — the renderer then draws them in their ordinary colours.
+    const viewSim = store.state.viewMode ? sim : null;
 
     ctx.save();
     // Clear the whole backing store in device pixels (identity transform) so a
@@ -115,8 +126,8 @@ export function initCanvas(canvasEl, store) {
     ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
     ctx.scale(dpr, dpr);
     drawGrid(ctx, w, h, vp);
-    drawBuses(ctx, store.design, vp, store.state.selection, conflicts);
-    drawWires(ctx, store.design, vp, store.state.selection, conflicts);
+    drawBuses(ctx, store.design, vp, store.state.selection, conflicts, viewSim);
+    drawWires(ctx, store.design, vp, store.state.selection, conflicts, viewSim);
     drawComponents(ctx, store.design, vp, store.state.selection, store.state.hover, sim, editing);
     // Vertex marks and group-snap braces last, so a component body never hides a
     // connection/dangling indicator that sits on or under it (§6.8).
@@ -283,10 +294,32 @@ function endpointWorld(design, p) {
   return { x: p.x, y: p.y };
 }
 
+// viewColor maps a conductor to its view-mode stroke (FR-087d) from the run's
+// SAMPLED values — the state just before the primary clock's rising edge, not
+// the current step. A conductor colours by the agreement of its lanes: gold when
+// every lane sampled 1, black when every lane sampled 0, gray otherwise. A wire
+// has one lane, so this collapses to the 1/0/U-or-Z mapping; a bus has one lane
+// per bit, so disagreeing bits are gray like an undefined one. Returns null when
+// there is nothing to colour by — no sim, no snapshot yet, or a held vector run,
+// whose view publishes no sampled reader — and the caller keeps its ordinary
+// stroke.
+function viewColor(sim, lanes) {
+  if (!sim?.sampledValueOfLane || lanes.length === 0) return null;
+  let all1 = true;
+  let all0 = true;
+  for (const lane of lanes) {
+    const v = sim.sampledValueOfLane(lane);
+    if (v !== V1) all1 = false;
+    if (v !== V0) all0 = false;
+  }
+  return all1 ? VIEW_ONE : all0 ? VIEW_ZERO : VIEW_UNKNOWN;
+}
+
 // drawWires draws wires as thin black polylines (FR-036), highlighting the
 // selected one; a conflicted conductor strokes red while the conflict
-// persists (FR-082).
-function drawWires(ctx, design, vp, selection, conflicts) {
+// persists (FR-082). In view mode each wire strokes in its sampled state
+// instead, with the conflict red still taking precedence (FR-087d).
+function drawWires(ctx, design, vp, selection, conflicts, viewSim) {
   if (!design) return;
   for (const w of design.wires) {
     const pts = w.path.map((p, i) => {
@@ -299,8 +332,9 @@ function drawWires(ctx, design, vp, selection, conflicts) {
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
     const selected = selection.some((s) => sameRef(s, { kind: "wire", id: w.id }));
     const conflicted = conflicts?.has(w.id) && !selected;
+    const view = conflicted || selected ? null : viewColor(viewSim, [`wire:${w.id}`]);
     ctx.lineWidth = selected ? 2.5 : conflicted ? 2 : 1;
-    ctx.strokeStyle = selected ? "#4a90d9" : conflicted ? CONFLICT_COLOR : "#000";
+    ctx.strokeStyle = selected ? "#4a90d9" : conflicted ? CONFLICT_COLOR : (view ?? "#000");
     ctx.stroke();
     highlightSelectedSegments(ctx, pts, selection, w.id, 2.5);
   }
@@ -323,8 +357,10 @@ function highlightSelectedSegments(ctx, pts, selection, id, width) {
 
 // drawBuses draws buses as thick blue polylines with a "/n" width annotation
 // (FR-036/037), highlighting the selected one; a bus with a conflicted bit
-// strokes red while the conflict persists (FR-082).
-function drawBuses(ctx, design, vp, selection, conflicts) {
+// strokes red while the conflict persists (FR-082). In view mode the stroke is
+// the agreement of the bus's sampled bits instead (FR-087d); the "/n"
+// annotation stays blue either way, being design information rather than state.
+function drawBuses(ctx, design, vp, selection, conflicts, viewSim) {
   if (!design) return;
   for (const b of design.buses) {
     const pts = b.path.map((p, i) => {
@@ -337,8 +373,10 @@ function drawBuses(ctx, design, vp, selection, conflicts) {
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
     const selected = selection.some((s) => sameRef(s, { kind: "bus", id: b.id }));
     const conflicted = conflicts?.has(b.id) && !selected;
+    const lanes = Array.from({ length: b.width }, (_, i) => `bus:${b.id}:${i}`);
+    const view = conflicted || selected ? null : viewColor(viewSim, lanes);
     ctx.lineWidth = selected ? 5 : 3;
-    ctx.strokeStyle = selected ? "#4a90d9" : conflicted ? CONFLICT_COLOR : "#1565c0";
+    ctx.strokeStyle = selected ? "#4a90d9" : conflicted ? CONFLICT_COLOR : (view ?? "#1565c0");
     ctx.stroke();
     highlightSelectedSegments(ctx, pts, selection, b.id, 5);
 

@@ -105,6 +105,13 @@ export function createStore(initial = {}) {
     // persisted, never undoable, never dirtying — and NOT the selection, which
     // stays locked and empty during a run (FR-087).
     probe: null,
+    // `viewMode` is view mode's on/off flag (FR-087d): while set, the renderer
+    // colours every conductor by its state sampled just before the primary
+    // clock's rising edge. Transient on the same terms as `probe` — never
+    // persisted, never undoable, never dirtying — and deliberately NOT part of
+    // `tool`: view mode is a display mode, not a tool, which is what lets it be
+    // on at the same time as probe mode.
+    viewMode: false,
     // `vectorHold` says the current `sim` view is a HELD vector run (FR-115l),
     // not values lingering after an interactive Stop (FR-085) — a distinction
     // `sim` alone cannot carry. It drives the "held" state tray (FR-073) and the
@@ -233,10 +240,11 @@ export function createStore(initial = {}) {
 
   // clearSimView drops a retained simulation display view on the first design
   // modification after a run (FR-085, §6.13), and with it any probe target
-  // (FR-087c) — the values it was reading are gone.
+  // (FR-087c) and view mode (FR-087d) — the values they were reading are gone.
   function clearSimView() {
     state.sim = null;
     state.probe = null;
+    state.viewMode = false;
   }
 
   return {
@@ -404,6 +412,16 @@ export function createStore(initial = {}) {
       notify();
     },
 
+    // setViewMode turns view mode on or off (FR-087d). Transient like the probe
+    // target: outside the command/undo path, never persisted, never dirtying.
+    // The engine half — sampling and the 1 Hz clock cap — is armed by the
+    // caller (the toolbar, via sim.setViewMode), not from here, so the store
+    // stays free of engine dependencies.
+    setViewMode(on) {
+      state.viewMode = on;
+      notify();
+    },
+
     // toggleSelection adds ref to the selection if absent, or removes it if
     // present (shift-click, FR-016a), then notifies.
     toggleSelection(ref) {
@@ -561,10 +579,14 @@ export function createStore(initial = {}) {
     // what resets it: each run gets a fresh object and starts from the design's
     // own switch settings. Dropping it clears the probe target too (FR-087c):
     // the reading came from this view, and a reading with no simulation behind
-    // it is exactly the stale display FR-085 exists to prevent.
+    // it is exactly the stale display FR-085 exists to prevent. View mode goes
+    // the same way (FR-087d): its colours are that view's sampled values.
     setSim(view) {
       state.sim = view;
-      if (!view) state.probe = null;
+      if (!view) {
+        state.probe = null;
+        state.viewMode = false; // view mode goes with the display view (FR-087d/FR-085)
+      }
       notify();
     },
 

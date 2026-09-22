@@ -421,6 +421,21 @@ export function buildSimulation(
   let lastStepChanged = true;
   const conflictedNets = new Set();
 
+  // View-mode sampling (FR-087d). `viewPeriod` is the primary clock's effective
+  // period while view mode is on, else null; `sampled` holds the net values
+  // captured at the unit step just before that clock's rising edge — the values
+  // a registered input sees at the edge (FR-078). Sampling from inside step()
+  // rather than from its callers is what makes the paced loop and STEP sample
+  // identically. `speedCap` is view mode's 1 Hz pacing cap, applied in
+  // unitsPerSecond so it can never reach the clock instances or the waveform.
+  let viewPeriod = null;
+  let sampled = null;
+  let speedCap = null;
+
+  function sampleView() {
+    sampled = curr.slice();
+  }
+
   // resolveNet implements FR-081–FR-083: enabled strong drivers win; weak
   // (pull-up/pull-down) contributions resolve only when no strong driver is
   // enabled; 0-vs-1 disagreement is a conflict → U, flagged and reported on
@@ -456,6 +471,11 @@ export function buildSimulation(
   // of each entity's clock net (FR-079); (2) evaluate every driver of every
   // net against curr (FR-081); (3) resolve into next; (4) swap.
   function step() {
+    // View mode (FR-087d): capture the pre-edge state of every net at the
+    // evaluation time of the primary clock's rising edge (the FR-084 waveform
+    // rises where t % period === floor(period / 2)). Taken BEFORE this step
+    // evaluates, so `curr` still holds the values the edge is about to latch.
+    if (viewPeriod !== null && simTime % viewPeriod === Math.floor(viewPeriod / 2)) sampleView();
     for (const e of entities) {
       if (e.kind !== "galasm" || e.registers.size === 0) continue;
       // Global clock edge (for .R outputs without their own .CLK); per-output
@@ -647,6 +667,29 @@ export function buildSimulation(
       const n = netOfLane.get(lane);
       return n === undefined ? VZ : curr[n];
     },
+    // sampledValueOfLane is valueOfLane's view-mode twin (FR-087d): the lane's
+    // value as of the last sample rather than the current step. VZ before the
+    // first sample, which the renderer draws as the gray "no level".
+    sampledValueOfLane(lane) {
+      if (sampled === null) return VZ;
+      const n = netOfLane.get(lane);
+      return n === undefined ? VZ : sampled[n];
+    },
+    // setViewSampling arms (with the primary clock's effective period) or
+    // disarms view-mode sampling; sampleViewNow takes the immediate snapshot
+    // FR-087d requires on entering the mode, so the sheet is never blank.
+    setViewSampling(period) {
+      viewPeriod = period;
+      if (period === null) sampled = null;
+    },
+    sampleViewNow: sampleView,
+    // setSpeedCap caps every clock's `speed` for pacing only (FR-087d): null
+    // for no cap. It is applied in unitsPerSecond below, so nothing downstream
+    // of the property — the clock behavior's waveform included — can see it and
+    // the simulated result is identical to the uncapped run.
+    setSpeedCap(cap) {
+      speedCap = cap;
+    },
     conflictedConductors() {
       const ids = new Set();
       for (const i of conflictedNets) {
@@ -664,15 +707,24 @@ export function buildSimulation(
     // carries across frames without needing whole steps each time.
     unitsPerSecond: () =>
       clocks.length
-        ? Math.max(...clocks.map((c) => Math.max(2, Math.floor(c.props.period)) * c.props.speed))
+        ? Math.max(
+            ...clocks.map(
+              (c) =>
+                Math.max(2, Math.floor(c.props.period)) *
+                (speedCap === null ? c.props.speed : Math.min(c.props.speed, speedCap)),
+            ),
+          )
         : 0,
     // clockInfo lists every clock generator with its effective period — the
     // same clamp the clock behavior applies (§6.11 builtins) — for the
-    // step-cycle edge computation (FR-076a).
+    // step-cycle edge computation (FR-076a), and its declared `speed`, which is
+    // what view mode's 1 Hz cap reports on (FR-087d). These are the FLATTENED
+    // run's clocks, so a clock inside an embedded sub-design is covered too.
     clockInfo: () =>
       clocks.map((c) => ({
         refdes: c.refdes,
         period: Math.max(2, Math.floor(c.props.period)),
+        speed: c.props.speed,
       })),
     // setStimulus replaces the external stimulus list between steps (FR-115e):
     // a long-lived sequential vector run re-drives its inputs row by row (and
@@ -815,6 +867,10 @@ export function advanceOneCycle(sim, primaryPeriod, clocks, onMessage = () => {}
   }
 }
 
+// VIEW_MAX_HZ is view mode's pacing cap (FR-087d): the mode is for reading
+// values by eye, which a clock faster than one cycle per real second defeats.
+export const VIEW_MAX_HZ = 1;
+
 // MAX_STEPS_PER_FRAME caps a paced frame's work so a huge period × speed
 // cannot freeze the tab (§6.13).
 const MAX_STEPS_PER_FRAME = 10000;
@@ -901,6 +957,7 @@ export function createSim({ store, renderer, consolePanel = null, onRefusal = po
     store.setSim({
       valueOfPin: sim.valueOfPin,
       valueOfLane: sim.valueOfLane, // conductor reads for the probe (FR-087c)
+      sampledValueOfLane: sim.sampledValueOfLane, // view-mode colouring (FR-087d)
       conflictedConductors: sim.conflictedConductors,
       // Which ports this run accepts clicks on (FR-094g), resolved once from the
       // ROOT design — the sheet the user sees — not the flattened one. Carried on
@@ -991,7 +1048,6 @@ export function createSim({ store, renderer, consolePanel = null, onRefusal = po
 
   // Sequential: advance period × speed units per wall second (FR-084).
   function startPaced() {
-    const rate = sim.unitsPerSecond();
     let last = performance.now();
     let due = 0; // fractional steps carried between frames
     const frame = (now) => {
@@ -1005,7 +1061,11 @@ export function createSim({ store, renderer, consolePanel = null, onRefusal = po
         rafId = requestAnimationFrame(frame);
         return;
       }
-      due += ((now - last) / 1000) * rate;
+      // Re-read the rate every frame rather than capturing it at run start:
+      // view mode's 1 Hz cap (FR-087d) can change it mid-run. The fractional
+      // `due` accumulator carries partial steps across a rate change exactly as
+      // it carries them across frames (FR-071a).
+      due += ((now - last) / 1000) * sim.unitsPerSecond();
       last = now;
       // Run the whole steps due, capped per frame; drop any backlog beyond
       // the cap (slow real time beats accruing unbounded debt).
@@ -1034,6 +1094,34 @@ export function createSim({ store, renderer, consolePanel = null, onRefusal = po
     if (!sim || !paused) return;
     paused = false;
     setAppState("simulating");
+  }
+
+  // --- View mode (FR-087d); sequential runs only ---
+
+  // setViewMode arms or disarms the whole of view mode on the running sim: the
+  // pre-edge sampling (on the primary clock, FR-076b) and the 1 Hz pacing cap.
+  // The store owns the flag itself — setSim(null) clears it, so Stop needs no
+  // help here — and this is only the engine half. A combinational run has no
+  // edge to sample and no pacing to cap, so it is a no-op there.
+  function setViewMode(on) {
+    if (!sim || !sim.hasClocks()) return;
+    if (!on) {
+      sim.setViewSampling(null);
+      sim.setSpeedCap(null);
+      renderer.requestRender();
+      return;
+    }
+    const clocks = sim.clockInfo();
+    sim.setViewSampling(primaryClock(clocks).period);
+    sim.sampleViewNow(); // show something at once, rather than a blank sheet (FR-087d)
+    // Report the cap only when it actually caps something (FR-087d).
+    const fast = clocks.filter((c) => c.speed > VIEW_MAX_HZ);
+    sim.setSpeedCap(VIEW_MAX_HZ);
+    if (fast.length) {
+      const which = fast.map((c) => `${c.refdes} at ${c.speed} Hz`).join(", ");
+      postMessage(`view mode: clock speed limited to ${VIEW_MAX_HZ} Hz (${which})`);
+    }
+    renderer.requestRender();
   }
 
   // primaryClock resolves the design's primary clock (FR-076b) against the
@@ -1084,5 +1172,6 @@ export function createSim({ store, renderer, consolePanel = null, onRefusal = po
     pause,
     resume,
     stepCycle,
+    setViewMode,
   };
 }

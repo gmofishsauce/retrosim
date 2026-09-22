@@ -336,6 +336,51 @@ test("the probe target is cleared with the sim view, however it is dropped (FR-0
   assert.equal(held.state.probe, null);
 });
 
+test("setViewMode toggles view mode and notifies (FR-087d)", () => {
+  const store = newStore();
+  let notes = 0;
+  store.subscribe(() => notes++);
+  assert.equal(store.state.viewMode, false);
+
+  store.setViewMode(true);
+  assert.equal(store.state.viewMode, true);
+  assert.equal(notes, 1); // the canvas repaints off this
+  store.setViewMode(false);
+  assert.equal(store.state.viewMode, false);
+});
+
+test("view mode is a display mode, not a tool, so it coexists with probe (FR-087d)", () => {
+  const store = newStore();
+  store.setViewMode(true);
+  store.setProbe({ kind: "wire", id: "w1" });
+  // Neither turns the other off: the probe owns the click, view mode owns the
+  // conductor colours, and they are independent toggles.
+  assert.equal(store.state.viewMode, true);
+  assert.deepEqual(store.state.probe, { kind: "wire", id: "w1" });
+  // Unlike the probe, a selection change leaves view mode alone: it reads no
+  // panel, so there is nothing to hand back.
+  store.setSelection([{ kind: "component", refdes: "U1" }]);
+  assert.equal(store.state.viewMode, true);
+  assert.equal(store.state.probe, null);
+});
+
+test("view mode is cleared with the sim view, however it is dropped (FR-087d/FR-085)", () => {
+  // Stop: one setSim(null) drops the colours with the indicators and the probe.
+  const stopped = newStore();
+  stopped.setSimulating(true);
+  stopped.setSim({ valueOfPin: () => 0 });
+  stopped.setViewMode(true);
+  stopped.setSim(null);
+  assert.equal(stopped.state.viewMode, false);
+
+  // An edit under a held view (clearSimView) — the other way a view ends.
+  const held = newStore();
+  held.setSim({ valueOfPin: () => 0 });
+  held.setViewMode(true);
+  held.dispatch(addCmd(1));
+  assert.equal(held.state.viewMode, false);
+});
+
 test("vectorHold marks a held vector run and notifies (FR-115l)", () => {
   const store = newStore();
   let notes = 0;

@@ -1557,7 +1557,8 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
 ### 6.8 JS: Canvas renderer (`web/js/engine/canvas.js`)
 - **Purpose:** draw the whole scene; own the render loop and viewport.
 - **Satisfies:** FR-012–FR-015, FR-020, FR-021, FR-022, FR-023, FR-036, FR-037,
-  FR-068 (simulated indicator states), FR-082 (red conflict nets), NFR-005.
+  FR-068 (simulated indicator states), FR-082 (red conflict nets), FR-087d (view-mode
+  conductor colouring), NFR-005.
 - **Interface:** `init(canvasEl, store)`, `setViewport({pan, zoom})`,
   `setMarquee(rect | null)` (the live rubber-band rectangle + window/crossing
   mode, FR-016b), `requestRender()`, `onAfterRender(fn) → unsubscribe`. Renders on
@@ -1586,6 +1587,24 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   stroke colors). Vertex marks and braces are drawn **after** components (moved
   2026-06-18; previously before) so a component body can never hide a
   connection/dangling indicator that sits on or under it.
+- **View-mode conductor colouring (FR-087d):** when `store.state.viewMode` is set,
+  `drawWires`/`drawBuses` take their stroke from the run's **sampled** values rather
+  than from the ordinary black/blue. The colour is chosen by a single helper,
+  `viewColor(sim, lanes)`, applied per conductor: `VIEW_ONE` (gold) when every lane
+  sampled 1, `VIEW_ZERO` (black) when every lane sampled 0, `VIEW_UNKNOWN` (gray)
+  otherwise — which covers a U or Z lane and, on a bus, bits that disagree
+  (FR-087d's agreement rule; a wire has one lane, so the same three cases collapse
+  to the 1/0/U-or-Z mapping the FR states for wires). The lanes are the conductor's
+  existing lane keys (`wire:<id>`, `bus:<id>:<bit>`, §6.6), read through
+  `sim.sampledValueOfLane` (§6.13) — the sampled twin of the probe's `valueOfLane`.
+  **Precedence is unchanged in shape:** selection blue (which a run never has, the
+  selection being locked empty, FR-087) → conflict red → view colour → ordinary
+  black/blue, so FR-082's red still wins in view mode. Line widths and everything
+  that is not a conductor — the bus `/n` annotation included — are untouched, so the
+  mode changes stroke colour and nothing else. The renderer treats a missing
+  `sampledValueOfLane` as "no snapshot" and falls back to the ordinary colours: the
+  vector panel's held-run view (§6.16) publishes only the three probe fields, and
+  view mode is not offered under a hold anyway (FR-087d).
 - **Vertex marks (`drawVertices`):** a `junction` vertex draws a filled black dot.
   A `pin`/`connector` vertex with **two or more** conductor path-ends on it
   (fan-out, FR-034a) draws the same dot at each pair of ends' **branch point**
@@ -2246,6 +2265,11 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   and releasing a vector hold — by `setSelection` (a selection during a live run or
   hold hands the properties panel back to the selection sheet), and by
   `clearSimView` (a design modification during a hold).
+  `viewMode` (a boolean, `setViewMode`, FR-087d) is transient on exactly the same
+  terms — not persisted, not undoable, not dirtying — and is cleared by
+  `setSim(null)`, so Stop drops the colouring with the indicators and the probe in
+  one atomic notification. It is **not** part of `state.tool`: view mode is a display
+  toggle, not a tool, which is what lets it coexist with probe mode (FR-087d).
 - **Atomic command failure (FR-024a):** before `cmd.apply`, `dispatch` captures
   an in-store snapshot of the design's connectivity collections (`components`,
   `wires`, `buses`, `vertices`) and id counters (`nextWireId`/`nextBusId`/
@@ -2419,7 +2443,15 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `interaction.setTool(probing ? "select" : "probe")`, whose `active` class
   tracks `state.tool === "probe"`, and which — since `refresh()` is where the
   toolbar learns the run ended — also drops probe mode back to Select when
-  neither live-value state holds any longer. (Pan has no control; it is
+  neither live-value state holds any longer. Immediately right of it, the
+  **States** toggle (FR-087d), shown only while `simulating && seqRun` — a run
+  with a clock, the same `seqRun` disjunct STEP uses, since a combinational run
+  has no edge to sample. Its click calls `store.setViewMode(!store.state.viewMode)`
+  and its `active` class tracks `state.viewMode`; it touches neither
+  `interaction.setTool` nor the probe, the two modes being independent. Turning it
+  on is also where the engine is told to start sampling and to cap the clocks
+  (§6.13); `setSim(null)` clears `state.viewMode`, so the button needs no
+  end-of-run cleanup of its own, unlike Probe. (Pan has no control; it is
   space-drag/middle-drag or right-click-to-recenter on bare canvas —
   FR-023a/FR-023b; left-drag on bare canvas is rubber-band select, FR-016b.)
   A menu opens on click, closes on item choice / outside click / Escape, and is
@@ -3550,7 +3582,8 @@ no sequential part could ever leave U.)
   new interactive built-in (an `INTERACTIONS` handler, §6.11) needs no scheduler
   change.
 - **Display view:** the engine publishes `state.sim = { valueOfPin(refdes,
-  pinName), valueOfLane(lane), conflictedConductors, debugPorts }` (transient, §6.10) consumed
+  pinName), valueOfLane(lane), sampledValueOfLane(lane) (FR-087d),
+  conflictedConductors, debugPorts }` (transient, §6.10) consumed
   by the renderer (§6.8) for indicator glyphs and red conflict strokes, and by the
   properties panel's probe sheet (§6.11, FR-087c). The store wraps what the engine
   publishes, carrying alongside it the `inputs` map of run-time interactive state
@@ -3575,6 +3608,43 @@ no sequential part could ever leave U.)
   previously impossible because only pin-keyed lookup was exposed. The
   **test-vector panel publishes the same three-field view** when it holds a run
   (§6.16, FR-115l), so the probe reads a held run and a live one identically.
+- **View mode (FR-087d):** two engine additions, both small, plus one change to
+  the paced loop.
+  - **Sampling** lives inside `buildSimulation`. `setViewSampling(period | null)`
+    records the **primary clock's effective period** (the `max(2, floor(period))`
+    clamp `clockInfo` already applies) or disables sampling; `step()` then, *before*
+    evaluating, copies `curr` into a `sampled` array whenever
+    `simTime % period === floor(period / 2)` — the FR-084 waveform's rising-edge
+    evaluation time, so what is saved is the state of every net one unit *before*
+    the edge takes effect, which is exactly what a registered input sees (FR-078).
+    Putting the test in `step()` rather than in the two callers is what keeps both
+    the paced rAF loop and `advanceOneCycle` (STEP) unchanged and guarantees they
+    sample identically; it costs one modulo per unit step, and none at all when
+    sampling is off. `sampleViewNow()` takes the immediate on-entry snapshot, and
+    `sampledValueOfLane(lane)` reads it through the same `netOfLane` map
+    `valueOfLane` uses, returning `VZ` when no snapshot has been taken.
+    `sampledValueOfLane` joins the published display view (above) so the renderer
+    reaches it the same way it reaches the rest.
+  - **The 1 Hz cap** is `setSpeedCap(cap | null)`, applied inside
+    `unitsPerSecond()`: each clock's `speed` becomes `Math.min(speed, cap)` before
+    the `effective period × speed` product. Capping inside `unitsPerSecond` rather
+    than mutating the clock entities is what makes FR-087d's "run-time override,
+    never touches the instance" true by construction — nothing downstream of the
+    property, including the waveform the clock behavior generates from `period`,
+    can see it, so the simulated result is bit-identical to the uncapped run.
+  - **`startPaced` must re-read the rate each frame.** It currently captures
+    `const rate = sim.unitsPerSecond()` once at run start, which was correct while
+    nothing could change the rate mid-run; view mode can, so the frame loop calls
+    `sim.unitsPerSecond()` per frame instead. The fractional `due` accumulator
+    needs no change — it carries partial steps across a rate change as it already
+    carries them across frames (FR-071a).
+  - **Toggling.** `createSim` exposes `setViewMode(on)`: on, it calls
+    `setSpeedCap(1)`, `setViewSampling(primaryClock(sim.clockInfo()).period)`,
+    `sampleViewNow()`, posts the message-tray line naming any clock whose declared
+    `speed` exceeded 1 (and nothing when none did, FR-087d), and requests a render;
+    off, it clears both the cap and the sampling. `stop()` needs no addition: it
+    already calls `store.setSim(null)`, which clears `state.viewMode`, and the sim
+    object carrying the cap is discarded whole.
 - **Error handling:** a behavior evaluation throw (a compiler bug, not author
   error — author errors are caught at preflight) stops the simulation with a
   message rather than killing the rAF loop.
@@ -5772,6 +5842,7 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-071k, FR-020e | §6.8, §6.10, §6.11, §6.13, §6.17, §6.18, §7.2 | `builtins.js`, `canvas.js`, `commands.js`, `properties.js`, `model/design.js`, `sim.js`, `cgen.js`, `ndl.js`, `examples/decoder.*` |
 | FR-087b | §6.9, §6.10, §6.11, §6.13 | `interaction.js`, `store.js`, `builtins.js`, `sim.js` |
 | FR-087c | §6.8, §6.9, §6.10, §6.11, §6.13 | `interaction.js`, `properties.js`, `toolbar.js`, `canvas.js`, `sim.js`, `store.js`, `dialogs.js`, `style.css` |
+| FR-087d | §6.8, §6.10, §6.11, §6.13 | `canvas.js`, `store.js`, `toolbar.js`, `sim.js`, `style.css` |
 | FR-088 | §6.6, §6.10, §6.11, §6.14 | `model/design.js`, `commands.js`, `toolbar.js`, `dialogs.js` |
 | FR-094, FR-094a, FR-095 | §6.14, §7.1a, §7.2 | `subdesign.js`, `builtins.js`, `model/design.js`, `model/netlist.js` |
 | FR-096 | §6.14, §7.2 | `model/design.js`, `dialogs.js` |
@@ -6267,6 +6338,24 @@ tests beside them per §9).
     marked is silent for R8 (the same no-pins guard as the text note); a net's
     marked pin counts as neither load nor driver for R4/R9. The marks are set
     directly on the in-memory instances, so these run with no store and no tool.
+- **View mode (`sim.test.js`, `store.test.js`, §6.13, FR-087d):** the claim worth
+  testing is the *timing* of the snapshot, so the spine is a DFF clocked at
+  period 10 with a pulled-up D. After the first `advanceOneCycle` the sampled
+  values are the state at the end of t = 4 — clock 0, D 1, **Q still U**, because
+  t = 5 is the edge that latches it — while `valueOfLane` already reads Q = 1:
+  the snapshot demonstrably does not move between edges, which is the whole
+  reason the mode is readable. The next cycle's sample has Q = 1 and the clock
+  low again. Before any sample every lane reads Z (drawn gray), `sampleViewNow`
+  fills it immediately (the on-entry snapshot), and `setViewSampling(null)`
+  empties it. The cap is `min(speed, cap)` and pacing-only: 100 ns × 10 Hz
+  paces at 1000 and caps to 100 with `clockInfo`'s period unchanged, a 0.1 Hz
+  clock is left alone, and with two clocks the cap applies to both while
+  `clockInfo` still reports the *declared* speeds — which is what lets the
+  toolbar name only the clocks it actually slowed. In the store, `viewMode`
+  notifies, survives a selection change (unlike the probe, which the selection
+  hands the panel back from), coexists with a probe target — the assertion that
+  it is a display mode and not a tool — and is cleared by both `setSim(null)`
+  (Stop) and `clearSimView` (an edit under a held view).
 - **No-connect marks (`model/design.test.js`, `store.test.js`, `engine/interaction.test.js`, §6.22, FR-071i):**
   `pinAcceptsConnection` is false for a marked pin and for a pin named `NC`, true
   otherwise; `setPinMark` refuses a pin carrying a `pin` vertex or a bus
