@@ -529,3 +529,29 @@ test("generateC: behavior parse error propagates as a throw", () => {
   place(d, "U1", BAD);
   assert.throws(() => generateC(d), /BADX: behavior/);
 });
+
+// The labeled decoder (FR-071k) is generated, not refused: it lowers into
+// gen_drive from the same DECODER_TERMS literals the slow engine evaluates, so
+// the two engines stay in step (FR-107). Its display strings are editor-only and
+// appear nowhere in the emitted C.
+test("a decoder lowers to eight rt_contrib drives in gen_drive (FR-071k)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("decoder"), { decodeLabels: ["FETCH", "", "", "", "", "", "", ""] });
+  place(d, "A-2", builtin("switch"));
+  connect(d, ["A-2", "OUT"], ["A-1", "E"]);
+  place(d, "A-3", builtin("indicator"));
+  connect(d, ["A-1", "/Y0"], ["A-3", "IN"]);
+
+  const { code } = generateC(d);
+  assert.match(code, /labeled 3-to-8 decoder/);
+  for (let i = 0; i < 8; i++) {
+    assert.match(code, new RegExp(`A-1\\.\\/Y${i}`), `/Y${i} driven`);
+  }
+  // Five literals per term: E and /E plus the three address bits.
+  assert.equal((code.match(/rt_and\(/g) ?? []).length >= 8 * 4, true);
+  // gen_max_contribs must cover the decoder's eight drivers plus the switch's.
+  const max = Number(/gen_max_contribs = (\d+)/.exec(code)[1]);
+  assert.ok(max >= 9, `gen_max_contribs ${max} covers 8 decoder outputs + 1 switch`);
+  // The display strings are an editor concern only.
+  assert.ok(!code.includes("FETCH"));
+});

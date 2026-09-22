@@ -377,6 +377,15 @@ export function buildSimulation(
         kind: "builtin",
         refdes: inst.refdes,
         type: inst.type,
+        // Input-net accessor for the behaviors that READ as well as drive (the
+        // labeled decoder, FR-071k). Like the memory and UART entities' `read`
+        // it answers from `curr` — the PREVIOUS step's net values — so such a
+        // built-in's outputs follow its inputs by the standard one unit
+        // (FR-078), and an unwired pin reads Z (→U through the term rules).
+        read: (pinName) => {
+          const n = netOfPin.get(`${inst.refdes}.${pinName}`);
+          return n === undefined ? VZ : curr[n];
+        },
         // renderType (e.g. "clock") for built-in identification independent of
         // the now-id-valued `type` (FR-066e).
         renderType: inst.typeData.renderType,
@@ -508,6 +517,7 @@ export function buildSimulation(
           clockPeriod,
           state: src.switchState,
           drive: live?.portDrive,
+          read: e.read,
         };
         for (const c of e.behave(ctx)) {
           add(`${e.refdes}.${c.pin}`, c.value, !!c.weak, `${e.refdes}.${c.pin}`);

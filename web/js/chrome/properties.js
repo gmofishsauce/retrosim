@@ -8,6 +8,7 @@
 import {
   setOverrideCmd,
   setSwitchStateCmd,
+  setDecodeLabelCmd,
   setPortPropsCmd,
   setLabelCmd,
   setBusNameCmd,
@@ -17,6 +18,7 @@ import { openFileDialog } from "./dialogs.js";
 import { getVertex } from "../model/design.js";
 import { portDirection } from "../model/subdesign.js";
 import { V0, V1, VU } from "../engine/galasm.js";
+import { DECODER_LABEL_MAX } from "../builtins.js";
 
 function el(tag, className, text) {
   const e = document.createElement(tag);
@@ -414,6 +416,29 @@ export function initProperties({ container, store, renderer = null }) {
       });
       row.appendChild(select);
       container.appendChild(row);
+    }
+
+    // Labeled decoder strings (FR-020e/FR-071k): eight free-form text boxes, one
+    // per input value 0-7, each holding at most five characters (the browser
+    // enforces it as you type; setDecodeLabelCmd enforces it again on the way
+    // in). Per-instance state like the switch's, not an `overrides` entry, so
+    // each edit is its own undoable command. Disabled while simulating (FR-087).
+    if (td.renderType === "decoder") {
+      container.appendChild(el("div", "prop-section", "Decode labels"));
+      for (let v = 0; v < 8; v++) {
+        const row = el("div", "prop-row");
+        row.appendChild(el("label", "prop-label", String(v)));
+        const input = el("input", "prop-input");
+        input.type = "text";
+        input.maxLength = DECODER_LABEL_MAX;
+        input.value = inst.decodeLabels?.[v] ?? "";
+        input.disabled = locked;
+        input.addEventListener("change", () => {
+          store.dispatch(setDecodeLabelCmd(inst.refdes, v, input.value));
+        });
+        row.appendChild(input);
+        container.appendChild(row);
+      }
     }
 
     // Memory file bindings (FR-114i): a generated memory device's content file

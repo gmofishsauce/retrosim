@@ -218,6 +218,10 @@ export function addInstance(design, type, x, y, rotation) {
   if (type.renderType === "switch") inst.switchState = "0";
   // A text note carries its per-instance text (FR-071f), empty on placement.
   if (type.renderType === "note") inst.text = "";
+  // A labeled decoder carries its eight display strings (FR-071k), one per input
+  // value and all empty on placement — an unlabeled value falls back to its own
+  // digit when drawn, so a fresh decoder still reads out its state.
+  if (type.renderType === "decoder") inst.decodeLabels = ["", "", "", "", "", "", "", ""];
   // A port carries its interface fields (FR-094, §7.2): a label defaulting to the
   // refdes (so a fresh port is its own net until the user names it), direction,
   // and bit width. The optional off-sheet target (FR-101) is added in phase 4.

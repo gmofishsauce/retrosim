@@ -23,6 +23,10 @@ const VIRTUAL_TYPES = new Set([
   // line per pin naming its control pin's net (EN/COIL) and its contact
   // terminals' nets (A/B or NO/COM/NC), so the merge survives export (FR-119a f).
   "tgate", "relay",
+  // The labeled decoder (FR-071k) is likewise an editor-only object with no
+  // physical package: its eight outputs and five inputs export as comment lines
+  // naming their nets, so the connectivity survives without inventing a part.
+  "decoder",
 ]);
 
 const natural = (a, b) => a.localeCompare(b, undefined, { numeric: true });

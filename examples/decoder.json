@@ -1,0 +1,1103 @@
+{
+ "formatVersion": 3,
+ "name": "decoder",
+ "components": [
+  {
+   "refdes": "A-1",
+   "type": "type-decoder",
+   "x": 0,
+   "y": 0,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-decoder",
+    "name": "decoder",
+    "builtin": true,
+    "title": "decoder (3-to-8, labeled)",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"4\" y=\"5\" width=\"28\" height=\"26\" fill=\"#fff\" stroke=\"#333\"/><line x1=\"4\" y1=\"14\" x2=\"32\" y2=\"14\" stroke=\"#333\"/><text x=\"18\" y=\"10\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"ui-monospace,monospace\" font-size=\"8\" fill=\"#000\">----</text><text x=\"18\" y=\"23\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"10\" fill=\"#000\">3:8</text></svg>",
+    "renderType": "decoder",
+    "width": 8,
+    "height": 11,
+    "pins": [
+     {
+      "name": "E",
+      "side": "left",
+      "position": 3,
+      "direction": "in"
+     },
+     {
+      "name": "/E",
+      "side": "left",
+      "position": 4,
+      "direction": "in"
+     },
+     {
+      "name": "A2",
+      "side": "left",
+      "position": 6,
+      "direction": "in"
+     },
+     {
+      "name": "A1",
+      "side": "left",
+      "position": 7,
+      "direction": "in"
+     },
+     {
+      "name": "A0",
+      "side": "left",
+      "position": 8,
+      "direction": "in"
+     },
+     {
+      "name": "/Y0",
+      "side": "right",
+      "position": 3,
+      "direction": "out"
+     },
+     {
+      "name": "/Y1",
+      "side": "right",
+      "position": 4,
+      "direction": "out"
+     },
+     {
+      "name": "/Y2",
+      "side": "right",
+      "position": 5,
+      "direction": "out"
+     },
+     {
+      "name": "/Y3",
+      "side": "right",
+      "position": 6,
+      "direction": "out"
+     },
+     {
+      "name": "/Y4",
+      "side": "right",
+      "position": 7,
+      "direction": "out"
+     },
+     {
+      "name": "/Y5",
+      "side": "right",
+      "position": 8,
+      "direction": "out"
+     },
+     {
+      "name": "/Y6",
+      "side": "right",
+      "position": 9,
+      "direction": "out"
+     },
+     {
+      "name": "/Y7",
+      "side": "right",
+      "position": 10,
+      "direction": "out"
+     }
+    ],
+    "pinGroups": [
+     {
+      "name": "A",
+      "pins": [
+       "A0",
+       "A1",
+       "A2"
+      ]
+     }
+    ]
+   },
+   "overrides": {},
+   "decodeLabels": [
+    "RESET",
+    "FETCH",
+    "DECOD",
+    "READ",
+    "ALU",
+    "WRITE",
+    "JUMP",
+    "HALT"
+   ]
+  },
+  {
+   "refdes": "A-2",
+   "type": "type-switch",
+   "x": -16,
+   "y": -1,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-switch",
+    "name": "switch",
+    "builtin": true,
+    "title": "input switch",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+    "renderType": "switch",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "OUT",
+      "side": "right",
+      "position": 1,
+      "direction": "out"
+     }
+    ]
+   },
+   "overrides": {},
+   "switchState": "0",
+   "label": "E"
+  },
+  {
+   "refdes": "A-3",
+   "type": "type-switch",
+   "x": -16,
+   "y": 4,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-switch",
+    "name": "switch",
+    "builtin": true,
+    "title": "input switch",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+    "renderType": "switch",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "OUT",
+      "side": "right",
+      "position": 1,
+      "direction": "out"
+     }
+    ]
+   },
+   "overrides": {},
+   "switchState": "0",
+   "label": "nE"
+  },
+  {
+   "refdes": "A-4",
+   "type": "type-switch",
+   "x": -16,
+   "y": 9,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-switch",
+    "name": "switch",
+    "builtin": true,
+    "title": "input switch",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+    "renderType": "switch",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "OUT",
+      "side": "right",
+      "position": 1,
+      "direction": "out"
+     }
+    ]
+   },
+   "overrides": {},
+   "switchState": "0",
+   "label": "A2"
+  },
+  {
+   "refdes": "A-5",
+   "type": "type-switch",
+   "x": -16,
+   "y": 14,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-switch",
+    "name": "switch",
+    "builtin": true,
+    "title": "input switch",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+    "renderType": "switch",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "OUT",
+      "side": "right",
+      "position": 1,
+      "direction": "out"
+     }
+    ]
+   },
+   "overrides": {},
+   "switchState": "0",
+   "label": "A1"
+  },
+  {
+   "refdes": "A-6",
+   "type": "type-switch",
+   "x": -16,
+   "y": 19,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-switch",
+    "name": "switch",
+    "builtin": true,
+    "title": "input switch",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+    "renderType": "switch",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "OUT",
+      "side": "right",
+      "position": 1,
+      "direction": "out"
+     }
+    ]
+   },
+   "overrides": {},
+   "switchState": "0",
+   "label": "A0"
+  },
+  {
+   "refdes": "A-7",
+   "type": "type-indicator",
+   "x": 12,
+   "y": -6,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-indicator",
+    "name": "indicator",
+    "builtin": true,
+    "title": "State indicator",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+    "renderType": "indicator",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "IN",
+      "side": "bottom",
+      "position": 1,
+      "direction": "in"
+     }
+    ]
+   },
+   "overrides": {},
+   "label": "Y0"
+  },
+  {
+   "refdes": "A-8",
+   "type": "type-indicator",
+   "x": 15,
+   "y": -6,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-indicator",
+    "name": "indicator",
+    "builtin": true,
+    "title": "State indicator",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+    "renderType": "indicator",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "IN",
+      "side": "bottom",
+      "position": 1,
+      "direction": "in"
+     }
+    ]
+   },
+   "overrides": {},
+   "label": "Y1"
+  },
+  {
+   "refdes": "A-9",
+   "type": "type-indicator",
+   "x": 18,
+   "y": -6,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-indicator",
+    "name": "indicator",
+    "builtin": true,
+    "title": "State indicator",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+    "renderType": "indicator",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "IN",
+      "side": "bottom",
+      "position": 1,
+      "direction": "in"
+     }
+    ]
+   },
+   "overrides": {},
+   "label": "Y2"
+  },
+  {
+   "refdes": "A-10",
+   "type": "type-indicator",
+   "x": 21,
+   "y": -6,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-indicator",
+    "name": "indicator",
+    "builtin": true,
+    "title": "State indicator",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+    "renderType": "indicator",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "IN",
+      "side": "bottom",
+      "position": 1,
+      "direction": "in"
+     }
+    ]
+   },
+   "overrides": {},
+   "label": "Y3"
+  },
+  {
+   "refdes": "A-11",
+   "type": "type-indicator",
+   "x": 24,
+   "y": -6,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-indicator",
+    "name": "indicator",
+    "builtin": true,
+    "title": "State indicator",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+    "renderType": "indicator",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "IN",
+      "side": "bottom",
+      "position": 1,
+      "direction": "in"
+     }
+    ]
+   },
+   "overrides": {},
+   "label": "Y4"
+  },
+  {
+   "refdes": "A-12",
+   "type": "type-indicator",
+   "x": 27,
+   "y": -6,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-indicator",
+    "name": "indicator",
+    "builtin": true,
+    "title": "State indicator",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+    "renderType": "indicator",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "IN",
+      "side": "bottom",
+      "position": 1,
+      "direction": "in"
+     }
+    ]
+   },
+   "overrides": {},
+   "label": "Y5"
+  },
+  {
+   "refdes": "A-13",
+   "type": "type-indicator",
+   "x": 30,
+   "y": -6,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-indicator",
+    "name": "indicator",
+    "builtin": true,
+    "title": "State indicator",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+    "renderType": "indicator",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "IN",
+      "side": "bottom",
+      "position": 1,
+      "direction": "in"
+     }
+    ]
+   },
+   "overrides": {},
+   "label": "Y6"
+  },
+  {
+   "refdes": "A-14",
+   "type": "type-indicator",
+   "x": 33,
+   "y": -6,
+   "rotation": 0,
+   "typeData": {
+    "id": "type-indicator",
+    "name": "indicator",
+    "builtin": true,
+    "title": "State indicator",
+    "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+    "renderType": "indicator",
+    "width": 2,
+    "height": 2,
+    "pins": [
+     {
+      "name": "IN",
+      "side": "bottom",
+      "position": 1,
+      "direction": "in"
+     }
+    ]
+   },
+   "overrides": {},
+   "label": "Y7"
+  }
+ ],
+ "wires": [
+  {
+   "id": "w3",
+   "path": [
+    {
+     "t": "node",
+     "v": "v1"
+    },
+    {
+     "t": "bend",
+     "x": -12,
+     "y": 0
+    },
+    {
+     "t": "bend",
+     "x": -12,
+     "y": 3
+    },
+    {
+     "t": "node",
+     "v": "v2"
+    }
+   ]
+  },
+  {
+   "id": "w6",
+   "path": [
+    {
+     "t": "node",
+     "v": "v4"
+    },
+    {
+     "t": "bend",
+     "x": -11,
+     "y": 5
+    },
+    {
+     "t": "bend",
+     "x": -11,
+     "y": 4
+    },
+    {
+     "t": "node",
+     "v": "v5"
+    }
+   ]
+  },
+  {
+   "id": "w9",
+   "path": [
+    {
+     "t": "node",
+     "v": "v7"
+    },
+    {
+     "t": "bend",
+     "x": -10,
+     "y": 10
+    },
+    {
+     "t": "bend",
+     "x": -10,
+     "y": 6
+    },
+    {
+     "t": "node",
+     "v": "v8"
+    }
+   ]
+  },
+  {
+   "id": "w12",
+   "path": [
+    {
+     "t": "node",
+     "v": "v10"
+    },
+    {
+     "t": "bend",
+     "x": -9,
+     "y": 15
+    },
+    {
+     "t": "bend",
+     "x": -9,
+     "y": 7
+    },
+    {
+     "t": "node",
+     "v": "v11"
+    }
+   ]
+  },
+  {
+   "id": "w15",
+   "path": [
+    {
+     "t": "node",
+     "v": "v13"
+    },
+    {
+     "t": "bend",
+     "x": -8,
+     "y": 20
+    },
+    {
+     "t": "bend",
+     "x": -8,
+     "y": 8
+    },
+    {
+     "t": "node",
+     "v": "v14"
+    }
+   ]
+  },
+  {
+   "id": "w18",
+   "path": [
+    {
+     "t": "node",
+     "v": "v16"
+    },
+    {
+     "t": "bend",
+     "x": 13,
+     "y": 3
+    },
+    {
+     "t": "node",
+     "v": "v17"
+    }
+   ]
+  },
+  {
+   "id": "w21",
+   "path": [
+    {
+     "t": "node",
+     "v": "v19"
+    },
+    {
+     "t": "bend",
+     "x": 16,
+     "y": 4
+    },
+    {
+     "t": "node",
+     "v": "v20"
+    }
+   ]
+  },
+  {
+   "id": "w24",
+   "path": [
+    {
+     "t": "node",
+     "v": "v22"
+    },
+    {
+     "t": "bend",
+     "x": 19,
+     "y": 5
+    },
+    {
+     "t": "node",
+     "v": "v23"
+    }
+   ]
+  },
+  {
+   "id": "w27",
+   "path": [
+    {
+     "t": "node",
+     "v": "v25"
+    },
+    {
+     "t": "bend",
+     "x": 22,
+     "y": 6
+    },
+    {
+     "t": "node",
+     "v": "v26"
+    }
+   ]
+  },
+  {
+   "id": "w30",
+   "path": [
+    {
+     "t": "node",
+     "v": "v28"
+    },
+    {
+     "t": "bend",
+     "x": 25,
+     "y": 7
+    },
+    {
+     "t": "node",
+     "v": "v29"
+    }
+   ]
+  },
+  {
+   "id": "w33",
+   "path": [
+    {
+     "t": "node",
+     "v": "v31"
+    },
+    {
+     "t": "bend",
+     "x": 28,
+     "y": 8
+    },
+    {
+     "t": "node",
+     "v": "v32"
+    }
+   ]
+  },
+  {
+   "id": "w36",
+   "path": [
+    {
+     "t": "node",
+     "v": "v34"
+    },
+    {
+     "t": "bend",
+     "x": 31,
+     "y": 9
+    },
+    {
+     "t": "node",
+     "v": "v35"
+    }
+   ]
+  },
+  {
+   "id": "w39",
+   "path": [
+    {
+     "t": "node",
+     "v": "v37"
+    },
+    {
+     "t": "bend",
+     "x": 34,
+     "y": 10
+    },
+    {
+     "t": "node",
+     "v": "v38"
+    }
+   ]
+  }
+ ],
+ "buses": [],
+ "vertices": [
+  {
+   "id": "v1",
+   "kind": "pin",
+   "ref": "A-2",
+   "pin": "OUT",
+   "x": -14,
+   "y": 0
+  },
+  {
+   "id": "v2",
+   "kind": "pin",
+   "ref": "A-1",
+   "pin": "E",
+   "x": 0,
+   "y": 3
+  },
+  {
+   "id": "v4",
+   "kind": "pin",
+   "ref": "A-3",
+   "pin": "OUT",
+   "x": -14,
+   "y": 5
+  },
+  {
+   "id": "v5",
+   "kind": "pin",
+   "ref": "A-1",
+   "pin": "/E",
+   "x": 0,
+   "y": 4
+  },
+  {
+   "id": "v7",
+   "kind": "pin",
+   "ref": "A-4",
+   "pin": "OUT",
+   "x": -14,
+   "y": 10
+  },
+  {
+   "id": "v8",
+   "kind": "pin",
+   "ref": "A-1",
+   "pin": "A2",
+   "x": 0,
+   "y": 6
+  },
+  {
+   "id": "v10",
+   "kind": "pin",
+   "ref": "A-5",
+   "pin": "OUT",
+   "x": -14,
+   "y": 15
+  },
+  {
+   "id": "v11",
+   "kind": "pin",
+   "ref": "A-1",
+   "pin": "A1",
+   "x": 0,
+   "y": 7
+  },
+  {
+   "id": "v13",
+   "kind": "pin",
+   "ref": "A-6",
+   "pin": "OUT",
+   "x": -14,
+   "y": 20
+  },
+  {
+   "id": "v14",
+   "kind": "pin",
+   "ref": "A-1",
+   "pin": "A0",
+   "x": 0,
+   "y": 8
+  },
+  {
+   "id": "v16",
+   "kind": "pin",
+   "ref": "A-1",
+   "pin": "/Y0",
+   "x": 8,
+   "y": 3
+  },
+  {
+   "id": "v17",
+   "kind": "pin",
+   "ref": "A-7",
+   "pin": "IN",
+   "x": 13,
+   "y": -4
+  },
+  {
+   "id": "v19",
+   "kind": "pin",
+   "ref": "A-1",
+   "pin": "/Y1",
+   "x": 8,
+   "y": 4
+  },
+  {
+   "id": "v20",
+   "kind": "pin",
+   "ref": "A-8",
+   "pin": "IN",
+   "x": 16,
+   "y": -4
+  },
+  {
+   "id": "v22",
+   "kind": "pin",
+   "ref": "A-1",
+   "pin": "/Y2",
+   "x": 8,
+   "y": 5
+  },
+  {
+   "id": "v23",
+   "kind": "pin",
+   "ref": "A-9",
+   "pin": "IN",
+   "x": 19,
+   "y": -4
+  },
+  {
+   "id": "v25",
+   "kind": "pin",
+   "ref": "A-1",
+   "pin": "/Y3",
+   "x": 8,
+   "y": 6
+  },
+  {
+   "id": "v26",
+   "kind": "pin",
+   "ref": "A-10",
+   "pin": "IN",
+   "x": 22,
+   "y": -4
+  },
+  {
+   "id": "v28",
+   "kind": "pin",
+   "ref": "A-1",
+   "pin": "/Y4",
+   "x": 8,
+   "y": 7
+  },
+  {
+   "id": "v29",
+   "kind": "pin",
+   "ref": "A-11",
+   "pin": "IN",
+   "x": 25,
+   "y": -4
+  },
+  {
+   "id": "v31",
+   "kind": "pin",
+   "ref": "A-1",
+   "pin": "/Y5",
+   "x": 8,
+   "y": 8
+  },
+  {
+   "id": "v32",
+   "kind": "pin",
+   "ref": "A-12",
+   "pin": "IN",
+   "x": 28,
+   "y": -4
+  },
+  {
+   "id": "v34",
+   "kind": "pin",
+   "ref": "A-1",
+   "pin": "/Y6",
+   "x": 8,
+   "y": 9
+  },
+  {
+   "id": "v35",
+   "kind": "pin",
+   "ref": "A-13",
+   "pin": "IN",
+   "x": 31,
+   "y": -4
+  },
+  {
+   "id": "v37",
+   "kind": "pin",
+   "ref": "A-1",
+   "pin": "/Y7",
+   "x": 8,
+   "y": 10
+  },
+  {
+   "id": "v38",
+   "kind": "pin",
+   "ref": "A-14",
+   "pin": "IN",
+   "x": 34,
+   "y": -4
+  }
+ ],
+ "refCounters": {
+  "U": 1,
+  "A": 15,
+  "N": 1,
+  "X": 1
+ },
+ "nets": [
+  {
+   "pins": [
+    "A-2.OUT",
+    "A-1.E"
+   ],
+   "members": [
+    "w3"
+   ],
+   "provenance": [],
+   "name": "E"
+  },
+  {
+   "pins": [
+    "A-3.OUT",
+    "A-1./E"
+   ],
+   "members": [
+    "w6"
+   ],
+   "provenance": [],
+   "name": "/E"
+  },
+  {
+   "pins": [
+    "A-4.OUT",
+    "A-1.A2"
+   ],
+   "members": [
+    "w9"
+   ],
+   "provenance": [],
+   "name": "A2"
+  },
+  {
+   "pins": [
+    "A-5.OUT",
+    "A-1.A1"
+   ],
+   "members": [
+    "w12"
+   ],
+   "provenance": [],
+   "name": "A1"
+  },
+  {
+   "pins": [
+    "A-6.OUT",
+    "A-1.A0"
+   ],
+   "members": [
+    "w15"
+   ],
+   "provenance": [],
+   "name": "A0"
+  },
+  {
+   "pins": [
+    "A-1./Y0",
+    "A-7.IN"
+   ],
+   "members": [
+    "w18"
+   ],
+   "provenance": [],
+   "name": "/Y0"
+  },
+  {
+   "pins": [
+    "A-1./Y1",
+    "A-8.IN"
+   ],
+   "members": [
+    "w21"
+   ],
+   "provenance": [],
+   "name": "/Y1"
+  },
+  {
+   "pins": [
+    "A-1./Y2",
+    "A-9.IN"
+   ],
+   "members": [
+    "w24"
+   ],
+   "provenance": [],
+   "name": "/Y2"
+  },
+  {
+   "pins": [
+    "A-1./Y3",
+    "A-10.IN"
+   ],
+   "members": [
+    "w27"
+   ],
+   "provenance": [],
+   "name": "/Y3"
+  },
+  {
+   "pins": [
+    "A-1./Y4",
+    "A-11.IN"
+   ],
+   "members": [
+    "w30"
+   ],
+   "provenance": [],
+   "name": "/Y4"
+  },
+  {
+   "pins": [
+    "A-1./Y5",
+    "A-12.IN"
+   ],
+   "members": [
+    "w33"
+   ],
+   "provenance": [],
+   "name": "/Y5"
+  },
+  {
+   "pins": [
+    "A-1./Y6",
+    "A-13.IN"
+   ],
+   "members": [
+    "w36"
+   ],
+   "provenance": [],
+   "name": "/Y6"
+  },
+  {
+   "pins": [
+    "A-1./Y7",
+    "A-14.IN"
+   ],
+   "members": [
+    "w39"
+   ],
+   "provenance": [],
+   "name": "/Y7"
+  }
+ ]
+}

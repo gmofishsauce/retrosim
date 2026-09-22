@@ -19,6 +19,7 @@ import { hasEquations } from "./galerrors.js";
 import { compileBehavior } from "./galasm.js";
 import { buildNets } from "../model/netlist.js";
 import { deriveColumns } from "./vectors.js";
+import { DECODER_OUTPUTS, DECODER_TERMS } from "../builtins.js";
 
 // Hierarchical-prefix tolerant (FR-102/§6.14, mirroring sim.js): a flattened
 // child's subunit `X1/U3A` groups under the full prefixed stem `X1/U3`, so a
@@ -441,6 +442,27 @@ export function generateC(design, { columnsFrom = design } = {}) {
           rnLabel: intern(`${refdes}./R`),
           refdes,
         });
+      } else if (rt === "decoder") {
+        // Labeled 3-to-8 decoder (FR-071k): lowered straight into gen_drive from
+        // the SAME literal terms the slow engine evaluates (DECODER_TERMS,
+        // builtins.js), so the two engines cannot drift (FR-107). rt_buf/rt_not
+        // supply litValue's Z-to-U normalization and rt_and evalTerm's selective
+        // pessimism, exactly as the GALasm lowering above does. The display
+        // strings are editor-only and have no fast-engine counterpart.
+        const lines = [`  /* ${refdes}: labeled 3-to-8 decoder (FR-071k) */`];
+        const lit = (l) => {
+          const n = netOf(`${refdes}.${l.signal}`);
+          const rd = n >= 0 ? `curr[${n}]` : `RT_Z`;
+          return `${l.low ? "rt_not" : "rt_buf"}(${rd}) /* ${l.low ? "/" : ""}${l.signal} */`;
+        };
+        DECODER_TERMS.forEach((term, i) => {
+          const pin = DECODER_OUTPUTS[i];
+          const key = `${refdes}.${pin}`;
+          const expr = term.map(lit).reduce((a, b) => `rt_and(${a}, ${b})`);
+          lines.push(`  rt_contrib(${netOf(key)}, rt_not(${expr}), 0, ${intern(key)}); /* ${key} */`);
+        });
+        driveBlocks.push(lines.join("\n"));
+        driverCount += DECODER_OUTPUTS.length;
       } else if (rt === "tgate" || rt === "relay") {
         // Switch elements (FR-071g/FR-071h): dynamic net merging (FR-083a) is
         // slow-engine-only for now — refuse rather than misbehave (FR-116).

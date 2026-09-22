@@ -4,6 +4,12 @@ import assert from "node:assert/strict";
 import {
   BUILTINS,
   BEHAVIORS,
+  DECODER_BAND_H,
+  DECODER_DISABLED_TEXT,
+  DECODER_LABEL_MAX,
+  DECODER_OUTPUTS,
+  decoderSelection,
+  decoderText,
   HEX_SEGMENTS,
   INTERACTIONS,
   memDeviceType,
@@ -13,6 +19,7 @@ import {
   PORTN_MAX_WIDTH,
   PORTN_DEFAULT_WIDTH,
 } from "./builtins.js";
+import { V0, V1, VU, VZ } from "./engine/galasm.js";
 
 function find(name) {
   const t = BUILTINS.find((b) => b.name === name);
@@ -270,4 +277,147 @@ test("the switch handler ignores the hit descriptor (FR-087a/FR-087b)", () => {
   const inst = { refdes: "A-1", switchState: "0" };
   INTERACTIONS["type-switch"](inst, { bit: 3 });
   assert.equal(inst.switchState, "1");
+});
+
+// --- Labeled 3-to-8 decoder (FR-071k) --------------------------------------
+
+// The shape: an IC-style built-in with five inputs (two enables, three address
+// bits) down the left edge and eight active-low outputs down the right, the
+// address bits grouped so a 3-bit bus snaps to all of them at once.
+test("the decoder exposes E, /E, A2..A0 and eight active-low outputs (FR-071k)", () => {
+  const t = find("decoder");
+  assert.equal(t.id, "type-decoder");
+  assert.equal(t.renderType, "decoder");
+  assert.equal(t.width, 8);
+  assert.equal(t.height, 11);
+
+  const byName = new Map(t.pins.map((p) => [p.name, p]));
+  for (const name of ["E", "/E", "A2", "A1", "A0"]) {
+    assert.equal(byName.get(name)?.side, "left", `${name} on the left edge`);
+    assert.equal(byName.get(name)?.direction, "in");
+  }
+  DECODER_OUTPUTS.forEach((name, i) => {
+    assert.equal(name, `/Y${i}`);
+    assert.equal(byName.get(name)?.side, "right");
+    assert.equal(byName.get(name)?.direction, "out");
+    assert.equal(byName.get(name)?.position, i + 3); // below the title band
+  });
+  // Every pin fits inside the footprint, below the title band.
+  assert.ok(t.pins.every((p) => p.position > DECODER_BAND_H && p.position < t.height));
+  // Address bits grouped LSB-first (the 74138's convention); the /Y outputs are
+  // deliberately ungrouped — active-low names make no usable bus bit names.
+  assert.deepEqual(t.pinGroups, [{ name: "A", pins: ["A0", "A1", "A2"] }]);
+  assert.ok(!t.properties); // no numeric properties (FR-020b)
+});
+
+// The behavior: exactly one output low, the addressed one, when E is 1 and /E
+// is 0; all eight high when either enable says no — regardless of the address.
+test("the decoder drives the addressed output low when enabled (FR-071k)", () => {
+  const behave = BEHAVIORS["type-decoder"];
+  const reader = (pins) => (name) => pins[name] ?? VU;
+
+  for (let n = 0; n < 8; n++) {
+    const out = behave({
+      read: reader({
+        E: V1,
+        "/E": V0,
+        A2: n & 4 ? V1 : V0,
+        A1: n & 2 ? V1 : V0,
+        A0: n & 1 ? V1 : V0,
+      }),
+    });
+    assert.equal(out.length, 8);
+    out.forEach((c, i) => {
+      assert.equal(c.pin, `/Y${i}`);
+      assert.equal(c.value, i === n ? V0 : V1, `value ${n}: ${c.pin}`);
+      assert.ok(!c.weak); // a strong driver, like any ordinary output
+    });
+  }
+});
+
+// Disabled is decided by the enables alone: a 0 on an enable literal settles
+// every term even when the address bits read U (FR-077 selective pessimism), so
+// a disabled decoder drives all eight outputs high without knowing its address.
+test("a disabled decoder drives every output high, address unknown (FR-071k)", () => {
+  const behave = BEHAVIORS["type-decoder"];
+  const reader = (pins) => (name) => pins[name] ?? VU;
+  for (const enables of [
+    { E: V0, "/E": V0 }, // active-high enable not asserted
+    { E: V1, "/E": V1 }, // active-low enable not asserted
+    { E: V0, "/E": V1 }, // neither
+  ]) {
+    const out = behave({ read: reader(enables) }); // A2..A0 read U
+    assert.deepEqual(
+      out.map((c) => c.value),
+      new Array(8).fill(V1),
+      JSON.stringify(enables),
+    );
+  }
+});
+
+// An unknown enable or address bit is unknown only where it could matter: an
+// output whose address does not match is high whatever the enables say, because
+// a 0 on any address literal settles that term (FR-077). So an unknown enable
+// puts only the ADDRESSED output at U, and an unknown address bit puts only the
+// pair of outputs it chooses between at U.
+test("the decoder reports U only where the inputs do not decide (FR-071k/FR-077)", () => {
+  const behave = BEHAVIORS["type-decoder"];
+  const reader = (pins) => (name) => pins[name] ?? VU;
+
+  // E is U, address 0: /Y0 might or might not be driven low; the rest cannot be.
+  const unknownEnable = behave({ read: reader({ "/E": V0, A2: V0, A1: V0, A0: V0 }) });
+  assert.deepEqual(
+    unknownEnable.map((c) => c.value),
+    [VU, V1, V1, V1, V1, V1, V1, V1],
+  );
+
+  // E=1, /E=0, A2=1, A1=0, A0=U → /Y4 and /Y5 undecided, the rest high.
+  const partial = behave({ read: reader({ E: V1, "/E": V0, A2: V1, A1: V0 }) });
+  assert.deepEqual(
+    partial.map((c) => c.value),
+    [V1, V1, V1, V1, VU, VU, V1, V1],
+  );
+});
+
+// An unwired input reads Z (the simulator's no-net answer), which the term rules
+// treat as U — so an unwired decoder is undecided, never accidentally enabled.
+test("an unwired decoder input reads Z and decides nothing (FR-071k/FR-077)", () => {
+  const out = BEHAVIORS["type-decoder"]({ read: () => VZ });
+  assert.deepEqual(
+    out.map((c) => c.value),
+    new Array(8).fill(VU),
+  );
+});
+
+// decoderSelection is the DISPLAY's reading of the inputs (not the outputs'):
+// a value 0-7 only when the decoder is enabled and all three address bits are
+// defined, and null — the dashes case — otherwise.
+test("decoderSelection answers only for an enabled, fully defined input (FR-071k)", () => {
+  const reader = (pins) => (name) => pins[name] ?? VU;
+  const enabled = { E: V1, "/E": V0 };
+  assert.equal(decoderSelection(reader({ ...enabled, A2: V1, A1: V0, A0: V1 })), 5);
+  assert.equal(decoderSelection(reader({ ...enabled, A2: V0, A1: V0, A0: V0 })), 0);
+  assert.equal(decoderSelection(reader({ ...enabled, A2: V1, A1: V1, A0: V1 })), 7);
+
+  assert.equal(decoderSelection(reader({ ...enabled, A2: V1, A1: V0 })), null); // A0 is U
+  assert.equal(decoderSelection(reader({ E: V0, "/E": V0, A2: V0, A1: V0, A0: V0 })), null);
+  assert.equal(decoderSelection(reader({ E: V1, "/E": V1, A2: V0, A1: V0, A0: V0 })), null);
+  assert.equal(decoderSelection(() => VZ), null); // nothing wired
+});
+
+// decoderText is the title-band string: the instance's label for the selected
+// value, clipped to five characters; the value's own digit when unlabeled; the
+// four dashes when there is no selection at all.
+test("decoderText shows the label, else the digit, else the dashes (FR-071k)", () => {
+  const inst = { decodeLabels: ["FETCH", "", "DECODE", "EXEC"] };
+  assert.equal(decoderText(inst, 0), "FETCH");
+  assert.equal(decoderText(inst, 1), "1"); // set but empty → the digit
+  assert.equal(decoderText(inst, 6), "6"); // never set at all → the digit
+  assert.equal(decoderText(inst, 2), "DECOD"); // clipped to DECODER_LABEL_MAX
+  assert.equal(decoderText(inst, null), DECODER_DISABLED_TEXT);
+  assert.equal(decoderText(inst, undefined), DECODER_DISABLED_TEXT);
+  assert.equal(DECODER_DISABLED_TEXT, "----");
+  // A decoder placed before it had labels at all still draws.
+  assert.equal(decoderText({}, 3), "3");
+  assert.equal(decoderText(undefined, null), DECODER_DISABLED_TEXT);
 });

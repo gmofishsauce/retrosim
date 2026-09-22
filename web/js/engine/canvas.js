@@ -23,7 +23,13 @@ import {
   NOTE_FONT,
 } from "../model/design.js";
 import { drawSymbol, pinHasOwnBubble, pinLabelEdge } from "./symbols.js";
-import { HEX_SEGMENTS, sevenSegPolys } from "../builtins.js";
+import {
+  DECODER_BAND_H,
+  decoderSelection,
+  decoderText,
+  HEX_SEGMENTS,
+  sevenSegPolys,
+} from "../builtins.js";
 import { V0, V1 } from "./galasm.js";
 import { sameRef } from "../store.js";
 
@@ -620,6 +626,8 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
     drawTgate(ctx, inst, vp, selected);
   } else if (td.renderType === "relay") {
     drawRelay(ctx, inst, vp, selected);
+  } else if (td.renderType === "decoder") {
+    drawDecoder(ctx, inst, vp, selected, sim);
   } else if (td.renderType === "uart") {
     // Magic UART (FR-122a): an IC-style box labeled "UART" — the same glyph as
     // the palette tile. Unlike other built-ins it shows pin names and a type
@@ -701,9 +709,14 @@ function drawComponent(ctx, inst, vp, selected, hovered, sim) {
     }
     // A built-in's glyph owns its body, so skip the pin name (it would land on
     // top of the glyph). Pin labels are also culled once the symbol is small on
-    // screen (FR-012a). Exception: the magic UART is an IC-style box whose pins
-    // (D0–D7, CS//CE//CLK) must be distinguishable, so it shows them (FR-122a).
-    if ((!td.builtin || td.renderType === "uart") && symPx >= LABEL_T1) {
+    // screen (FR-012a). Exceptions: the magic UART is an IC-style box whose pins
+    // (D0–D7, CS//CE//CLK) must be distinguishable, so it shows them (FR-122a),
+    // and so is the labeled decoder, whose E and /E would otherwise be
+    // indistinguishable (FR-071k).
+    if (
+      (!td.builtin || td.renderType === "uart" || td.renderType === "decoder") &&
+      symPx >= LABEL_T1
+    ) {
       ctx.fillStyle = "#333";
       if (td.renderType === "subunit") {
         ctx.textAlign = "center";
@@ -1081,6 +1094,45 @@ function drawRelay(ctx, inst, vp, selected) {
 
 // drawLabelBox renders a built-in's outline box with a centered label: the
 // clock's "CLK" (FR-071) and the power-on reset's "RST" (FR-071b).
+// drawDecoder renders the labeled 3-to-8 decoder (FR-071k): an IC-style body
+// with a title band across the top carrying the decoded string. The band's text
+// is `decoderText` of `decoderSelection` over the live net values — the
+// instance's five-character string for the selected value, that value's own digit
+// when no string is set, and four dashes when the decoder is disabled, an input
+// is not a defined 0/1, or no run is in progress. Like the hex display it keeps
+// no state: it is a pure read of the present nets, so Stop's dropping of the sim
+// view (§6.10) returns it to the dashes for free. The string is drawn upright in
+// a fixed-width font (FR-015); the shared pin loop draws the leads and the pin
+// names, and the designator rides above the body with every other built-in's.
+function drawDecoder(ctx, inst, vp, selected, sim) {
+  const td = inst.typeData;
+  const stroke = selected ? "#4a90d9" : "#333";
+  ctx.lineWidth = selected ? 2 : 1;
+  fillLocalPoly(
+    ctx,
+    inst,
+    vp,
+    [[0, 0], [td.width, 0], [td.width, td.height], [0, td.height]],
+    "#fff",
+    stroke,
+  );
+  // Band separator, drawn as a degenerate (zero-height) local polygon so it
+  // rotates with the body like every other local-frame piece.
+  ctx.lineWidth = 1;
+  fillLocalPoly(ctx, inst, vp, [[0, DECODER_BAND_H], [td.width, DECODER_BAND_H]], null, "#333");
+
+  // The readout. `sim` absent (no run) yields no selection, hence the dashes.
+  const sel = sim ? decoderSelection((pin) => sim.valueOfPin(inst.refdes, pin)) : null;
+  const br = rotateOffset(td.width / 2, DECODER_BAND_H / 2, inst.rotation);
+  const band = worldToScreen({ x: inst.x + br.x, y: inst.y + br.y }, vp);
+  ctx.fillStyle = "#111";
+  ctx.font =
+    "bold " + Math.round(1.1 * scaleFor(vp)) + "px ui-monospace, Menlo, Consolas, monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(decoderText(inst, sel), band.x, band.y);
+}
+
 function drawLabelBox(ctx, inst, vp, selected, label) {
   const td = inst.typeData;
   const corners = [

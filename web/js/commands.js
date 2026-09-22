@@ -42,6 +42,7 @@ import { addSubDesignInstance } from "./model/subdesign.js";
 import { pasteFragment } from "./model/clipboard.js";
 import { componentBBox } from "./engine/hittest.js";
 import { rotateOffset } from "./geometry.js";
+import { DECODER_LABEL_MAX } from "./builtins.js";
 
 // composite bundles several commands into one undoable step (§6.10, FR-016a):
 // apply runs them in order; revert undoes them in reverse. Used for group
@@ -588,6 +589,32 @@ export function setNoteTextCmd(refdes, text) {
       inst.text = old.text;
       inst.typeData.width = old.width;
       inst.typeData.height = old.height;
+    },
+  };
+}
+
+// setDecodeLabelCmd sets one of a labeled decoder's eight display strings
+// (inst.decodeLabels[value], FR-071k/FR-020e). Per-instance state, not an
+// override; the string is clipped to the five-character maximum here, at the one
+// place that writes it, and the prior value is captured once so undo restores
+// it. The array is created on demand: a decoder placed before this field existed
+// (or one whose labels were all cleared) has none.
+export function setDecodeLabelCmd(refdes, value, text) {
+  let captured = false;
+  let old = null;
+  return {
+    label: "Set decoder label",
+    apply(design) {
+      const inst = findInstance(design, refdes);
+      if (!Array.isArray(inst.decodeLabels)) inst.decodeLabels = ["", "", "", "", "", "", "", ""];
+      if (!captured) {
+        old = inst.decodeLabels[value] ?? "";
+        captured = true;
+      }
+      inst.decodeLabels[value] = String(text ?? "").slice(0, DECODER_LABEL_MAX);
+    },
+    revert(design) {
+      findInstance(design, refdes).decodeLabels[value] = old;
     },
   };
 }

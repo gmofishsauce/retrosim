@@ -23,7 +23,7 @@ KiCad-like.
 8. [Per-instance overrides](#8-per-instance-overrides)
 9. [Refreshing type data](#9-refreshing-type-data)
 10. [Projects and files](#10-projects-and-files) — including [Importing a block from another project](#importing-a-block-from-another-project), [Design notes](#design-notes) and [Reading a component's notes](#reading-a-components-notes)
-11. [Built-in components](#11-built-in-components) — including [Text notes](#text-notes)
+11. [Built-in components](#11-built-in-components) — including [Labeled decoders](#labeled-decoders) and [Text notes](#text-notes)
 12. [Sub-designs and ports](#12-sub-designs-and-ports)
 13. [Simulation](#13-simulation) — including [Driving a port by hand](#driving-a-port-by-hand), [Stepping and pausing](#stepping-and-pausing), [Probing a point](#probing-a-point), [The bottom panel area](#the-bottom-panel-area), [Console output](#console-output), [Test vectors](#test-vectors) — including [The panel's test-vector file](#the-panels-test-vector-file) and [Holding a run to inspect it](#holding-a-run-to-inspect-it) — and [Generating a standalone C simulator](#generating-a-standalone-c-simulator)
 14. [Checking a design](#14-checking-a-design) — including [Reading the report](#reading-the-report), [Fixing what it finds](#fixing-what-it-finds), [Pins the check ignores](#pins-the-check-ignores), [Waiving a finding](#waiving-a-finding), and [What each rule means](#what-each-rule-means)
@@ -1185,6 +1185,7 @@ no behavior, and no designator — see below.)
 | **Transmission gate** | `A` (left), `B` (right), `EN` (top) | An ideal **bidirectional switch**: `A` and `B` are interchangeable contact terminals — neither is an input or an output, and drivers on either side may come and go. While `EN` reads **1** the two sides are electrically **joined** (they resolve as one net); while it reads **0** they are isolated. An `EN` of U (or Z) means the switch position is unknown: both sides are forced to **U**. Drives nothing, stores nothing, no properties; see the switch-element notes in [Simulation](#13-simulation). |
 | **Relay (SPDT)** | `COIL` (top); contacts `NO` / `COM` / `NCC` (right, labeled on the canvas) | A changeover relay with an idealized logic-level coil (one pin — no second coil terminal, no coil current). Released (`COIL` = 0): `COM`–`NCC` joined, `NO` isolated. Energized (`COIL` = 1): `COM`–`NO` joined, `NCC` isolated. (The normally-closed terminal is `NCC`, not `NC`: the pin name `NC` is reserved for *no connect*, see [Pins the check ignores](#pins-the-check-ignores).) A U coil forces all three contact nets to **U**. Contacts follow the coil after the standard one-unit delay (no pick/drop time is modeled). For an SPST contact, leave the unused throw (`NO` or `NCC`) unwired. No moving contact arm is drawn — read the live state from wired indicators. |
 | **Magic UART** | eight inputs (`D0`–`D7`, left, one pin group `DATA`); `CS/`, `CE/`, `CLK` (right) | A convenience character-output device — physically unrealistic, but handy for getting text out of a running design. Drawn as an IC-style box labeled **UART**. On each **rising edge of `CLK`**, and only while both `CS/` and `CE/` read **0**, it latches `D0`(LSB)…`D7`(MSB) and emits that byte as an **ASCII character** to the simulator's standard output — the **[Console panel](#console-output)** in the slow simulator, and real `stdout` in [generated C](#generating-a-standalone-c-simulator). It drives no nets and has no readback path. Emission is deliberately careful: if `CS/` or `CE/` is **1** (deselected) or uncertain (U/Z), nothing is emitted; any data bit that is not a clean **1** counts as **0**. The eight `DATA` pins form one pin group, so an 8-wide bus snap-connects to all of them at once (see [Buses](#7-buses)). No properties. |
+| **Decoder (3-to-8, labeled)** | `E`, `/E`, `A2`, `A1`, `A0` (left, `A2`–`A0` one pin group `A`); `/Y0`–`/Y7` (right) | A 3-to-8 decoder that decodes like a **74138** and, unlike one, **names the state it has decoded** across the top of its body. It is enabled when `E` reads **1** *and* `/E` reads **0**; enabled, it drives the one output addressed by `A2`–`A0` (`A0` the least significant bit) **low** and the other seven high. Not enabled, all eight outputs are high. The three address pins form one pin group, so a 3-wide bus snap-connects to all of them at once (see [Buses](#7-buses)). No properties. See **[Labeled decoders](#labeled-decoders)** below for the readout. |
 | **Text note** (`NOTE` tile) | none | A free-form text annotation — pure documentation, with no pins, no wiring, and no part in simulation. See **[Text notes](#text-notes)** below for how to type and edit one. |
 
 You can override a built-in's properties per instance via the properties panel
@@ -1205,6 +1206,42 @@ rewrite them.
 drives can be clicked during a run to drive its net, on the same terms — run-time
 only, never saved, dropped at Stop. See
 [Driving a port by hand](#driving-a-port-by-hand).
+
+### Labeled decoders
+
+A **decoder** is the one built-in that both does real logic and reads its state
+back to you in words. Its outputs behave exactly as a 74138's do, so you can wire
+it as an ordinary decoder — one-hot chip selects, a state one-hot, an address
+decode. What it adds is the band across the top of its body, which shows a short
+name for whichever of the eight input values is currently selected.
+
+Select the decoder and the properties panel shows a **Decode labels** section:
+eight text fields, one per input value **0**–**7**. Type a name into each one you
+care about. Each field holds at most **five characters** — the band is drawn in a
+fixed-width font so five is what fits — and each edit is a separate undoable
+change, saved with the design.
+
+What the band shows:
+
+- **The value's label**, while the decoder is enabled and `A2`–`A0` all read a
+  clean 0 or 1. Labeling a state machine's decoder `RESET`, `FETCH`, `DECOD`, …
+  turns it into a live state display.
+- **The value's own digit** (`0`–`7`), when that value has no label set — so a
+  decoder you have not labeled still tells you where it is.
+- **Four dashes** (`----`), whenever there is nothing decoded to name: the
+  decoder not enabled, any enable or address pin reading U or Z, and whenever no
+  simulation is running. Like the indicators, it returns to the dashes the moment
+  you press Stop.
+
+The band is a pure readout of what the inputs say *right now* — it stores
+nothing, so it can never show you a stale state.
+
+Unlike most built-ins the decoder **draws its pin names**, since `E` and `/E`
+would otherwise be impossible to tell apart. The names disappear when you zoom
+far out, like any other pin name.
+
+`examples/decoder.json` is a worked example: five switches into a decoder, eight
+indicators off its outputs, and the eight states named.
 
 ### Text notes
 
@@ -2076,8 +2113,10 @@ no override option), so put the file where you run the program. See
 [Persistent RAM](#persistent-ram) for the file format and details.
 
 Generation never modifies the design, and works whether or not it has been
-saved. Registered (`.R`) parts, independent per-output clocks, and RAM/ROM
-devices — including persistent RAM — are all supported. One thing is refused,
+saved. Registered (`.R`) parts, independent per-output clocks, RAM/ROM
+devices — including persistent RAM — and the labeled decoder are all supported
+(the decoder's logic generates; its on-screen label band is an editor feature and
+has no counterpart in a compiled program). One thing is refused,
 with a message naming the instance, because it runs only on the debug simulator
 for now: a design containing a **transmission gate or relay** (the bidirectional
 switch elements, see [Built-in components](#11-built-in-components)). A design

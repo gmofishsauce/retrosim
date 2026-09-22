@@ -1590,3 +1590,60 @@ test("a pin alias never overrides a real pin of the flat design (FR-087c)", () =
   sim.step();
   assert.equal(sim.valueOfPin("X1", "A"), V1); // its own net (the pull-up), not the alias
 });
+
+// The labeled decoder (FR-071k) is the first built-in whose behavior READS its
+// input nets, through the `read` accessor buildSimulation now puts in the
+// behavior context (§6.13). End to end: five switches in, the addressed output
+// low and the other seven high.
+test("the decoder drives the addressed output low through the netlist (FR-071k)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("decoder"));
+  const ins = { E: "A-2", "/E": "A-3", A2: "A-4", A1: "A-5", A0: "A-6" };
+  for (const [pin, refdes] of Object.entries(ins)) {
+    place(d, refdes, builtin("switch"));
+    connect(d, [refdes, "OUT"], ["A-1", pin]);
+  }
+  const set = (pin, state) => {
+    d.components.find((c) => c.refdes === ins[pin]).switchState = state;
+  };
+
+  // Enabled (E=1, /E=0), address 5 (A2=1, A1=0, A0=1).
+  set("E", "1");
+  set("/E", "0");
+  set("A2", "1");
+  set("A1", "0");
+  set("A0", "1");
+  const sim = buildSimulation(d);
+  settle(sim);
+  for (let i = 0; i < 8; i++) {
+    assert.equal(sim.valueOfPin("A-1", `/Y${i}`), i === 5 ? V0 : V1, `/Y${i}`);
+  }
+});
+
+// Disabling the active-high enable releases every output high — the decoder's
+// outputs follow its inputs by the standard one unit (FR-078), since `read`
+// answers from the previous step's net values like every other entity's.
+test("a decoder's outputs follow its inputs by one unit (FR-071k/FR-078)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("decoder"));
+  place(d, "A-2", builtin("switch")); // E
+  place(d, "A-3", builtin("pulldown")); // /E held low: enabled
+  connect(d, ["A-2", "OUT"], ["A-1", "E"]);
+  connect(d, ["A-3", "OUT"], ["A-1", "/E"]);
+  d.components.find((c) => c.refdes === "A-2").switchState = "1";
+  // A2..A0 unwired: they read Z→U, so only the output the address could select
+  // is undecided — but with the address entirely unknown, that is all of them.
+  const sim = buildSimulation(d);
+  settle(sim);
+  assert.equal(sim.valueOfPin("A-1", "/Y0"), VU);
+
+  // Drop the enable. The behavior reads the PREVIOUS step's net values, so it
+  // takes two steps: one for the switch's new level to land on the E net, one
+  // more for the decoder to act on what it then reads.
+  d.components.find((c) => c.refdes === "A-2").switchState = "0";
+  sim.step();
+  assert.equal(sim.valueOfPin("A-1", "E"), V0); // the input has moved...
+  assert.equal(sim.valueOfPin("A-1", "/Y0"), VU); // ...but the output has not yet
+  sim.step();
+  for (let i = 0; i < 8; i++) assert.equal(sim.valueOfPin("A-1", `/Y${i}`), V1, `/Y${i}`);
+});

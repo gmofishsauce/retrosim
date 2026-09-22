@@ -2331,7 +2331,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `TranslateWiring` (shifts a set of bend points and junction/free vertices by an
   offset — the interior wiring of a group move, FR-018c). Later features added
   commands on the same pattern: `RotateSelection` (FR-019), `setLabelCmd`
-  (FR-011b), `setNoteText` (FR-071f), `deleteSegmentCmd` (FR-033d),
+  (FR-011b), `setNoteText` (FR-071f), `setDecodeLabelCmd` (FR-071k/FR-020e — one
+  of a decoder's eight display strings, clipped to five characters at this single
+  write path), `deleteSegmentCmd` (FR-033d),
   `SetPortProps`/`PlaceSubDesign`/`SetDefaultRender` (§6.14),
   `SetPrimaryClock` (FR-076b, dispatched by the Design Properties dialog,
   §6.11 — `PlaceComponent`/`DeleteComponent` additionally auto-set/reassign
@@ -2548,7 +2550,9 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   **relay** (`"relay"`, 4×4, top-edge `in` pin `COIL`, right-edge `bidir`
   pins `NO`/`COM`/`NCC` top-to-bottom, FR-071h); **hex display**
   (`"hexdisplay"`, 8×9, eight left-edge `in` pins `D0`–`D7` in one pin group
-  `D`, FR-071j). The two switch elements'
+  `D`, FR-071j); **labeled decoder** (`"decoder"`, 8×11, five left-edge `in` pins
+  `E`/`/E`/`A2`/`A1`/`A0` with the three address bits in one pin group `A`, and
+  eight right-edge `out` pins `/Y0`–`/Y7`, FR-071k). The two switch elements'
   contact terminals are declared `bidir` — deliberately, since a switch
   terminal is genuinely directionless; a consequence is that a port whose net
   reaches a switch terminal derives direction **bidir** (FR-094c), the
@@ -2609,6 +2613,13 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   instance in `sim.debugPorts`, each pentagon's body is filled from its bit's
   `portDrive` entry by that same white/black/gray mapping (with the label drawn in the
   contrasting color), and otherwise stays plain white as before (FR-094g, §6.14).
+  `drawDecoder` (FR-071k) draws the labeled decoder: the IC-style body, a
+  separator line `DECODER_BAND_H` (2) grid units down, and in the band above it
+  the readout — `decoderText(inst, decoderSelection(pin => sim.valueOfPin(refdes,
+  pin)))` — drawn upright (FR-015) in a fixed-width font. Like the hex display
+  it is a pure read of the present nets and keeps no state, so Stop's dropping of
+  the sim view (§6.10) returns it to the four dashes for free; a `sim` of `null`
+  (no run) is the same case, since the branch asks for no selection at all.
   Two switch-element branches (FR-071g/FR-071h):
   `drawTgate` draws the two overlapping opposite-pointing triangles between
   the `A` and `B` pins with the `EN` lead entering the top, and `drawRelay`
@@ -2623,8 +2634,10 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   state display, FR-068). The shared pin loop draws the connection leads at
   each pin for both. Pin
   name labels are suppressed for built-ins (the glyph owns the body) — the relay
-  is the exception, labeling its `NO`/`COM`/`NCC` contacts (above); the refdes is
-  drawn above the symbol. The **text note** (`note`) is the lone exception that
+  is the exception, labeling its `NO`/`COM`/`NCC` contacts (above), and the magic
+  UART and the labeled decoder are IC-style boxes that show the whole set
+  (FR-122a/FR-071k; the decoder's `E` and `/E` are otherwise indistinguishable);
+  the refdes is drawn above the symbol. The **text note** (`note`) is the lone exception that
   draws neither pins nor refdes (FR-071f): `drawNote` (§6.8) draws only `inst.text`
   (plus a dotted blue outline box when selected). While a note is being edited the
   renderer skips it entirely — a DOM `<textarea>` overlay covers it (§6.9). Because it has no `pins`, `addInstance` assigns it
@@ -2658,6 +2671,40 @@ JavaScript uses `camelCase`, ES modules, one responsibility per file.
   `cgen` (§6.17) and the vector runner (§6.16) read the instance, since a generated
   program and a vector row both start from the design as authored. (A legacy `"U"`
   from an older saved design reads as `0`.)
+- **Labeled decoder (FR-071k)** — the logic lives in `builtins.js` as **data**,
+  not as JS conditionals: `DECODER_TERMS[n]` is the AND term selecting output
+  `n`, a list of GALasm literals (`{signal, low}`) over the built-in's own pin
+  names — `E * //E * <A2> * <A1> * <A0>`, the 74138's equations with one
+  active-high and one active-low enable. That single definition feeds both
+  engines, which is what keeps FR-107 parity structural rather than a thing to
+  remember: the slow engine's behavior evaluates it with galasm.js's own
+  `evalTerm` (so FR-077 selective pessimism applies verbatim — a 0 on any
+  literal settles its term over a U elsewhere) and inverts the result, since
+  `/Yn = term` means the pin is LOW when the term is true; the generator (§6.17)
+  lowers the identical literals to `rt_buf`/`rt_not`/`rt_and` in `gen_drive`.
+  The pin names are used as GAL **signal** names only within this module's own
+  term lists — the decoder never goes through `compileBehavior`, which is what
+  lets it have pins named both `E` and `/E` (one GAL signal namespace could not
+  hold both). The decoder is the first built-in whose behavior **reads** its
+  inputs: `ctx.read(pinName)` (§6.13) answers from the previous step's net
+  values, so its outputs follow its inputs by the standard one unit (FR-078).
+  Two display helpers ride beside it and are shared with the canvas so the rule
+  is stated once: `decoderSelection(read)` → `0..7` or `null` (null whenever the
+  decoder is disabled or any input is not a defined 0/1) and
+  `decoderText(inst, sel)` → the band string (the instance's label for `sel`
+  clipped to `DECODER_LABEL_MAX` = 5, else `sel`'s own digit, else
+  `DECODER_DISABLED_TEXT` = `"----"`).
+- **Decoder display strings (FR-071k)** — the decoder carries one per-instance
+  field, `inst.decodeLabels` (an array of eight strings, all `""` on placement),
+  set on the instance directly rather than through `overrides` and round-tripping
+  through save/load for free like `switchState` and the note's `text` (§7.2). It
+  is edited in the properties panel (§6.11 `properties.js`, FR-020e) by eight
+  text fields — one per input value, `maxLength` 5 — each `change` dispatching
+  `setDecodeLabelCmd(refdes, value, text)` (§6.10), so every field edit is its own
+  undoable command. The command **clips to five characters** and creates the array
+  on demand, which makes it the one write path that has to be right: a design
+  hand-edited outside the app still cannot overflow the band, because
+  `decoderText` clips again at draw time.
 - **Interactive-input registry (`INTERACTIONS`, FR-087b)** — a second registry
   exported beside `BEHAVIORS`, mapping built-in type name → an interaction
   handler `(inst) => void` that mutates the instance's interactive state in
@@ -3297,7 +3344,7 @@ no sequential part could ever leave U.)
   columns (`deriveColumns` ignores them, FR-115b).
 - **Built-in behaviors (FR-067a):** the `BEHAVIORS` registry entries (§6.11)
   take the uniform signature `behave(ctx) → [{pin, value, weak?}]` with `ctx =
-  {props, simTime, clockPeriod, state, drive}`: **clock** returns its FR-084 waveform —
+  {props, simTime, clockPeriod, state, drive, read}`: **clock** returns its FR-084 waveform —
   low for the first half of each `period`, high for the second, so the first
   rising edge lands half a period in; **pull-up/pull-down** return their constant
   weak 1/0; **indicator**, **8-wide indicator** and **hex display** (FR-071j)
@@ -3305,11 +3352,18 @@ no sequential part could ever leave U.)
   **power-on reset**
   (FR-071b) drives `R` 1 and `/R` 0 while `simTime < cycles × clockPeriod`,
   the inverse afterward; **input switch** (FR-087a) strong-drives `OUT` to the
-  logic value of `state` (`"1"`→V1, else V0); **port / portN** (FR-094g) return one
+  logic value of `state` (`"1"`→V1, else V0); **labeled decoder** (FR-071k) returns
+  one strong contribution per output, the inversion of
+  `evalTerm(DECODER_TERMS[n], read)` — the first behavior that reads as well as
+  drives; **port / portN** (FR-094g) return one
   strong contribution per **driven** bit of `drive` — `{pin:"P"}` for the 1-wide port,
   `{pin:"P"+i}` for a portN bit — and nothing at all for an undriven bit, which is the
   whole of their old "a port drives nothing" behavior preserved as the default case.
-  `props` carries
+  `read(pinName) → V0|V1|VU|VZ` is the input-net accessor built per entity beside
+  the memory and UART entities' identical one: it answers from `curr`, the
+  **previous** step's net values, so an input-reading built-in's outputs follow
+  its inputs by one unit (FR-078), and an unwired pin reads `VZ` (→ U through the
+  term rules). `props` carries
   effective values: `overrides.props` else the declared default (FR-020b).
   `state` is the **effective** switch state (§6.11): `buildSimulation` takes an
   optional `liveInputs(refdes) → instLike | undefined` accessor and each step reads
@@ -3821,6 +3875,7 @@ keeps one behavior for every caller rather than growing a per-tab branch. The **
   - **GALasm entities:** each compiled output's term/sum tree is lowered to a C expression/function over `curr[]` using the `rt_*` ops — plain, `.T` (enable gating), `.R`, and `.L` outputs; register **and latch** state as static `rt_val` arrays; global-clock and per-output `.CLK` edge detection mirroring `updateRegisters`/`evalOutput` (§6.13, FR-079/FR-079a). A **transparent latch** (`.L`/`.G`, FR-079d) lowers to a `latch_<tag>[]` state array beside the `reg_` arrays: `gen_init` seeds it U; in the `gen_latch` phase (alongside register latching, before contributions) the generated fragment evaluates the `.G` gate over `curr` and, level-sensitively, captures the `.L` sum when the gate is 1 and holds when 0 (applying any `.ARST` clear first) — no edge state, mirroring §6.13's latch bullet; and `gen_drive` contributes `latch_<tag>[k]` gated by the output's `.E` exactly as a register drives, so `curr` carries the one-unit-delayed latched value the runtime's unchanged net resolve produces (the net-resolve, drive, and latch-capture paths use only existing `rt_*` ops, so they need no runtime change). The **one** runtime touch a clock-less latch design forces is the vector runner's **stateful decision**: the generator bakes a `gen_latch_count`, and `rt_run_vectors` runs its rows in order on persistent state when `gen_clock_count > 0 || gen_latch_count > 0` — not clocks alone — the C analogue of `isStateful` (§6.16, FR-115e). A clock-less latch design still has no `C` pulses and no power-on preamble (both keyed on `gen_clock_count`), but its rows share state so a latch's hold spans rows. Subunit packages union their siblings' pins exactly as `makeGalasmEntity`. **Buried registered nodes (FR-079c)** mirror the slow engine's virtual-net trick: `lowerGalasm` appends one placeholder net per `typeData.internal` name (bumping `gen_net_count`), maps the node to a synthetic `"<refdes>.#<node>"` key in `netOfPin`/`pinOwner` and interns a label for it; the buried `.R` output then lowers into ordinary `reg_<tag>[k]` state (`gen_init` U-seed, `gen_latch` rising-edge D-latch reading buried literals as `curr[<vnet>]`) and a `gen_drive` fragment `rt_contrib(<vnet>, reg_<tag>[k], 0, <label>)`, so `curr[<vnet>]` carries the one-unit-delayed buried value the runtime's unchanged net resolve produces — no runtime change, the two engines agree on `Q7`/`Q7N` (FR-107). New sequential parity pair `examples/74165-*` (a placed 74165 with switch-driven `D0..D7`/`DS`/`PL`//`CE`/, a clock on `CP`, indicators on `Q7`/`Q7N`, and a `.tv` exercising load-then-shift and `CE`/ inhibit) covers a buried sequential node through the FR-107 harness (`runtests.sh` step 3). A further parity pair `examples/74573-*` (a placed 74573 with switch-driven `D0..D7`, `LE`, and `/OE`, indicators on `Q0..Q7`, and a `.tv` that exercises transparency while `LE` is high, hold after `LE` falls, and high-Z under `/OE`) covers the transparent-latch lowering (FR-079d) through the same harness — a **clock-less stateful** design, verifying the `isStateful`/ordered-rows path (§6.16) in both engines.
   - **Column tables:** `deriveColumns` (§6.16) supplies them, so a **clock-source port** (FR-094f) arrives as a `kind:"clock"` column whose refdes is a port with no `gen_clocks` entry; it lowers to `RT_COL_PORT_CLOCK` (a net index, like `RT_COL_PORT`) and bumps `gen_clockport_count`, never a synthesized clock generator — see M8 below for why. Each input column additionally bakes its `activeLow` stamp as `rt_incol.active_low` (FR-115p, M9 below), so a tool reading the program's `--columns` dump defaults an omitted cell exactly as the panel does.
   - **Built-ins/memory:** instance tables (type, nets, effective properties, switch's persisted state as its baked drive level — overridable by a vector input column); each ROM's **refdes and content-file path** baked for the runtime's startup load (FR-117b; superseded the M3 baked-bytes rule 2026-07-03); a plain RAM starts all-U, while a **persistent RAM** (FR-114g) additionally bakes its **save-file path and load-on-start flag** for the runtime's startup load and write-back (FR-117c).
+  - **Labeled decoder (FR-071k):** lowered inline into `gen_drive` from `DECODER_TERMS` (`builtins.js`, §6.11) — the **same literal terms the slow engine evaluates** — with `rt_buf`/`rt_not` per literal, `rt_and` folding the term, and `rt_not` over the whole to make the active-low output. Sharing the term data rather than restating the logic is what makes FR-107 parity structural here: there is no second copy of the decode to keep in step. Its display strings are an editor concern and appear nowhere in the emitted C. `driverCount` gains eight per instance.
   - **Preflight/refusals:** same compile errors as `buildSimulation` (parse failure, `.R` without `clock:`); behavior-less types — and, for a GAL part, each output pin its behavior writes no equation for — generate U-drivers with a warning (FR-080 analogue; the per-pin GAL case is exercised by the FR-107 parity run). The Generate C… flow runs `designDefinitionErrors` on the flattened design, before `generateC`, and refuses a design with GAL definition errors through the FR-066m modal (§6.14). **Switch elements (FR-071g/FR-071h) are refused** (added 2026-07-07): `generateC` fails with "transmission gates / relays are not supported by the fast simulator" naming the offending refdes(es) — FR-083a's dynamic net merging is slow-engine-only for now (FR-116); the Generate C… flow surfaces the refusal via the message tray like a flatten failure. **Persistent RAM (FR-114g) is supported** (refusal withdrawn 2026-07-09, originally refused 2026-07-08): a RAM instance whose `mem.ramFile` is set bakes its save-file path and load-on-start flag into `gen_mems`, and the runtime loads it at start-up and writes it back on normal termination of either batch mode (FR-117c, M7 below); a plain RAM (no save file) bakes a NULL path and generates unchanged. If **switch-element** fast support is added later it will mirror the slow engine's per-root resolution (a union-find in `runtime.c` plus generated contact tables) with FR-107 parity coverage — no `gen_` interface provision is reserved for it now (YAGNI; the runtime pair ships verbatim per generation, so an interface change costs only a regenerate). The former FR-116 deferred-scope refusals of sub-design instances / off-sheet connectors remain **as internal guards** — the caller flattens first (FR-116 hierarchy, reworked 2026-07-04), so tripping one means an unflattened design reached the generator. `SUBUNIT_PKG_RE` is the hierarchical-prefix-tolerant form (§6.14), so a child's subunit packages group within their instance. A clock generator with a hierarchical refdes is baked normally (free-run mode drives it, FR-117a) and the **runtime's vector mode refuses it at startup** — `rt_init`/the vector runner scans `gen_clocks[].refdes` for `/`, reports the refdes with a pointer at `--cycles`, and exits 2 (the FR-115e hidden-clock rule, enforceable only at run time because one program serves both modes).
 
 **Chrome wiring (`chrome/toolbar.js`, `app.js`).** The Tools menu (§6.16) gains a **Generate C…** item (`onGenerateC`), disabled while `state.simulating` or `state.vectorPanelOpen` (FR-116). `app.js` handles it: fetch `/cgen/runtime.h` + `/cgen/runtime.c` → `flatten(store.design, loadDesign, { rootPath: savePath })` (FR-116 hierarchy; a flatten refusal posts to the tray and aborts) → `generateC(flat, { columnsFrom: store.design })` (no ROM preload — the program reads ROM contents itself at startup, FR-117b; the `loadRomContents` preload this section originally specified was discovered at M5 never to have been wired in — a latent all-U-ROM bug in app-generated programs, mooted by FR-117b) → `openFileDialog` in save mode with a `.c` extension (the `saveExt` generalization of §6.16) seeded at the project root (`store.state.project.dir`, FR-121h — same directory as the former `dirOf(savePath)` under the flat layout) with default `<base>.c` → write all three files through `POST /api/v1/file/save` (§6.4), the verbatim-text endpoint added for this purpose (the design-save endpoint requires a valid-JSON body — `json.Indent` — so C source cannot ride it; corrected 2026-07-02 from the original "reuse `/design/save`" plan). Failures/warnings post via the message tray (FR-074).
@@ -3886,7 +3941,8 @@ keeps one behavior for every caller rather than growing a per-tab branch. The **
     orientation is why direction matters here at all.
   - **Virtual built-ins.** clock/switch/indicator/indicator8/pullup/pulldown/
     reset — and, added 2026-07-07, tgate/relay (FR-071g/FR-071h), and, added
-    2026-09-21, hexdisplay (FR-071j) — instances
+    2026-09-21, hexdisplay (FR-071j), and, added 2026-09-22, decoder (FR-071k,
+    which unlike the rest drives real logic but still has no package) — instances
     have no physical package: each emits a comment line in the
     circuit block (`# virtual: A-3 (clock) OUT -> U1.CP, …`) naming every net
     pin it drives or observes — for a switch element, its control pin's net and
@@ -4902,6 +4958,7 @@ branch wire that meet at it share one position and cannot drift apart (A1).
 | `overrides` | object | per-instance field overrides, grouped by kind: `{"delays":{"tpd":12},"props":{"period":200}}` — `delays` shadows `typeData.delays` (FR-058), `props` shadows `typeData.properties` defaults (FR-020b) |
 | `ncPins` | string[]? | the instance's pins carrying a **no-connect mark** (FR-071i) — the mark is a field of the marked instance, never an object of its own (§6.22/§8), so it moves, rotates, copies, and is deleted with the component for free. Additive-optional: absent means none, so **no `formatVersion` bump**, exactly as `drcWaivers` (FR-124e). Seeded at placement from the type's `NC` pins (FR-062f) and thereafter ordinary user state; filtered on load to names the `typeData` still has (§7.4), the stale-waiver rule |
 | `switchState` | string? | input-switch built-in only (FR-071c): current state, `"0"` \| `"1"` (default `"0"`; a legacy `"U"` reads as `0`). Per-instance interactive state, not an `overrides` entry; set via the properties panel (FR-020c) or a click during a run (FR-087a). The port's analogous `portDrive` (FR-094g) is deliberately **not** here: it exists only on the run-time copy in the sim view (§6.10) and is never saved |
+| `decodeLabels` | string[]? | labeled-decoder built-in only (FR-071k): the eight display strings, index = input value 0–7, each at most five characters (all `""` on placement). Per-instance state on the same footing as `switchState`, not an `overrides` entry; set via the properties panel (FR-020e). An absent or short array reads as unset for the missing values, which draw their own digit — so a decoder saved before the field existed still loads and draws |
 | `kind` | string? | `"subdesign"` for a sub-design instance (FR-098); absent/`"component"` for an ordinary, subunit, or built-in instance (§6.14) |
 | `childPath` | string? | sub-design only: child design file path. **On disk relative to the parent's save dir** (FR-098); **absolute in memory** after load (absolutized by `fileops.loadIntoStore`, relativized by `fileops.save`). Resolved on load to derive the interface; no `typeData` is stored (supersedes FR-057 for sub-designs) |
 | `render` | string? | sub-design only: chosen embed rendering `"ic"` \| `"connector"` (FR-099) |
@@ -5664,6 +5721,7 @@ the existing panel primitives). New tests: `js/engine/drc.test.js` and
 | FR-084, FR-085, FR-086 | §6.13 | `sim.js`, `builtins.js` |
 | FR-076a, FR-076b | §6.6, §6.10, §6.11, §6.13, §7.2 | `toolbar.js`, `dialogs.js`, `statusbar.js`, `sim.js`, `model/design.js`, `store.js`, `model/design.js` |
 | FR-071g, FR-071h, FR-083a | §6.11, §6.13, §6.17 (refusal), §6.18 (comment lines), §8 | `builtins.js`, `canvas.js`, `sim.js`, `cgen.js`, `ndl.js` |
+| FR-071k, FR-020e | §6.8, §6.10, §6.11, §6.13, §6.17, §6.18, §7.2 | `builtins.js`, `canvas.js`, `commands.js`, `properties.js`, `model/design.js`, `sim.js`, `cgen.js`, `ndl.js`, `examples/decoder.*` |
 | FR-087b | §6.9, §6.10, §6.11, §6.13 | `interaction.js`, `store.js`, `builtins.js`, `sim.js` |
 | FR-087c | §6.8, §6.9, §6.10, §6.11, §6.13 | `interaction.js`, `properties.js`, `toolbar.js`, `canvas.js`, `sim.js`, `store.js`, `dialogs.js`, `style.css` |
 | FR-088 | §6.6, §6.10, §6.11, §6.14 | `model/design.js`, `commands.js`, `toolbar.js`, `dialogs.js` |

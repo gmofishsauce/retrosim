@@ -1,4 +1,4 @@
-import { V0, V1 } from "./engine/galasm.js";
+import { V0, V1, VU, evalTerm } from "./engine/galasm.js";
 
 // Client-side registry of built-in editor objects (FR-067–FR-071a). These are
 // synthetic ComponentTypes defined by the app rather than loaded from YAML; once
@@ -236,6 +236,89 @@ const UART_ICON =
   ' font-family="system-ui,sans-serif" font-weight="bold" font-size="9" fill="#000">UART</text>' +
   "</svg>";
 
+// --- Labeled 3-to-8 decoder (FR-071k) -------------------------------------
+//
+// DECODER_LABEL_MAX is the per-value string limit (five characters), enforced
+// at the source — the properties-panel field — and again at draw time, so a
+// design hand-edited or carried in from elsewhere still cannot overflow the
+// title band.
+export const DECODER_LABEL_MAX = 5;
+
+// DECODER_DISABLED_TEXT is the face shown whenever there is no decoded
+// selection to name (FR-071k): the decoder disabled, an enable or address bit
+// not a defined 0/1, or no run at all. Four dashes, as specified — deliberately
+// shorter than the five-character maximum, so it never reads as a label.
+export const DECODER_DISABLED_TEXT = "----";
+
+// DECODER_OUTPUTS names the eight active-low outputs in value order, so
+// DECODER_OUTPUTS[n] is the pin selected by input value n.
+// DECODER_BAND_H is the height, in grid units, of the title band that carries
+// the decoded string across the top of the body (FR-071k) — the "on top of the
+// component" the requirement asks for, drawn inside the outline so it cannot
+// collide with the designator the shared label pass puts above every built-in.
+export const DECODER_BAND_H = 2;
+
+export const DECODER_OUTPUTS = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => `/Y${i}`);
+
+// DECODER_TERMS[n] is the AND term that selects output n, as a GALasm literal
+// list ({signal, low}) over this built-in's own pin names — the 74138's
+// equations with one active-high enable (E) and one active-low (/E):
+//
+//   /Yn = E * //E * <A2> * <A1> * <A0>
+//
+// Written as data rather than as JS conditionals so the slow engine can
+// evaluate it with galasm.js's own `evalTerm` (FR-077 selective pessimism, so a
+// 0 on any input still decides the term over a U on another) and the fast engine
+// can lower the identical literals to rt_and/rt_not (§6.17) — one definition of
+// the logic, two engines, which is what FR-107 parity asks for.
+export const DECODER_TERMS = [0, 1, 2, 3, 4, 5, 6, 7].map((n) => [
+  { signal: "E", low: false },
+  { signal: "/E", low: true },
+  { signal: "A2", low: (n & 4) === 0 },
+  { signal: "A1", low: (n & 2) === 0 },
+  { signal: "A0", low: (n & 1) === 0 },
+]);
+
+// decoderSelection reads the five inputs through `read(pinName) → V0|V1|VU|VZ`
+// and returns the selected value 0..7, or null when there is none: the decoder
+// disabled (E not 1, or /E not 0) or any address bit not a defined 0/1. Null is
+// the display's dashes case (FR-071k); it says nothing about the outputs, which
+// the behavior below decides per output with the full four-state rules.
+export function decoderSelection(read) {
+  if (read("E") !== V1 || read("/E") !== V0) return null;
+  let v = 0;
+  for (let i = 0; i < 3; i++) {
+    const b = read(`A${i}`);
+    if (b === V1) v |= 1 << i;
+    else if (b !== V0) return null;
+  }
+  return v;
+}
+
+// decoderText returns the string the title band shows for selection `sel`
+// (decoderSelection's result): the instance's string for that value, clipped to
+// DECODER_LABEL_MAX; the value's own digit when no string is set, so a decoder
+// nobody has labeled still reads out its state; and the four dashes when there
+// is no selection at all.
+export function decoderText(inst, sel) {
+  if (sel === null || sel === undefined) return DECODER_DISABLED_TEXT;
+  const s = inst?.decodeLabels?.[sel];
+  return s ? String(s).slice(0, DECODER_LABEL_MAX) : String(sel);
+}
+
+// DECODER_ICON: the placed object in miniature (FR-071k) — a box with a title
+// band showing the disabled face over the "3:8" body, so the tile says both what
+// the part is and that its top line is a readout.
+const DECODER_ICON =
+  '<svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true">' +
+  '<rect x="4" y="5" width="28" height="26" fill="#fff" stroke="#333"/>' +
+  '<line x1="4" y1="14" x2="32" y2="14" stroke="#333"/>' +
+  '<text x="18" y="10" text-anchor="middle" dominant-baseline="central"' +
+  ' font-family="ui-monospace,monospace" font-size="8" fill="#000">----</text>' +
+  '<text x="18" y="23" text-anchor="middle" dominant-baseline="central"' +
+  ' font-family="system-ui,sans-serif" font-weight="bold" font-size="10" fill="#000">3:8</text>' +
+  "</svg>";
+
 // BIT_NAMES returns the n bit names "<prefix>0".."<prefix>(n-1)" for a wide
 // built-in's pins and its single pin group (FR-071d/e). n defaults to 8 (the
 // fixed-width 8-wide indicator); the multi-bit port passes its chosen width.
@@ -467,6 +550,45 @@ const BUILTIN_DEFS = [
     pinGroups: [{ name: "DATA", pins: BIT_NAMES("D") }],
   },
   {
+    name: "decoder",
+    builtin: true,
+    title: "decoder (3-to-8, labeled)", // FR-071k palette tooltip
+    icon: DECODER_ICON,
+    renderType: "decoder",
+    // A title band (the top DECODER_BAND_H rows) over the pin field: eight
+    // output rows 3..10 plus a one-unit bottom margin make the height 11, and
+    // the width holds five monospace characters between the two pin-name
+    // columns.
+    width: 8,
+    height: 11,
+    // Five inputs down the left edge — the two enables above the three address
+    // bits, separated by a blank row — and the eight active-low outputs down the
+    // right (FR-071k). Like the magic UART this is an IC-style built-in whose pin
+    // names are drawn, so E and /E are tellable apart on the canvas.
+    pins: [
+      { name: "E", side: "left", position: 3, direction: "in" },
+      { name: "/E", side: "left", position: 4, direction: "in" },
+      { name: "A2", side: "left", position: 6, direction: "in" },
+      { name: "A1", side: "left", position: 7, direction: "in" },
+      { name: "A0", side: "left", position: 8, direction: "in" },
+      ...DECODER_OUTPUTS.map((name, i) => ({
+        name,
+        side: "right",
+        position: i + 3,
+        direction: "out",
+      })),
+    ],
+    // The three address bits as one group (LSB first, the 74138's convention) so
+    // a 3-bit bus snap-connects to all of them at once (FR-041/FR-042). The
+    // outputs are deliberately ungrouped: a bus adopts its group's pin names as
+    // bit names, and the active-low `/Y0`–`/Y7` do not make usable ones.
+    pinGroups: [{ name: "A", pins: ["A0", "A1", "A2"] }],
+    // The eight display strings are per-instance state (inst.decodeLabels), not
+    // numeric properties (FR-020b) — the switchState/note-text precedent — set
+    // through the properties panel (FR-020e) and round-tripping with the
+    // instance (§7.2). The decoder declares no properties.
+  },
+  {
     name: "note",
     builtin: true,
     title: "text note", // FR-071f palette tooltip
@@ -620,6 +742,22 @@ const BEHAVIOR_DEFS = {
   port({ drive }) {
     const v = driveValue(drive?.[0]);
     return v === null ? [] : [{ pin: "P", value: v }];
+  },
+  // Labeled 3-to-8 decoder (FR-071k): eight active-low outputs, one per input
+  // value, driven by the DECODER_TERMS literals above. Unlike every earlier
+  // built-in this behavior READS its own input nets, through the `read`
+  // accessor the simulator now supplies in ctx (§6.13) — the same previous-step
+  // accessor the memory and UART entities take, so the outputs follow the inputs
+  // by the standard one unit (FR-078). `/Yn = term` means pin /Yn is LOW exactly
+  // when its term is true, hence the inversion here; evalTerm supplies the
+  // four-state rules (a 0 on any input decides the term even when another reads
+  // U, FR-077), so a disabled decoder drives all eight outputs high without
+  // knowing its address.
+  decoder({ read }) {
+    return DECODER_TERMS.map((term, i) => {
+      const t = evalTerm(term, read);
+      return { pin: DECODER_OUTPUTS[i], value: t === VU ? VU : t === V1 ? V0 : V1 };
+    });
   },
   // Display only, like the 1-wide indicator (FR-071d): drives nothing; the
   // renderer reads each bit's net value to light the bar-graph stripes.
