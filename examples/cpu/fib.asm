@@ -11,6 +11,15 @@
 # The ROM image examples/cpu/cpurom.bin is this program, so opening
 # examples/cpu/core.json and pressing RUN (or STEP) executes it.
 #
+# PASSES.  The whole computation runs 10 times over (the literal in the movi at
+# 0002 -- the assembler has no named constants), each pass rewriting the same
+# memory, so the program doubles as a benchmark for the fast (C) simulator.
+# One pass is about 1,050 clocks, so 10 passes reach the spin loop after about
+# 10,500 clocks: about 10 s for the generated C built with `cc -O2 -flto` on an
+# i7-9750H.  Built without -flto it runs about 10x slower, and on the slow
+# (debug) simulator even one pass takes over a minute -- set PASSES to 1 there.
+# The remaining-pass count lives in Mem[0x0001].
+#
 # THE LIMIT TEST.  The machine has no compare and no shift -- only add, nand and
 # beq -- but it does not need one here.  Every Fibonacci number below 32767 has
 # bit 15 clear, and the first one that is not below it, 46368, has bit 15 set
@@ -31,39 +40,53 @@
 #   r3  next  -- a + b, the candidate for the next round
 #   r4  0x8000, the limit mask
 #   r5  store pointer, walking up from 0x0100
-#   r6  scratch, for the bit-15 test
+#   r6  scratch, for the bit-15 test and for the pass count between passes
 #   r7  count of numbers written
 
         lui     r0, 0           # 0000  r0 := 0 -- see above; must come first
         lui     r4, 0x8000      # 0001  r4 := 0x8000 -- bit 15 alone
-        movi    r5, 0x0100      # 0002  r5 := 0x0100 -- where the sequence goes
+        movi    r6, 10          # 0002  r6 := passes to run -- see PASSES above
                                 # 0003    (movi is lui + addi, two words)
-        add     r1, r0, r0      # 0004  a := 0
-        addi    r2, r0, 1       # 0005  b := 1
-        add     r7, r0, r0      # 0006  count := 0
+        sw      r6, r0, 1       # 0004  Mem[1] := passes still to run
+
+again:
+        movi    r5, 0x0100      # 0005  r5 := 0x0100 -- where the sequence goes
+                                # 0006
+        add     r1, r0, r0      # 0007  a := 0
+        addi    r2, r0, 1       # 0008  b := 1
+        add     r7, r0, r0      # 0009  count := 0
 
 loop:
-        sw      r2, r5, 0       # 0007  Mem[p] := b
-        addi    r5, r5, 1       # 0008  p++
-        addi    r7, r7, 1       # 0009  count++
-        add     r3, r1, r2      # 000a  next := a + b
-        nand    r6, r3, r4      # 000b  r6 := ~(next & 0x8000)
-        nand    r6, r6, r6      # 000c  r6 := next & 0x8000
-        beq     r6, r0, cont    # 000d  bit 15 clear -- next still fits
-        beq     r0, r0, done    # 000e  bit 15 set -- next is over the limit
+        sw      r2, r5, 0       # 000a  Mem[p] := b
+        addi    r5, r5, 1       # 000b  p++
+        addi    r7, r7, 1       # 000c  count++
+        add     r3, r1, r2      # 000d  next := a + b
+        nand    r6, r3, r4      # 000e  r6 := ~(next & 0x8000)
+        nand    r6, r6, r6      # 000f  r6 := next & 0x8000
+        beq     r6, r0, cont    # 0010  bit 15 clear -- next still fits
+        beq     r0, r0, done    # 0011  bit 15 set -- next is over the limit
 
 cont:
-        add     r1, r0, r2      # 000f  a := b
-        add     r2, r0, r3      # 0010  b := next
-        beq     r0, r0, loop    # 0011
+        add     r1, r0, r2      # 0012  a := b
+        add     r2, r0, r3      # 0013  b := next
+        beq     r0, r0, loop    # 0014
 
 done:
-        sw      r7, r0, 0       # 0012  Mem[0] := how many were written
+        sw      r7, r0, 0       # 0015  Mem[0] := how many were written
+
+# End of one pass.  Every register is spoken for inside the pass, so the pass
+# counter lives in memory, at Mem[1]; r6 is free to borrow here because the
+# bit-15 test is over.
+        lw      r6, r0, 1       # 0016  r6 := passes still to run
+        addi    r6, r6, -1      # 0017  one fewer
+        sw      r6, r0, 1       # 0018
+        beq     r6, r0, spin    # 0019  that was the last pass
+        beq     r0, r0, again   # 001a
 
 # Nothing halts this machine, so the program ends by spinning.  The add is not
 # busy-work: the ALU result register drives the two hex displays, so recomputing
 # the last Fibonacci number every time round parks it on screen instead of
 # leaving whatever the branch happened to compute.
 spin:
-        add     r3, r0, r2      # 0013  r3 := the last Fibonacci number
-        beq     r0, r0, spin    # 0014
+        add     r3, r0, r2      # 001b  r3 := the last Fibonacci number
+        beq     r0, r0, spin    # 001c
