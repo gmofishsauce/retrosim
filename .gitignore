@@ -2,3 +2,4 @@
 /risc16test.hex
 /examples/cpu/regram*.bin
 *.sw[a-p]
+.DS_Store
