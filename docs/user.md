@@ -2123,11 +2123,16 @@ the project folder); three files are written there:
 - `runtime.c` / `runtime.h` — a fixed, documented support library, copied
   alongside every generated file.
 
-Compile them with any C compiler, no flags needed:
+Compile them with any C compiler. No flags are required, but turn on
+optimization — it makes the program run many times faster:
 
 ```
-cc -o mydesign mydesign.c runtime.c
+cc -O2 -o mydesign mydesign.c runtime.c
 ```
+
+As a rough guide, the example RiSC-16 CPU (`examples/cpu`) runs about 1,200
+clock cycles per second built with `-O2`, against about 60 without it — and
+about 10–15 in the editor's debug simulator.
 
 **Command line at a glance:**
 

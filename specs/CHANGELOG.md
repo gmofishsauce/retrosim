@@ -22,7 +22,7 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 ## 2026-09-23 — Fast engine: the four-state operators become `static inline` in runtime.h (FR-116a)
 What: `rt_and`, `rt_or`, `rt_not`, `rt_xor`, `rt_buf` and the Z→U read normalization (now `rt_norm`) move from `runtime.c` into `runtime.h` as `static inline` definitions; `runtime.c` keeps using `rt_norm` for its own reads. Semantics unchanged.
 Why: requested by the user after timing the generated C for `examples/cpu` (entry below). These operators dominate the profile, and as out-of-line functions in the other translation unit they cannot be inlined without `-flto`: about 100 clocks/s at `-O2` versus about 1,000 with `-O2 -flto`. In the header, a plain optimizing compile inlines them. The build command of FR-116 is unchanged.
-Touches: FR-116a (amended); design §6.17 (runtime, combination ops)
+Touches: FR-116a (amended); design §6.17 (runtime, combination ops); `docs/user.md` ("Generating a standalone C simulator" — compile with `-O2`), applied with the user's approval on 2026-09-23
 
 ## 2026-09-23 — examples/cpu: fib.asm runs 10 passes, as a fast-simulator benchmark
 What: `examples/cpu/fib.asm` wraps its Fibonacci computation in an outer loop that runs it 10 times (remaining-pass count in Mem[1], since every register is used inside a pass), then spins as before; `examples/cpu/cpurom.bin` reassembled from it. Content only: no FR, no design section, nothing outside `examples/`.
