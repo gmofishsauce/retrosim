@@ -733,7 +733,10 @@ export function generateC(design, { columnsFrom = design } = {}) {
   L.push(`}`);
   L.push(``);
   L.push(`/* --- registered latch: .R outputs (FR-079/FR-079a, sim.js updateRegisters) --- */`);
-  L.push(`void gen_latch(const rt_val *curr) {`);
+  // Every state store goes through rt_upd, so gen_latch can report whether the
+  // phase changed anything: the free-run fixed-point test (FR-117d).
+  L.push(`int gen_latch(const rt_val *curr) {`);
+  L.push(`  int ch = 0;`);
   if (!regUnits.length && !latchUnits.length) L.push(`  (void)curr;`);
   for (const u of regUnits) {
     L.push(`  {`);
@@ -743,36 +746,36 @@ export function generateC(design, { columnsFrom = design } = {}) {
     // equations here and in gen_drive, which rt_step runs later in the step.
     for (const r of u.regs) {
       const v = r.lhsLow ? `rt_not(reg_${u.tag}[${r.k}])` : `reg_${u.tag}[${r.k}]`;
-      L.push(`    regprev_${u.tag}[${r.k}] = ${v};`);
+      L.push(`    ch |= rt_upd(&regprev_${u.tag}[${r.k}], ${v});`);
     }
     if (u.hasGlobal) {
       const clk = u.clockNet >= 0 ? `curr[${u.clockNet}]` : `RT_Z`;
       L.push(`    rt_val gclk = ${clk}; /* global clock: pin */`);
       L.push(`    int grose = (prevClk_${u.tag} == RT_0 && gclk == RT_1);`);
       L.push(`    if (grose) {`);
-      for (const k of u.globalIdxs) L.push(`      reg_${u.tag}[${k}] = ${u.regs[k].dExpr};`);
+      for (const k of u.globalIdxs) L.push(`      ch |= rt_upd(&reg_${u.tag}[${k}], ${u.regs[k].dExpr});`);
       L.push(`    }`);
       if (u.spExpr) {
         L.push(`    if (grose) { rt_val s = ${u.spExpr}; if (s != RT_0) { /* global SP */`);
-        for (const k of u.globalIdxs) L.push(`      reg_${u.tag}[${k}] = (s == RT_1) ? RT_1 : RT_U;`);
+        for (const k of u.globalIdxs) L.push(`      ch |= rt_upd(&reg_${u.tag}[${k}], (s == RT_1) ? RT_1 : RT_U);`);
         L.push(`    } }`);
       }
       if (u.arExpr) {
         L.push(`    { rt_val a = ${u.arExpr}; if (a != RT_0) { /* global AR (async) */`);
-        for (const k of u.globalIdxs) L.push(`      reg_${u.tag}[${k}] = (a == RT_1) ? RT_0 : RT_U;`);
+        for (const k of u.globalIdxs) L.push(`      ch |= rt_upd(&reg_${u.tag}[${k}], (a == RT_1) ? RT_0 : RT_U);`);
         L.push(`    } }`);
       }
-      L.push(`    prevClk_${u.tag} = gclk;`);
+      L.push(`    ch |= rt_upd(&prevClk_${u.tag}, gclk);`);
     }
     for (const r of u.regs) {
       if (!r.clkExpr) continue;
       L.push(`    { rt_val clk = ${r.clkExpr}; /* per-output .CLK */`);
-      L.push(`      if (prevClk_${u.tag}_${r.k} == RT_0 && clk == RT_1) reg_${u.tag}[${r.k}] = ${r.dExpr};`);
-      L.push(`      prevClk_${u.tag}_${r.k} = clk;`);
+      L.push(`      if (prevClk_${u.tag}_${r.k} == RT_0 && clk == RT_1) ch |= rt_upd(&reg_${u.tag}[${r.k}], ${r.dExpr});`);
+      L.push(`      ch |= rt_upd(&prevClk_${u.tag}_${r.k}, clk);`);
       if (r.aprstExpr)
-        L.push(`      { rt_val p = ${r.aprstExpr}; if (p != RT_0) reg_${u.tag}[${r.k}] = (p == RT_1) ? RT_1 : RT_U; } /* .APRST */`);
+        L.push(`      { rt_val p = ${r.aprstExpr}; if (p != RT_0) ch |= rt_upd(&reg_${u.tag}[${r.k}], (p == RT_1) ? RT_1 : RT_U); } /* .APRST */`);
       if (r.arstExpr)
-        L.push(`      { rt_val a = ${r.arstExpr}; if (a != RT_0) reg_${u.tag}[${r.k}] = (a == RT_1) ? RT_0 : RT_U; } /* .ARST wins */`);
+        L.push(`      { rt_val a = ${r.arstExpr}; if (a != RT_0) ch |= rt_upd(&reg_${u.tag}[${r.k}], (a == RT_1) ? RT_0 : RT_U); } /* .ARST wins */`);
       L.push(`    }`);
     }
     L.push(`  }`);
@@ -784,14 +787,15 @@ export function generateC(design, { columnsFrom = design } = {}) {
     for (const t of u.latches) {
       L.push(`  { /* latch ${u.tag}[${t.k}] */`);
       if (t.arstExpr)
-        L.push(`    { rt_val a = ${t.arstExpr}; if (a != RT_0) latch_${u.tag}[${t.k}] = (a == RT_1) ? RT_0 : RT_U; } /* .ARST clear first */`);
+        L.push(`    { rt_val a = ${t.arstExpr}; if (a != RT_0) ch |= rt_upd(&latch_${u.tag}[${t.k}], (a == RT_1) ? RT_0 : RT_U); } /* .ARST clear first */`);
       L.push(`    rt_val g = ${t.gateExpr}; /* .G gate */`);
-      L.push(`    if (g == RT_1) latch_${u.tag}[${t.k}] = ${t.dExpr}; /* transparent */`);
-      L.push(`    else if (g == RT_U) latch_${u.tag}[${t.k}] = RT_U; /* pessimism */`);
+      L.push(`    if (g == RT_1) ch |= rt_upd(&latch_${u.tag}[${t.k}], ${t.dExpr}); /* transparent */`);
+      L.push(`    else if (g == RT_U) ch |= rt_upd(&latch_${u.tag}[${t.k}], RT_U); /* pessimism */`);
       L.push(`    /* g == RT_0: hold */`);
       L.push(`  }`);
     }
   }
+  L.push(`  return ch;`);
   L.push(`}`);
   L.push(``);
   L.push(`/* --- strong drivers, one fragment per instance (FR-081) --- */`);

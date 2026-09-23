@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-09-23 — Fast engine: free runs skip quiescent unit steps (FR-117d)
+What: a free run (`--cycles N`) no longer evaluates unit steps that provably change nothing. After a step that is a full fixed point — no net changed and the latch phase changed no state — the runtime jumps simulated time to the next clock transition or reset release, or to the end of the run if that comes first. Results are bit-identical. `gen_latch` now returns whether it changed any state (a `gen_`/runtime interface change: regenerate older programs). `mem_write_all` and `uart_step` report their edge-state changes the same way.
+Why: requested by the user after profiling the `-O2` build of `examples/cpu`. Only 7.7% of its unit steps change any net, because each 100 ns clock period settles within a few units of the edge, yet every step re-evaluated all ~700 driver contributions and 399 nets. Net quiescence alone would not be exact: a register latching behind a disabled output changes no net that step but can change a combinational output one step later through its feedback snapshot. So the fixed-point test also requires the latch phase to be unchanged. Vector mode is untouched, since its settle loop already stops at quiescence.
+Touches: FR-117d (new); design §6.17 (M10, Satisfies line), traceability
+
 ## 2026-09-23 — Fast engine: the four-state operators become `static inline` in runtime.h (FR-116a)
 What: `rt_and`, `rt_or`, `rt_not`, `rt_xor`, `rt_buf` and the Z→U read normalization (now `rt_norm`) move from `runtime.c` into `runtime.h` as `static inline` definitions; `runtime.c` keeps using `rt_norm` for its own reads. Semantics unchanged.
 Why: requested by the user after timing the generated C for `examples/cpu` (entry below). These operators dominate the profile, and as out-of-line functions in the other translation unit they cannot be inlined without `-flto`: about 100 clocks/s at `-O2` versus about 1,000 with `-O2 -flto`. In the header, a plain optimizing compile inlines them. The build command of FR-116 is unchanged.

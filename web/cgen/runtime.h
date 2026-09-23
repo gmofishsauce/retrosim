@@ -92,6 +92,15 @@ static inline rt_val rt_xor(rt_val a, rt_val b) {
  * literal, where no other combinator would normalize the net value. */
 static inline rt_val rt_buf(rt_val a) { return rt_norm(a); }
 
+/* rt_upd stores v into *dst and reports whether that changed it. The
+ * generated latch phase makes every state store through it, so gen_latch
+ * can say whether the step changed any state (FR-117d). */
+static inline int rt_upd(rt_val *dst, rt_val v) {
+  if (*dst == v) return 0;
+  *dst = v;
+  return 1;
+}
+
 /* ------------------------------------------------------------------ *
  *  Net state and the unit step (FR-078, FR-110)
  * ------------------------------------------------------------------ */
@@ -185,7 +194,10 @@ int rt_run_vectors(void);
  * their baked levels; ports are undriven.
  *
  * The run advances exactly `cycles` × clockPeriod unit steps — no settle
- * loop — then writes one line per observable column (FR-118 set: the
+ * loop — skipping any stretch of steps that provably changes nothing: after
+ * a fixed-point step, simulated time jumps to the next clock transition or
+ * reset release (FR-117d). The result is bit-identical to stepping every
+ * unit. It then writes one line per observable column (FR-118 set: the
  * input columns, then the output columns, in column order) to standard
  * output as "LABEL=v", v the four-state value 0/1/U/Z. Bus conflicts
  * report to standard error as ever (FR-108). */
@@ -224,8 +236,11 @@ void gen_init(void);
  * (FR-079/FR-079a). Called by rt_step before any contribution is
  * evaluated, so latching sees the pre-step values, exactly like the slow
  * simulator. Empty in a purely combinational design. (Memory write ports
- * are latched by the runtime from gen_mems, FR-114d, not here.) */
-void gen_latch(const rt_val *curr);
+ * are latched by the runtime from gen_mems, FR-114d, not here.) Returns
+ * nonzero if any generated state — a register, its feedback snapshot or
+ * clock-edge memory, or a transparent latch — took a different value:
+ * half of the free-run fixed-point test (FR-117d). */
+int gen_latch(const rt_val *curr);
 
 /* gen_drive computes every generated strong driver from `curr` and
  * deposits it via rt_contrib: each GALasm output (plain, .T-gated, or

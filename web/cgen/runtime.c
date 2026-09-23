@@ -12,6 +12,7 @@
 #include "runtime.h"
 
 #include <ctype.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -503,8 +504,11 @@ static void mem_reset(void) {
 
 /* mem_write_all latches each RAM's data bus into the addressed cell on a
  * WE/ 0→1 edge (FR-114d; memory.js writeStep), sampling this step's values.
- * Called in the latch phase, before any contribution. A ROM never writes. */
-static void mem_write_all(const rt_val *curr) {
+ * Called in the latch phase, before any contribution. A ROM never writes.
+ * Returns nonzero if any RAM's WE/ edge state changed (FR-117d); a store
+ * write happens only on such an edge, so it needs no report of its own. */
+static int mem_write_all(const rt_val *curr) {
+  int ch = 0;
   for (int i = 0; i < gen_mem_count; i++) {
     const rt_mem *m = &gen_mems[i];
     if (m->kind != RT_MEM_RAM) continue;
@@ -516,8 +520,10 @@ static void mem_write_all(const rt_val *curr) {
         for (int b = 0; b < m->width; b++) word[b] = mem_rd(curr, m->data[b]);
       }
     }
+    if (mem_states[i].prev_we != we) ch = 1;
     mem_states[i].prev_we = we;
   }
+  return ch;
 }
 
 /* ------------------------------------------------------------------ *
@@ -538,8 +544,11 @@ static void uart_reset(void) {
 
 /* uart_step latches and emits for each UART on its CLK 0→1 edge (FR-122b),
  * reusing mem_rd (Z→U, unwired -1→U). Called in the latch phase beside
- * mem_write_all, in gen_uarts order (deterministic interleave). */
-static void uart_step(const rt_val *curr) {
+ * mem_write_all, in gen_uarts order (deterministic interleave). Returns
+ * nonzero if any UART's CLK edge state changed (FR-117d); a byte is emitted
+ * only on such an edge. */
+static int uart_step(const rt_val *curr) {
+  int ch = 0;
   for (int i = 0; i < gen_uart_count; i++) {
     const rt_uart *u = &gen_uarts[i];
     rt_val clk = mem_rd(curr, u->clk);
@@ -550,8 +559,10 @@ static void uart_step(const rt_val *curr) {
         if (mem_rd(curr, u->data[b]) == RT_1) byte |= 1u << b;
       putchar((int)byte);
     }
+    if (uart_prev_clk[i] != clk) ch = 1;
     uart_prev_clk[i] = clk;
   }
+  return ch;
 }
 
 /* mem_save_all writes each persistent RAM's full contents back to its baked
@@ -636,12 +647,20 @@ static void mem_drive_all(const rt_val *curr) {
  *  The unit step and settling (FR-078, FR-085, FR-110; sim.js step/settle)
  * ------------------------------------------------------------------ */
 
+/* step_fixed is set by rt_step when the step it just ran was a fixed point:
+ * no net changed and the latch phase changed no state. Every later step is
+ * then a no-op until a time-driven built-in changes its output, which is
+ * what lets rt_run_free skip ahead (FR-117d). Nets alone are not enough: a
+ * register latching behind a disabled output changes no net this step, but
+ * its feedback snapshot (regprev_) differs next step. */
+static int step_fixed;
+
 int rt_step(void) {
   /* (1) Latch registered (.R) and memory (RAM WE/) state from the previous
    * step's values, before any contribution is evaluated (FR-079/FR-114d). */
-  gen_latch(curr_buf);
-  mem_write_all(curr_buf);
-  uart_step(curr_buf); /* magic UART latch + emit on CLK 0→1 (FR-122b) */
+  int latched = gen_latch(curr_buf);
+  latched |= mem_write_all(curr_buf);
+  latched |= uart_step(curr_buf); /* magic UART latch + emit on CLK 0→1 (FR-122b) */
 
   /* (2) Gather every driver's contribution, all computed from curr. */
   ncontrib = 0;
@@ -661,6 +680,7 @@ int rt_step(void) {
   next_buf = t;
   sim_time++;
   vcd_sample();
+  step_fixed = !changed && !latched;
   return changed;
 }
 
@@ -917,10 +937,39 @@ static int incol_net(const rt_incol *c) {
   return -1;
 }
 
+/* next_builtin_change returns the earliest simulated time after t at which
+ * a time-driven built-in's output differs from its output at t — the
+ * drive_builtins formulas, solved forward — or LONG_MAX if none ever
+ * does. Switches, pulls and port stimulus are constant in free run. */
+static long next_builtin_change(long t) {
+  long next = LONG_MAX;
+  for (int i = 0; i < gen_clock_count; i++) {
+    long period = gen_clocks[i].period_ns < 2 ? 2 : gen_clocks[i].period_ns;
+    long half = period / 2;
+    long base = t - t % period;
+    long edge = t % period < half ? base + half : base + period;
+    if (edge < next) next = edge;
+  }
+  for (int i = 0; i < gen_reset_count; i++) {
+    long release = (long)gen_resets[i].cycles * clock_period_eff();
+    if (t < release && release < next) next = release;
+  }
+  return next;
+}
+
 void rt_run_free(long cycles) {
   freerun = 1;
-  long total = cycles * (long)clock_period_eff();
-  for (long i = 0; i < total; i++) rt_step();
+  long end = sim_time + cycles * (long)clock_period_eff();
+  while (sim_time < end) {
+    rt_step();
+    /* Quiescence skip (FR-117d): after a fixed-point step, evaluated at
+     * sim_time - 1, the steps up to the next built-in change are exact
+     * no-ops, so jump straight there. */
+    if (step_fixed) {
+      long next = next_builtin_change(sim_time - 1);
+      sim_time = next < end ? next : end;
+    }
+  }
 
   /* Flush all buffered UART output (FR-122d) before the trailing observable
    * dump, so the two are ordered deterministically: every UART byte precedes

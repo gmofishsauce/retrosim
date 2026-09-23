@@ -257,8 +257,12 @@ test("generateC: global-clock .R output emits register state and latch (M3 step 
   assert.match(code, /static rt_val reg_U1\[1\];/);
   assert.match(code, /static rt_val prevClk_U1;/);
   assert.match(code, /int grose = \(prevClk_U1 == RT_0 && gclk == RT_1\);/);
-  assert.match(code, /reg_U1\[0\] = rt_buf/); // latches D on the rising edge
+  assert.match(code, /ch \|= rt_upd\(&reg_U1\[0\], rt_buf/); // latches D on the rising edge
   assert.match(code, /v = reg_U1\[0\]; \/\* latched \*\//); // drive reads the register
+  // gen_latch reports whether it changed any state: the free-run fixed-point
+  // test (FR-117d) depends on every state store going through rt_upd.
+  assert.match(code, /int gen_latch\(const rt_val \*curr\) \{\n  int ch = 0;[\s\S]*?\n  return ch;\n\}/);
+  assert.doesNotMatch(code, /\b(reg|regprev|prevClk)_U1(\[0\])? = (?!RT_U;)/); // only gen_init stores directly
 });
 
 // HOLDREG: a registered bit whose hold term reads its own output, behind a
@@ -284,9 +288,9 @@ test("generateC: a registered output's own-signal feedback reads the snapshot (F
   assert.match(code, /static rt_val regprev_U1\[1\];/);
   // Filled from the register at the top of gen_latch, ahead of the edge test —
   // and so in place for gen_drive too, which rt_step runs later in the step.
-  assert.match(code, /regprev_U1\[0\] = reg_U1\[0\];[\s\S]*?int grose =/);
+  assert.match(code, /ch \|= rt_upd\(&regprev_U1\[0\], reg_U1\[0\]\);[\s\S]*?int grose =/);
   // The D equation reads Q from that snapshot, never from Q's net.
-  assert.match(code, /reg_U1\[0\] = [^;\n]*rt_buf\(regprev_U1\[0\]\) \/\* Q:register \*\//);
+  assert.match(code, /rt_upd\(&reg_U1\[0\], [^;\n]*rt_buf\(regprev_U1\[0\]\) \/\* Q:register \*\//);
 });
 
 // SHIFT2: first stage SR0 is a buried internal node (FR-079c); DS -> SR0 -> Q1.
@@ -325,7 +329,7 @@ test("generateC: per-output .CLK registered output latches on its own clock (M3 
   const { code } = generateC(d);
   assert.match(code, /static rt_val prevClk_U1_0;/);
   assert.doesNotMatch(code, /static rt_val prevClk_U1;/); // no global clock for a self-clocked reg
-  assert.match(code, /if \(prevClk_U1_0 == RT_0 && clk == RT_1\) reg_U1\[0\] = /);
+  assert.match(code, /if \(prevClk_U1_0 == RT_0 && clk == RT_1\) ch \|= rt_upd\(&reg_U1\[0\], /);
   assert.match(code, /v = reg_U1\[0\]; \/\* latched \*\//);
 });
 
@@ -344,8 +348,8 @@ test("generateC: async .APRST/.ARST lower to per-step preset/reset (M3 step 2)",
   const d = mkDesign();
   place(d, "U1", AFF);
   const { code } = generateC(d);
-  assert.match(code, /if \(p != RT_0\) reg_U1\[0\] = \(p == RT_1\) \? RT_1 : RT_U; \} \/\* \.APRST \*\//);
-  assert.match(code, /if \(a != RT_0\) reg_U1\[0\] = \(a == RT_1\) \? RT_0 : RT_U; \} \/\* \.ARST wins \*\//);
+  assert.match(code, /if \(p != RT_0\) ch \|= rt_upd\(&reg_U1\[0\], \(p == RT_1\) \? RT_1 : RT_U\); \} \/\* \.APRST \*\//);
+  assert.match(code, /if \(a != RT_0\) ch \|= rt_upd\(&reg_U1\[0\], \(a == RT_1\) \? RT_0 : RT_U\); \} \/\* \.ARST wins \*\//);
 });
 
 const ROM4x2 = {
