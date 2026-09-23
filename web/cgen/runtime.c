@@ -16,52 +16,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* ------------------------------------------------------------------ *
- *  Four-state combination (FR-077; galasm.js litValue/evalTerm/evalSum)
- * ------------------------------------------------------------------ */
-
-/* A component reading Z treats it as U (FR-077): normalize before
- * combining, so the ops below only ever see 0/1/U — exactly what
- * galasm.js guarantees via litValue. */
-static rt_val norm(rt_val v) { return v == RT_Z ? RT_U : v; }
-
-/* AND: any 0 operand decides (0 AND U = 0); otherwise any U → U. */
-rt_val rt_and(rt_val a, rt_val b) {
-  a = norm(a);
-  b = norm(b);
-  if (a == RT_0 || b == RT_0) return RT_0;
-  if (a == RT_U || b == RT_U) return RT_U;
-  return RT_1;
-}
-
-/* OR: any 1 operand decides (1 OR U = 1); otherwise any U → U. */
-rt_val rt_or(rt_val a, rt_val b) {
-  a = norm(a);
-  b = norm(b);
-  if (a == RT_1 || b == RT_1) return RT_1;
-  if (a == RT_U || b == RT_U) return RT_U;
-  return RT_0;
-}
-
-/* NOT: U → U; else flip. */
-rt_val rt_not(rt_val a) {
-  a = norm(a);
-  if (a == RT_U) return RT_U;
-  return a == RT_0 ? RT_1 : RT_0;
-}
-
-/* Non-inverting buffer: just the read normalization (see norm above). */
-rt_val rt_buf(rt_val a) { return norm(a); }
-
-/* XOR (extended dialect, FR-079a): no controlling value, so any U
- * operand → U (full pessimism); else equal → 0, differ → 1. Mirrors
- * galasm.js xorValues. */
-rt_val rt_xor(rt_val a, rt_val b) {
-  a = norm(a);
-  b = norm(b);
-  if (a == RT_U || b == RT_U) return RT_U;
-  return a == b ? RT_0 : RT_1;
-}
+/* The four-state combination operators (FR-077) and the Z→U read
+ * normalization rt_norm are static inline in runtime.h. */
 
 /* ------------------------------------------------------------------ *
  *  Net state and contributions
@@ -154,7 +110,7 @@ void rt_contrib(int net, rt_val v, int weak, int label) {
     exit(2);
   }
   struct contrib *c = &contribs[ncontrib];
-  c->v = norm(v);
+  c->v = rt_norm(v);
   c->weak = (unsigned char)(weak != 0);
   c->label = label;
   c->link = head[net];
@@ -299,7 +255,7 @@ static struct mem_state {
 /* mem_rd reads a memory pin's net from curr, normalizing Z→U and treating
  * an unwired pin (net -1) as U (FR-077), exactly like memory.js's read. */
 static rt_val mem_rd(const rt_val *curr, int net) {
-  return net < 0 ? RT_U : norm(curr[net]);
+  return net < 0 ? RT_U : rt_norm(curr[net]);
 }
 
 /* mem_decode resolves A0(LSB)..A(abits-1) to an address, or -1 when any

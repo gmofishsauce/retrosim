@@ -15,8 +15,8 @@
 # 0002 -- the assembler has no named constants), each pass rewriting the same
 # memory, so the program doubles as a benchmark for the fast (C) simulator.
 # One pass is about 1,050 clocks, so 10 passes reach the spin loop after about
-# 10,500 clocks: about 10 s for the generated C built with `cc -O2 -flto` on an
-# i7-9750H.  Built without -flto it runs about 10x slower, and on the slow
+# 10,500 clocks: about 9 s for the generated C built with `cc -O2` on an
+# i7-9750H.  Built with no -O it runs about 20x slower, and on the slow
 # (debug) simulator even one pass takes over a minute -- set PASSES to 1 there.
 # The remaining-pass count lives in Mem[0x0001].
 #

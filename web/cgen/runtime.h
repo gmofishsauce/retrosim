@@ -39,16 +39,58 @@ enum {
  * (FR-077): an AND with any 0 operand yields 0 and an OR with any 1
  * operand yields 1, regardless of U operands; every other combination
  * involving a U operand yields U. A Z operand reads as U. These are the
- * only combinators the generated evaluate code uses. */
-rt_val rt_and(rt_val a, rt_val b);
-rt_val rt_or(rt_val a, rt_val b);
-rt_val rt_not(rt_val a);
-rt_val rt_xor(rt_val a, rt_val b); /* extended-dialect XOR (FR-079a) */
+ * only combinators the generated evaluate code uses.
+ *
+ * They are defined here, static inline, rather than in runtime.c: they are
+ * the innermost operations of every generated evaluate function, and a call
+ * into the other translation unit cannot be inlined without link-time
+ * optimization (design.md §6.17). The semantics mirror galasm.js
+ * litValue/evalTerm/evalSum. */
+
+/* rt_norm is the read normalization: a component reading Z treats it as U
+ * (FR-077), so the ops below only ever see 0/1/U — exactly what galasm.js
+ * guarantees via litValue. */
+static inline rt_val rt_norm(rt_val v) { return v == RT_Z ? RT_U : v; }
+
+/* AND: any 0 operand decides (0 AND U = 0); otherwise any U → U. */
+static inline rt_val rt_and(rt_val a, rt_val b) {
+  a = rt_norm(a);
+  b = rt_norm(b);
+  if (a == RT_0 || b == RT_0) return RT_0;
+  if (a == RT_U || b == RT_U) return RT_U;
+  return RT_1;
+}
+
+/* OR: any 1 operand decides (1 OR U = 1); otherwise any U → U. */
+static inline rt_val rt_or(rt_val a, rt_val b) {
+  a = rt_norm(a);
+  b = rt_norm(b);
+  if (a == RT_1 || b == RT_1) return RT_1;
+  if (a == RT_U || b == RT_U) return RT_U;
+  return RT_0;
+}
+
+/* NOT: U → U; else flip. */
+static inline rt_val rt_not(rt_val a) {
+  a = rt_norm(a);
+  if (a == RT_U) return RT_U;
+  return a == RT_0 ? RT_1 : RT_0;
+}
+
+/* XOR (extended dialect, FR-079a): no controlling value, so any U
+ * operand → U (full pessimism); else equal → 0, differ → 1. Mirrors
+ * galasm.js xorValues. */
+static inline rt_val rt_xor(rt_val a, rt_val b) {
+  a = rt_norm(a);
+  b = rt_norm(b);
+  if (a == RT_U || b == RT_U) return RT_U;
+  return a == b ? RT_0 : RT_1;
+}
 
 /* rt_buf is the read normalization alone (a non-inverting buffer): Z reads
  * as U, 0/1/U pass through. Generated code applies it to a bare positive
  * literal, where no other combinator would normalize the net value. */
-rt_val rt_buf(rt_val a);
+static inline rt_val rt_buf(rt_val a) { return rt_norm(a); }
 
 /* ------------------------------------------------------------------ *
  *  Net state and the unit step (FR-078, FR-110)
