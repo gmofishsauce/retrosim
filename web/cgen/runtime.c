@@ -560,6 +560,9 @@ static int uart_step(const rt_val *curr) {
       for (int b = 0; b < 8; b++)
         if (mem_rd(curr, u->data[b]) == RT_1) byte |= 1u << b;
       putchar((int)byte);
+      /* Line-oriented output reaches the console as it is produced, even in
+       * an unbounded free run; stdout is otherwise fully buffered (FR-122d). */
+      if (byte == '\n') fflush(stdout);
     }
     if (uart_prev_clk[i] != clk) ch = 1;
     uart_prev_clk[i] = clk;
@@ -1158,7 +1161,8 @@ static int usage(const char *prog) {
 int main(int argc, char **argv) {
   /* Heavily buffer stdout (FR-122d): the magic UART writes here, and full
    * buffering keeps a high-volume byte stream cheap and non-blocking. Flushed
-   * explicitly before the end-of-run dump/transcript (below) and at exit. */
+   * explicitly after each UART newline, before the end-of-run dump/transcript
+   * (below), and at exit. */
   setvbuf(stdout, NULL, _IOFBF, 1 << 16);
   long cycles = 0;             /* free-run bound; 0 = until SIGINT (FR-117a) */
   int vectors = 0;             /* -v: vector rows on stdin (FR-117) */

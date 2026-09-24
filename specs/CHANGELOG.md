@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-09-24 — Fast engine: the UART flushes stdout on each newline (FR-122d)
+What: after the magic UART emits a newline byte (0x0A), the runtime flushes standard output. Otherwise stdout stays fully buffered, and it is still flushed at the end of a run.
+Why: requested by the user. With free running now the default and unbounded until Ctrl-C (FR-117a), a fully buffered 64 KB stdout meant a UART program's output only appeared in 64 KB chunks, or at exit. Flushing only on the UART's own newlines, rather than switching stdout to line buffering, keeps a newline-free byte stream fully buffered, and leaves the end-of-run dump and vector transcript buffered as before.
+Touches: FR-122d (amended); design §6.20 (fast engine), design decision table; `docs/user.md` ("Generating a standalone C simulator", UART paragraph), after the user verified the feature on 2026-09-24
+
 ## 2026-09-24 — Fast engine: free run is the default mode; `-v` selects vectors (FR-117, FR-117a)
 What: the generated program free-runs when started with no mode flag, until SIGINT (Ctrl-C), then ends the run normally: UART flush, the `LABEL=v` dump, persistent-RAM write-back, VCD close, exit 0. `--cycles N` still bounds a run. Test-vector mode, formerly the default (rows on stdin whenever `--cycles` was absent), is now selected by `-v` (also `-vectors`/`--vectors`) and still reads the tv2txt row format on stdin. `-v` with `--cycles` is a usage error. A quiescent unbounded run with nothing left to change sleeps until interrupted rather than spinning.
 Why: requested by the user, so a generated simulator started bare behaves like the editor's RUN. Two choices were the user's, from offered alternatives. (a) Ctrl-C ends an unbounded run *with* the final dump, which makes the unbounded run an ordinary free run that simply ends when interrupted, not a separate mode. (b) `-v` keeps reading rows from stdin rather than baking the `.tv` rows in at generate time or parsing the `.tv` JSON at run time, so FR-117's "the program never parses `.tv`" stands and tv2txt is unchanged apart from its usage line. The SIGINT handler is installed only for free runs, so Ctrl-C during a vector run still simply kills it.

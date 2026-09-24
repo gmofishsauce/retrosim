@@ -2207,7 +2207,9 @@ is where such a design is exercised.
 
 Any **[magic UART](#11-built-in-components)** in the design writes its emitted
 characters to the program's real standard output in both modes, so you can pipe
-or redirect them like any command output. The `LABEL=value` free-run dump (and
+or redirect them like any command output. Output is buffered for speed, but
+each line is written out as soon as the UART sends its newline, so a program
+that prints lines shows them as it runs. The `LABEL=value` free-run dump (and
 the test-vector transcript) share that stream and trail all the UART bytes.
 
 **Waveform traces.** In either mode, `--vcd trace.vcd` also writes a VCD
