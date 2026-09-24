@@ -102,7 +102,16 @@ export function generateC(design, { columnsFrom = design } = {}) {
   const compileCache = new Map(); // type name → CompiledBehavior|null
   const reportedNoBehavior = new Set();
   const packages = new Map(); // shared U-number → [subunit insts]
-  let driverCount = 0; // upper bound for gen_max_contribs
+  // Every driver, in the global contribution order (design §6.17 M12): the
+  // gen_drive text in order, then the runtime's built-ins, then memory data
+  // bits. Slots are numbered once all are known, so generated code refers to
+  // a driver by a placeholder token until then.
+  const drivers = []; // { net, label, weak }
+  const driver = (net, label, weak = 0) => {
+    if (net < 0) return null; // drives no net: no slot
+    drivers.push({ net, label, weak });
+    return `@S${drivers.length - 1}@`;
+  };
 
   function compiled(typeName, typeData) {
     if (!compileCache.has(typeName)) {
@@ -146,7 +155,7 @@ export function generateC(design, { columnsFrom = design } = {}) {
     // gen_net_count = nets.length below), map the node to a synthetic
     // "<refdes>.#<node>" key in netOfPin/pinOwner, and intern its label. The
     // buried .R output then lowers through the ordinary reg/drive paths below:
-    // its D literals read curr[<vnet>] and its driver is rt_contrib(<vnet>, …),
+    // its D literals read curr[<vnet>] and its driver is a slot on <vnet>,
     // so curr[<vnet>] carries the one-unit-delayed buried value the runtime's
     // unchanged net resolve produces — the two engines agree on the exposed pins.
     for (const node of td0.internal ?? []) {
@@ -167,8 +176,8 @@ export function generateC(design, { columnsFrom = design } = {}) {
         }
         const lines = [`  /* ${refdesList}: ${typeName} — no behavior, outputs U (FR-080) */`];
         for (const key of uPins) {
-          lines.push(`  rt_contrib(${netOf(key)}, RT_U, 0, ${intern(key)}); /* ${key} */`);
-          driverCount++;
+          const slot = driver(netOf(key), intern(key));
+          if (slot) lines.push(`  rt_drive(${slot}, RT_U); /* ${key} */`);
         }
         driveBlocks.push(lines.join("\n"));
       }
@@ -311,9 +320,9 @@ export function generateC(design, { columnsFrom = design } = {}) {
         lines.push(`    rt_val v;`);
         for (const b of body) lines.push(`    ${b}`);
       }
-      lines.push(`    rt_contrib(${net}, v, 0, ${lbl});`);
+      const slot = driver(net, lbl);
+      lines.push(slot ? `    rt_drive(${slot}, v);` : `    (void)v; /* drives no net */`);
       lines.push(`  }`);
-      driverCount++;
     }
     // A GAL output pin its behavior writes no equation for drives U (FR-080),
     // mirroring sim.js makeGalasmEntity: unwritten logic is unknown, not undriven.
@@ -325,8 +334,8 @@ export function generateC(design, { columnsFrom = design } = {}) {
           const signal = p.name.startsWith("/") ? p.name.slice(1) : p.name;
           if (p.direction === "in" || written.has(signal)) continue;
           const key = `${inst.refdes}.${p.name}`;
-          lines.push(`  rt_contrib(${netOf(key)}, RT_U, 0, ${intern(key)}); /* ${key}: no equation (FR-080) */`);
-          driverCount++;
+          const slot = driver(netOf(key), intern(key));
+          if (slot) lines.push(`  rt_drive(${slot}, RT_U); /* ${key}: no equation (FR-080) */`);
           if (!unwritten.includes(p.name)) unwritten.push(p.name);
         }
       }
@@ -384,7 +393,6 @@ export function generateC(design, { columnsFrom = design } = {}) {
         ramFile: isRam && mem.ramFile ? mem.ramFile : null,
         ramLoad: isRam && mem.ramFile && mem.ramLoad ? 1 : 0,
       });
-      driverCount += mem.dataWidth; // drives up to w data pins
     } else if (inst.typeData.builtin) {
       const rt = inst.typeData.renderType;
       const refdes = inst.refdes;
@@ -400,7 +408,7 @@ export function generateC(design, { columnsFrom = design } = {}) {
       } else if (rt === "uart") {
         // Magic UART (FR-122d): collect its data/CS//CE//CLK net indices; the
         // runtime owns the latch/gate/emit (runtime.c uart core), driven from
-        // this gen_uarts entry. It drives no nets, so driverCount is unchanged.
+        // this gen_uarts entry. It drives no nets, so it has no driver slot.
         const data = [];
         for (let i = 0; i < 8; i++) data.push(netOf(`${refdes}.D${i}`));
         uarts.push({
@@ -459,10 +467,10 @@ export function generateC(design, { columnsFrom = design } = {}) {
           const pin = DECODER_OUTPUTS[i];
           const key = `${refdes}.${pin}`;
           const expr = term.map(lit).reduce((a, b) => `rt_and(${a}, ${b})`);
-          lines.push(`  rt_contrib(${netOf(key)}, rt_not(${expr}), 0, ${intern(key)}); /* ${key} */`);
+          const slot = driver(netOf(key), intern(key));
+          if (slot) lines.push(`  rt_drive(${slot}, rt_not(${expr})); /* ${key} */`);
         });
         driveBlocks.push(lines.join("\n"));
-        driverCount += DECODER_OUTPUTS.length;
       } else if (rt === "tgate" || rt === "relay") {
         // Switch elements (FR-071g/FR-071h): dynamic net merging (FR-083a) is
         // slow-engine-only for now — refuse rather than misbehave (FR-116).
@@ -527,7 +535,6 @@ export function generateC(design, { columnsFrom = design } = {}) {
       // have — a divergence outside vector mode, where no parity leg would catch
       // it. FR-094f keeps a marked port out of the free-running path entirely.
       clockPorts++;
-      driverCount++;
       return {
         kind: "RT_COL_PORT_CLOCK",
         ref: netOf(`${col.refdes}.${col.pin}`),
@@ -539,7 +546,6 @@ export function generateC(design, { columnsFrom = design } = {}) {
       return { kind: "RT_COL_SWITCH", ref: switchIdx.get(col.refdes), ...id, label: 0 };
     }
     // A port column forces its net directly (FR-115f external stimulus).
-    driverCount++;
     return {
       kind: "RT_COL_PORT",
       ref: netOf(`${col.refdes}.${col.pin}`),
@@ -554,7 +560,32 @@ export function generateC(design, { columnsFrom = design } = {}) {
     pin: cstr(col.pin),
   }));
 
-  driverCount += pulls.length + switches.length + clocks.length + resets.length * 2;
+  // The runtime's own drivers, in its drive_builtins order, then memory data
+  // bits (mem_drive_all) — the tail of the contribution order (M12).
+  for (const p of pulls) p.slot = driver(p.net, p.label, 1);
+  for (const s of switches) s.slot = driver(s.net, s.label);
+  for (const c of clocks) c.slot = driver(c.net, c.label);
+  for (const r of resets) {
+    r.rSlot = driver(r.rNet, r.rLabel);
+    r.rnSlot = driver(r.rnNet, r.rnLabel);
+  }
+  for (const c of incols) {
+    c.slot = c.kind === "RT_COL_PORT" || c.kind === "RT_COL_PORT_CLOCK" ? driver(c.ref, c.label) : null;
+  }
+  for (const m of mems) m.dataSlot = m.data.map((n, b) => driver(n, m.dataLabel[b]));
+
+  // Number the slots: a stable sort by net keeps each net's drivers contiguous
+  // and in contribution order, which resolution relies on to name the first
+  // 0- and 1-driver in a bus-conflict report (FR-108).
+  const order = drivers.map((_, k) => k).sort((a, b) => drivers[a].net - drivers[b].net || a - b);
+  const slotOf = new Array(drivers.length);
+  order.forEach((k, slot) => (slotOf[k] = slot));
+  const slotStart = new Array(nets.length + 1).fill(0);
+  for (const d of drivers) slotStart[d.net + 1]++;
+  for (let n = 0; n < nets.length; n++) slotStart[n + 1] += slotStart[n];
+  // A placeholder token (from driver()) → its slot number, or -1 for none.
+  const sl = (tok) => (tok ? slotOf[Number(tok.slice(2, -1))] : -1);
+  const fillSlots = (text) => text.replace(/@S(\d+)@/g, (_, k) => String(slotOf[Number(k)]));
 
   // --- Emit ---
   const L = [];
@@ -575,36 +606,57 @@ export function generateC(design, { columnsFrom = design } = {}) {
     L.push(`const char *const gen_labels[] = { "" }; /* none */`);
   }
   L.push(`const int gen_label_count = ${labels.length};`);
-  L.push(`const int gen_max_contribs = ${Math.max(driverCount, 1)};`);
+  L.push(``);
+
+  // Driver slots (M12): per slot its net, label and tier, and the CSR table of
+  // each net's slots [gen_net_slot_start[n], gen_net_slot_start[n+1]).
+  const slotRows = (vals) => {
+    const out = [];
+    for (let i = 0; i < vals.length; i += 16) out.push(`  ${vals.slice(i, i + 16).join(", ")},`);
+    return out;
+  };
+  const sorted = order.map((k) => drivers[k]);
+  L.push(`/* --- driver slots (FR-116a, design §6.17 M12) --- */`);
+  L.push(`const int gen_slot_count = ${drivers.length};`);
+  L.push(`const int gen_net_slot_start[] = {`, ...slotRows(slotStart), `};`);
+  if (drivers.length) {
+    L.push(`const int gen_slot_net[] = {`, ...slotRows(sorted.map((d) => d.net)), `};`);
+    L.push(`const int gen_slot_label[] = {`, ...slotRows(sorted.map((d) => d.label)), `};`);
+    L.push(`const unsigned char gen_slot_weak[] = {`, ...slotRows(sorted.map((d) => d.weak)), `};`);
+  } else {
+    L.push(`const int gen_slot_net[] = { -1 }; /* none */`);
+    L.push(`const int gen_slot_label[] = { 0 }; /* none */`);
+    L.push(`const unsigned char gen_slot_weak[] = { 0 }; /* none */`);
+  }
   L.push(``);
 
   L.push(`/* --- built-in instances (behaviors live in runtime.c, FR-116a) --- */`);
   if (pulls.length) {
     L.push(`const rt_pull gen_pulls[] = {`);
-    for (const p of pulls) L.push(`  { ${p.net}, ${p.value}, ${p.label} },`);
+    for (const p of pulls) L.push(`  { ${p.net}, ${p.value}, ${sl(p.slot)} },`);
     L.push(`};`);
   } else {
-    L.push(`const rt_pull gen_pulls[] = { { -1, RT_0, 0 } }; /* none */`);
+    L.push(`const rt_pull gen_pulls[] = { { -1, RT_0, -1 } }; /* none */`);
   }
   L.push(`const int gen_pull_count = ${pulls.length};`);
   L.push(``);
   if (switches.length) {
     L.push(`rt_switch gen_switches[] = {`);
-    for (const s of switches) L.push(`  { ${s.net}, ${s.level}, ${s.label} }, /* ${s.refdes} */`);
+    for (const s of switches) L.push(`  { ${s.net}, ${s.level}, ${sl(s.slot)} }, /* ${s.refdes} */`);
     L.push(`};`);
   } else {
-    L.push(`rt_switch gen_switches[] = { { -1, RT_0, 0 } }; /* none */`);
+    L.push(`rt_switch gen_switches[] = { { -1, RT_0, -1 } }; /* none */`);
   }
   L.push(`const int gen_switch_count = ${switches.length};`);
   L.push(``);
   if (clocks.length) {
     L.push(`rt_clock gen_clocks[] = {`);
     for (const c of clocks) {
-      L.push(`  { ${c.net}, RT_0, ${c.period}, ${c.label} }, /* ${c.refdes} */`);
+      L.push(`  { ${c.net}, RT_0, ${c.period}, ${c.label}, ${sl(c.slot)} }, /* ${c.refdes} */`);
     }
     L.push(`};`);
   } else {
-    L.push(`rt_clock gen_clocks[] = { { -1, RT_0, 0, 0 } }; /* none */`);
+    L.push(`rt_clock gen_clocks[] = { { -1, RT_0, 0, 0, -1 } }; /* none */`);
   }
   L.push(`const int gen_clock_count = ${clocks.length};`);
   L.push(``);
@@ -612,17 +664,17 @@ export function generateC(design, { columnsFrom = design } = {}) {
     L.push(`rt_reset gen_resets[] = {`);
     for (const r of resets) {
       L.push(
-        `  { ${r.rNet}, ${r.rnNet}, ${r.cycles}, 0, ${r.rLabel}, ${r.rnLabel} }, /* ${r.refdes} */`,
+        `  { ${r.rNet}, ${r.rnNet}, ${r.cycles}, 0, ${sl(r.rSlot)}, ${sl(r.rnSlot)} }, /* ${r.refdes} */`,
       );
     }
     L.push(`};`);
   } else {
-    L.push(`rt_reset gen_resets[] = { { -1, -1, 0, 0, 0, 0 } }; /* none */`);
+    L.push(`rt_reset gen_resets[] = { { -1, -1, 0, 0, -1, -1 } }; /* none */`);
   }
   L.push(`const int gen_reset_count = ${resets.length};`);
   L.push(``);
 
-  // Memory devices (FR-114d): per-instance pin-net/label arrays, then the
+  // Memory devices (FR-114d): per-instance pin-net/slot arrays, then the
   // gen_mems table referencing them. A ROM's refdes + content-file path are
   // baked for the runtime's startup load (FR-117b); a persistent RAM's
   // save-file path + load-on-start flag are baked for load/write-back
@@ -630,7 +682,7 @@ export function generateC(design, { columnsFrom = design } = {}) {
   for (const m of mems) {
     L.push(`static const int mem_addr_${m.tag}[] = { ${m.addr.join(", ")} };`);
     L.push(`static const int mem_data_${m.tag}[] = { ${m.data.join(", ")} };`);
-    L.push(`static const int mem_dlbl_${m.tag}[] = { ${m.dataLabel.join(", ")} };`);
+    L.push(`static const int mem_dslot_${m.tag}[] = { ${m.dataSlot.map(sl).join(", ")} };`);
   }
   if (mems.length) {
     L.push(`const rt_mem gen_mems[] = {`);
@@ -638,7 +690,7 @@ export function generateC(design, { columnsFrom = design } = {}) {
       const romFile = m.romFile ? cstr(m.romFile) : "0";
       const ramFile = m.ramFile ? cstr(m.ramFile) : "0";
       L.push(
-        `  { ${m.kind}, ${m.n}, ${m.w}, mem_addr_${m.tag}, mem_data_${m.tag}, mem_dlbl_${m.tag}, ${m.ce}, ${m.oe}, ${m.we}, ${cstr(m.refdes)}, ${romFile}, ${ramFile}, ${m.ramLoad} }, /* ${m.tag} */`,
+        `  { ${m.kind}, ${m.n}, ${m.w}, mem_addr_${m.tag}, mem_data_${m.tag}, mem_dslot_${m.tag}, ${m.ce}, ${m.oe}, ${m.we}, ${cstr(m.refdes)}, ${romFile}, ${ramFile}, ${m.ramLoad} }, /* ${m.tag} */`,
       );
     }
     L.push(`};`);
@@ -683,11 +735,11 @@ export function generateC(design, { columnsFrom = design } = {}) {
   if (incols.length) {
     L.push(`const rt_incol gen_incols[] = {`);
     for (const c of incols) {
-      L.push(`  { ${c.kind}, ${c.ref}, ${c.name}, ${c.refdes}, ${c.pin}, ${c.label}, ${c.alow} },`);
+      L.push(`  { ${c.kind}, ${c.ref}, ${c.name}, ${c.refdes}, ${c.pin}, ${sl(c.slot)}, ${c.alow} },`);
     }
     L.push(`};`);
   } else {
-    L.push(`const rt_incol gen_incols[] = { { RT_COL_SWITCH, -1, "", "", "", 0, 0 } }; /* none */`);
+    L.push(`const rt_incol gen_incols[] = { { RT_COL_SWITCH, -1, "", "", "", -1, 0 } }; /* none */`);
   }
   L.push(`const int gen_incol_count = ${incols.length};`);
   L.push(``);
@@ -801,7 +853,7 @@ export function generateC(design, { columnsFrom = design } = {}) {
   L.push(`/* --- strong drivers, one fragment per instance (FR-081) --- */`);
   L.push(`void gen_drive(const rt_val *curr) {`);
   L.push(`  (void)curr;`);
-  for (const b of driveBlocks) L.push(b);
+  for (const b of driveBlocks) L.push(fillSlots(b));
   L.push(`}`);
   L.push(``);
 

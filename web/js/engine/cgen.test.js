@@ -88,14 +88,14 @@ test("generateC: inverter emits nets, tables, columns, and lowered logic", () =>
   assert.match(code, /rt_switch gen_switches\[\] = \{\n  \{ \d+, RT_0, \d+ \}, \/\* A-1 \*\//);
   // Input column: baked (refdes,pin) identity alongside the label (M2), then the
   // active-low flag (M9, FR-115p) — 0 here, the switch's label being its refdes.
-  assert.match(code, /\{ RT_COL_SWITCH, 0, "A-1", "A-1", "OUT", 0, 0 \}/);
+  assert.match(code, /\{ RT_COL_SWITCH, 0, "A-1", "A-1", "OUT", -1, 0 \}/);
   assert.match(code, /const int gen_incol_count = 1;/);
   // Output column carries its (refdes,pin) identity too.
   assert.match(code, /\{ \d+, "A-2", "A-2", "IN" \}/);
   assert.match(code, /const int gen_outcol_count = 1;/);
-  // Lowered Y = /A: a negated literal and a contribution for U1.Y.
+  // Lowered Y = /A: a negated literal and a driver slot for U1.Y.
   assert.match(code, /rt_not\(curr\[\d+\]\)/);
-  assert.match(code, /rt_contrib\(\d+, v, 0, \d+\); *\n *\}/);
+  assert.match(code, /rt_drive\(\d+, v\); *\n *\}/);
   // No clocks: combinational.
   assert.match(code, /const int gen_clock_count = 0;/);
 });
@@ -158,8 +158,8 @@ test("generateC: bakes the active-low stamp as rt_incol.active_low (FR-115p, M9)
   connect(d, ["A-3", "P1"], ["U2", "A"]);
 
   const { code } = generateC(d);
-  assert.match(code, /\{ RT_COL_SWITCH, \d+, "\/RESET", "A-1", "OUT", 0, 1 \}/);
-  assert.match(code, /\{ RT_COL_SWITCH, \d+, "DATA", "A-2", "OUT", 0, 0 \}/);
+  assert.match(code, /\{ RT_COL_SWITCH, \d+, "\/RESET", "A-1", "OUT", -1, 1 \}/);
+  assert.match(code, /\{ RT_COL_SWITCH, \d+, "DATA", "A-2", "OUT", -1, 0 \}/);
   // Every bit of the port is flagged, though each per-bit label ("CS/0") is not
   // itself active-low — the stamp comes from the instance's base label, which is
   // exactly why the flag is baked instead of recovered from the label (M9).
@@ -200,8 +200,8 @@ test("generateC: behavior-less type drives U and warns once (FR-080)", () => {
   const { code, warnings } = generateC(d);
   assert.equal(warnings.filter((w) => w.includes("no behavior")).length, 1);
   // Each unwired output drives its own single-node net (FR-081a), not net -1.
-  assert.match(code, /rt_contrib\(\d+, RT_U, 0, \d+\); \/\* U1\.Y \*\//);
-  assert.match(code, /rt_contrib\(\d+, RT_U, 0, \d+\); \/\* U2\.Y \*\//);
+  assert.match(code, /rt_drive\(\d+, RT_U\); \/\* U1\.Y \*\//);
+  assert.match(code, /rt_drive\(\d+, RT_U\); \/\* U2\.Y \*\//);
 });
 
 test("generateC: a GAL output pin with no equation drives U and warns once (FR-080)", () => {
@@ -220,7 +220,7 @@ test("generateC: a GAL output pin with no equation drives U and warns once (FR-0
   place(d, "U1", PARTIAL);
   place(d, "U2", PARTIAL);
   const { code, warnings } = generateC(d);
-  assert.match(code, /rt_contrib\(\d+, RT_U, 0, \d+\); \/\* U1\.Z: no equation \(FR-080\) \*\//);
+  assert.match(code, /rt_drive\(\d+, RT_U\); \/\* U1\.Z: no equation \(FR-080\) \*\//);
   assert.doesNotMatch(code, /U1\.Y: no equation/);
   assert.equal(warnings.filter((w) => w.includes("no equation for Z")).length, 1);
 });
@@ -231,10 +231,10 @@ test("generateC: pulls, unwired probes, and empty tables", () => {
   place(d, "A-2", builtin("indicator"));
   connect(d, ["A-1", "OUT"], ["A-2", "IN"]);
   const { code } = generateC(d);
-  assert.match(code, /const rt_pull gen_pulls\[\] = \{\n  \{ 0, RT_1, 0 \},/);
+  assert.match(code, /const rt_pull gen_pulls\[\] = \{\n  \{ 0, RT_1, \d+ \},/);
   assert.match(code, /const int gen_pull_count = 1;/);
   // No switches: dummy entry, count 0.
-  assert.match(code, /rt_switch gen_switches\[\] = \{ \{ -1, RT_0, 0 \} \}; \/\* none \*\//);
+  assert.match(code, /rt_switch gen_switches\[\] = \{ \{ -1, RT_0, -1 \} \}; \/\* none \*\//);
   assert.match(code, /const int gen_switch_count = 0;/);
 });
 
@@ -369,7 +369,7 @@ test("generateC: ROM device bakes refdes + content-file path, not bytes (M5, FR-
   const d = mkDesign();
   place(d, "U1", ROM4x2);
   const { code } = generateC(d);
-  assert.match(code, /\{ RT_MEM_ROM, 2, 2, mem_addr_U1, mem_data_U1, mem_dlbl_U1, [^,]+, [^,]+, -1, "U1", "r\.hex", 0, 0 \}/);
+  assert.match(code, /\{ RT_MEM_ROM, 2, 2, mem_addr_U1, mem_data_U1, mem_dslot_U1, [^,]+, [^,]+, -1, "U1", "r\.hex", 0, 0 \}/);
   assert.doesNotMatch(code, /mem_rom_U1/);
   assert.match(code, /const int gen_mem_count = 1;/);
 });
@@ -390,7 +390,7 @@ test("generateC: RAM device emits a gen_mems entry with a WE/ net and no ROM (M3
   const d = mkDesign();
   place(d, "U1", RAM);
   const { code } = generateC(d);
-  assert.match(code, /\{ RT_MEM_RAM, 2, 1, mem_addr_U1, mem_data_U1, mem_dlbl_U1, [^,]+, [^,]+, [^,]+, "U1", 0, 0, 0 \}/);
+  assert.match(code, /\{ RT_MEM_RAM, 2, 1, mem_addr_U1, mem_data_U1, mem_dslot_U1, [^,]+, [^,]+, [^,]+, "U1", 0, 0, 0 \}/);
   assert.doesNotMatch(code, /mem_rom_U1/);
 });
 
@@ -534,11 +534,44 @@ test("generateC: behavior parse error propagates as a throw", () => {
   assert.throws(() => generateC(d), /BADX: behavior/);
 });
 
+// Driver slots (design §6.17 M12): a net's slots are contiguous and in
+// contribution order — generated outputs first, then the runtime's built-ins —
+// which is what lets resolution name the first 0- and 1-driver in a conflict.
+test("generateC: a shared net's driver slots are contiguous, in contribution order (M12)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("pullup"));
+  place(d, "U1", TBUF);
+  place(d, "U2", TBUF);
+  place(d, "A-2", builtin("indicator"));
+  connect(d, ["A-1", "OUT"], ["A-2", "IN"]);
+  connect(d, ["U1", "Y"], ["A-2", "IN"]);
+  connect(d, ["U2", "Y"], ["A-2", "IN"]);
+  const { code } = generateC(d);
+
+  const arr = (name) =>
+    new RegExp(`${name}\\[\\] = \\{([^}]*)\\}`).exec(code)[1].split(",").map((x) => x.trim()).filter(Boolean);
+  const labels = arr("gen_labels").map((x) => JSON.parse(x));
+  const start = arr("gen_net_slot_start").map(Number);
+  const slotNet = arr("gen_slot_net").map(Number);
+  const slotLabel = arr("gen_slot_label").map((x) => labels[Number(x)]);
+  const slotWeak = arr("gen_slot_weak").map(Number);
+
+  const n = slotNet[slotLabel.indexOf("U1.Y")];
+  assert.deepEqual(slotLabel.slice(start[n], start[n + 1]), ["U1.Y", "U2.Y", "A-1.OUT"]);
+  assert.deepEqual(slotWeak.slice(start[n], start[n + 1]), [0, 0, 1]);
+  assert.ok(slotNet.slice(start[n], start[n + 1]).every((x) => x === n));
+  assert.equal(start.at(-1), Number(/gen_slot_count = (\d+)/.exec(code)[1]));
+  // The generated drive refers to the slots, and the pull's table entry too.
+  const u1 = slotLabel.indexOf("U1.Y");
+  assert.match(code, new RegExp(`rt_drive\\(${u1}, v\\);`));
+  assert.match(code, new RegExp(`\\{ ${n}, RT_1, ${start[n] + 2} \\},`));
+});
+
 // The labeled decoder (FR-071k) is generated, not refused: it lowers into
 // gen_drive from the same DECODER_TERMS literals the slow engine evaluates, so
 // the two engines stay in step (FR-107). Its display strings are editor-only and
 // appear nowhere in the emitted C.
-test("a decoder lowers to eight rt_contrib drives in gen_drive (FR-071k)", () => {
+test("a decoder lowers to eight rt_drive slots in gen_drive (FR-071k)", () => {
   const d = mkDesign();
   place(d, "A-1", builtin("decoder"), { decodeLabels: ["FETCH", "", "", "", "", "", "", ""] });
   place(d, "A-2", builtin("switch"));
@@ -553,9 +586,9 @@ test("a decoder lowers to eight rt_contrib drives in gen_drive (FR-071k)", () =>
   }
   // Five literals per term: E and /E plus the three address bits.
   assert.equal((code.match(/rt_and\(/g) ?? []).length >= 8 * 4, true);
-  // gen_max_contribs must cover the decoder's eight drivers plus the switch's.
-  const max = Number(/gen_max_contribs = (\d+)/.exec(code)[1]);
-  assert.ok(max >= 9, `gen_max_contribs ${max} covers 8 decoder outputs + 1 switch`);
+  // One driver slot per decoder output plus the switch's.
+  const slots = Number(/gen_slot_count = (\d+)/.exec(code)[1]);
+  assert.equal(slots, 9, `gen_slot_count ${slots}: 8 decoder outputs + 1 switch`);
   // The display strings are an editor concern only.
   assert.ok(!code.includes("FETCH"));
 });

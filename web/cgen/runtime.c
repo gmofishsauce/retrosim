@@ -23,7 +23,7 @@
  * normalization rt_norm are static inline in runtime.h. */
 
 /* ------------------------------------------------------------------ *
- *  Net state and contributions
+ *  Net state and driver slots
  * ------------------------------------------------------------------ */
 
 /* Double-buffered net values (FR-078): every evaluate reads `curr_buf`
@@ -36,19 +36,16 @@ static rt_val *next_buf;
  * and re-armed when the conflict clears (FR-082; sim.js conflictedNets). */
 static unsigned char *conflicted;
 
-/* One step's driver contributions, bucketed per net as singly-linked
- * lists threaded through `link` (head[net] → first contribution index,
- * -1 terminates). Capacity gen_max_contribs is a generate-time bound, so
- * there is no reallocation in the step loop. */
-struct contrib {
-  rt_val v;           /* RT_0, RT_1, or RT_U (never RT_Z; see rt_contrib) */
-  unsigned char weak; /* pull-up/pull-down tier (FR-083) */
-  int label;          /* gen_labels index, for conflict reports */
-  int link;           /* next contribution on the same net, or -1 */
-};
-static struct contrib *contribs;
-static int *head;    /* per net */
-static int ncontrib; /* used entries in contribs[] this step */
+/* Each driver's value for the step being computed (gen_slot_count slots,
+ * design §6.17 M12), RT_Z when not driving. Every driver rewrites its own
+ * slot every step, so there is nothing to clear between steps. */
+rt_val *rt_slot_val;
+
+/* drive_slot is rt_drive for the runtime's own drivers, whose slot is -1
+ * when the pin is unwired. */
+static void drive_slot(int slot, rt_val v) {
+  if (slot >= 0) rt_slot_val[slot] = v;
+}
 
 static void *xalloc(size_t n) {
   void *p = malloc(n ? n : 1); /* degenerate (empty) designs: never malloc(0) */
@@ -83,6 +80,7 @@ static void reset_state(void) {
   memset(curr_buf, RT_Z, (size_t)gen_net_count);
   memset(next_buf, RT_Z, (size_t)gen_net_count);
   memset(conflicted, 0, (size_t)gen_net_count);
+  memset(rt_slot_val, RT_Z, (size_t)gen_slot_count);
   gen_init();
   mem_reset();
   uart_reset();
@@ -92,8 +90,7 @@ void rt_init(void) {
   curr_buf = xalloc((size_t)gen_net_count);
   next_buf = xalloc((size_t)gen_net_count);
   conflicted = xalloc((size_t)gen_net_count);
-  contribs = xalloc((size_t)gen_max_contribs * sizeof contribs[0]);
-  head = xalloc((size_t)gen_net_count * sizeof head[0]);
+  rt_slot_val = xalloc((size_t)gen_slot_count);
   port_stim = xalloc((size_t)(gen_incol_count > 0 ? gen_incol_count : 1));
   memset(port_stim, RT_Z, (size_t)(gen_incol_count > 0 ? gen_incol_count : 1));
   mem_alloc();
@@ -104,48 +101,39 @@ void rt_init(void) {
 
 const rt_val *rt_curr(void) { return curr_buf; }
 
-void rt_contrib(int net, rt_val v, int weak, int label) {
-  if (net < 0 || v == RT_Z) return; /* disabled/unwired: not driving (FR-081) */
-  if (ncontrib >= gen_max_contribs) {
-    /* Cannot happen for correctly generated code: gen_max_contribs bounds
-     * the total driver count. A trip here is a generator bug. */
-    fprintf(stderr, "internal error: contribution buffer overflow\n");
-    exit(2);
-  }
-  struct contrib *c = &contribs[ncontrib];
-  c->v = rt_norm(v);
-  c->weak = (unsigned char)(weak != 0);
-  c->label = label;
-  c->link = head[net];
-  head[net] = ncontrib++;
-}
-
 /* ------------------------------------------------------------------ *
  *  Net resolution (FR-081–FR-083, FR-108; sim.js resolveNet)
  * ------------------------------------------------------------------ */
 
-/* resolve_net computes one net's next value from its contributions.
- * Enabled strong drivers win: weak (pull) contributions decide only when
- * there is no strong contribution at all — a strong U still suppresses
- * every weak driver (FR-083). Within the deciding tier: a 0-vs-1
- * disagreement is a bus conflict → U, reported to stderr on onset naming
- * two of the disagreeing drivers (FR-082/FR-108/FR-118); else any U → U;
- * else the agreed value. No contribution at all → Z. */
+/* resolve_net computes one net's next value from its driver slots.
+ * Enabled strong drivers win: weak (pull) drivers decide only when every
+ * strong driver is Z — a strong U still suppresses every weak driver
+ * (FR-083). Within the deciding tier: a 0-vs-1 disagreement is a bus
+ * conflict → U, reported to stderr on onset naming the first 0-driver and
+ * first 1-driver in contribution order (FR-082/FR-108/FR-118); else any
+ * U → U; else the agreed value. No driver driving at all → Z. */
 static rt_val resolve_net(int n) {
+  int lo = gen_net_slot_start[n], hi = gen_net_slot_start[n + 1];
+  if (hi - lo == 1) {
+    /* A lone driver cannot conflict, and a lone pull decides alone. */
+    conflicted[n] = 0;
+    return rt_slot_val[lo];
+  }
   /* One pass, tallying both tiers; then judge the deciding tier. */
   int s_zero = -1, s_one = -1, s_anyU = 0, s_count = 0;
   int w_zero = -1, w_one = -1, w_anyU = 0, w_count = 0;
-  for (int i = head[n]; i != -1; i = contribs[i].link) {
-    const struct contrib *c = &contribs[i];
-    if (c->weak) {
+  for (int i = lo; i < hi; i++) {
+    rt_val v = rt_slot_val[i];
+    if (v == RT_Z) continue; /* not driving (FR-081) */
+    if (gen_slot_weak[i]) {
       w_count++;
-      if (c->v == RT_0) w_zero = c->label;
-      else if (c->v == RT_1) w_one = c->label;
+      if (v == RT_0) { if (w_zero < 0) w_zero = gen_slot_label[i]; }
+      else if (v == RT_1) { if (w_one < 0) w_one = gen_slot_label[i]; }
       else w_anyU = 1;
     } else {
       s_count++;
-      if (c->v == RT_0) s_zero = c->label;
-      else if (c->v == RT_1) s_one = c->label;
+      if (v == RT_0) { if (s_zero < 0) s_zero = gen_slot_label[i]; }
+      else if (v == RT_1) { if (s_one < 0) s_one = gen_slot_label[i]; }
       else s_anyU = 1;
     }
   }
@@ -195,7 +183,7 @@ static int clock_period_eff(void) {
   return gen_clock_count == 1 ? gen_clocks[0].period_ns : 100;
 }
 
-/* drive_builtins deposits the runtime-owned drivers each step: weak pulls
+/* drive_builtins writes the runtime-owned drivers' slots each step: weak pulls
  * (FR-083), input switches at their current level (FR-071c/FR-087a —
  * strong, never U or Z), clock generators, and power-on resets. In vector
  * mode clocks drive their scripted level and resets their released flag
@@ -207,36 +195,35 @@ static int clock_period_eff(void) {
 static void drive_builtins(void) {
   for (int i = 0; i < gen_pull_count; i++) {
     const rt_pull *p = &gen_pulls[i];
-    rt_contrib(p->net, p->value, 1, p->label);
+    drive_slot(p->slot, p->value);
   }
   for (int i = 0; i < gen_switch_count; i++) {
     const rt_switch *s = &gen_switches[i];
-    rt_contrib(s->net, s->level, 0, s->label);
+    drive_slot(s->slot, s->level);
   }
   for (int i = 0; i < gen_clock_count; i++) {
     const rt_clock *c = &gen_clocks[i];
     if (freerun) {
       int period = c->period_ns < 2 ? 2 : c->period_ns;
-      rt_contrib(c->net, sim_time % period < period / 2 ? RT_0 : RT_1, 0,
-                 c->label);
+      drive_slot(c->slot, sim_time % period < period / 2 ? RT_0 : RT_1);
     } else {
-      rt_contrib(c->net, c->level, 0, c->label);
+      drive_slot(c->slot, c->level);
     }
   }
   for (int i = 0; i < gen_reset_count; i++) {
     const rt_reset *r = &gen_resets[i];
     int active = freerun ? sim_time < (long)r->cycles * clock_period_eff()
                          : !r->released;
-    rt_contrib(r->r_net, active ? RT_1 : RT_0, 0, r->r_label);
-    rt_contrib(r->rn_net, active ? RT_0 : RT_1, 0, r->rn_label);
+    drive_slot(r->r_slot, active ? RT_1 : RT_0);
+    drive_slot(r->rn_slot, active ? RT_0 : RT_1);
   }
   /* A clock-source port (FR-094f) forces its net exactly as an ordinary port
    * column does — the only difference is upstream, in how its symbol is read
-   * and pulsed. */
+   * and pulsed. An unarmed column's stimulus is RT_Z: not driving. */
   for (int i = 0; i < gen_incol_count; i++) {
     rt_col_kind k = gen_incols[i].kind;
-    if ((k == RT_COL_PORT || k == RT_COL_PORT_CLOCK) && port_stim[i] != RT_Z) {
-      rt_contrib(gen_incols[i].ref, port_stim[i], 0, gen_incols[i].label);
+    if (k == RT_COL_PORT || k == RT_COL_PORT_CLOCK) {
+      drive_slot(gen_incols[i].slot, port_stim[i]);
     }
   }
 }
@@ -611,10 +598,10 @@ static void mem_save_all(void) {
   }
 }
 
-/* mem_drive_all deposits each memory's data-bus drive (FR-114d; memory.js
- * dataDrive): the CE//OE//WE/ gating deciding Z (drive nothing), the
- * addressed word (unwritten cells read U), or pessimistic U. Called in the
- * contribution phase. */
+/* mem_drive_all writes each memory's data-bus drive into its data slots
+ * (FR-114d; memory.js dataDrive): the CE//OE//WE/ gating deciding Z (drive
+ * nothing), the addressed word (unwritten cells read U), or pessimistic U.
+ * Called in the drive phase. */
 static void mem_drive_all(const rt_val *curr) {
   for (int i = 0; i < gen_mem_count; i++) {
     const rt_mem *m = &gen_mems[i];
@@ -639,11 +626,10 @@ static void mem_drive_all(const rt_val *curr) {
       drive_u = 1; /* OE//WE/ uncertain */
     }
     if (word) {
-      for (int b = 0; b < m->width; b++)
-        rt_contrib(m->data[b], word[b], 0, m->data_label[b]);
-    } else if (drive_u) {
-      for (int b = 0; b < m->width; b++)
-        rt_contrib(m->data[b], RT_U, 0, m->data_label[b]);
+      for (int b = 0; b < m->width; b++) drive_slot(m->data_slot[b], word[b]); /* a Z cell drives nothing */
+    } else {
+      rt_val v = drive_u ? RT_U : RT_Z;
+      for (int b = 0; b < m->width; b++) drive_slot(m->data_slot[b], v);
     }
   }
 }
@@ -662,14 +648,12 @@ static int step_fixed;
 
 int rt_step(void) {
   /* (1) Latch registered (.R) and memory (RAM WE/) state from the previous
-   * step's values, before any contribution is evaluated (FR-079/FR-114d). */
+   * step's values, before any driver is evaluated (FR-079/FR-114d). */
   int latched = gen_latch(curr_buf);
   latched |= mem_write_all(curr_buf);
   latched |= uart_step(curr_buf); /* magic UART latch + emit on CLK 0→1 (FR-122b) */
 
-  /* (2) Gather every driver's contribution, all computed from curr. */
-  ncontrib = 0;
-  memset(head, -1, (size_t)gen_net_count * sizeof head[0]);
+  /* (2) Every driver writes its slot, all computed from curr. */
   gen_drive(curr_buf);
   drive_builtins();
   mem_drive_all(curr_buf);

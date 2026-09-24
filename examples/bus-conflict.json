@@ -1,0 +1,1153 @@
+{
+  "formatVersion": 3,
+  "name": "bus-conflict",
+  "components": [
+    {
+      "refdes": "A-1",
+      "type": "type-clock",
+      "x": 0,
+      "y": 14,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-clock",
+        "name": "clock",
+        "builtin": true,
+        "title": "clock",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"3\" y=\"11\" width=\"30\" height=\"14\" fill=\"#fff\" stroke=\"#333\"/><text x=\"18\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"10\" fill=\"#000\">CLK</text></svg>",
+        "renderType": "clock",
+        "width": 3,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ],
+        "properties": [
+          {
+            "name": "period",
+            "unit": "ns",
+            "default": 100,
+            "min": 2
+          },
+          {
+            "name": "speed",
+            "unit": "Hz",
+            "default": 1,
+            "min": 0.001
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-2",
+      "type": "type-reset",
+      "x": 0,
+      "y": 28,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-reset",
+        "name": "reset",
+        "builtin": true,
+        "title": "power-on reset",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><rect x=\"3\" y=\"11\" width=\"30\" height=\"14\" fill=\"#fff\" stroke=\"#333\"/><text x=\"18\" y=\"18\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"10\" fill=\"#000\">RST</text></svg>",
+        "renderType": "reset",
+        "width": 3,
+        "height": 3,
+        "pins": [
+          {
+            "name": "R",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          },
+          {
+            "name": "/R",
+            "side": "right",
+            "position": 2,
+            "direction": "out"
+          }
+        ],
+        "properties": [
+          {
+            "name": "cycles",
+            "unit": "cycles",
+            "default": 3,
+            "min": 0
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-3",
+      "type": "type-pullup",
+      "x": 0,
+      "y": 42,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-pullup",
+        "name": "pullup",
+        "builtin": true,
+        "title": "pull up",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"none\" stroke=\"#000\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"8,13 18,6 28,13\"/><polyline points=\"8,20 18,13 28,20\"/><line x1=\"18\" y1=\"22\" x2=\"18\" y2=\"32\"/></svg>",
+        "renderType": "pullup",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "bottom",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-4",
+      "type": "type-pulldown",
+      "x": 0,
+      "y": 56,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-pulldown",
+        "name": "pulldown",
+        "builtin": true,
+        "title": "pull down",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"none\" stroke=\"#000\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"18\" y1=\"4\" x2=\"18\" y2=\"28\"/><line x1=\"8\" y1=\"28\" x2=\"28\" y2=\"28\"/></svg>",
+        "renderType": "pulldown",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "top",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "U1",
+      "type": "type-74163",
+      "x": 0,
+      "y": 70,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-74163",
+        "name": "74163",
+        "renderType": "unit",
+        "width": 6,
+        "height": 12,
+        "pins": [
+          {
+            "name": "A",
+            "side": "left",
+            "position": 2,
+            "direction": "in",
+            "number": 3,
+            "desc": "parallel load input bit 0 (LSB)"
+          },
+          {
+            "name": "B",
+            "side": "left",
+            "position": 3,
+            "direction": "in",
+            "number": 4,
+            "desc": "parallel load input bit 1"
+          },
+          {
+            "name": "C",
+            "side": "left",
+            "position": 4,
+            "direction": "in",
+            "number": 5,
+            "desc": "parallel load input bit 2"
+          },
+          {
+            "name": "D",
+            "side": "left",
+            "position": 5,
+            "direction": "in",
+            "number": 6,
+            "desc": "parallel load input bit 3 (MSB)"
+          },
+          {
+            "name": "/CLR",
+            "side": "left",
+            "position": 7,
+            "direction": "in",
+            "number": 1,
+            "desc": "active-low synchronous clear"
+          },
+          {
+            "name": "/LOAD",
+            "side": "left",
+            "position": 8,
+            "direction": "in",
+            "number": 9,
+            "desc": "active-low synchronous parallel load"
+          },
+          {
+            "name": "ENP",
+            "side": "left",
+            "position": 10,
+            "direction": "in",
+            "number": 7,
+            "desc": "count enable P"
+          },
+          {
+            "name": "ENT",
+            "side": "left",
+            "position": 11,
+            "direction": "in",
+            "number": 10,
+            "desc": "count enable T (also gates RCO)"
+          },
+          {
+            "name": "QA",
+            "side": "right",
+            "position": 2,
+            "direction": "out",
+            "number": 14,
+            "desc": "count output bit 0 (LSB)"
+          },
+          {
+            "name": "QB",
+            "side": "right",
+            "position": 3,
+            "direction": "out",
+            "number": 13,
+            "desc": "count output bit 1"
+          },
+          {
+            "name": "QC",
+            "side": "right",
+            "position": 4,
+            "direction": "out",
+            "number": 12,
+            "desc": "count output bit 2"
+          },
+          {
+            "name": "QD",
+            "side": "right",
+            "position": 5,
+            "direction": "out",
+            "number": 11,
+            "desc": "count output bit 3 (MSB)"
+          },
+          {
+            "name": "RCO",
+            "side": "right",
+            "position": 7,
+            "direction": "out",
+            "number": 15,
+            "desc": "ripple-carry out (count=15 and ENT high)"
+          },
+          {
+            "name": "CLK",
+            "side": "top",
+            "position": 2,
+            "direction": "in",
+            "number": 2,
+            "desc": "clock input, rising-edge triggered"
+          }
+        ],
+        "pinGroups": [
+          {
+            "name": "DATA",
+            "pins": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ]
+          },
+          {
+            "name": "Q",
+            "pins": [
+              "QA",
+              "QB",
+              "QC",
+              "QD"
+            ]
+          }
+        ],
+        "delays": {
+          "th_d": 2,
+          "tpd_clk_q": 6,
+          "tpd_clk_rco": 10,
+          "tpd_ent_rco": 4,
+          "tsu_d": 5
+        },
+        "behavior": "; 74163 (SN74F163A) — synchronous presettable 4-bit binary counter with\n; synchronous clear. Derived from the description (datasheet p.1), the\n; logic diagram (p.3), and the state diagram (p.2); this datasheet has no\n; numbered function table. Priority at each rising clock edge:\n; clear (pin /CLR LOW) > load (pin /LOAD LOW) > count (ENP and ENT both\n; HIGH) > hold.\n;\n; SEQUENTIAL-PART CLOCK CONVENTION (74574.yaml): GALasm's .R registered\n; outputs are clocked by the GAL22V10's dedicated pin-1 clock\n; (galasmManual.txt section 3.4). That pin-1 clock role is played by the\n; part's named clock pin — here CLK, rising-edge triggered. CLK therefore\n; does NOT appear as a term in any equation below; the .R suffix implies it.\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (pin /CLR is GAL signal CLR, so '/CLR' below means \"pin /CLR is\n; LOW\"). Each Qn has four kinds of product term, every one carrying CLR\n; (pin /CLR HIGH, i.e. not clearing):\n;   load:  /LOAD * <data>                     — synchronous preset\n;   count: LOAD * ENP * ENT * <toggle/carry>  — binary up-count\n;   hold:  LOAD * /ENP * Qn  and  LOAD * /ENT * Qn — count disabled\n; The synchronous clear needs no terms of its own: with pin /CLR LOW no\n; term is true, so every register loads 0 at the next rising edge,\n; regardless of /LOAD, ENP, and ENT (p.1: clear overrides load and count).\n;\n; QA (LSB) toggles whenever counting; each higher bit toggles when all\n; lower bits are 1 (the look-ahead carry), otherwise holds while counting.\nQA.R =   CLR * /LOAD * A\n       + CLR *  LOAD * ENP * ENT * /QA\n       + CLR *  LOAD * /ENP * QA\n       + CLR *  LOAD * /ENT * QA\n\nQB.R =   CLR * /LOAD * B\n       + CLR *  LOAD * ENP * ENT *  QA * /QB\n       + CLR *  LOAD * ENP * ENT * /QA *  QB\n       + CLR *  LOAD * /ENP * QB\n       + CLR *  LOAD * /ENT * QB\n\nQC.R =   CLR * /LOAD * C\n       + CLR *  LOAD * ENP * ENT *  QA *  QB * /QC\n       + CLR *  LOAD * ENP * ENT * /QA *  QC\n       + CLR *  LOAD * ENP * ENT * /QB *  QC\n       + CLR *  LOAD * /ENP * QC\n       + CLR *  LOAD * /ENT * QC\n\nQD.R =   CLR * /LOAD * D\n       + CLR *  LOAD * ENP * ENT *  QA *  QB *  QC * /QD\n       + CLR *  LOAD * ENP * ENT * /QA *  QD\n       + CLR *  LOAD * ENP * ENT * /QB *  QD\n       + CLR *  LOAD * ENP * ENT * /QC *  QD\n       + CLR *  LOAD * /ENP * QD\n       + CLR *  LOAD * /ENT * QD\n\n; Ripple-carry output (combinational): HIGH while the count is 15 and ENT\n; is HIGH — ENT is fed forward to enable RCO; ENP does not affect RCO\n; (p.1). Counting spikes can occur on RCO (p.1); this unit-delay model\n; does not reproduce them.\nRCO = ENT * QA * QB * QC * QD\n",
+        "clock": "CLK",
+        "description": "Synchronous 4-bit binary counter, synchronous clear",
+        "datasheet": {
+          "vendor": "Texas Instruments",
+          "title": "SN74F163A Synchronous 4-Bit Binary Counter (SDFS088A)",
+          "rev": "March 1987, revised August 2001",
+          "url": "https://www.ti.com/lit/ds/symlink/sn74f163a.pdf"
+        },
+        "physical": {
+          "package": "DIP-16",
+          "pincount": 16,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 16
+            },
+            {
+              "name": "GND",
+              "number": 8
+            }
+          ]
+        }
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-5",
+      "type": "type-switch",
+      "x": 0,
+      "y": 84,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "0"
+    },
+    {
+      "refdes": "A-6",
+      "type": "type-switch",
+      "x": 0,
+      "y": 98,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-switch",
+        "name": "switch",
+        "builtin": true,
+        "title": "input switch",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"15\" cy=\"18\" r=\"12\" fill=\"#fff\" stroke=\"#333\"/><text x=\"15\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"14\" fill=\"#000\">1</text><line x1=\"27\" y1=\"18\" x2=\"31\" y2=\"18\" stroke=\"#333\" stroke-width=\"2\"/><path d=\"M29 14 L35 18 L29 22 Z\" fill=\"#333\"/></svg>",
+        "renderType": "switch",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "right",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {},
+      "switchState": "1"
+    },
+    {
+      "refdes": "U2",
+      "type": "type-74125",
+      "x": 0,
+      "y": 112,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-74125",
+        "name": "74125",
+        "renderType": "unit",
+        "width": 6,
+        "height": 13,
+        "pins": [
+          {
+            "name": "1A",
+            "side": "left",
+            "position": 2,
+            "direction": "in",
+            "number": 2,
+            "desc": "buffer 1 data input"
+          },
+          {
+            "name": "/1OE",
+            "side": "left",
+            "position": 3,
+            "direction": "in",
+            "number": 1,
+            "desc": "buffer 1 active-low output enable"
+          },
+          {
+            "name": "2A",
+            "side": "left",
+            "position": 5,
+            "direction": "in",
+            "number": 5,
+            "desc": "buffer 2 data input"
+          },
+          {
+            "name": "/2OE",
+            "side": "left",
+            "position": 6,
+            "direction": "in",
+            "number": 4,
+            "desc": "buffer 2 active-low output enable"
+          },
+          {
+            "name": "3A",
+            "side": "left",
+            "position": 8,
+            "direction": "in",
+            "number": 9,
+            "desc": "buffer 3 data input"
+          },
+          {
+            "name": "/3OE",
+            "side": "left",
+            "position": 9,
+            "direction": "in",
+            "number": 10,
+            "desc": "buffer 3 active-low output enable"
+          },
+          {
+            "name": "4A",
+            "side": "left",
+            "position": 11,
+            "direction": "in",
+            "number": 12,
+            "desc": "buffer 4 data input"
+          },
+          {
+            "name": "/4OE",
+            "side": "left",
+            "position": 12,
+            "direction": "in",
+            "number": 13,
+            "desc": "buffer 4 active-low output enable"
+          },
+          {
+            "name": "1Y",
+            "side": "right",
+            "position": 2,
+            "direction": "tristate",
+            "number": 3,
+            "desc": "buffer 1 3-state output"
+          },
+          {
+            "name": "2Y",
+            "side": "right",
+            "position": 5,
+            "direction": "tristate",
+            "number": 6,
+            "desc": "buffer 2 3-state output"
+          },
+          {
+            "name": "3Y",
+            "side": "right",
+            "position": 8,
+            "direction": "tristate",
+            "number": 8,
+            "desc": "buffer 3 3-state output"
+          },
+          {
+            "name": "4Y",
+            "side": "right",
+            "position": 11,
+            "direction": "tristate",
+            "number": 11,
+            "desc": "buffer 4 3-state output"
+          }
+        ],
+        "delays": {
+          "tdis": 15,
+          "ten": 15,
+          "tpd": 11
+        },
+        "behavior": "; 74125 — quad non-inverting 3-state buffer with four independent,\n; individually active-low output enables. Derived from the function table\n; (datasheet Table 3): with /nOE LOW the output nY follows data input nA;\n; with /nOE HIGH the output is in the high-impedance OFF-state.\n;\n; The four buffers are independent (each has its own enable), so each gets\n; its own 3-state pair. Bidirectional/3-state pins use GALasm's tristate\n; construct (galasmManual.txt section 3.4, established on the 74245): a .T\n; output equation fed from the data input, plus a single-term .E enable.\n;\n; Equations are physical-level GALasm: '/' is the complement operator and\n; signal names are this file's pin names with any active-low '/' prefix\n; dropped (pin /1OE is GAL signal 1OE, so '/1OE' below means \"pin /1OE is\n; LOW\"). The pin drives only while its .E term is true; when /nOE is HIGH\n; the .E term is false and nY is high-impedance.\n1Y.T = 1A\n1Y.E = /1OE\n2Y.T = 2A\n2Y.E = /2OE\n3Y.T = 3A\n3Y.E = /3OE\n4Y.T = 4A\n4Y.E = /4OE\n",
+        "description": "Quad buffer/line driver, 3-state, individual active-low enables",
+        "datasheet": {
+          "vendor": "Nexperia",
+          "title": "74HC125; 74HCT125 Quad buffer/line driver; 3-state",
+          "rev": "Rev. 8, 22 February 2024",
+          "url": "https://assets.nexperia.com/documents/data-sheet/74HC_HCT125.pdf"
+        },
+        "physical": {
+          "package": "DIP-14",
+          "pincount": 14,
+          "power": [
+            {
+              "name": "VCC",
+              "number": 14
+            },
+            {
+              "name": "GND",
+              "number": 7
+            }
+          ]
+        }
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-7",
+      "type": "type-pullup",
+      "x": 0,
+      "y": 126,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-pullup",
+        "name": "pullup",
+        "builtin": true,
+        "title": "pull up",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" fill=\"none\" stroke=\"#000\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"8,13 18,6 28,13\"/><polyline points=\"8,20 18,13 28,20\"/><line x1=\"18\" y1=\"22\" x2=\"18\" y2=\"32\"/></svg>",
+        "renderType": "pullup",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "OUT",
+            "side": "bottom",
+            "position": 1,
+            "direction": "out"
+          }
+        ]
+      },
+      "overrides": {}
+    },
+    {
+      "refdes": "A-8",
+      "type": "type-indicator",
+      "x": 0,
+      "y": 140,
+      "rotation": 0,
+      "typeData": {
+        "id": "type-indicator",
+        "name": "indicator",
+        "builtin": true,
+        "title": "State indicator",
+        "icon": "<svg width=\"36\" height=\"36\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"><circle cx=\"18\" cy=\"18\" r=\"15\" fill=\"#9a9a9a\" stroke=\"#333\"/><text x=\"18\" y=\"19\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"system-ui,sans-serif\" font-weight=\"bold\" font-size=\"18\" fill=\"#000\">?</text></svg>",
+        "renderType": "indicator",
+        "width": 2,
+        "height": 2,
+        "pins": [
+          {
+            "name": "IN",
+            "side": "bottom",
+            "position": 1,
+            "direction": "in"
+          }
+        ]
+      },
+      "overrides": {}
+    }
+  ],
+  "wires": [
+    {
+      "id": "w3",
+      "path": [
+        {
+          "t": "node",
+          "v": "v1"
+        },
+        {
+          "t": "node",
+          "v": "v2"
+        }
+      ]
+    },
+    {
+      "id": "w6",
+      "path": [
+        {
+          "t": "node",
+          "v": "v4"
+        },
+        {
+          "t": "node",
+          "v": "v5"
+        }
+      ]
+    },
+    {
+      "id": "w9",
+      "path": [
+        {
+          "t": "node",
+          "v": "v7"
+        },
+        {
+          "t": "node",
+          "v": "v8"
+        }
+      ]
+    },
+    {
+      "id": "w12",
+      "path": [
+        {
+          "t": "node",
+          "v": "v10"
+        },
+        {
+          "t": "node",
+          "v": "v11"
+        }
+      ]
+    },
+    {
+      "id": "w15",
+      "path": [
+        {
+          "t": "node",
+          "v": "v13"
+        },
+        {
+          "t": "node",
+          "v": "v14"
+        }
+      ]
+    },
+    {
+      "id": "w18",
+      "path": [
+        {
+          "t": "node",
+          "v": "v16"
+        },
+        {
+          "t": "node",
+          "v": "v17"
+        }
+      ]
+    },
+    {
+      "id": "w21",
+      "path": [
+        {
+          "t": "node",
+          "v": "v19"
+        },
+        {
+          "t": "node",
+          "v": "v20"
+        }
+      ]
+    },
+    {
+      "id": "w24",
+      "path": [
+        {
+          "t": "node",
+          "v": "v22"
+        },
+        {
+          "t": "node",
+          "v": "v23"
+        }
+      ]
+    },
+    {
+      "id": "w27",
+      "path": [
+        {
+          "t": "node",
+          "v": "v25"
+        },
+        {
+          "t": "node",
+          "v": "v26"
+        }
+      ]
+    },
+    {
+      "id": "w30",
+      "path": [
+        {
+          "t": "node",
+          "v": "v28"
+        },
+        {
+          "t": "node",
+          "v": "v29"
+        }
+      ]
+    },
+    {
+      "id": "w33",
+      "path": [
+        {
+          "t": "node",
+          "v": "v31"
+        },
+        {
+          "t": "node",
+          "v": "v32"
+        }
+      ]
+    },
+    {
+      "id": "w36",
+      "path": [
+        {
+          "t": "node",
+          "v": "v34"
+        },
+        {
+          "t": "node",
+          "v": "v35"
+        }
+      ]
+    },
+    {
+      "id": "w39",
+      "path": [
+        {
+          "t": "node",
+          "v": "v37"
+        },
+        {
+          "t": "node",
+          "v": "v38"
+        }
+      ]
+    },
+    {
+      "id": "w42",
+      "path": [
+        {
+          "t": "node",
+          "v": "v40"
+        },
+        {
+          "t": "node",
+          "v": "v41"
+        }
+      ]
+    },
+    {
+      "id": "w45",
+      "path": [
+        {
+          "t": "node",
+          "v": "v43"
+        },
+        {
+          "t": "node",
+          "v": "v44"
+        }
+      ]
+    },
+    {
+      "id": "w48",
+      "path": [
+        {
+          "t": "node",
+          "v": "v46"
+        },
+        {
+          "t": "node",
+          "v": "v47"
+        }
+      ]
+    }
+  ],
+  "buses": [],
+  "vertices": [
+    {
+      "id": "v1",
+      "kind": "pin",
+      "ref": "A-1",
+      "pin": "OUT",
+      "x": 0,
+      "y": 1
+    },
+    {
+      "id": "v2",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "CLK",
+      "x": 1,
+      "y": 2
+    },
+    {
+      "id": "v4",
+      "kind": "pin",
+      "ref": "A-2",
+      "pin": "/R",
+      "x": 0,
+      "y": 4
+    },
+    {
+      "id": "v5",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "/CLR",
+      "x": 1,
+      "y": 5
+    },
+    {
+      "id": "v7",
+      "kind": "pin",
+      "ref": "A-3",
+      "pin": "OUT",
+      "x": 0,
+      "y": 7
+    },
+    {
+      "id": "v8",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "/LOAD",
+      "x": 1,
+      "y": 8
+    },
+    {
+      "id": "v10",
+      "kind": "pin",
+      "ref": "A-3",
+      "pin": "OUT",
+      "x": 0,
+      "y": 10
+    },
+    {
+      "id": "v11",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "ENP",
+      "x": 1,
+      "y": 11
+    },
+    {
+      "id": "v13",
+      "kind": "pin",
+      "ref": "A-3",
+      "pin": "OUT",
+      "x": 0,
+      "y": 13
+    },
+    {
+      "id": "v14",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "ENT",
+      "x": 1,
+      "y": 14
+    },
+    {
+      "id": "v16",
+      "kind": "pin",
+      "ref": "A-4",
+      "pin": "OUT",
+      "x": 0,
+      "y": 16
+    },
+    {
+      "id": "v17",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "A",
+      "x": 1,
+      "y": 17
+    },
+    {
+      "id": "v19",
+      "kind": "pin",
+      "ref": "A-4",
+      "pin": "OUT",
+      "x": 0,
+      "y": 19
+    },
+    {
+      "id": "v20",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "B",
+      "x": 1,
+      "y": 20
+    },
+    {
+      "id": "v22",
+      "kind": "pin",
+      "ref": "A-4",
+      "pin": "OUT",
+      "x": 0,
+      "y": 22
+    },
+    {
+      "id": "v23",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "C",
+      "x": 1,
+      "y": 23
+    },
+    {
+      "id": "v25",
+      "kind": "pin",
+      "ref": "A-4",
+      "pin": "OUT",
+      "x": 0,
+      "y": 25
+    },
+    {
+      "id": "v26",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "D",
+      "x": 1,
+      "y": 26
+    },
+    {
+      "id": "v28",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "QA",
+      "x": 0,
+      "y": 28
+    },
+    {
+      "id": "v29",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "/1OE",
+      "x": 1,
+      "y": 29
+    },
+    {
+      "id": "v31",
+      "kind": "pin",
+      "ref": "U1",
+      "pin": "QB",
+      "x": 0,
+      "y": 31
+    },
+    {
+      "id": "v32",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "/2OE",
+      "x": 1,
+      "y": 32
+    },
+    {
+      "id": "v34",
+      "kind": "pin",
+      "ref": "A-5",
+      "pin": "OUT",
+      "x": 0,
+      "y": 34
+    },
+    {
+      "id": "v35",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "1A",
+      "x": 1,
+      "y": 35
+    },
+    {
+      "id": "v37",
+      "kind": "pin",
+      "ref": "A-6",
+      "pin": "OUT",
+      "x": 0,
+      "y": 37
+    },
+    {
+      "id": "v38",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "2A",
+      "x": 1,
+      "y": 38
+    },
+    {
+      "id": "v40",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "1Y",
+      "x": 0,
+      "y": 40
+    },
+    {
+      "id": "v41",
+      "kind": "pin",
+      "ref": "A-8",
+      "pin": "IN",
+      "x": 1,
+      "y": 41
+    },
+    {
+      "id": "v43",
+      "kind": "pin",
+      "ref": "U2",
+      "pin": "2Y",
+      "x": 0,
+      "y": 43
+    },
+    {
+      "id": "v44",
+      "kind": "pin",
+      "ref": "A-8",
+      "pin": "IN",
+      "x": 1,
+      "y": 44
+    },
+    {
+      "id": "v46",
+      "kind": "pin",
+      "ref": "A-7",
+      "pin": "OUT",
+      "x": 0,
+      "y": 46
+    },
+    {
+      "id": "v47",
+      "kind": "pin",
+      "ref": "A-8",
+      "pin": "IN",
+      "x": 1,
+      "y": 47
+    }
+  ],
+  "refCounters": {
+    "U": 3,
+    "A": 9,
+    "N": 1,
+    "X": 1
+  },
+  "nets": [
+    {
+      "pins": [
+        "A-1.OUT",
+        "U1.CLK"
+      ],
+      "members": [
+        "w3"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-2./R",
+        "U1./CLR"
+      ],
+      "members": [
+        "w6"
+      ],
+      "provenance": [],
+      "name": "/R"
+    },
+    {
+      "pins": [
+        "A-3.OUT",
+        "U1./LOAD",
+        "U1.ENP",
+        "U1.ENT"
+      ],
+      "members": [
+        "w9",
+        "w12",
+        "w15"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-4.OUT",
+        "U1.A",
+        "U1.B",
+        "U1.C",
+        "U1.D"
+      ],
+      "members": [
+        "w18",
+        "w21",
+        "w24",
+        "w27"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U1.QA",
+        "U2./1OE"
+      ],
+      "members": [
+        "w30"
+      ],
+      "provenance": [],
+      "name": "QA"
+    },
+    {
+      "pins": [
+        "U1.QB",
+        "U2./2OE"
+      ],
+      "members": [
+        "w33"
+      ],
+      "provenance": [],
+      "name": "QB"
+    },
+    {
+      "pins": [
+        "A-5.OUT",
+        "U2.1A"
+      ],
+      "members": [
+        "w36"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "A-6.OUT",
+        "U2.2A"
+      ],
+      "members": [
+        "w39"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    },
+    {
+      "pins": [
+        "U2.1Y",
+        "A-8.IN",
+        "U2.2Y",
+        "A-7.OUT"
+      ],
+      "members": [
+        "w42",
+        "w45",
+        "w48"
+      ],
+      "provenance": [],
+      "name": "OUT"
+    }
+  ]
+}

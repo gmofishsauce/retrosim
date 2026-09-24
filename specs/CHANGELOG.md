@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-09-24 — Fast engine: fixed driver slots replace per-step contribution lists (FR-116a)
+What: in the generated C simulator every driver (generated output, built-in, memory data pin, port stimulus) owns a fixed value slot, rewritten every step (Z when not driving). Each net resolves from its own slots through a baked per-net table in contribution order, keeping the first 0 and first 1 driver labels, so bus-conflict reports are unchanged. `rt_contrib` and `gen_max_contribs` are removed and the built-in tables carry slots, a `gen_` interface change (regenerate older programs). Results are bit-identical.
+Why: requested by the user after profiling `examples/cpu` at `-O2`. About 40% of run time went to building and walking per-net contribution lists every step. Slots are also the prerequisite for event-driven evaluation, the planned next step. Also adds `examples/bus-conflict.json` (a counter enabling two 3-state buffers onto a pulled-up net), since no example exercised bus conflicts or pulls against 3-state drivers in the fast engine.
+Touches: FR-116a (amended); design §6.17 (runtime bullet "Driver slots + resolution", M12); `examples/bus-conflict.json` (new, content)
+
 ## 2026-09-24 — Fast engine: the UART flushes stdout on each newline (FR-122d)
 What: after the magic UART emits a newline byte (0x0A), the runtime flushes standard output. Otherwise stdout stays fully buffered, and it is still flushed at the end of a run.
 Why: requested by the user. With free running now the default and unbounded until Ctrl-C (FR-117a), a fully buffered 64 KB stdout meant a UART program's output only appeared in 64 KB chunks, or at exit. Flushing only on the UART's own newlines, rather than switching stdout to line buffering, keeps a newline-free byte stream fully buffered, and leaves the end-of-run dump and vector transcript buffered as before.

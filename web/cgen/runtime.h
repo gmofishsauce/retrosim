@@ -109,8 +109,8 @@ static inline int rt_upd(rt_val *dst, rt_val v) {
  * matching the slow simulator's (FR-085/FR-115c). */
 #define RT_SETTLE_BOUND 10000
 
-/* rt_init allocates the runtime's net and contribution buffers, sets every
- * net to RT_Z (the slow simulator's power-up state), and calls gen_init().
+/* rt_init allocates the runtime's net and driver-slot buffers, sets every
+ * net and slot to RT_Z (the slow simulator's power-up state), and calls gen_init().
  * Must be called once before any rt_step/rt_settle. Exits with a message
  * on allocation failure. */
 void rt_init(void);
@@ -119,20 +119,23 @@ void rt_init(void);
  * i.e. the values every evaluate function reads. Read-only. */
 const rt_val *rt_curr(void);
 
-/* rt_contrib deposits one driver contribution on a net for the step being
- * computed. Called by gen_drive() (and by the runtime's own built-in
- * drivers). A contribution of RT_Z is ignored — a tristate output that is
- * disabled simply does not drive (FR-081). `weak` is nonzero for a
- * pull-up/pull-down (FR-083); `label` indexes gen_labels and names the
- * driver in a bus-conflict report (FR-108). */
-void rt_contrib(int net, rt_val v, int weak, int label);
+/* rt_slot_val holds each driver's value for the step being computed, one
+ * fixed slot per driver (gen_slot_count of them; design §6.17 M12). Every
+ * driver rewrites its slot every step; RT_Z means "not driving" — a tristate
+ * output that is disabled simply does not drive (FR-081). */
+extern rt_val *rt_slot_val;
+
+/* rt_drive sets one driver slot's value for the step being computed. Called
+ * by gen_drive() with the slot numbers the generator assigned (and by the
+ * runtime's own built-in drivers). */
+static inline void rt_drive(int slot, rt_val v) { rt_slot_val[slot] = v; }
 
 /* rt_step advances one unit (1 simulated ns), double-buffered (FR-078):
  * (1) gen_latch() latches registered/memory state from the previous
  * step's values; (2) gen_drive() plus the runtime's built-in drivers
- * (switches, pulls, scripted clocks/resets) deposit contributions
- * computed from the previous step's values; (3) every net resolves
- * (FR-081–FR-083): enabled strong drivers win, weak drivers decide only
+ * (switches, pulls, scripted clocks/resets, memories) write their slots,
+ * computed from the previous step's values; (3) every net resolves from
+ * its own slots (FR-081–FR-083): enabled strong drivers win, weak drivers decide only
  * when every strong driver is Z, agreeing drivers give their value, a
  * 0-vs-1 disagreement is a bus conflict — the net goes U and the conflict
  * is reported once, on onset, to stderr naming both drivers (FR-108,
@@ -218,16 +221,26 @@ void rt_run_free(long cycles);
 /* Number of nets. Net indices run 0..gen_net_count-1. */
 extern const int gen_net_count;
 
-/* Driver/probe name strings, "refdes.pin" (e.g. "U3.Q0"), indexed by the
- * `label` argument of rt_contrib and by the built-in tables below. Used
- * verbatim in bus-conflict reports (FR-108/FR-082). */
+/* Driver/probe name strings, "refdes.pin" (e.g. "U3.Q0"), indexed by
+ * gen_slot_label and rt_clock.label. Used verbatim in bus-conflict reports
+ * (FR-108/FR-082). */
 extern const char *const gen_labels[];
 extern const int gen_label_count;
 
-/* Upper bound on the contributions deposited in any one step (the total
- * driver count: every output-capable pin, built-in driver, and input
- * column). Sizes the runtime's contribution buffer. */
-extern const int gen_max_contribs;
+/* --- Driver slots (design §6.17 M12) --- */
+
+/* One slot per driver: every generated output, built-in driver, memory data
+ * pin, and port-stimulus input column that drives a net. Slots are numbered
+ * so that each net's slots are contiguous and in contribution order (the
+ * gen_drive text, then the built-ins in drive_builtins order, then memory
+ * data bits). Net n's slots are [gen_net_slot_start[n],
+ * gen_net_slot_start[n+1]); resolution reads them in that order, and a
+ * bus-conflict report names the first 0-driver and first 1-driver found. */
+extern const int gen_slot_count;
+extern const int gen_net_slot_start[]; /* gen_net_count + 1 entries */
+extern const int gen_slot_net[];       /* the net each slot drives */
+extern const int gen_slot_label[];     /* gen_labels index naming the driver */
+extern const unsigned char gen_slot_weak[]; /* 1 for a pull (FR-083) */
 
 /* --- Lowered design logic --- */
 
@@ -249,7 +262,7 @@ void gen_init(void);
 int gen_latch(const rt_val *curr);
 
 /* gen_drive computes every generated strong driver from `curr` and
- * deposits it via rt_contrib: each GALasm output (plain, .T-gated, or
+ * writes its slot via rt_drive: each GALasm output (plain, .T-gated, or
  * registered, FR-079) and each behavior-less type's U-driving output
  * (FR-080). The runtime's own built-in drivers, including memory data
  * pins (below, from gen_mems), are not gen_drive's concern. */
@@ -257,11 +270,12 @@ void gen_drive(const rt_val *curr);
 
 /* --- Built-in instances (behaviors live in runtime.c, FR-116a) --- */
 
-/* Weak pull-up/pull-down (FR-069/FR-070/FR-083). value is RT_1 or RT_0. */
+/* Weak pull-up/pull-down (FR-069/FR-070/FR-083). value is RT_1 or RT_0.
+ * `slot` is the driver slot (-1 when unwired), in every built-in table. */
 typedef struct {
   int net;
   rt_val value;
-  int label;
+  int slot;
 } rt_pull;
 extern const rt_pull gen_pulls[];
 extern const int gen_pull_count;
@@ -272,7 +286,7 @@ extern const int gen_pull_count;
 typedef struct {
   int net;
   rt_val level;
-  int label;
+  int slot;
 } rt_switch;
 extern rt_switch gen_switches[];
 extern const int gen_switch_count;
@@ -290,7 +304,8 @@ typedef struct {
   int net;
   rt_val level;
   int period_ns;
-  int label;
+  int label; /* gen_labels index (the hidden-clock check names it) */
+  int slot;
 } rt_clock;
 extern rt_clock gen_clocks[];
 extern const int gen_clock_count;
@@ -303,8 +318,8 @@ typedef struct {
   int rn_net; /* /R (active low), or -1 when unwired */
   int cycles;
   int released; /* 0 = asserting reset, 1 = released */
-  int r_label;
-  int rn_label;
+  int r_slot;  /* R driver slot, or -1 */
+  int rn_slot; /* /R driver slot, or -1 */
 } rt_reset;
 extern rt_reset gen_resets[];
 extern const int gen_reset_count;
@@ -313,7 +328,7 @@ extern const int gen_reset_count;
  * core). The runtime owns a per-instance mutable store (2^abits × width
  * rt_val, RAM power-up U, ROM seeded from its loaded contents) plus
  * WE/-edge state; this table is the const wiring. `addr`/`data`/
- * `data_label` point at abits- and width-long net-index / label arrays
+ * `data_slot` point at abits- and width-long net-index / driver-slot arrays
  * baked in the generated file; a control net is -1 when unwired (reads U).
  * `we` is -1 for a ROM.
  *
@@ -340,7 +355,7 @@ typedef struct {
   int width;  /* data lines D0..D(width-1) */
   const int *addr;       /* abits net indices */
   const int *data;       /* width net indices */
-  const int *data_label; /* width gen_labels indices (conflict reports) */
+  const int *data_slot;  /* width driver slots (-1 for an unwired pin) */
   int ce;                /* CE/ net index (active low), or -1 */
   int oe;                /* OE/ net index (active low), or -1 */
   int we;                /* WE/ net index (active low, RAM), or -1 */
@@ -406,7 +421,7 @@ typedef struct {
   const char *name;   /* column display label, for the transcript */
   const char *refdes; /* column identity: instance ref (FR-115a, --columns) */
   const char *pin;    /* column identity: pin name (FR-115a, --columns) */
-  int label;          /* gen_labels index for the stimulus driver */
+  int slot;           /* driver slot of a port column's stimulus, else -1 */
   int active_low;     /* 1 when this column's signal is active low (FR-115p): its
                        * display label begins or ends with '/'. Baked by the
                        * generator, which reads the stamp deriveColumns applied to
