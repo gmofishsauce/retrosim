@@ -2130,7 +2130,7 @@ optimization — it makes the program run many times faster:
 cc -O2 -o mydesign mydesign.c runtime.c
 ```
 
-As a rough guide, the example RiSC-16 CPU (`examples/cpu`) runs about 10,000
+As a rough guide, the example RiSC-16 CPU (`examples/cpu`) runs about 60,000
 clock cycles per second built with `-O2`, against about 10–15 in the editor's
 debug simulator. Leaving `-O2` off makes the program much slower.
 

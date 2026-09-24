@@ -19,6 +19,11 @@ Touches: FR-0xx, FR-0yy; design §6.x, §8
 
 ---
 
+## 2026-09-24 — Fast engine: event-driven evaluation (FR-110a)
+What: each unit step of the generated C simulator re-evaluates only the drivers whose input nets changed in the previous step, or whose register or latch state changed in this step's latch phase, and resolves only the nets whose driver slots changed. Results are bit-identical in both batch modes. `gen_drive` becomes `gen_eval(unit, curr)`, and the generator emits `gen_unit_count`, a net-to-unit fanout table, and per-instance state-dependency lists that `gen_latch` marks through `rt_mark_units`. The net array is no longer double-buffered. This is a `gen_` interface change: regenerate older programs.
+Why: requested by the user after profiling `examples/cpu`. With fixed driver slots (entry below), about 74% of run time was spent recomputing all ~700 drivers every step, although only about 10 of 399 nets change in a typical step.
+Touches: FR-110a (new); design §6.17 (Satisfies line, four-state type bullet, "Step/settle" bullet, M13); `docs/user.md` ("Generating a standalone C simulator": `-O2` speed figure, about 60,000 clocks/s, measured 0.16 s for 10,600 clocks) and the timing note in `examples/cpu/fib.asm`, updated at the user's direction on 2026-09-24 without their manual verification
+
 ## 2026-09-24 — Fast engine: fixed driver slots replace per-step contribution lists (FR-116a)
 What: in the generated C simulator every driver (generated output, built-in, memory data pin, port stimulus) owns a fixed value slot, rewritten every step (Z when not driving). Each net resolves from its own slots through a baked per-net table in contribution order, keeping the first 0 and first 1 driver labels, so bus-conflict reports are unchanged. `rt_contrib` and `gen_max_contribs` are removed and the built-in tables carry slots, a `gen_` interface change (regenerate older programs). Results are bit-identical.
 Why: requested by the user after profiling `examples/cpu` at `-O2`. About 40% of run time went to building and walking per-net contribution lists every step. Slots are also the prerequisite for event-driven evaluation, the planned next step. Also adds `examples/bus-conflict.json` (a counter enabling two 3-state buffers onto a pulled-up net), since no example exercised bus conflicts or pulls against 3-state drivers in the fast engine.

@@ -125,22 +125,47 @@ const rt_val *rt_curr(void);
  * output that is disabled simply does not drive (FR-081). */
 extern rt_val *rt_slot_val;
 
-/* rt_drive sets one driver slot's value for the step being computed. Called
- * by gen_drive() with the slot numbers the generator assigned (and by the
- * runtime's own built-in drivers). */
-static inline void rt_drive(int slot, rt_val v) { rt_slot_val[slot] = v; }
+/* The dirty-net set (FR-110a, design §6.17 M13): the nets at least one of
+ * whose slots changed value this step, so only they are resolved. A flag
+ * per net (no duplicates) plus a list. Owned by the runtime; exposed only
+ * so rt_drive can be inline. */
+extern unsigned char *rt_net_dirty;
+extern int *rt_dirty_nets;
+extern int rt_ndirty_nets;
+extern const int gen_slot_net[];
 
-/* rt_step advances one unit (1 simulated ns), double-buffered (FR-078):
+/* rt_drive sets one driver slot's value for the step being computed, and
+ * marks the slot's net for resolution if the value changed. Called by
+ * gen_eval() with the slot numbers the generator assigned (and by the
+ * runtime's own built-in drivers). */
+static inline void rt_drive(int slot, rt_val v) {
+  if (rt_slot_val[slot] == v) return;
+  rt_slot_val[slot] = v;
+  int n = gen_slot_net[slot];
+  if (!rt_net_dirty[n]) {
+    rt_net_dirty[n] = 1;
+    rt_dirty_nets[rt_ndirty_nets++] = n;
+  }
+}
+
+/* rt_mark_units marks `n` evaluation units (indices into gen_eval's cases)
+ * for evaluation in the current step. Called by gen_latch() for the units
+ * that read a register's or latch's state when that state changes. */
+void rt_mark_units(const int *units, int n);
+
+/* rt_step advances one unit (1 simulated ns), with unit delay (FR-078):
  * (1) gen_latch() latches registered/memory state from the previous
- * step's values; (2) gen_drive() plus the runtime's built-in drivers
- * (switches, pulls, scripted clocks/resets, memories) write their slots,
- * computed from the previous step's values; (3) every net resolves from
- * its own slots (FR-081–FR-083): enabled strong drivers win, weak drivers decide only
+ * step's values; (2) the evaluation units whose inputs changed (FR-110a)
+ * run gen_eval(), and the runtime's built-in drivers (switches, pulls,
+ * scripted clocks/resets, memories) write their slots, all computed from
+ * the previous step's values; (3) each net whose slots changed resolves
+ * from its own slots (FR-081–FR-083): enabled strong drivers win, weak drivers decide only
  * when every strong driver is Z, agreeing drivers give their value, a
  * 0-vs-1 disagreement is a bus conflict — the net goes U and the conflict
  * is reported once, on onset, to stderr naming both drivers (FR-108,
- * FR-118) — any deciding U gives U, and no driver at all gives Z;
- * (4) the buffers swap. Returns nonzero if any net changed value. */
+ * FR-118) — any deciding U gives U, and no driver at all gives Z. A net
+ * whose value changed marks the units reading it for the next step.
+ * Returns nonzero if any net changed value. */
 int rt_step(void);
 
 /* rt_settle runs rt_step() until quiescence — no net changed — or until
@@ -232,7 +257,7 @@ extern const int gen_label_count;
 /* One slot per driver: every generated output, built-in driver, memory data
  * pin, and port-stimulus input column that drives a net. Slots are numbered
  * so that each net's slots are contiguous and in contribution order (the
- * gen_drive text, then the built-ins in drive_builtins order, then memory
+ * gen_eval units in order, then the built-ins in drive_builtins order, then memory
  * data bits). Net n's slots are [gen_net_slot_start[n],
  * gen_net_slot_start[n+1]); resolution reads them in that order, and a
  * bus-conflict report names the first 0-driver and first 1-driver found. */
@@ -252,7 +277,8 @@ void gen_init(void);
 
 /* gen_latch updates registered state from the previous step's net values
  * (`curr`): .R register latching on each relevant clock's 0→1 edge
- * (FR-079/FR-079a). Called by rt_step before any contribution is
+ * (FR-079/FR-079a). When an instance's state changes it marks, through
+ * rt_mark_units, the units that read that state. Called by rt_step before any contribution is
  * evaluated, so latching sees the pre-step values, exactly like the slow
  * simulator. Empty in a purely combinational design. (Memory write ports
  * are latched by the runtime from gen_mems, FR-114d, not here.) Returns
@@ -261,12 +287,23 @@ void gen_init(void);
  * half of the free-run fixed-point test (FR-117d). */
 int gen_latch(const rt_val *curr);
 
-/* gen_drive computes every generated strong driver from `curr` and
- * writes its slot via rt_drive: each GALasm output (plain, .T-gated, or
- * registered, FR-079) and each behavior-less type's U-driving output
- * (FR-080). The runtime's own built-in drivers, including memory data
- * pins (below, from gen_mems), are not gen_drive's concern. */
-void gen_drive(const rt_val *curr);
+/* gen_eval computes one evaluation unit — one generated strong driver —
+ * from `curr` and writes its slot via rt_drive: a GALasm output (plain,
+ * .T-gated, registered, or latched, FR-079/FR-079d), a decoder output
+ * (FR-071k), or a behavior-less type's U-driving output (FR-080). Units
+ * are numbered 0..gen_unit_count-1. The runtime's own built-in drivers,
+ * including memory data pins (below, from gen_mems), are not gen_eval's
+ * concern. */
+void gen_eval(int unit, const rt_val *curr);
+extern const int gen_unit_count;
+
+/* The units reading each net, for event-driven evaluation (FR-110a): net
+ * n's readers are gen_net_fan[gen_net_fan_start[n] ..
+ * gen_net_fan_start[n+1]). When a net changes value, those units are
+ * evaluated in the next step. (Units reading register or latch state are
+ * marked by gen_latch through rt_mark_units instead.) */
+extern const int gen_net_fan_start[]; /* gen_net_count + 1 entries */
+extern const int gen_net_fan[];
 
 /* --- Built-in instances (behaviors live in runtime.c, FR-116a) --- */
 

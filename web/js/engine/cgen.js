@@ -88,7 +88,26 @@ export function generateC(design, { columnsFrom = design } = {}) {
   };
 
   // --- Walk the components (the same dispatch as buildSimulation, §6.13) ---
-  const driveBlocks = []; // C fragments for gen_drive's body
+  // Evaluation units (design §6.17 M13): one per generated driver, each a
+  // gen_eval case, with the nets and instance state its expression reads.
+  const units = []; // { comment, lines, slot, nets:Set, states:Set }
+  let deps = null; // the dependency collector while a unit is being lowered
+  const useNet = (n) => {
+    if (deps && n >= 0) deps.nets.add(n);
+  };
+  const useState = (key) => {
+    if (deps) deps.states.add(key);
+  };
+  const beginUnit = () => {
+    deps = { nets: new Set(), states: new Set() };
+  };
+  // endUnit files the unit being lowered; a driver on no net (slot null) drives
+  // nothing and so needs no unit at all.
+  const endUnit = (slot, comment, lines) => {
+    const d = deps;
+    deps = null;
+    if (slot) units.push({ comment, lines, slot, ...d });
+  };
   const pulls = [];
   const switches = [];
   const clocks = [];
@@ -174,12 +193,11 @@ export function generateC(design, { columnsFrom = design } = {}) {
           reportedNoBehavior.add(typeName);
           warnings.push(`${typeName}: no behavior defined; its outputs are U (FR-080)`);
         }
-        const lines = [`  /* ${refdesList}: ${typeName} — no behavior, outputs U (FR-080) */`];
         for (const key of uPins) {
+          beginUnit();
           const slot = driver(netOf(key), intern(key));
-          if (slot) lines.push(`  rt_drive(${slot}, RT_U); /* ${key} */`);
+          endUnit(slot, `${key}: ${typeName} — no behavior, U (FR-080)`, [`rt_drive(${slot}, RT_U);`]);
         }
-        driveBlocks.push(lines.join("\n"));
       }
       return;
     }
@@ -206,6 +224,8 @@ export function generateC(design, { columnsFrom = design } = {}) {
     const litExpr = (lit) => {
       const k = regIdxOf.get(lit.signal);
       const n = k === undefined ? netOf(pinOwner.get(lit.signal)) : -1;
+      if (k !== undefined) useState(`reg_${regTag}`);
+      else useNet(n);
       const rd = k !== undefined ? `regprev_${regTag}[${k}]` : n >= 0 ? `curr[${n}]` : `RT_Z`;
       const cm =
         k !== undefined ? `${lit.signal}:register` : n >= 0 ? lit.signal : `${lit.signal}:unconnected`;
@@ -289,16 +309,18 @@ export function generateC(design, { columnsFrom = design } = {}) {
       latchUnits.push({ tag: latchTag, latches });
     }
 
-    const lines = [`  /* ${refdesList}: ${typeName} */`];
     for (const out of c.outputs) {
       const key = pinOwner.get(out.signal);
       const lbl = intern(key);
       const net = netOf(key);
-      lines.push(`  { /* ${key} */`);
+      beginUnit();
+      const lines = [];
       const body = [];
       if (out.kind === "R") {
+        useState(`reg_${regTag}`);
         body.push(`v = reg_${regTag}[${regIdxOf.get(out.signal)}]; /* latched */`);
       } else if (out.kind === "L") {
+        useState(`latch_${latchTag}`);
         body.push(`v = latch_${latchTag}[${latchIdxOf.get(out.signal)}]; /* transparent latch */`);
       } else {
         body.push(`v = ${sumExpr(out.terms)};`);
@@ -309,20 +331,20 @@ export function generateC(design, { columnsFrom = design } = {}) {
       if (out.lhsLow) body.push(`v = rt_not(v); /* declared active-low */`);
       if (out.enable) {
         // .T enable (FR-079/evalOutput): false → Z (no drive), U → U.
-        lines.push(`    rt_val v;`);
-        lines.push(`    rt_val e = ${termExpr(out.enable)}; /* .E */`);
-        lines.push(`    if (e == RT_0) v = RT_Z;`);
-        lines.push(`    else if (e == RT_U) v = RT_U;`);
-        lines.push(`    else {`);
-        for (const b of body) lines.push(`      ${b}`);
-        lines.push(`    }`);
+        lines.push(`rt_val v;`);
+        lines.push(`rt_val e = ${termExpr(out.enable)}; /* .E */`);
+        lines.push(`if (e == RT_0) v = RT_Z;`);
+        lines.push(`else if (e == RT_U) v = RT_U;`);
+        lines.push(`else {`);
+        for (const b of body) lines.push(`  ${b}`);
+        lines.push(`}`);
       } else {
-        lines.push(`    rt_val v;`);
-        for (const b of body) lines.push(`    ${b}`);
+        lines.push(`rt_val v;`);
+        for (const b of body) lines.push(b);
       }
       const slot = driver(net, lbl);
-      lines.push(slot ? `    rt_drive(${slot}, v);` : `    (void)v; /* drives no net */`);
-      lines.push(`  }`);
+      lines.push(`rt_drive(${slot}, v);`);
+      endUnit(slot, `${key}: ${typeName}`, lines);
     }
     // A GAL output pin its behavior writes no equation for drives U (FR-080),
     // mirroring sim.js makeGalasmEntity: unwritten logic is unknown, not undriven.
@@ -334,8 +356,9 @@ export function generateC(design, { columnsFrom = design } = {}) {
           const signal = p.name.startsWith("/") ? p.name.slice(1) : p.name;
           if (p.direction === "in" || written.has(signal)) continue;
           const key = `${inst.refdes}.${p.name}`;
+          beginUnit();
           const slot = driver(netOf(key), intern(key));
-          if (slot) lines.push(`  rt_drive(${slot}, RT_U); /* ${key}: no equation (FR-080) */`);
+          endUnit(slot, `${key}: no equation (FR-080)`, [`rt_drive(${slot}, RT_U);`]);
           if (!unwritten.includes(p.name)) unwritten.push(p.name);
         }
       }
@@ -344,7 +367,6 @@ export function generateC(design, { columnsFrom = design } = {}) {
         warnings.push(`${typeName}: no equation for ${unwritten.join(", ")}; ${unwritten.length === 1 ? "it is" : "they are"} U (FR-080)`);
       }
     }
-    driveBlocks.push(lines.join("\n"));
   }
 
   for (const inst of design.components) {
@@ -457,20 +479,20 @@ export function generateC(design, { columnsFrom = design } = {}) {
         // supply litValue's Z-to-U normalization and rt_and evalTerm's selective
         // pessimism, exactly as the GALasm lowering above does. The display
         // strings are editor-only and have no fast-engine counterpart.
-        const lines = [`  /* ${refdes}: labeled 3-to-8 decoder (FR-071k) */`];
         const lit = (l) => {
           const n = netOf(`${refdes}.${l.signal}`);
+          useNet(n);
           const rd = n >= 0 ? `curr[${n}]` : `RT_Z`;
           return `${l.low ? "rt_not" : "rt_buf"}(${rd}) /* ${l.low ? "/" : ""}${l.signal} */`;
         };
         DECODER_TERMS.forEach((term, i) => {
           const pin = DECODER_OUTPUTS[i];
           const key = `${refdes}.${pin}`;
+          beginUnit();
           const expr = term.map(lit).reduce((a, b) => `rt_and(${a}, ${b})`);
           const slot = driver(netOf(key), intern(key));
-          if (slot) lines.push(`  rt_drive(${slot}, rt_not(${expr})); /* ${key} */`);
+          endUnit(slot, `${key}: labeled 3-to-8 decoder (FR-071k)`, [`rt_drive(${slot}, rt_not(${expr}));`]);
         });
-        driveBlocks.push(lines.join("\n"));
       } else if (rt === "tgate" || rt === "relay") {
         // Switch elements (FR-071g/FR-071h): dynamic net merging (FR-083a) is
         // slow-engine-only for now — refuse rather than misbehave (FR-116).
@@ -627,6 +649,29 @@ export function generateC(design, { columnsFrom = design } = {}) {
     L.push(`const int gen_slot_net[] = { -1 }; /* none */`);
     L.push(`const int gen_slot_label[] = { 0 }; /* none */`);
     L.push(`const unsigned char gen_slot_weak[] = { 0 }; /* none */`);
+  }
+  L.push(``);
+
+  // Evaluation units (M13): the net → reading-units fanout CSR, and per
+  // instance-state array the units reading it (marked by gen_latch).
+  const fan = nets.map(() => []);
+  const stateDeps = new Map(); // "reg_<tag>" / "latch_<tag>" → [unit]
+  units.forEach((u, i) => {
+    for (const n of u.nets) fan[n].push(i);
+    for (const k of u.states) {
+      if (!stateDeps.has(k)) stateDeps.set(k, []);
+      stateDeps.get(k).push(i);
+    }
+  });
+  const fanStart = [0];
+  for (const f of fan) fanStart.push(fanStart.at(-1) + f.length);
+  L.push(`/* --- evaluation units (FR-110a, design §6.17 M13) --- */`);
+  L.push(`const int gen_unit_count = ${units.length};`);
+  L.push(`const int gen_net_fan_start[] = {`, ...slotRows(fanStart), `};`);
+  if (fanStart.at(-1)) L.push(`const int gen_net_fan[] = {`, ...slotRows(fan.flat()), `};`);
+  else L.push(`const int gen_net_fan[] = { -1 }; /* none */`);
+  for (const [k, list] of stateDeps) {
+    L.push(`static const int deps_${k}[] = { ${list.join(", ")} };`);
   }
   L.push(``);
 
@@ -790,70 +835,90 @@ export function generateC(design, { columnsFrom = design } = {}) {
   L.push(`int gen_latch(const rt_val *curr) {`);
   L.push(`  int ch = 0;`);
   if (!regUnits.length && !latchUnits.length) L.push(`  (void)curr;`);
+  // Each instance's block keeps its own change flag, so a change marks the
+  // units reading that instance's state for re-evaluation (M13).
+  const markState = (key) => {
+    const list = stateDeps.get(key) ?? [];
+    return list.length
+      ? `  if (c) { ch = 1; rt_mark_units(deps_${key}, ${list.length}); }`
+      : `  ch |= c;`;
+  };
   for (const u of regUnits) {
-    L.push(`  {`);
+    L.push(`  { int c = 0;`);
     // Feedback snapshot before this unit latches (FR-079e, sim.js
     // snapshotFeedback): the value each .R macrocell presents — the register
     // with its LHS negation, no .E gating — read by this instance's own
     // equations here and in gen_drive, which rt_step runs later in the step.
     for (const r of u.regs) {
       const v = r.lhsLow ? `rt_not(reg_${u.tag}[${r.k}])` : `reg_${u.tag}[${r.k}]`;
-      L.push(`    ch |= rt_upd(&regprev_${u.tag}[${r.k}], ${v});`);
+      L.push(`    c |= rt_upd(&regprev_${u.tag}[${r.k}], ${v});`);
     }
     if (u.hasGlobal) {
       const clk = u.clockNet >= 0 ? `curr[${u.clockNet}]` : `RT_Z`;
       L.push(`    rt_val gclk = ${clk}; /* global clock: pin */`);
       L.push(`    int grose = (prevClk_${u.tag} == RT_0 && gclk == RT_1);`);
       L.push(`    if (grose) {`);
-      for (const k of u.globalIdxs) L.push(`      ch |= rt_upd(&reg_${u.tag}[${k}], ${u.regs[k].dExpr});`);
+      for (const k of u.globalIdxs) L.push(`      c |= rt_upd(&reg_${u.tag}[${k}], ${u.regs[k].dExpr});`);
       L.push(`    }`);
       if (u.spExpr) {
         L.push(`    if (grose) { rt_val s = ${u.spExpr}; if (s != RT_0) { /* global SP */`);
-        for (const k of u.globalIdxs) L.push(`      ch |= rt_upd(&reg_${u.tag}[${k}], (s == RT_1) ? RT_1 : RT_U);`);
+        for (const k of u.globalIdxs) L.push(`      c |= rt_upd(&reg_${u.tag}[${k}], (s == RT_1) ? RT_1 : RT_U);`);
         L.push(`    } }`);
       }
       if (u.arExpr) {
         L.push(`    { rt_val a = ${u.arExpr}; if (a != RT_0) { /* global AR (async) */`);
-        for (const k of u.globalIdxs) L.push(`      ch |= rt_upd(&reg_${u.tag}[${k}], (a == RT_1) ? RT_0 : RT_U);`);
+        for (const k of u.globalIdxs) L.push(`      c |= rt_upd(&reg_${u.tag}[${k}], (a == RT_1) ? RT_0 : RT_U);`);
         L.push(`    } }`);
       }
-      L.push(`    ch |= rt_upd(&prevClk_${u.tag}, gclk);`);
+      L.push(`    c |= rt_upd(&prevClk_${u.tag}, gclk);`);
     }
     for (const r of u.regs) {
       if (!r.clkExpr) continue;
       L.push(`    { rt_val clk = ${r.clkExpr}; /* per-output .CLK */`);
-      L.push(`      if (prevClk_${u.tag}_${r.k} == RT_0 && clk == RT_1) ch |= rt_upd(&reg_${u.tag}[${r.k}], ${r.dExpr});`);
-      L.push(`      ch |= rt_upd(&prevClk_${u.tag}_${r.k}, clk);`);
+      L.push(`      if (prevClk_${u.tag}_${r.k} == RT_0 && clk == RT_1) c |= rt_upd(&reg_${u.tag}[${r.k}], ${r.dExpr});`);
+      L.push(`      c |= rt_upd(&prevClk_${u.tag}_${r.k}, clk);`);
       if (r.aprstExpr)
-        L.push(`      { rt_val p = ${r.aprstExpr}; if (p != RT_0) ch |= rt_upd(&reg_${u.tag}[${r.k}], (p == RT_1) ? RT_1 : RT_U); } /* .APRST */`);
+        L.push(`      { rt_val p = ${r.aprstExpr}; if (p != RT_0) c |= rt_upd(&reg_${u.tag}[${r.k}], (p == RT_1) ? RT_1 : RT_U); } /* .APRST */`);
       if (r.arstExpr)
-        L.push(`      { rt_val a = ${r.arstExpr}; if (a != RT_0) ch |= rt_upd(&reg_${u.tag}[${r.k}], (a == RT_1) ? RT_0 : RT_U); } /* .ARST wins */`);
+        L.push(`      { rt_val a = ${r.arstExpr}; if (a != RT_0) c |= rt_upd(&reg_${u.tag}[${r.k}], (a == RT_1) ? RT_0 : RT_U); } /* .ARST wins */`);
       L.push(`    }`);
     }
+    L.push(`  ${markState(`reg_${u.tag}`)}`);
     L.push(`  }`);
   }
   // Transparent latches (FR-079d, sim.js updateLatches): level-sensitive, in the
   // same phase as registers — .ARST clears first, then capture while .G is 1,
   // hold while 0, store U while U. No edge, no clock.
   for (const u of latchUnits) {
+    L.push(`  { int c = 0;`);
     for (const t of u.latches) {
       L.push(`  { /* latch ${u.tag}[${t.k}] */`);
       if (t.arstExpr)
-        L.push(`    { rt_val a = ${t.arstExpr}; if (a != RT_0) ch |= rt_upd(&latch_${u.tag}[${t.k}], (a == RT_1) ? RT_0 : RT_U); } /* .ARST clear first */`);
+        L.push(`    { rt_val a = ${t.arstExpr}; if (a != RT_0) c |= rt_upd(&latch_${u.tag}[${t.k}], (a == RT_1) ? RT_0 : RT_U); } /* .ARST clear first */`);
       L.push(`    rt_val g = ${t.gateExpr}; /* .G gate */`);
-      L.push(`    if (g == RT_1) ch |= rt_upd(&latch_${u.tag}[${t.k}], ${t.dExpr}); /* transparent */`);
-      L.push(`    else if (g == RT_U) ch |= rt_upd(&latch_${u.tag}[${t.k}], RT_U); /* pessimism */`);
+      L.push(`    if (g == RT_1) c |= rt_upd(&latch_${u.tag}[${t.k}], ${t.dExpr}); /* transparent */`);
+      L.push(`    else if (g == RT_U) c |= rt_upd(&latch_${u.tag}[${t.k}], RT_U); /* pessimism */`);
       L.push(`    /* g == RT_0: hold */`);
       L.push(`  }`);
     }
+    L.push(`  ${markState(`latch_${u.tag}`)}`);
+    L.push(`  }`);
   }
   L.push(`  return ch;`);
   L.push(`}`);
   L.push(``);
-  L.push(`/* --- strong drivers, one fragment per instance (FR-081) --- */`);
-  L.push(`void gen_drive(const rt_val *curr) {`);
+  L.push(`/* --- evaluation units: one generated driver each (FR-081, FR-110a) --- */`);
+  L.push(`void gen_eval(int unit, const rt_val *curr) {`);
   L.push(`  (void)curr;`);
-  for (const b of driveBlocks) L.push(fillSlots(b));
+  L.push(`  switch (unit) {`);
+  units.forEach((u, i) => {
+    L.push(`  case ${i}: { /* ${u.comment} */`);
+    for (const line of u.lines) L.push(`    ${fillSlots(line)}`);
+    L.push(`    break;`);
+    L.push(`  }`);
+  });
+  L.push(`  default: break;`);
+  L.push(`  }`);
   L.push(`}`);
   L.push(``);
 

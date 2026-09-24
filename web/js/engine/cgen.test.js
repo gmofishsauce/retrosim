@@ -95,7 +95,7 @@ test("generateC: inverter emits nets, tables, columns, and lowered logic", () =>
   assert.match(code, /const int gen_outcol_count = 1;/);
   // Lowered Y = /A: a negated literal and a driver slot for U1.Y.
   assert.match(code, /rt_not\(curr\[\d+\]\)/);
-  assert.match(code, /rt_drive\(\d+, v\); *\n *\}/);
+  assert.match(code, /rt_drive\(\d+, v\);\n *break;/);
   // No clocks: combinational.
   assert.match(code, /const int gen_clock_count = 0;/);
 });
@@ -200,8 +200,8 @@ test("generateC: behavior-less type drives U and warns once (FR-080)", () => {
   const { code, warnings } = generateC(d);
   assert.equal(warnings.filter((w) => w.includes("no behavior")).length, 1);
   // Each unwired output drives its own single-node net (FR-081a), not net -1.
-  assert.match(code, /rt_drive\(\d+, RT_U\); \/\* U1\.Y \*\//);
-  assert.match(code, /rt_drive\(\d+, RT_U\); \/\* U2\.Y \*\//);
+  assert.match(code, /\/\* U1\.Y: NBX — no behavior, U \(FR-080\) \*\/\n *rt_drive\(\d+, RT_U\);/);
+  assert.match(code, /\/\* U2\.Y: NBX — no behavior, U \(FR-080\) \*\/\n *rt_drive\(\d+, RT_U\);/);
 });
 
 test("generateC: a GAL output pin with no equation drives U and warns once (FR-080)", () => {
@@ -220,7 +220,7 @@ test("generateC: a GAL output pin with no equation drives U and warns once (FR-0
   place(d, "U1", PARTIAL);
   place(d, "U2", PARTIAL);
   const { code, warnings } = generateC(d);
-  assert.match(code, /rt_drive\(\d+, RT_U\); \/\* U1\.Z: no equation \(FR-080\) \*\//);
+  assert.match(code, /\/\* U1\.Z: no equation \(FR-080\) \*\/\n *rt_drive\(\d+, RT_U\);/);
   assert.doesNotMatch(code, /U1\.Y: no equation/);
   assert.equal(warnings.filter((w) => w.includes("no equation for Z")).length, 1);
 });
@@ -257,7 +257,7 @@ test("generateC: global-clock .R output emits register state and latch (M3 step 
   assert.match(code, /static rt_val reg_U1\[1\];/);
   assert.match(code, /static rt_val prevClk_U1;/);
   assert.match(code, /int grose = \(prevClk_U1 == RT_0 && gclk == RT_1\);/);
-  assert.match(code, /ch \|= rt_upd\(&reg_U1\[0\], rt_buf/); // latches D on the rising edge
+  assert.match(code, /c \|= rt_upd\(&reg_U1\[0\], rt_buf/); // latches D on the rising edge
   assert.match(code, /v = reg_U1\[0\]; \/\* latched \*\//); // drive reads the register
   // gen_latch reports whether it changed any state: the free-run fixed-point
   // test (FR-117d) depends on every state store going through rt_upd.
@@ -287,8 +287,8 @@ test("generateC: a registered output's own-signal feedback reads the snapshot (F
   const { code } = generateC(d);
   assert.match(code, /static rt_val regprev_U1\[1\];/);
   // Filled from the register at the top of gen_latch, ahead of the edge test —
-  // and so in place for gen_drive too, which rt_step runs later in the step.
-  assert.match(code, /ch \|= rt_upd\(&regprev_U1\[0\], reg_U1\[0\]\);[\s\S]*?int grose =/);
+  // and so in place for gen_eval too, which rt_step runs later in the step.
+  assert.match(code, /c \|= rt_upd\(&regprev_U1\[0\], reg_U1\[0\]\);[\s\S]*?int grose =/);
   // The D equation reads Q from that snapshot, never from Q's net.
   assert.match(code, /rt_upd\(&reg_U1\[0\], [^;\n]*rt_buf\(regprev_U1\[0\]\) \/\* Q:register \*\//);
 });
@@ -317,7 +317,7 @@ test("generateC: buried internal node becomes a virtual net with register state 
   // Two registers: the buried SR0 and the exposed Q1.
   assert.match(code, /static rt_val reg_U1\[2\];/);
   // The buried node lowers with its synthetic "#"-tagged key and drives its net.
-  assert.match(code, /\/\* U1\.#SR0 \*\//);
+  assert.match(code, /case \d+: \{ \/\* U1\.#SR0: SHIFT2 \*\//);
   assert.match(code, /v = reg_U1\[0\]; \/\* latched \*\//);
   assert.match(code, /v = reg_U1\[1\]; \/\* latched \*\//);
 });
@@ -329,7 +329,7 @@ test("generateC: per-output .CLK registered output latches on its own clock (M3 
   const { code } = generateC(d);
   assert.match(code, /static rt_val prevClk_U1_0;/);
   assert.doesNotMatch(code, /static rt_val prevClk_U1;/); // no global clock for a self-clocked reg
-  assert.match(code, /if \(prevClk_U1_0 == RT_0 && clk == RT_1\) ch \|= rt_upd\(&reg_U1\[0\], /);
+  assert.match(code, /if \(prevClk_U1_0 == RT_0 && clk == RT_1\) c \|= rt_upd\(&reg_U1\[0\], /);
   assert.match(code, /v = reg_U1\[0\]; \/\* latched \*\//);
 });
 
@@ -348,8 +348,8 @@ test("generateC: async .APRST/.ARST lower to per-step preset/reset (M3 step 2)",
   const d = mkDesign();
   place(d, "U1", AFF);
   const { code } = generateC(d);
-  assert.match(code, /if \(p != RT_0\) ch \|= rt_upd\(&reg_U1\[0\], \(p == RT_1\) \? RT_1 : RT_U\); \} \/\* \.APRST \*\//);
-  assert.match(code, /if \(a != RT_0\) ch \|= rt_upd\(&reg_U1\[0\], \(a == RT_1\) \? RT_0 : RT_U\); \} \/\* \.ARST wins \*\//);
+  assert.match(code, /if \(p != RT_0\) c \|= rt_upd\(&reg_U1\[0\], \(p == RT_1\) \? RT_1 : RT_U\); \} \/\* \.APRST \*\//);
+  assert.match(code, /if \(a != RT_0\) c \|= rt_upd\(&reg_U1\[0\], \(a == RT_1\) \? RT_0 : RT_U\); \} \/\* \.ARST wins \*\//);
 });
 
 const ROM4x2 = {
@@ -567,11 +567,59 @@ test("generateC: a shared net's driver slots are contiguous, in contribution ord
   assert.match(code, new RegExp(`\\{ ${n}, RT_1, ${start[n] + 2} \\},`));
 });
 
+// Event-driven evaluation (FR-110a, design §6.17 M13): a unit is listed under
+// every net its expression reads — .E enable terms included — so a change on
+// any of them re-evaluates it; a registered output's unit, which reads state
+// rather than nets, is in its instance's deps list, marked by gen_latch.
+const tables = (code) => {
+  const arr = (name) =>
+    new RegExp(`${name}\\[\\] = \\{([^}]*)\\}`).exec(code)[1].split(",").map((x) => x.trim()).filter(Boolean);
+  const start = arr("gen_net_fan_start").map(Number);
+  const fan = arr("gen_net_fan").map(Number);
+  const unitOf = (key) => Number(new RegExp(`case (\\d+): \\{ \\/\\* ${key.replace(/[.#]/g, "\\$&")}:`).exec(code)[1]);
+  const readers = (n) => fan.slice(start[n], start[n + 1]);
+  return { arr, unitOf, readers };
+};
+
+test("generateC: the fanout table lists a unit under each net it reads (M13)", () => {
+  const d = mkDesign();
+  place(d, "A-1", builtin("switch"));
+  place(d, "A-2", builtin("switch"));
+  place(d, "U1", TBUF);
+  place(d, "A-3", builtin("indicator"));
+  connect(d, ["A-1", "OUT"], ["U1", "A"]);
+  connect(d, ["A-2", "OUT"], ["U1", "E"]);
+  connect(d, ["U1", "Y"], ["A-3", "IN"]);
+  const { code } = generateC(d);
+  const { arr, unitOf, readers } = tables(code);
+  assert.match(code, /const int gen_unit_count = 1;/);
+  const u = unitOf("U1.Y");
+  const netOfSlot = (label) => {
+    const labels = arr("gen_labels").map((x) => JSON.parse(x));
+    const slotLabel = arr("gen_slot_label").map((x) => labels[Number(x)]);
+    return Number(arr("gen_slot_net")[slotLabel.indexOf(label)]);
+  };
+  assert.deepEqual(readers(netOfSlot("A-1.OUT")), [u]); // data input A
+  assert.deepEqual(readers(netOfSlot("A-2.OUT")), [u]); // .E enable
+  assert.deepEqual(readers(netOfSlot("U1.Y")), []); // nothing reads Y
+});
+
+test("generateC: a registered output's unit is in its instance's state deps (M13)", () => {
+  const d = mkDesign();
+  place(d, "U1", HOLDREG);
+  const { code } = generateC(d);
+  const { unitOf } = tables(code);
+  const u = unitOf("U1.Q");
+  assert.match(code, new RegExp(`static const int deps_reg_U1\\[\\] = \\{ ${u} \\};`));
+  // gen_latch marks them when the instance's state changes, and still reports it.
+  assert.match(code, /if \(c\) \{ ch = 1; rt_mark_units\(deps_reg_U1, 1\); \}/);
+});
+
 // The labeled decoder (FR-071k) is generated, not refused: it lowers into
-// gen_drive from the same DECODER_TERMS literals the slow engine evaluates, so
+// gen_eval from the same DECODER_TERMS literals the slow engine evaluates, so
 // the two engines stay in step (FR-107). Its display strings are editor-only and
 // appear nowhere in the emitted C.
-test("a decoder lowers to eight rt_drive slots in gen_drive (FR-071k)", () => {
+test("a decoder lowers to eight gen_eval units (FR-071k)", () => {
   const d = mkDesign();
   place(d, "A-1", builtin("decoder"), { decodeLabels: ["FETCH", "", "", "", "", "", "", ""] });
   place(d, "A-2", builtin("switch"));

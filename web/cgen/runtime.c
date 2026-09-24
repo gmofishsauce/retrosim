@@ -26,11 +26,10 @@
  *  Net state and driver slots
  * ------------------------------------------------------------------ */
 
-/* Double-buffered net values (FR-078): every evaluate reads `curr_buf`
- * (the previous step's values) while resolution writes `next_buf`; the
- * buffers swap at the end of each step. */
+/* Net values. Unit delay (FR-078) needs no second buffer: within a step
+ * every driver reads `curr_buf` (the previous step's values) before any net
+ * is resolved into it (rt_step). */
 static rt_val *curr_buf;
-static rt_val *next_buf;
 
 /* Per-net conflict flag, so a bus conflict is reported once, on onset,
  * and re-armed when the conflict clears (FR-082; sim.js conflictedNets). */
@@ -44,7 +43,30 @@ rt_val *rt_slot_val;
 /* drive_slot is rt_drive for the runtime's own drivers, whose slot is -1
  * when the pin is unwired. */
 static void drive_slot(int slot, rt_val v) {
-  if (slot >= 0) rt_slot_val[slot] = v;
+  if (slot >= 0) rt_drive(slot, v);
+}
+
+/* Event-driven evaluation (FR-110a, design §6.17 M13). The dirty-net set is
+ * filled by rt_drive and drained by rt_step's resolution. The dirty-unit set
+ * holds the units to evaluate in the coming step: those reading a net that
+ * changed in the step just run, plus those gen_latch marks for a state change
+ * at the start of the step. Each set is a flag array (no duplicates) plus a
+ * list. */
+unsigned char *rt_net_dirty;
+int *rt_dirty_nets;
+int rt_ndirty_nets;
+static unsigned char *unit_dirty;
+static int *dirty_units;
+static int ndirty_units;
+
+void rt_mark_units(const int *units, int n) {
+  for (int i = 0; i < n; i++) {
+    int u = units[i];
+    if (!unit_dirty[u]) {
+      unit_dirty[u] = 1;
+      dirty_units[ndirty_units++] = u;
+    }
+  }
 }
 
 static void *xalloc(size_t n) {
@@ -78,9 +100,17 @@ static void vcd_sample(void); /* per-step VCD change dump (--vcd, FR-118) */
  * (FR-115c). */
 static void reset_state(void) {
   memset(curr_buf, RT_Z, (size_t)gen_net_count);
-  memset(next_buf, RT_Z, (size_t)gen_net_count);
   memset(conflicted, 0, (size_t)gen_net_count);
   memset(rt_slot_val, RT_Z, (size_t)gen_slot_count);
+  /* Nets and slots agree (all Z), so no net is dirty; every unit is, so the
+   * first step evaluates everything, as a fresh simulation does. */
+  memset(rt_net_dirty, 0, (size_t)gen_net_count);
+  rt_ndirty_nets = 0;
+  for (int u = 0; u < gen_unit_count; u++) {
+    unit_dirty[u] = 1;
+    dirty_units[u] = u;
+  }
+  ndirty_units = gen_unit_count;
   gen_init();
   mem_reset();
   uart_reset();
@@ -88,7 +118,10 @@ static void reset_state(void) {
 
 void rt_init(void) {
   curr_buf = xalloc((size_t)gen_net_count);
-  next_buf = xalloc((size_t)gen_net_count);
+  rt_net_dirty = xalloc((size_t)gen_net_count);
+  rt_dirty_nets = xalloc((size_t)gen_net_count * sizeof rt_dirty_nets[0]);
+  unit_dirty = xalloc((size_t)gen_unit_count);
+  dirty_units = xalloc((size_t)gen_unit_count * sizeof dirty_units[0]);
   conflicted = xalloc((size_t)gen_net_count);
   rt_slot_val = xalloc((size_t)gen_slot_count);
   port_stim = xalloc((size_t)(gen_incol_count > 0 ? gen_incol_count : 1));
@@ -653,20 +686,35 @@ int rt_step(void) {
   latched |= mem_write_all(curr_buf);
   latched |= uart_step(curr_buf); /* magic UART latch + emit on CLK 0→1 (FR-122b) */
 
-  /* (2) Every driver writes its slot, all computed from curr. */
-  gen_drive(curr_buf);
+  /* (2) Drivers write their slots, all computed from curr: only the units
+   * whose inputs changed (FR-110a — any other unit would recompute the value
+   * its slot already holds), then the few runtime-owned drivers, every step.
+   * A slot that changes marks its net dirty. */
+  for (int i = 0; i < ndirty_units; i++) {
+    int u = dirty_units[i];
+    unit_dirty[u] = 0;
+    gen_eval(u, curr_buf);
+  }
+  ndirty_units = 0;
   drive_builtins();
   mem_drive_all(curr_buf);
 
-  /* (3) Resolve every net into next; (4) swap. */
+  /* (3) Resolve the dirty nets straight into curr: resolution reads only
+   * slots, and every reader of this step's curr has already run. A net that
+   * changes marks the units reading it for the next step. */
   int changed = 0;
-  for (int i = 0; i < gen_net_count; i++) {
-    next_buf[i] = resolve_net(i);
-    if (next_buf[i] != curr_buf[i]) changed = 1;
+  for (int i = 0; i < rt_ndirty_nets; i++) {
+    int n = rt_dirty_nets[i];
+    rt_net_dirty[n] = 0;
+    rt_val v = resolve_net(n);
+    if (v != curr_buf[n]) {
+      curr_buf[n] = v;
+      changed = 1;
+      rt_mark_units(&gen_net_fan[gen_net_fan_start[n]],
+                    gen_net_fan_start[n + 1] - gen_net_fan_start[n]);
+    }
   }
-  rt_val *t = curr_buf;
-  curr_buf = next_buf;
-  next_buf = t;
+  rt_ndirty_nets = 0;
   sim_time++;
   vcd_sample();
   step_fixed = !changed && !latched;
@@ -1072,7 +1120,7 @@ static void vcd_open(const char *path) {
 }
 
 /* vcd_sample dumps every column whose value changed this step, under a
- * #<time> stamp. Called by rt_step after the buffer swap, so curr_buf
+ * #<time> stamp. Called by rt_step after resolution, so curr_buf
  * holds the values at sim_time. No-op without --vcd. */
 static void vcd_sample(void) {
   if (!vcd_fp) return;
