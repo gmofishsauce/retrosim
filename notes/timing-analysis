@@ -1,0 +1,114 @@
+Would the event driven evaluation be able to accommodate per-component
+delays so that each "step" might not be exactly 1ns? I ask because
+specifying actual delays and using them in the generated C code is
+some thing I contemplated but never completed. You will note that
+there is incomplete dproagation delay information in some of the
+component YAML files. On the other hand, it might be better to have
+a separate critical path computation based on the delay information
+then to include it in the simulation and slow the simulator down.
+I've never been completely clear about how to approach this, which
+is why that work is incomplete.
+
+Checking what the specs and component files already say about delays
+before answering:
+
+  Ran 2 shell commands
+
+Yes, an event-driven engine can handle real per-component delays.
+But I'd put your timing question into a separate static timing
+analysis, not the simulator, and keep simulation at unit delay.
+
+Event-driven simulation and real delays
+
+An event-driven engine is the general form of what we have. Each
+output change is scheduled for "now + delay" in a time-ordered
+queue, and simulated time jumps to the next scheduled change. Unit
+delay is the special case where every delay is 1. The quiescence
+skip we just built is a crude version of that jump. Scheduling a
+change 13 ns ahead costs about the same as scheduling it 1 ns ahead,
+so real delays wouldn't make an event-driven engine inherently
+slower.
+
+What real delays would cost is in the semantics and the upkeep:
+
+- You'd have to pick a delay model. Real hardware swallows a pulse
+shorter than a gate's delay (called inertial delay); a simple queue
+passes every pulse through (transport delay). The two give different
+answers for glitches, which are the main thing a timing simulation
+is for. 
+- Typical values can hide races. One number per path shows
+one ordering of events. Datasheets give typical and maximum, and a
+race between two paths shows up only when you consider the minimum
+of one against the maximum of the other. 
+- Parity [between the
+slow sim and generated C code - Jeff] would force both engines to
+change. FR-107 requires the two simulators to agree bit-for-bit,
+so real delays in the C engine mean real delays in the debug simulator
+too. FR-078 deliberately keeps the debug simulator at unit delay
+so you can watch logic settle one level at a time.
+
+What simulation with delays can and can't tell you
+
+The question behind this is usually "is my clock period long enough?"
+or "what's the fastest clock this design supports?" Simulation is
+a poor tool for that: it measures only the paths the current run
+happens to use. Your fib program never exercises the slowest path
+through the ALU carry chain with the worst-case microcode word, so
+a delay simulation would report success while the real board fails.
+
+Static timing analysis answers it directly. It walks every path
+from one register to the next, without any stimulus. For each path
+it adds the register's clock-to-output delay, the gate delays along
+the path, and the receiving register's setup time, then reports the
+longest (critical) path and the fastest clock the design supports.
+It's fast and deterministic, needs no change to either simulator,
+and it's how the industry splits the job: simulate for function,
+analyze statically for timing.
+
+It fits this editor well: a Tools ▸ Timing analysis command that
+reports the critical path and its delay, and highlights the path
+on the schematic the way the probe or view mode highlights nets.
+The complications:
+
+- Memories: the delay from address to data output needs its own
+entry. 
+- Tri-state buses: the enable and disable times (ten/tdis)
+need their own entries. 
+- Transparent latches: a latch passes data
+through while enabled, so paths through it don't stop at a register
+boundary and need special handling. 
+- Paths that never actually
+happen: the analysis can report a path the logic never lets through,
+such as an ALU result the microcode reads a cycle later. That errs
+on the safe side; letting you mark such paths as exempt would fix
+it.
+
+Why the delay work is stuck, as I read it
+
+The YAML files have the numbers, but which pins each number applies
+to is stated only in comments. For example, 74157.yaml has tpd_s:
+15 # S -> nY, and 74164.yaml has tsu: 12 # DSA/DSB setup before CP
+edge. Nothing can read the pin paths. The key names are also free-form
+(tpd, tpd_i, tpd_cp, tsu, ten, …). That blocks timing simulation
+and static analysis alike, so it's the real first step.
+
+Suggested order
+
+1. Specify a machine-readable delay format. Each entry names its
+kind, the pins it runs from and to (pins or pin groups), and a
+value, for example { kind: tpd, from: [S], to: [1Y, 2Y, 3Y, 4Y],
+max: 15 }, with the kinds tpd, tco, tsu, th, ten and tdis. Existing
+files would be converted, plus a check that flags parts with
+incomplete entries. This is small, and needed whichever way you go.
+2. Build static timing analysis on top of it. That answers the real
+question without touching either simulator.  3. Make the C engine
+event-driven for speed, still at unit delay. Build its scheduler
+as a general time-ordered queue rather than hard-coding "next step",
+so real delays stay possible later without committing to them now.
+4. Later, and only if you want glitch or race checking: a real-delay
+mode added to both engines together, with the delay model and
+typical-versus-maximum question decided first.
+
+Steps 1–2 and step 3 don't depend on each other, so either can go
+first. Want me to draft the delay-format spec (the requirement and
+design text) for you to review before anything else?
