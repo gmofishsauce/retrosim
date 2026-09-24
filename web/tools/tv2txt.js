@@ -3,7 +3,7 @@
 // the file's (refdes,pin) columns to the program's baked column order.
 //
 // Usage:  node tv2txt.js <program> <file.tv>
-//         node tv2txt.js ./sim design.tv | ./sim
+//         node tv2txt.js ./sim design.tv | ./sim -v
 //
 // It runs `<program> --columns` to learn the baked column set (so it needs no
 // design file), then reuses deserializeVectors + reconcileVectors (§6.16, the

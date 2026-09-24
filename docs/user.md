@@ -2130,16 +2130,19 @@ optimization — it makes the program run many times faster:
 cc -O2 -o mydesign mydesign.c runtime.c
 ```
 
-As a rough guide, the example RiSC-16 CPU (`examples/cpu`) runs about 1,200
-clock cycles per second built with `-O2`, against about 60 without it — and
-about 10–15 in the editor's debug simulator.
+As a rough guide, the example RiSC-16 CPU (`examples/cpu`) runs about 10,000
+clock cycles per second built with `-O2`, against about 10–15 in the editor's
+debug simulator. Leaving `-O2` off makes the program much slower.
 
 **Command line at a glance:**
 
 ```
-./mydesign                      run test vectors from standard input (default mode)
+./mydesign                      free-run until Ctrl-C, then print final values
 ./mydesign --cycles N           free-run N clock cycles, then print final values
+./mydesign -v                   run test vectors from standard input
 ./mydesign --columns            print the vector column set, one per line, and exit
+
+-v may also be spelled -vectors or --vectors; it cannot be combined with --cycles.
 
 Options for either run mode:
 --vcd FILE                      also write a VCD waveform trace to FILE
@@ -2148,16 +2151,16 @@ Options for either run mode:
 ```
 
 Any unrecognized flag prints this usage and exits with status 2. The exit
-status is 0 for a vector run in which every row passed, or for a completed
-free run; each flag is described in detail below.
+status is 0 for a vector run in which every row passed, or for a free run
+(including one ended with Ctrl-C); each flag is described in detail below.
 
 The program has exactly the debug simulator's semantics — the same four
 values, unit-delay timing, settling behavior, and bus-conflict detection — so
 the two engines produce the same results for the same design. It runs in one
-of two modes: a **test-vector runner** (the default) or a **free-running
-simulation** (`--cycles`, below).
+of two modes: a **free-running simulation** (the default, below) or a
+**test-vector runner** (`-v`).
 
-As a vector runner it reads rows from standard input as plain text, one row per line:
+As a vector runner (`-v`) it reads rows from standard input as plain text, one row per line:
 the input symbols (`0`/`1`, or `C` to pulse a clock column), a `|`, then the
 expected outputs (`H`/`L`/`X`), separated by spaces. Blank lines and lines
 starting with `#` are skipped. For example, two rows for a two-switch,
@@ -2182,17 +2185,21 @@ panel need not assert every column; the `tv2txt` converter reconciles it
 against the program's columns and emits ready-to-pipe rows:
 
 ```
-node web/tools/tv2txt.js ./mydesign mydesign.tv | ./mydesign
+node web/tools/tv2txt.js ./mydesign mydesign.tv | ./mydesign -v
 ```
 
-**Free-running mode.** `--cycles N` runs the design free for `N` clock periods
-instead of reading vectors: the clock generator produces its real square wave
-(per its `period` property), the power-on reset asserts and releases exactly as
-in a debug run, switches hold the positions they were in when you generated,
-and after the last cycle the program prints each observable point (the same
-column set) as a `LABEL=value` line — values `0`, `1`, `U`, or `Z`. This is
-the mode for letting a design — a ROM-driven circuit, a counter, eventually a
-CPU — simply run. Note that a port marked **clock source** is *not* driven in
+**Free-running mode.** Run with no mode option, the program runs the design
+free — like pressing **RUN** in the editor, only much faster — until you press
+**Ctrl-C**. `--cycles N` instead runs exactly `N` clock periods and stops. The
+clock generator produces its real square wave (per its `period` property), the
+power-on reset asserts and releases exactly as in a debug run, and switches
+hold the positions they were in when you generated. When the run ends, whether
+after `N` cycles or at Ctrl-C, the program prints each observable point (the
+same column set) as a `LABEL=value` line — values `0`, `1`, `U`, or `Z` —
+writes back any persistent RAM, and exits normally. This is the mode for
+letting a design — a ROM-driven circuit, a counter, a CPU — simply run. A
+design that has settled and has no clock to change it again just waits for
+Ctrl-C without using the CPU. Note that a port marked **clock source** is *not* driven in
 this mode — like the interactive **RUN**, free-running needs a real clock
 generator, since a marked port has no waveform to produce. A design clocked
 only through a marked port free-runs with that net undriven; test-vector mode
@@ -2251,8 +2258,8 @@ that can't be loaded — stops generation with the same message. The program's
 vector columns come from the **top sheet only**, exactly as in the test-vector
 panel. A clock generator inside a sub-design follows the panel's rule,
 enforced when the program runs: vector mode refuses at startup (naming the
-clock and pointing at `--cycles`, exit status 2), while `--cycles` free-runs
-such clocks normally.
+clock and pointing at `--cycles`, exit status 2), while a free run drives such
+clocks normally.
 
 The menu item is unavailable while a
 simulation is running.

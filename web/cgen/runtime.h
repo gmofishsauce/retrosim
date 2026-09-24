@@ -180,7 +180,7 @@ int rt_settle(void);
 int rt_run_vectors(void);
 
 /* ------------------------------------------------------------------ *
- *  Free-running mode (--cycles N, FR-117a)
+ *  Free-running mode (the default; --cycles N bounds it, FR-117a)
  * ------------------------------------------------------------------ */
 
 /* rt_run_free runs the design free — no vector rows, standard input
@@ -193,12 +193,18 @@ int rt_run_vectors(void);
  * exactly one clock generator, else the 100 ns default). Switches drive
  * their baked levels; ports are undriven.
  *
- * The run advances exactly `cycles` × clockPeriod unit steps — no settle
- * loop — skipping any stretch of steps that provably changes nothing: after
- * a fixed-point step, simulated time jumps to the next clock transition or
- * reset release (FR-117d). The result is bit-identical to stepping every
- * unit. It then writes one line per observable column (FR-118 set: the
- * input columns, then the output columns, in column order) to standard
+ * A bounded run (cycles > 0) advances exactly `cycles` × clockPeriod unit
+ * steps; cycles == 0 runs unbounded. Either way the run ends early, after
+ * the step in progress, when SIGINT arrives (main() installs the handler).
+ * There is no settle loop. The run skips any stretch of steps that provably
+ * changes nothing: after a fixed-point step, simulated time jumps to the
+ * next clock transition or reset release (FR-117d), with a result
+ * bit-identical to stepping every unit. An unbounded run that reaches a
+ * state which can never change again sleeps until SIGINT instead of
+ * spinning.
+ *
+ * When the run ends it writes one line per observable column (FR-118 set:
+ * the input columns, then the output columns, in column order) to standard
  * output as "LABEL=v", v the four-state value 0/1/U/Z. Bus conflicts
  * report to standard error as ever (FR-108). */
 void rt_run_free(long cycles);

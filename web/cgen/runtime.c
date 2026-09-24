@@ -13,9 +13,11 @@
 
 #include <ctype.h>
 #include <limits.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h> /* sleep: an idle unbounded free run (FR-117a) */
 
 /* The four-state combination operators (FR-077) and the Z→U read
  * normalization rt_norm are static inline in runtime.h. */
@@ -957,16 +959,32 @@ static long next_builtin_change(long t) {
   return next;
 }
 
+/* stop_requested is set by the SIGINT handler main() installs for a free
+ * run (FR-117a). The step loop checks it between steps, so the step in
+ * progress always completes and the run ends normally. */
+static volatile sig_atomic_t stop_requested;
+
+static void on_sigint(int sig) {
+  (void)sig;
+  stop_requested = 1;
+}
+
 void rt_run_free(long cycles) {
   freerun = 1;
-  long end = sim_time + cycles * (long)clock_period_eff();
-  while (sim_time < end) {
+  long end = cycles > 0 ? sim_time + cycles * (long)clock_period_eff() : LONG_MAX;
+  while (sim_time < end && !stop_requested) {
     rt_step();
     /* Quiescence skip (FR-117d): after a fixed-point step, evaluated at
      * sim_time - 1, the steps up to the next built-in change are exact
      * no-ops, so jump straight there. */
     if (step_fixed) {
       long next = next_builtin_change(sim_time - 1);
+      if (next == LONG_MAX && cycles <= 0) {
+        /* Unbounded, and nothing can ever change again: wait for the
+         * interrupt without spinning (sleep returns early on a signal). */
+        while (!stop_requested) sleep(1);
+        break;
+      }
       sim_time = next < end ? next : end;
     }
   }
@@ -1128,12 +1146,22 @@ static void rt_dump_columns(void) {
   }
 }
 
+static int usage(const char *prog) {
+  fprintf(stderr,
+          "usage: %s [--vcd FILE] [--rom REFDES=FILE] [--cycles N]   free run (until Ctrl-C without --cycles)\n"
+          "       %s -v [--vcd FILE] [--rom REFDES=FILE]            test-vector rows on stdin\n"
+          "       %s --columns                                      print the vector column set\n",
+          prog, prog, prog);
+  return 2;
+}
+
 int main(int argc, char **argv) {
   /* Heavily buffer stdout (FR-122d): the magic UART writes here, and full
    * buffering keeps a high-volume byte stream cheap and non-blocking. Flushed
    * explicitly before the end-of-run dump/transcript (below) and at exit. */
   setvbuf(stdout, NULL, _IOFBF, 1 << 16);
-  long cycles = -1;            /* -1 = vector mode (no --cycles flag) */
+  long cycles = 0;             /* free-run bound; 0 = until SIGINT (FR-117a) */
+  int vectors = 0;             /* -v: vector rows on stdin (FR-117) */
   const char *vcd_path = NULL; /* --vcd trace file, or NULL */
   rom_args = xalloc((size_t)argc * sizeof *rom_args);
   for (int i = 1; i < argc; i++) {
@@ -1147,25 +1175,27 @@ int main(int argc, char **argv) {
         fprintf(stderr, "--cycles: N must be a positive integer\n");
         return 2;
       }
+    } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "-vectors") == 0 ||
+               strcmp(argv[i], "--vectors") == 0) {
+      vectors = 1;
     } else if (strcmp(argv[i], "--vcd") == 0 && i + 1 < argc) {
       vcd_path = argv[++i];
     } else if (strcmp(argv[i], "--rom") == 0 && i + 1 < argc) {
       rom_args[rom_arg_count++] = argv[++i]; /* resolved by mem_load_all (FR-117b) */
     } else {
-      fprintf(stderr,
-              "usage: %s [--columns | [--vcd FILE] [--rom REFDES=FILE] [--cycles N]] (vector rows on stdin otherwise)\n",
-              argv[0]);
-      return 2;
+      return usage(argv[0]);
     }
   }
+  if (vectors && cycles > 0) return usage(argv[0]); /* mutually exclusive */
   rt_init();
   if (vcd_path) vcd_open(vcd_path); /* both modes trace (FR-118) */
   int status;
-  if (cycles > 0) { /* free-running mode (FR-117a): stdin untouched */
+  if (vectors) {
+    status = rt_run_vectors() ? 1 : 0;
+  } else { /* free-running mode, the default (FR-117a): stdin untouched */
+    signal(SIGINT, on_sigint); /* Ctrl-C ends the run normally, with the dump */
     rt_run_free(cycles);
     status = 0;
-  } else {
-    status = rt_run_vectors() ? 1 : 0;
   }
   mem_save_all(); /* write persistent RAMs back on normal termination (FR-117c) */
   if (vcd_fp) fclose(vcd_fp);

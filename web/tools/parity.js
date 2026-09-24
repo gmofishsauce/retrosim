@@ -157,7 +157,8 @@ async function checkPair(jsonPath, tvPath) {
     columns.outputs,
   );
   const stdin = rows.map((r) => `${r.in.join(" ")} | ${r.out.join(" ")}`).join("\n") + "\n";
-  const actual = runFast(gen.code, stdin, romArgsFs(flat, dirname(jsonPath)));
+  // -v selects vector mode; with no mode flag the program free-runs (FR-117/FR-117a).
+  const actual = runFast(gen.code, stdin, ["-v", ...romArgsFs(flat, dirname(jsonPath))]);
 
   if (actual === expected) return { name, status: "ok", detail: `${rows.length} rows` };
   return { name, status: "diff", detail: diff(expected, actual) };
